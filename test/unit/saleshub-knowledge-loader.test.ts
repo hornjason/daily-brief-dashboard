@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, getSalesPlayByName, getTdpByName, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
+import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, getSalesPlayByName, getTdpByName, getKnowledgeCoverage, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { resolve } from 'path'
 
@@ -267,5 +267,124 @@ describe('getKnowledgeStats', () => {
     const stats = getKnowledgeStats()
     expect(stats.tdpCount).toBe(0)
     expect(stats.scrapedAt).toBeNull()
+  })
+})
+
+describe('getTdpByName', () => {
+  it('returns TDP node by name', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.name).toBe('Automation TDP')
+    expect(tdp!.description).toContain('mission-critical foundation')
+  })
+
+  it('returns TDP with whatToShow data', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.whatToShow).toHaveLength(2)
+    expect(tdp!.whatToShow[0].name).toBe('AIOps Live Demo')
+  })
+
+  it('returns TDP with services data', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.services).toHaveLength(2)
+    expect(tdp!.services[0].name).toBe('Automation Adoption Program')
+  })
+
+  it('returns undefined for unknown TDP', () => {
+    expect(getTdpByName('NonExistent')).toBeUndefined()
+  })
+
+  it('returns undefined when knowledge file missing', () => {
+    rmSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'))
+    resetKnowledgeCache()
+    expect(getTdpByName('Automation')).toBeUndefined()
+  })
+})
+
+describe('getKnowledgeCoverage', () => {
+  it('returns correct TDP coverage for fixture data', () => {
+    const coverage = getKnowledgeCoverage()
+    expect(coverage.tdps).toHaveLength(2)
+
+    const automationTdp = coverage.tdps.find(t => t.name === 'Automation TDP')
+    expect(automationTdp).toBeDefined()
+    expect(automationTdp!.sections.whatToShow).toBe(true)
+    expect(automationTdp!.sections.services).toBe(true)
+    expect(automationTdp!.sections.customerWins).toBe(false)
+    expect(automationTdp!.sections.whatToSay).toBe(false)
+    expect(automationTdp!.sections.whatToShare).toBe(false)
+    expect(automationTdp!.sections.cheatsheet).toBe(false)
+    expect(automationTdp!.sections.customerDeck).toBe(false)
+    expect(automationTdp!.sectionCount).toBe(2)
+    expect(automationTdp!.tacticCount).toBe(2)
+
+    const virtTdp = coverage.tdps.find(t => t.name === 'Virtualization TDP')
+    expect(virtTdp).toBeDefined()
+    expect(virtTdp!.sections.whatToShow).toBe(true)
+    expect(virtTdp!.sectionCount).toBe(1)
+    expect(virtTdp!.tacticCount).toBe(1)
+  })
+
+  it('returns correct Play coverage for fixture data', () => {
+    const coverage = getKnowledgeCoverage()
+    expect(coverage.plays).toHaveLength(1)
+
+    const play = coverage.plays[0]
+    expect(play.name).toBe('Modernize Infrastructure')
+    expect(play.sections.customerLens).toBe(true)
+    expect(play.sections.realWorldExamples).toBe(true)
+    expect(play.sections.emailTemplate).toBe(true)
+    expect(play.sections.discoveryQuestions).toBe(false)
+    expect(play.sections.introPitchDeck).toBe(false)
+    expect(play.sections.personas).toBe(true)
+    expect(play.sectionCount).toBe(4)
+  })
+
+  it('calculates overall coverage percentage correctly', () => {
+    const coverage = getKnowledgeCoverage()
+    // TDP1: 2/7, TDP2: 1/7 = 3/14 TDP sections
+    // Play1: 4/6 = 4/6 play sections
+    // Total: 7/20 = 35%
+    expect(coverage.overallCoveragePercent).toBe(35)
+  })
+
+  it('counts extracted content correctly', () => {
+    const coverage = getKnowledgeCoverage()
+    // AIOps has content, Automate at Scale empty, VMware Migration has content = 2
+    expect(coverage.docsWithExtractedContent).toBe(2)
+  })
+
+  it('counts total linked docs', () => {
+    const coverage = getKnowledgeCoverage()
+    // Unique URLs: demo.example.com/aiops, demo.example.com/eda, demo.example.com/vmware
+    // + tactic whatToShare: abc, xyz = 5 total unique URLs
+    expect(coverage.totalLinkedDocs).toBe(5)
+  })
+
+  it('returns scrapedAt from knowledge base', () => {
+    const coverage = getKnowledgeCoverage()
+    expect(coverage.scrapedAt).toBe('2026-05-21T20:00:00Z')
+  })
+
+  it('returns zero coverage when knowledge file missing', () => {
+    rmSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'))
+    resetKnowledgeCache()
+    const coverage = getKnowledgeCoverage()
+    expect(coverage.tdps).toHaveLength(0)
+    expect(coverage.plays).toHaveLength(0)
+    expect(coverage.overallCoveragePercent).toBe(0)
+    expect(coverage.totalLinkedDocs).toBe(0)
+    expect(coverage.docsWithExtractedContent).toBe(0)
+    expect(coverage.scrapedAt).toBeNull()
+  })
+
+  it('includes extractedContentCount per TDP', () => {
+    const coverage = getKnowledgeCoverage()
+    const automationTdp = coverage.tdps.find(t => t.name === 'Automation TDP')
+    expect(automationTdp).toBeDefined()
+    // AIOps has extractedContent, Automate at Scale does not = 1
+    expect(automationTdp!.extractedContentCount).toBe(1)
   })
 })

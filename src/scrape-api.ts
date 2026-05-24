@@ -1289,6 +1289,12 @@ export function registerScrapeRoutes(app: Hono): void {
     })
   })
 
+  app.get('/api/saleshub/coverage', (c) => {
+    const { getKnowledgeCoverage } = require('./lib/saleshub-knowledge-loader.ts')
+    const coverage = getKnowledgeCoverage()
+    return c.json(coverage)
+  })
+
   app.post('/api/saleshub/refresh', (c) => {
     if (!isPrimary()) {
       return c.json({ error: 'SalesHub refresh only available on primary (Mac Mini) node' }, 404)
