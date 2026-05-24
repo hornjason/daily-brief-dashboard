@@ -2,7 +2,7 @@
 // GitHub Issue #146 — Campaign feature module registration
 // Phase 1: No-op implementation to prove registry pattern end-to-end
 
-import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
+import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 
 FeatureModuleRegistry.register({
   name: 'campaigns',

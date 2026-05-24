@@ -2,7 +2,7 @@
 // GitHub Issue #153 — News radar feature module registration
 // Implements news search, caching, and cleanup
 
-import { FeatureModuleRegistry, type Signal, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
+import { FeatureModuleRegistry, type Signal, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { newsProvider, type NewsItem } from '../news-provider.ts'
 import { toSlug } from '../cache-layer.ts'
 import { existsSync, unlinkSync, writeFileSync, mkdirSync, readFileSync, statSync } from 'fs'

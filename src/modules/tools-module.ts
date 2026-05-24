@@ -2,7 +2,7 @@
 // GitHub Issue #146 — Business value tools feature module registration
 // GitHub Issue #150 — NotebookLM sync on artifact upload
 
-import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
+import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { customers } from '../server-state'
 import { findCustomerDriveFolder } from '../lib/customer-folder'
 import { createOrUpdateNotebook } from '../notebooklm'

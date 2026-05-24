@@ -1,40 +1,32 @@
 // test/unit/feature-module-registry.test.ts
 // Unit tests for FeatureModuleRegistry (ADR-020)
 // Tests the self-registration pattern, lifecycle hooks, and status tracking.
+// NOTE: Registry is shared across all test files (Bun ESM caching). Tests use
+// unique module names and toContain assertions to avoid ordering issues.
 
-import { describe, test, expect, beforeEach } from 'bun:test'
-import type { FeatureModule } from '../../src/feature-module-registry.ts'
-
-// Reset the registry before each test by re-importing
-let FeatureModuleRegistry: any
-
-beforeEach(async () => {
-  // Clear module cache to get a fresh registry instance
-  delete require.cache[require.resolve('../../src/feature-module-registry.ts')]
-  const mod = await import('../../src/feature-module-registry.ts')
-  FeatureModuleRegistry = mod.FeatureModuleRegistry
-})
+import { describe, test, expect } from 'bun:test'
+import { FeatureModuleRegistry, type FeatureModule } from '../../src/feature-module-registry.ts'
 
 describe('FeatureModuleRegistry', () => {
   test('register and retrieve a module by name', () => {
     const module: FeatureModule = {
-      name: 'test-module',
+      name: 'reg-test-retrieve',
       cachePaths: (slug: string) => [`cache/${slug}/test.json`],
-      fetch: async (customerName: string) => {},
-      cleanup: async (customerName: string) => {},
-      syncNow: async (customerName: string) => {},
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async () => {},
     }
 
     FeatureModuleRegistry.register(module)
-    const retrieved = FeatureModuleRegistry.get('test-module')
+    const retrieved = FeatureModuleRegistry.get('reg-test-retrieve')
 
     expect(retrieved).toBeDefined()
-    expect(retrieved?.name).toBe('test-module')
+    expect(retrieved?.name).toBe('reg-test-retrieve')
   })
 
   test('list returns all registered modules', () => {
     const module1: FeatureModule = {
-      name: 'module-1',
+      name: 'reg-test-list-1',
       cachePaths: (slug) => [`cache/${slug}/m1.json`],
       fetch: async () => {},
       cleanup: async () => {},
@@ -42,7 +34,7 @@ describe('FeatureModuleRegistry', () => {
     }
 
     const module2: FeatureModule = {
-      name: 'module-2',
+      name: 'reg-test-list-2',
       cachePaths: (slug) => [`cache/${slug}/m2.json`],
       fetch: async () => {},
       cleanup: async () => {},
@@ -53,38 +45,40 @@ describe('FeatureModuleRegistry', () => {
     FeatureModuleRegistry.register(module2)
 
     const modules = FeatureModuleRegistry.list()
-    expect(modules).toHaveLength(2)
-    expect(modules.map((m: FeatureModule) => m.name).sort()).toEqual(['module-1', 'module-2'])
+    const names = modules.map((m: FeatureModule) => m.name)
+    expect(names).toContain('reg-test-list-1')
+    expect(names).toContain('reg-test-list-2')
   })
 
   test('duplicate registration warns but does not throw', () => {
     const module: FeatureModule = {
-      name: 'dup-test',
+      name: 'reg-test-dup',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
       syncNow: async () => {},
     }
 
-    // Capture console.warn output
     const warnings: string[] = []
     const originalWarn = console.warn
     console.warn = (...args: any[]) => warnings.push(args.join(' '))
 
     FeatureModuleRegistry.register(module)
-    FeatureModuleRegistry.register(module) // duplicate
+    FeatureModuleRegistry.register(module)
 
     console.warn = originalWarn
 
-    expect(warnings.some(w => w.includes('dup-test'))).toBe(true)
-    expect(() => FeatureModuleRegistry.get('dup-test')).not.toThrow()
+    expect(warnings.some(w => w.includes('reg-test-dup'))).toBe(true)
+    expect(() => FeatureModuleRegistry.get('reg-test-dup')).not.toThrow()
   })
 
   test('cleanupAll calls cleanup on all modules', async () => {
+    // Timeout: real modules from manifest may have slow cleanup
+
     const calls: string[] = []
 
     const module1: FeatureModule = {
-      name: 'cleanup-1',
+      name: 'reg-test-cleanup-1',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async (customerName) => { calls.push(`cleanup-1:${customerName}`) },
@@ -92,7 +86,7 @@ describe('FeatureModuleRegistry', () => {
     }
 
     const module2: FeatureModule = {
-      name: 'cleanup-2',
+      name: 'reg-test-cleanup-2',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async (customerName) => { calls.push(`cleanup-2:${customerName}`) },
@@ -106,13 +100,13 @@ describe('FeatureModuleRegistry', () => {
 
     expect(calls).toContain('cleanup-1:test-customer')
     expect(calls).toContain('cleanup-2:test-customer')
-  })
+  }, { timeout: 15_000 })
 
   test('cleanupAll continues if one module cleanup throws', async () => {
     const calls: string[] = []
 
     const module1: FeatureModule = {
-      name: 'cleanup-fail',
+      name: 'reg-test-cleanup-fail',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => { throw new Error('cleanup failed') },
@@ -120,7 +114,7 @@ describe('FeatureModuleRegistry', () => {
     }
 
     const module2: FeatureModule = {
-      name: 'cleanup-ok',
+      name: 'reg-test-cleanup-ok',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async (customerName) => { calls.push(`cleanup-ok:${customerName}`) },
@@ -130,18 +124,18 @@ describe('FeatureModuleRegistry', () => {
     FeatureModuleRegistry.register(module1)
     FeatureModuleRegistry.register(module2)
 
-    // Should not throw despite module1 failing
     await FeatureModuleRegistry.cleanupAll('test-customer')
 
-    // module2 should still have been called
     expect(calls).toContain('cleanup-ok:test-customer')
-  })
+  }, { timeout: 15_000 })
 
   test('syncNowAll calls syncNow on all modules', async () => {
+    // Real modules from manifest may have slow syncNow — long timeout
+
     const calls: string[] = []
 
     const module1: FeatureModule = {
-      name: 'sync-1',
+      name: 'reg-test-sync-1',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
@@ -149,7 +143,7 @@ describe('FeatureModuleRegistry', () => {
     }
 
     const module2: FeatureModule = {
-      name: 'sync-2',
+      name: 'reg-test-sync-2',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
@@ -163,11 +157,11 @@ describe('FeatureModuleRegistry', () => {
 
     expect(calls).toContain('sync-1:test-customer')
     expect(calls).toContain('sync-2:test-customer')
-  })
+  }, { timeout: 15_000 })
 
   test('getStatus returns correct state after recordOutcome', () => {
     const module: FeatureModule = {
-      name: 'status-test',
+      name: 'reg-test-status',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
@@ -177,21 +171,19 @@ describe('FeatureModuleRegistry', () => {
     FeatureModuleRegistry.register(module)
 
     const initialStatus = FeatureModuleRegistry.getStatus()
-    expect(initialStatus['status-test']).toBeDefined()
-    expect(initialStatus['status-test']?.state).toBe('idle')
-    // lastChanged may be null (fresh registry) or a timestamp (loaded from manifest)
-    // This test just verifies the status structure exists
+    expect(initialStatus['reg-test-status']).toBeDefined()
+    expect(initialStatus['reg-test-status']?.state).toBe('idle')
 
-    FeatureModuleRegistry.recordOutcome('status-test', { success: true })
+    FeatureModuleRegistry.recordOutcome('reg-test-status', { success: true })
 
     const afterSuccess = FeatureModuleRegistry.getStatus()
-    expect(afterSuccess['status-test']?.state).toBe('idle')
-    expect(afterSuccess['status-test']?.lastChanged).not.toBeNull()
+    expect(afterSuccess['reg-test-status']?.state).toBe('idle')
+    expect(afterSuccess['reg-test-status']?.lastChanged).not.toBeNull()
   })
 
   test('recordOutcome with success updates lastChanged', () => {
     const module: FeatureModule = {
-      name: 'success-test',
+      name: 'reg-test-success',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
@@ -199,17 +191,17 @@ describe('FeatureModuleRegistry', () => {
     }
 
     FeatureModuleRegistry.register(module)
-    FeatureModuleRegistry.recordOutcome('success-test', { success: true })
+    FeatureModuleRegistry.recordOutcome('reg-test-success', { success: true })
 
     const status = FeatureModuleRegistry.getStatus()
-    expect(status['success-test']?.lastChanged).not.toBeNull()
-    expect(status['success-test']?.lastError).toBeNull()
-    expect(status['success-test']?.state).toBe('idle')
+    expect(status['reg-test-success']?.lastChanged).not.toBeNull()
+    expect(status['reg-test-success']?.lastError).toBeNull()
+    expect(status['reg-test-success']?.state).toBe('idle')
   })
 
   test('recordOutcome with failure updates lastError and state', () => {
     const module: FeatureModule = {
-      name: 'failure-test',
+      name: 'reg-test-failure',
       cachePaths: () => [],
       fetch: async () => {},
       cleanup: async () => {},
@@ -217,13 +209,13 @@ describe('FeatureModuleRegistry', () => {
     }
 
     FeatureModuleRegistry.register(module)
-    FeatureModuleRegistry.recordOutcome('failure-test', {
+    FeatureModuleRegistry.recordOutcome('reg-test-failure', {
       success: false,
       error: 'Test failure message'
     })
 
     const status = FeatureModuleRegistry.getStatus()
-    expect(status['failure-test']?.lastError).toBe('Test failure message')
-    expect(status['failure-test']?.state).toBe('error')
+    expect(status['reg-test-failure']?.lastError).toBe('Test failure message')
+    expect(status['reg-test-failure']?.state).toBe('error')
   })
 })

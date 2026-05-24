@@ -718,4 +718,9 @@ export const FeatureModuleRegistry = {
 
     return { modules: results }
   },
+
+  _resetForTesting(): void {
+    _modules.clear()
+    _status.clear()
+  },
 }

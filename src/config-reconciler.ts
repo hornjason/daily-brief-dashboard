@@ -21,7 +21,7 @@ import { resolve } from 'path'
 import { CONFIG_DIR } from './lib/paths.ts'
 
 function getConfigDir(): string {
-  return CONFIG_DIR
+  return process.env.CONFIG_DIR ?? CONFIG_DIR
 }
 
 export function getAuthConfigPath(): string {

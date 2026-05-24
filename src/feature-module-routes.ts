@@ -1,7 +1,7 @@
 // src/feature-module-routes.ts
 // GitHub Issue #144 — Sync Now API endpoint for registered feature modules
 import { Hono } from 'hono'
-import { FeatureModuleRegistry } from './feature-module-registry'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { schedulerRegistry } from './scheduler-registry'
 import { customers } from './server-state'
 import { sanitizeErr } from './utils'

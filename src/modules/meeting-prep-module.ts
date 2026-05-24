@@ -1,7 +1,7 @@
 // src/modules/meeting-prep-module.ts
 // GitHub Issue #229 — Meeting Prep feature module registration
 
-import { FeatureModuleRegistry } from '../feature-module-registry'
+import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 
 FeatureModuleRegistry.register({
   name: 'meeting-prep',

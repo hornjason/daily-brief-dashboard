@@ -32,10 +32,10 @@ function loadKnowledgeBase(): SalesHubKnowledge | null {
     return _knowledgeCache
   }
 
-  const paths = [
-    resolve(getConfigDir(), 'saleshub-knowledge.json'),
-    resolve('config-templates', 'saleshub-knowledge.json'),
-  ]
+  const paths = [resolve(getConfigDir(), 'saleshub-knowledge.json')]
+  if (!process.env.CONFIG_DIR) {
+    paths.push(resolve('config-templates', 'saleshub-knowledge.json'))
+  }
 
   for (const p of paths) {
     try {
