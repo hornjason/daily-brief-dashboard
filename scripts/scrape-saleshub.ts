@@ -398,7 +398,7 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     })
 
     // Identify linked TDPs from page text and links
-    const knownTdps = ['AI', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Edge']
+    const knownTdps = ['AI Platform', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Container Mgmt']
     const linkedTdps: string[] = []
     for (const tdp of knownTdps) {
       if (data.mainText.toLowerCase().includes(tdp.toLowerCase())) {
@@ -539,7 +539,7 @@ async function extractSalesTacticPage(page: Page, tacticName: string, tacticUrl:
     }
 
     // Determine parent TDP from page content
-    const knownTdps = ['AI', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Edge']
+    const knownTdps = ['AI Platform', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Container Mgmt']
     let parentTdp = ''
     const mainTextLower = mainText.toLowerCase()
 

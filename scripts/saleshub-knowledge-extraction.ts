@@ -572,7 +572,12 @@ export function parseSalesPlayPageSections(
         if (line.length > 5) result.personas.push(line)
         break
       case 'tdp-alignment':
-        if (line.length > 3) result.tdpAlignment.push(line)
+        // Only accept lines matching known TDP names (#381)
+        const CANONICAL_TDPS = ['AI Platform', 'Server/Cloud Operating System', 'Container Management',
+          'Automation', 'App Platform', 'Application Platform', 'Virtualization', 'Server/Cloud OS']
+        if (line.length > 3 && CANONICAL_TDPS.some(t => t.toLowerCase() === lower || lower.includes(t.toLowerCase()))) {
+          result.tdpAlignment.push(line)
+        }
         break
       case 'regional':
         if (line.length > 5) {
@@ -765,6 +770,46 @@ export function buildSalesHubKnowledge(
         })
       }
     }
+  }
+
+  // ── TDP name normalization (#381) ──
+  const TDP_NAME_MAP: Record<string, string> = {
+    'server/cloud operating system': 'Server/Cloud OS',
+    'server/cloud operating system tdp': 'Server/Cloud OS',
+    'application platform': 'App Platform',
+    'application platform tdp': 'App Platform TDP',
+    'container management': 'Container Mgmt',
+    'container management tdp': 'Container Mgmt',
+  }
+
+  // Normalize TDP names in tdpMap
+  for (const [key, tdp] of tdpMap) {
+    const normalized = TDP_NAME_MAP[tdp.name.toLowerCase()]
+    if (normalized && normalized !== tdp.name) {
+      tdpMap.delete(key)
+      // Merge into existing entry if one exists
+      const existing = tdpMap.get(normalized)
+      if (existing) {
+        for (const t of tdp.tactics) { if (!existing.tactics.includes(t)) existing.tactics.push(t) }
+        for (const p of tdp.products) { if (!existing.products.includes(p)) existing.products.push(p) }
+        if (tdp.customerWins.length > existing.customerWins.length) existing.customerWins = tdp.customerWins
+        if (tdp.whatToSay.length > existing.whatToSay.length) existing.whatToSay = tdp.whatToSay
+        if (tdp.whatToShare.length > existing.whatToShare.length) existing.whatToShare = tdp.whatToShare
+        if (tdp.whatToShow.length > existing.whatToShow.length) existing.whatToShow = tdp.whatToShow
+        if (tdp.services.length > existing.services.length) existing.services = tdp.services
+        if (!existing.cheatsheetUrl && tdp.cheatsheetUrl) existing.cheatsheetUrl = tdp.cheatsheetUrl
+        if (!existing.customerDeckUrl && tdp.customerDeckUrl) existing.customerDeckUrl = tdp.customerDeckUrl
+      } else {
+        tdp.name = normalized
+        tdpMap.set(normalized, tdp)
+      }
+    }
+  }
+
+  // Also normalize tactic parentTdp references
+  for (const tactic of tacticNodes) {
+    const normalized = TDP_NAME_MAP[tactic.parentTdp.toLowerCase()]
+    if (normalized) tactic.parentTdp = normalized
   }
 
   // ── Post-processing: Restructure TDPs to match SalesHub actual structure (#368) ──

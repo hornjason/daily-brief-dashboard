@@ -140,7 +140,7 @@ export async function discoverAllPages(page: Page): Promise<DiscoveryResult> {
   // Categorize
   const tactics = allPages.filter(p => KNOWN_TACTICS.some(k => p.name.includes(k)))
   const plays = allPages.filter(p => KNOWN_PLAYS.some(k => p.name === k))
-  const tdps = allPages.filter(p => KNOWN_TDPS.some(k => p.name.includes(k)))
+  const tdps = allPages.filter(p => KNOWN_TDPS.some(k => p.name === k))
   const products = allPages.filter(p => p.name.startsWith('Red Hat ') || p.name.startsWith('Azure ') || p.name.startsWith('OpenShift '))
 
   console.log(`[page-discovery] Categorized: ${tactics.length} tactics, ${plays.length} plays, ${tdps.length} TDPs, ${products.length} products`)

@@ -587,3 +587,152 @@ End of content.
     expect(result.personas).toEqual([])
   })
 })
+
+describe('TDP name normalization (#381)', () => {
+  it('normalizes "Server/Cloud Operating System TDP" to "Server/Cloud OS"', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'rhel',
+        name: 'RHEL',
+        description: 'Enterprise Linux',
+        url: 'https://example.com/rhel',
+        tdpSections: [{ name: 'Server/Cloud Operating System TDP', description: 'RHEL server TDP' }],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    const serverOs = knowledge.tdps.find(t => t.name === 'Server/Cloud OS')
+    expect(serverOs).toBeDefined()
+    const oldName = knowledge.tdps.find(t => t.name === 'Server/Cloud Operating System TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('normalizes "Application Platform TDP" to "App Platform TDP"', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'ocp',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [{ name: 'Application Platform TDP', description: 'App platform TDP' }],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    const appPlatform = knowledge.tdps.find(t => t.name === 'App Platform TDP')
+    expect(appPlatform).toBeDefined()
+    const oldName = knowledge.tdps.find(t => t.name === 'Application Platform TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('merges duplicate TDPs after normalization (Container Management TDP + Container Mgmt)', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'ocp',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [
+          { name: 'App Platform TDP', description: 'Application platform' },
+          { name: 'Container Management TDP', description: 'Container mgmt from scrape' },
+          { name: 'Kubernetes for 3rd party workloads (Non-AI)', description: 'Run 3rd party non-AI workloads' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    // "Container Management TDP" should be normalized to "Container Mgmt" and merged with
+    // the Container Mgmt TDP created by #368 restructure
+    const containerMgmt = knowledge.tdps.filter(t => t.name === 'Container Mgmt')
+    expect(containerMgmt.length).toBe(1)
+    const oldName = knowledge.tdps.find(t => t.name === 'Container Management TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('normalizes tactic parentTdp references', () => {
+    const tactics: ScrapedSalesTactic[] = [
+      {
+        name: 'RHEL Image Mode',
+        talkTrack: 'Deploy bootable images',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        parentTdp: 'Server/Cloud Operating System',
+        url: 'https://example.com/image-mode',
+      },
+      {
+        name: 'Container Adoption',
+        talkTrack: 'Adopt containers',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        parentTdp: 'Container Management',
+        url: 'https://example.com/container-adoption',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge([], [], tactics)
+    const imageMode = knowledge.tactics.find(t => t.name === 'RHEL Image Mode')
+    expect(imageMode).toBeDefined()
+    expect(imageMode!.parentTdp).toBe('Server/Cloud OS')
+
+    const containerAdoption = knowledge.tactics.find(t => t.name === 'Container Adoption')
+    expect(containerAdoption).toBeDefined()
+    expect(containerAdoption!.parentTdp).toBe('Container Mgmt')
+  })
+})
+
+describe('tdpAlignment parsing filter (#381)', () => {
+  it('stops at non-TDP lines like sidebar nav text', () => {
+    const text = `
+Build and Run Applications
+Sales Play overview.
+TDPs Powering the Play
+AI Platform
+Container Management
+Account research in minutes
+Quick links to resources
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.tdpAlignment.length).toBe(2)
+    expect(result.tdpAlignment).toContain('AI Platform')
+    expect(result.tdpAlignment).toContain('Container Management')
+    // Garbage lines should NOT be included
+    expect(result.tdpAlignment).not.toContain('Account research in minutes')
+    expect(result.tdpAlignment).not.toContain('Quick links to resources')
+  })
+
+  it('accepts all canonical TDP name variants', () => {
+    const text = `
+Some Play
+TDPs Powering the Play
+AI Platform
+Server/Cloud Operating System
+Container Management
+Automation
+App Platform
+Virtualization
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.tdpAlignment.length).toBe(6)
+  })
+})
