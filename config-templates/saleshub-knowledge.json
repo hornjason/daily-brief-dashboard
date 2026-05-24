@@ -6,48 +6,43 @@
       "name": "Build and Run Applications",
       "description": "The Build & Run sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables modernize legacy applications, build new cloud-native apps faster and improve developer productivity - while reducing costs, increasing agility and maintaining security.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "App Platform",
-        "Automation",
-        "Edge"
+        "Automation"
       ]
     },
     {
       "name": "IT Operations Efficiency",
-      "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations\u2014reducing cost, minimizing risk and freeing IT teams to focus on innovation across datacenter, cloud and edge.",
+      "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations—reducing cost, minimizing risk and freeing IT teams to focus on innovation across datacenter, cloud and edge.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "Automation",
-        "Virtualization",
-        "Edge"
+        "Virtualization"
       ]
     },
     {
       "name": "Modernize Infrastructure",
       "description": "The Modernize Infrastructure sales play is a guide for positioning Red Hat as the trusted, open hybrid platform for organizations to standardize, secure and modernize their legacy infrastructure - reducing operational complexity and cost, and build secured, scalable foundation for future innovation across hybrid environments.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "App Platform",
         "Automation",
-        "Virtualization",
-        "Edge"
+        "Virtualization"
       ]
     },
     {
       "name": "Sovereignty",
-      "description": "Digital sovereignty is no longer just a geopolitical concern\u2014it is a strategic business imperative driven by the",
+      "description": "Digital sovereignty is no longer just a geopolitical concern—it is a strategic business imperative driven by the",
       "linkedTdps": [
-        "AI",
-        "Edge"
+        "AI Platform"
       ]
     },
     {
       "name": "The AI-Ready Enterprise",
       "description": "The AI-Ready Enterprise sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables enterprises to scale AI operations reliably and cost-effectively while maintaining control over their data, security, and choice of infrastructure.",
       "linkedTdps": [
-        "AI",
-        "Automation",
-        "Edge"
+        "AI Platform",
+        "Automation"
       ]
     }
   ],
@@ -66,13 +61,14 @@
       ]
     },
     {
-      "name": "AI",
-      "description": "The AI Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, and enterprise-grade agentic AI deployments.",
+      "name": "AI Platform",
+      "description": "The AI Platform Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, enterprise-grade agentic AI deployments, and AI Factory with NVIDIA.",
       "tactics": [
         "Agentic AI",
         "Inference at Scale",
         "Production AI",
-        "Sovereign (Private) AI"
+        "Sovereign (Private) AI",
+        "Red Hat AI Factory with NVIDIA"
       ],
       "products": [
         "Red Hat AI",
@@ -81,16 +77,12 @@
     },
     {
       "name": "App Platform",
-      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development, container management, and platform engineering.",
+      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development and platform engineering.",
       "tactics": [
         "Cloud marketplaces and private offers",
         "Container Adoption Journey",
         "DevX & platform engineering to build modern applications",
-        "Kubernetes for 3rd party AI workloads",
-        "Kubernetes for 3rd party workloads (Non-AI)",
-        "Multicluster management & security at scale for Kubernetes",
-        "Operationalize AI",
-        "Secure the software supply chain"
+        "Operationalize AI"
       ],
       "products": [
         "Red Hat OpenShift",
@@ -99,12 +91,19 @@
       ]
     },
     {
-      "name": "Edge",
-      "description": "The Edge Technology Decision Point positions Red Hat for deploying and managing workloads at the edge with lightweight OpenShift (SNO, MicroShift) and RHEL for Edge. Covers zero-touch provisioning, AI inference at the edge, and sovereign edge deployments.",
-      "tactics": [],
+      "name": "Container Mgmt",
+      "description": "The Container Management Technology Decision Point positions Red Hat OpenShift for enterprise Kubernetes container management, multi-cluster operations, supply chain security, and sovereign infrastructure.",
+      "tactics": [
+        "Kubernetes for 3rd party workloads (Non-AI)",
+        "Kubernetes for 3rd party AI workloads",
+        "Multicluster management & security at scale for Kubernetes",
+        "Secure the software supply chain",
+        "Sovereign Infrastructure"
+      ],
       "products": [
         "Red Hat OpenShift",
-        "Red Hat Enterprise Linux"
+        "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
+        "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
       ]
     },
     {
@@ -163,7 +162,7 @@
           "type": "google-slides"
         },
         {
-          "name": "AIOps doesn\u2019t replace DevOps\u2014it\u2019s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
+          "name": "AIOps doesn’t replace DevOps—it’s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
         },
@@ -188,7 +187,7 @@
           "type": "google-slides"
         },
         {
-          "name": "Workshop:\u00a0AIOps",
+          "name": "Workshop: AIOps",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
         },
@@ -226,12 +225,12 @@
           "type": "external"
         },
         {
-          "name": "Gauge customer staff\u2019s automation proficiency with a no-cost\u00a0Skills Assessment",
+          "name": "Gauge customer staff’s automation proficiency with a no-cost Skills Assessment",
           "url": "/apps/skills",
           "type": "external"
         },
         {
-          "name": "Understand the customer\u2019s current technology, process, and culture with a no-cost\u00a0Discovery Session",
+          "name": "Understand the customer’s current technology, process, and culture with a no-cost Discovery Session",
           "url": "https://portfoliohub.redhat.com/v3/serviceskit/discovery",
           "type": "external"
         },
@@ -271,7 +270,7 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0Ansible Cloud",
+          "name": "Demo(s): Ansible Cloud",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+cloud",
           "type": "external"
         },
@@ -337,7 +336,7 @@
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
         "Business content",
-        "IT Automation:\u00a0Interactive experiences"
+        "IT Automation: Interactive experiences"
       ],
       "whatToShare": [
         {
@@ -366,7 +365,7 @@
           "type": "external"
         },
         {
-          "name": "60-day Customer Trial:\u00a0Ansible Automation Platform",
+          "name": "60-day Customer Trial: Ansible Automation Platform",
           "url": "https://www.redhat.com/en/technologies/management/ansible/trial",
           "type": "external"
         },
@@ -423,7 +422,7 @@
           "type": "external"
         },
         {
-          "name": "Workshop(s):\u00a0Network Automation",
+          "name": "Workshop(s): Network Automation",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
           "type": "external"
         },
@@ -452,7 +451,7 @@
     },
     {
       "name": "Agentic AI",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [
         "Red Hat AI Customer References",
         "Select case studies from the interactive customer references dashboard"
@@ -463,7 +462,7 @@
         "Intro to Agentic AI"
       ],
       "whatToShare": [],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform"
     },
     {
       "name": "Cloud marketplaces and private offers",
@@ -483,7 +482,7 @@
     },
     {
       "name": "Deploy new critical & AI applications on RHEL",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
@@ -505,7 +504,7 @@
           "type": "external"
         },
         {
-          "name": "Solution architecture:\u00a0convert from CentOS to Red Hat Enterprise Linux",
+          "name": "Solution architecture: convert from CentOS to Red Hat Enterprise Linux",
           "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
           "type": "external"
         },
@@ -515,12 +514,12 @@
           "type": "external"
         },
         {
-          "name": "Key items:\u00a0RHEL 10 demos and labs",
+          "name": "Key items: RHEL 10 demos and labs",
           "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
           "type": "external"
         },
         {
-          "name": "Interactive lab(s):\u00a0RHEL",
+          "name": "Interactive lab(s): RHEL",
           "url": "https://www.redhat.com/en/interactive-labs/enterprise-linux",
           "type": "external"
         }
@@ -529,7 +528,7 @@
     },
     {
       "name": "DevX & platform engineering to build modern applications",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
@@ -546,12 +545,12 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0Application Platform",
+          "name": "Demo(s): Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
         {
-          "name": "Workshop(s):\u00a0Application Platform",
+          "name": "Workshop(s): Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
@@ -575,7 +574,7 @@
     },
     {
       "name": "Inference at Scale",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [
         "GTM Power Hour (Red Hat AI starts at 32:25)",
         "Special Edition Power Hour (Red Hat AI starts at 19:10)",
@@ -621,7 +620,7 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0Red Hat AI Inference Server",
+          "name": "Demo(s): Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
         },
@@ -631,18 +630,18 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform"
     },
     {
       "name": "Kubernetes for 3rd party AI workloads",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -657,23 +656,23 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0OpenShift",
+          "name": "Demo(s): OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt"
     },
     {
       "name": "Kubernetes for 3rd party workloads (Non-AI)",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -688,7 +687,7 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0OpenShift",
+          "name": "Demo(s): OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -698,7 +697,7 @@
           "type": "external"
         },
         {
-          "name": "Red Hat\u00ae Training and Certification - OpenShift skills path",
+          "name": "Red Hat® Training and Certification - OpenShift skills path",
           "url": "/apps/skills",
           "type": "external"
         },
@@ -733,7 +732,7 @@
           "type": "external"
         },
         {
-          "name": "This Red Hat OpenShift Virtualization\u2019s ecosystem of partners provides businesses with flexibility in designing, migrating, and modernizing their virtualization solutions.",
+          "name": "This Red Hat OpenShift Virtualization’s ecosystem of partners provides businesses with flexibility in designing, migrating, and modernizing their virtualization solutions.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -758,7 +757,7 @@
           "type": "external"
         },
         {
-          "name": "Explore:\u00a0Red Hat OpenShift training",
+          "name": "Explore: Red Hat OpenShift training",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -778,7 +777,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt"
     },
     {
       "name": "Migrate to the Cloud",
@@ -835,7 +834,7 @@
           "type": "external"
         },
         {
-          "name": "Gauge customer staff\u2019s proficiency with a Skills Assessment",
+          "name": "Gauge customer staff’s proficiency with a Skills Assessment",
           "url": "/apps/skills",
           "type": "external"
         },
@@ -899,14 +898,14 @@
     },
     {
       "name": "Multicluster management & security at scale for Kubernetes",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -921,12 +920,12 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0OpenShift",
+          "name": "Demo(s): OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt"
     },
     {
       "name": "Operationalize AI",
@@ -940,7 +939,7 @@
           "type": "external"
         },
         {
-          "name": "Get started with AI for enterprise: A beginner\u2019s guide (ebook)",
+          "name": "Get started with AI for enterprise: A beginner’s guide (ebook)",
           "url": "https://www.redhat.com/en/engage/artificial-intelligence-for-enterprise-beginners-guide-ebook?percmp=RHCTG0250000460019",
           "type": "external"
         }
@@ -949,7 +948,7 @@
     },
     {
       "name": "Production AI",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [
         "GTM Power Hour (Red Hat AI starts at 32:25)",
         "Special Edition Power Hour (Red Hat AI starts at 19:10)",
@@ -1015,7 +1014,7 @@
           "type": "external"
         },
         {
-          "name": "Demo:\u00a0Red Hat AI Inference Server",
+          "name": "Demo: Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
         },
@@ -1025,7 +1024,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform"
     },
     {
       "name": "Secure and Manage RHEL",
@@ -1036,12 +1035,12 @@
       ],
       "whatToShare": [
         {
-          "name": "T\u00fcrk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
+          "name": "Türk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "T\u00fcrk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+          "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
@@ -1061,7 +1060,7 @@
           "type": "external"
         },
         {
-          "name": "Solution architecture:\u00a0convert from CentOS to Red Hat Enterprise Linux",
+          "name": "Solution architecture: convert from CentOS to Red Hat Enterprise Linux",
           "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
           "type": "external"
         },
@@ -1080,7 +1079,7 @@
     },
     {
       "name": "Secure the software supply chain",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
@@ -1097,12 +1096,12 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0Application Platform",
+          "name": "Demo(s): Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
         {
-          "name": "Workshop(s):\u00a0Application Platform",
+          "name": "Workshop(s): Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
@@ -1122,11 +1121,11 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt"
     },
     {
       "name": "Sovereign (Private) AI",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [
         "Select case studies from interactive customer references dashboard"
       ],
@@ -1140,7 +1139,7 @@
           "type": "external"
         },
         {
-          "name": "Model-as\u2013a-Service",
+          "name": "Model-as–a-Service",
           "url": "https://www.redhat.com/architect/portfolio/detail/95-models-as-a-service-interactive-experience?intcmp=RHCTG0250000449876",
           "type": "external"
         },
@@ -1155,7 +1154,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform"
     },
     {
       "name": "Standardize & Modernize your Operating System",
@@ -1167,12 +1166,12 @@
       ],
       "whatToShare": [
         {
-          "name": "T\u00fcrk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
+          "name": "Türk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "T\u00fcrk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+          "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
@@ -1182,12 +1181,12 @@
           "type": "external"
         },
         {
-          "name": "Demo(s):\u00a0Red Hat Enterprise Linux demos",
+          "name": "Demo(s): Red Hat Enterprise Linux demos",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "Lab(s):\u00a0Red Hat Enterprise Linux labs",
+          "name": "Lab(s): Red Hat Enterprise Linux labs",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
@@ -1207,7 +1206,7 @@
           "type": "external"
         },
         {
-          "name": "Key items:\u00a0RHEL 10 demos and labs",
+          "name": "Key items: RHEL 10 demos and labs",
           "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
           "type": "external"
         },
@@ -1221,7 +1220,7 @@
     },
     {
       "name": "VM migration & modernization",
-      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
@@ -1239,7 +1238,7 @@
           "type": "external"
         },
         {
-          "name": "Take the headache out of your virtual machine management with Red Hat OpenShift Virtualization. Alan Cowles, Principle Technical Marketing Manager, explains how you can move to OpenShift with a smooth migration process and gain the option to apply a host of cloud-native features to your VMs\u2014all at your own pace. Prepare for your conversation with your sysadmin about your infrastructure management: https://www.redhat.com/en/products/virtualization Subscribe to Red Hat's YouTube channel: https://www.youtube.com/redhat/?sub_confirmation=1 #RedHat #VMmigration #OpenShift #Virtualization",
+          "name": "Take the headache out of your virtual machine management with Red Hat OpenShift Virtualization. Alan Cowles, Principle Technical Marketing Manager, explains how you can move to OpenShift with a smooth migration process and gain the option to apply a host of cloud-native features to your VMs—all at your own pace. Prepare for your conversation with your sysadmin about your infrastructure management: https://www.redhat.com/en/products/virtualization Subscribe to Red Hat's YouTube channel: https://www.youtube.com/redhat/?sub_confirmation=1 #RedHat #VMmigration #OpenShift #Virtualization",
           "url": "http://red.ht/virttcoestimator",
           "type": "external"
         },
@@ -1299,7 +1298,7 @@
           "type": "external"
         },
         {
-          "name": "Workshop(s):\u00a0OpenShift",
+          "name": "Workshop(s): OpenShift",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?category=Workshops&search=virtualization",
           "type": "external"
         },
@@ -1310,6 +1309,22 @@
         }
       ],
       "parentTdp": "Virtualization"
+    },
+    {
+      "name": "Sovereign Infrastructure",
+      "talkTrack": "",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Container Mgmt"
+    },
+    {
+      "name": "Red Hat AI Factory with NVIDIA",
+      "talkTrack": "",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "AI Platform"
     }
   ],
   "products": [
@@ -1404,7 +1419,7 @@
           "type": "external"
         },
         {
-          "name": "RHACS 4.9 release\u00a0notes",
+          "name": "RHACS 4.9 release notes",
           "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.9/html-single/release_notes/index",
           "type": "external"
         }

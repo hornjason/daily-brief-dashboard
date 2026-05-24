@@ -1,12 +1,12 @@
 {
   "version": 2,
   "tdps": [
-    "AI",
+    "AI Platform",
     "App Platform",
     "Automation",
     "Virtualization",
     "Server/Cloud OS",
-    "Edge"
+    "Container Mgmt"
   ],
   "plays": [
     {
@@ -74,7 +74,7 @@
     {
       "id": "ai-ml-platform",
       "name": "AI/ML Platform with OpenShift AI",
-      "tdp": "AI",
+      "tdp": "AI Platform",
       "summary": "Build and deploy AI/ML models at scale with OpenShift AI and RHEL AI.",
       "triggerTechnologies": ["TensorFlow", "PyTorch", "Kubeflow", "MLflow", "SageMaker", "Databricks", "Jupyter", "NVIDIA"],
       "redHatProducts": ["ocp", "rhoai"],
@@ -90,7 +90,7 @@
     {
       "id": "agentic-ai",
       "name": "Agentic AI on Red Hat",
-      "tdp": "AI",
+      "tdp": "AI Platform",
       "summary": "Build and deploy agentic AI applications that move from insights to automated action.",
       "triggerTechnologies": ["LangChain", "LLM", "GPT", "Claude", "AI agents", "GenAI", "Generative AI"],
       "redHatProducts": ["ocp", "rhoai"],
@@ -227,7 +227,7 @@
     {
       "id": "edge-computing",
       "name": "Edge Computing with OpenShift and RHEL",
-      "tdp": "Edge",
+      "tdp": "Server/Cloud OS",
       "summary": "Deploy and manage workloads at the edge with lightweight OpenShift and RHEL for Edge.",
       "triggerTechnologies": ["IoT", "Edge", "MEC", "Industrial IoT", "SCADA"],
       "redHatProducts": ["ocp", "rhel", "acm"],

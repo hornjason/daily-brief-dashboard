@@ -160,7 +160,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(knowledge.scrapedAt).toBeTruthy()
     expect(knowledge.products.length).toBe(1)
     expect(knowledge.salesPlays.length).toBe(1)
-    expect(knowledge.tactics.length).toBe(2) // 1 from product tdpSections (non-TDP entry) + 1 standalone
+    expect(knowledge.tactics.length).toBe(4) // 1 from product tdpSections (non-TDP entry) + 1 standalone + 2 injected (#368: Sovereign Infrastructure, AI Factory)
     expect(knowledge.tdps.length).toBeGreaterThanOrEqual(1)
 
     // Verify product structure
@@ -289,6 +289,83 @@ describe('buildSalesHubKnowledge', () => {
     expect(tdp!.services[0].name).toBe('IBM Consulting')
     expect(tdp!.cheatsheetUrl).toBe('https://example.com/cheatsheet')
     expect(tdp!.customerDeckUrl).toBe('https://example.com/customer-deck')
+  })
+
+  it('restructures TDPs to match SalesHub actual structure (#368)', () => {
+    // Build products that produce App Platform TDP with container mgmt tactics
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'openshift',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [
+          { name: 'App Platform TDP', description: 'Application platform for cloud-native apps' },
+          { name: 'Kubernetes for 3rd party workloads (Non-AI)', description: 'Run 3rd party non-AI workloads on OpenShift' },
+          { name: 'Kubernetes for 3rd party AI workloads', description: 'Run 3rd party AI workloads on OpenShift' },
+          { name: 'Multicluster management & security at scale for Kubernetes', description: 'Manage multiple clusters' },
+          { name: 'Secure the software supply chain', description: 'Supply chain security with ACS' },
+          { name: 'Cloud marketplaces and private offers', description: 'Purchase through cloud marketplaces' },
+          { name: 'Container Adoption Journey', description: 'Adoption path for containers' },
+          { name: 'AI TDP', description: 'AI Technology Decision Point' },
+          { name: 'Agentic AI', description: 'Deploy agentic AI applications' },
+          { name: 'Edge TDP', description: 'Edge computing decision point' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+
+    // Container Mgmt TDP should exist with 5 tactics
+    const containerMgmt = knowledge.tdps.find(t => t.name === 'Container Mgmt')
+    expect(containerMgmt).toBeDefined()
+    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party AI workloads')
+    expect(containerMgmt!.tactics).toContain('Multicluster management & security at scale for Kubernetes')
+    expect(containerMgmt!.tactics).toContain('Secure the software supply chain')
+    expect(containerMgmt!.tactics).toContain('Sovereign Infrastructure')
+    expect(containerMgmt!.tactics.length).toBe(5)
+
+    // Edge TDP should NOT exist
+    const edge = knowledge.tdps.find(t => t.name.toLowerCase().includes('edge'))
+    expect(edge).toBeUndefined()
+
+    // AI should be renamed to AI Platform
+    const aiTdp = knowledge.tdps.find(t => t.name === 'AI Platform')
+    expect(aiTdp).toBeDefined()
+    const oldAi = knowledge.tdps.find(t => t.name === 'AI TDP' || t.name === 'AI')
+    expect(oldAi).toBeUndefined()
+
+    // Sovereign Infrastructure should exist under Container Mgmt
+    const sovereign = knowledge.tactics.find(t => t.name === 'Sovereign Infrastructure')
+    expect(sovereign).toBeDefined()
+    expect(sovereign!.parentTdp).toBe('Container Mgmt')
+
+    // Red Hat AI Factory with NVIDIA should exist under AI Platform
+    const aiFactory = knowledge.tactics.find(t => t.name === 'Red Hat AI Factory with NVIDIA')
+    expect(aiFactory).toBeDefined()
+    expect(aiFactory!.parentTdp).toBe('AI Platform')
+
+    // App Platform should NOT have the moved tactics
+    const appPlatform = knowledge.tdps.find(t => t.name === 'App Platform TDP')
+    expect(appPlatform).toBeDefined()
+    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party AI workloads')
+    expect(appPlatform!.tactics).not.toContain('Multicluster management & security at scale for Kubernetes')
+    expect(appPlatform!.tactics).not.toContain('Secure the software supply chain')
+    // App Platform should still have its non-moved tactics
+    expect(appPlatform!.tactics).toContain('Cloud marketplaces and private offers')
+    expect(appPlatform!.tactics).toContain('Container Adoption Journey')
+
+    // Agentic AI should have parentTdp updated to AI Platform
+    const agenticAi = knowledge.tactics.find(t => t.name === 'Agentic AI')
+    expect(agenticAi).toBeDefined()
+    expect(agenticAi!.parentTdp).toBe('AI Platform')
   })
 
   it('defaults SalesPlay new fields when not provided (#367)', () => {
