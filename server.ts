@@ -85,6 +85,8 @@ import { createCampaignsRouter } from './src/campaigns-routes.ts'
 // ── GitHub #168: Batch execution routes ─────────────────────────────────
 import { createBatchRouter } from './src/batch-routes.ts'
 import { createNewsRouter } from './src/news-routes.ts'
+// ── GitHub #352: Cloud marketplace drill-down routes ────────────────────
+import { createCloudMarketplaceRouter } from './src/cloud-marketplace-routes.ts'
 // ── GitHub #200: Intelligence surfaces routes ───────────────────────────
 import { createIntelligenceRouter } from './src/intelligence-routes.ts'
 // ── GitHub #293: Playbook routes ────────────────────────────────────────
@@ -307,6 +309,7 @@ app.route('/', createToolsRouter())
 app.route('/', createCampaignsRouter())
 // ── GitHub #153: News Radar routes ──────────────────────────────────────────
 app.route('/', createNewsRouter())
+app.route('/', createCloudMarketplaceRouter())
 // ── GitHub #168: Batch execution routes ─────────────────────────────────────
 app.route('/', createBatchRouter())
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────────
