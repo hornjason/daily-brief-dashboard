@@ -243,17 +243,18 @@ FeatureModuleRegistry.register({
         upgradeGuideUrl: urls.upgradeGuideUrl,
         detectedVersions,
         hasOlderVersion,
+        // #376: Always set redHatProducts so lifecycle signals route to product
+        // alignment deterministically, not via narrative budget competition
+        redHatProducts: [product.slug],
       }
 
       if (isOwned) {
         metadata.customerSlug = customerSlug
         metadata.matchType = 'subscription'
-        metadata.redHatProducts = [product.slug]
       } else if (isInterest) {
         metadata.customerSlug = customerSlug
         metadata.matchType = 'interest'
         metadata.context = 'evaluating'
-        metadata.redHatProducts = [product.slug]
       }
 
       signals.push({

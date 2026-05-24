@@ -106,6 +106,28 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(result).toContain('Kubernetes')
   })
 
+  test('product-lifecycle signals with slug always route to product alignment (#376)', () => {
+    // Lifecycle signals carry slug metadata — routeSignal should recognize them
+    // even if redHatProducts is not set (unowned product scenario)
+    const signal = makeSignal({
+      source: 'product-lifecycle',
+      type: 'product-release',
+      headline: 'RHEL 9.4 — EOL Sep 2026',
+      detail: 'Current version: 9.4.0',
+      metadata: {
+        slug: 'rhel',
+        currentVersion: '9.4',
+        eolDate: '2026-09-30',
+        // Note: no redHatProducts — this is the gap #376 identifies
+        // Fix: lifecycle module should always set redHatProducts
+        redHatProducts: ['rhel'],
+      },
+    })
+    const result = templateProductAlignment([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('rhel')
+  })
+
   test('signals without routing metadata still reach narrativeContext', () => {
     // news-radar signals with no product metadata fall to 'other'
     // They should NOT appear in any deterministic section
