@@ -6,6 +6,7 @@
 
 import { Newspaper, RefreshCw, ExternalLink, Loader2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import SignalWithAging from '../SignalWithAging'
 
 interface NewsTabProps {
   customerName: string
@@ -169,10 +170,7 @@ export function NewsTab({ customerName }: NewsTabProps) {
       {!loading && !error && sortedArticles.length > 0 && (
         <div className="space-y-4">
           {sortedArticles.map((article, idx) => (
-            <div
-              key={idx}
-              className="bg-surface border border-border rounded-xl p-6 space-y-4 hover:border-accent/50 transition-colors"
-            >
+            <SignalWithAging key={idx} timestamp={article.publishedDate} showTimestamp={false} className="bg-surface border border-border rounded-xl p-6 space-y-4 hover:border-accent/50 transition-colors">
               {/* Headline */}
               <h3 className="text-lg font-bold text-text-primary">{article.headline}</h3>
 
@@ -204,7 +202,7 @@ export function NewsTab({ customerName }: NewsTabProps) {
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-            </div>
+            </SignalWithAging>
           ))}
         </div>
       )}
