@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-17
+updated: 2026-05-24
 ---
 
 # DailyBriefDashboard — Project State
@@ -190,7 +190,7 @@ Last updated: 2026-05-20 — Full architecture overhaul: Signal Template Engine 
 | `.rh-session.json` | RH Portal session cookie | ❌ No | Re-login via Admin page |
 | `.sf-session.json` | SF session flag | ❌ No | Re-login via Admin page |
 | `solution-plays.json` | 16 solution plays with TDP mappings, trigger technologies, value props | ✅ Ships in `config-templates/` | Seeded on first boot from config-templates |
-| `saleshub-knowledge.json` | SalesHub knowledge base: TDPs, tactics (talk tracks), sales plays, products | ✅ Ships in `config-templates/` | Seeded on first boot; refreshed via `make saleshub-now` on Mac Mini |
+| `saleshub-knowledge.json` | SalesHub knowledge base: TDPs (7 structured sections each), tactics (talk tracks), sales plays (8 structured sections each), products | ✅ Ships in `config-templates/` | Seeded on first boot; refreshed via `make saleshub-now` on Mac Mini |
 
 **Implemented (BKL-BACKUP-01):** Config backup sheet created at POD Bootstrap; auto-syncs aes.json + customers.json + data-sources.json + product-intel-config.json on every save (backup-config.ts + backup-routes.ts). Admin page Backup/Restore buttons still pending.
 
@@ -266,7 +266,7 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 - `make seed` — reset `data-test/` from seed fixtures
 - `make test-up` / `make test-down` — start/stop test container
 
-**Unit tests (2026-04-10):** `test/unit/` — 27 pure-function tests covering slug, sanitize, account-numbers, setup-validation. Run: `bun test test/unit/`
+**Unit tests (2026-05-24):** `test/unit/` — 1609 tests across 165 files covering modules, signals, scrapers, bootstrap, cache, API routes. Run: `bun test --isolate test/unit/` (requires Bun 1.3.13+; `--isolate` gives each file a fresh global scope)
 
 **CI gate (2026-04-10):** `make lint` runs `scripts/check-empty-catches.sh` — fails build if any `.catch(() => {})` exists in `dashboard/src/`
 

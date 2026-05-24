@@ -194,6 +194,12 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - If not easily testable: document why in the backlog item and propose the closest proxy test
 - This question is not optional. Skipping it is a process failure.
 
+**Zero test failures gate (MANDATORY):**
+- `bun test --isolate test/unit/` must pass with 0 failures before any commit. The `--isolate` flag (Bun 1.3.13+) gives each test file a fresh global scope — required for FeatureModuleRegistry isolation.
+- Never use static `import '../../src/modules/X-module.ts'` for side-effect registration in tests. Always use `beforeAll(async () => { await import('...') })` — static imports create ESM TDZ errors when modules call `.register()` at load time.
+- Never use `delete require.cache[...]` to reset ESM modules — it's a no-op in Bun ESM. Use `_resetForTesting()` on the registry if you need a clean slate.
+- When test failures appear: check Context7 for current Bun test docs before guessing at fixes.
+
 **Quinn Standard:** `~/.claude/PAI/Testing/QUINN-STANDARD.md` — Quinn reads this at session start before any testing. Defines mandatory sequence: load registry → run Playwright baseline → visual review → capture findings.
 
 **Quinn Registry:** `~/.claude/PAI/Testing/registries/dailybriefdashboard.md` — accumulating list of known issues and visual findings. Quinn checks every entry each session and appends new findings.
