@@ -44,6 +44,8 @@ export interface TdpNode {
   services: Array<{ name: string; description: string }>
   cheatsheetUrl: string
   customerDeckUrl: string
+  extractedContent: string
+  metrics: Array<{ value: string; context: string; source: string }>
 }
 
 export interface TacticNode {
@@ -53,6 +55,8 @@ export interface TacticNode {
   whatToSay: string[]
   whatToShare: Array<{ name: string; url: string; type: string }>
   parentTdp: string
+  extractedContent: string
+  metrics: Array<{ value: string; context: string; source: string }>
 }
 
 export interface ProductNode {
@@ -665,6 +669,8 @@ export function buildSalesHubKnowledge(
             services: [],
             cheatsheetUrl: '',
             customerDeckUrl: '',
+            extractedContent: '',
+            metrics: [],
           })
         }
       } else {
@@ -677,6 +683,8 @@ export function buildSalesHubKnowledge(
           whatToSay: [],
           whatToShare: [],
           parentTdp,
+          extractedContent: '',
+          metrics: [],
         })
         // Link tactic to its parent TDP
         const tdp = tdpMap.get(parentTdp)
@@ -705,6 +713,8 @@ export function buildSalesHubKnowledge(
         whatToSay: tactic.whatToSay,
         whatToShare: tactic.whatToShare,
         parentTdp: tactic.parentTdp,
+        extractedContent: '',
+        metrics: [],
       })
     }
     // Link to TDP
@@ -750,6 +760,8 @@ export function buildSalesHubKnowledge(
           services: tdpPage.services,
           cheatsheetUrl: tdpPage.cheatsheetUrl,
           customerDeckUrl: tdpPage.customerDeckUrl,
+          extractedContent: '',
+          metrics: [],
         })
       }
     }
@@ -791,6 +803,8 @@ export function buildSalesHubKnowledge(
       whatToSay: [],
       whatToShare: [],
       parentTdp: 'Container Mgmt',
+      extractedContent: '',
+      metrics: [],
     })
   } else {
     // Update parentTdp if it exists
@@ -813,6 +827,8 @@ export function buildSalesHubKnowledge(
       services: [],
       cheatsheetUrl: '',
       customerDeckUrl: '',
+      extractedContent: '',
+      metrics: [],
     })
   } else {
     const cm = tdpMap.get('Container Mgmt')!
@@ -856,6 +872,8 @@ export function buildSalesHubKnowledge(
       whatToSay: [],
       whatToShare: [],
       parentTdp: parentForAiFactory,
+      extractedContent: '',
+      metrics: [],
     })
     // Add to AI TDP's tactics list
     if (aiTdpName) {

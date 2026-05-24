@@ -42,3 +42,11 @@ export function isValidAsset(asset: { name: string; url: string }): boolean {
 
   return true
 }
+
+/**
+ * Returns true if the extracted metric has a number in value and meaningful context.
+ * Filters out noise from automated metric extraction.
+ */
+export function isValidMetric(metric: { value: string; context: string }): boolean {
+  return /\d/.test(metric.value) && metric.context.length > 5
+}

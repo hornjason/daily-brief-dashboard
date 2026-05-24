@@ -180,6 +180,12 @@ describe('buildSalesHubKnowledge', () => {
     // Verify TDP aggregation from products
     const automationTdp = knowledge.tdps.find(t => t.name === 'Automation TDP')
     expect(automationTdp).toBeDefined()
+
+    // Verify extractedContent and metrics fields are initialized (#369)
+    expect(automationTdp!.extractedContent).toBe('')
+    expect(automationTdp!.metrics).toEqual([])
+    expect(standaloneTactic!.extractedContent).toBe('')
+    expect(standaloneTactic!.metrics).toEqual([])
   })
 
   it('deduplicates TDPs by name', () => {
