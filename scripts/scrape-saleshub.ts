@@ -398,19 +398,21 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
         href: a.getAttribute('href') ?? '',
       }))
 
-      // Extract TDP alignment from sidebar DOM elements (#381)
-      // The "TDPs Powering the Play" sidebar renders TDP names as card elements
-      // that may not appear in innerText (rendered as images/icons with text)
-      const KNOWN_TDP_NAMES = ['AI Platform', 'Server/Cloud Operating System', 'Container Management',
-        'Automation', 'App Platform', 'Application Platform', 'Virtualization', 'Server/Cloud OS']
+      // Extract TDP alignment from "TDPs Powering the Play" sidebar cards (#381)
+      // Cards use Seismic's docList widget with TDP names in aria-labels and card-name buttons
       const sidebarTdpNames: string[] = []
-      const allElements = document.querySelectorAll('span, div, a, p')
-      for (const el of allElements) {
-        const t = el.textContent?.trim() ?? ''
-        if (t.length > 3 && t.length < 50 && !t.includes('\n') && el.children.length < 2) {
-          if (KNOWN_TDP_NAMES.some(k => k.toLowerCase() === t.toLowerCase())) {
-            if (!sidebarTdpNames.includes(t)) sidebarTdpNames.push(t)
+      // Find the docList widget containing "TDPs Powering"
+      const docListWidgets = document.querySelectorAll('.seismic-page-docListPicker-Viewer')
+      for (const widget of docListWidgets) {
+        const header = widget.querySelector('.seismic-page-docListPicker-Viewer-title-text')
+        if (header?.textContent?.trim()?.includes('TDPs Powering')) {
+          // Extract card names from this specific widget
+          const cardNames = widget.querySelectorAll('button.seismic-page-docList-card-name span')
+          for (const name of cardNames) {
+            const t = name.textContent?.trim() ?? ''
+            if (t.length > 2 && !sidebarTdpNames.includes(t)) sidebarTdpNames.push(t)
           }
+          break
         }
       }
 
