@@ -853,6 +853,37 @@ export function initBackgroundScheduler(opts: {
     },
   })
 
+  // Proactive Meeting Prep — daily 6:00am ET (Issue #195)
+  // Scans calendar for customer meetings 2-3 days out and auto-generates prep docs
+  schedulerRegistry.register({
+    name: 'proactive-meeting-prep',
+    type: 'daily',
+    hour: 6,
+    minute: 0,
+    enabled: true,
+    run: async () => {
+      console.log('[proactive-prep] daily scan started')
+      const { runProactivePrepScan } = await import('./proactive-meeting-prep.ts')
+      const { fetchCalendar } = await import('./google.ts')
+      const { generateMeetingPrep, readHistory } = await import('./meeting-prep-service.ts')
+      const { toSlug } = await import('./cache-layer.ts')
+
+      const result = await runProactivePrepScan(
+        () => fetchCalendar(customers, true),
+        customers,
+        (customer, meeting) => generateMeetingPrep(customer, meeting),
+        (slug) => readHistory(slug),
+        toSlug,
+        (title, message) => notify(title, message),
+      )
+
+      console.log(`[proactive-prep] daily scan complete: ${result.generated} generated, ${result.skipped} skipped, ${result.errors.length} errors`)
+      if (result.errors.length > 0) {
+        console.warn(`[proactive-prep] errors: ${result.errors.join('; ')}`)
+      }
+    },
+  })
+
   // Events — every 7 days
   schedulerRegistry.register({
     name: 'rh-events',

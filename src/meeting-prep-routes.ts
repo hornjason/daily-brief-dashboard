@@ -27,6 +27,7 @@ import {
   getPrepCacheDir,
   type MeetingPrepRequest,
 } from './meeting-prep-service.ts'
+import { runProactivePrepScan, readAttendeeCache } from './proactive-meeting-prep.ts'
 
 // ── In-flight guard ──────────────────────────────────────────────────────────
 
@@ -168,6 +169,39 @@ export function createMeetingPrepRouter() {
     writeFileSync(getHistoryPath(slug), JSON.stringify(history, null, 2), { mode: 0o600 })
 
     return c.json({ deleted: true, remaining: history.length })
+  })
+
+  // ── POST /api/meeting-prep/scan ──────────────────────────────────────────
+  // Trigger proactive meeting prep scan manually (Issue #195)
+  router.post('/api/meeting-prep/scan', async (c) => {
+    try {
+      const result = await runProactivePrepScan(
+        () => fetchCalendar(customers, true),
+        customers,
+        (customer, meeting) => generateMeetingPrep(customer, meeting),
+        (slug) => readHistory(slug),
+        (name) => toSlug(name),
+      )
+      return c.json(result)
+    } catch (e: any) {
+      console.error('[meeting-prep] Scan failed:', e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/customer/:name/attendees ──────────────────────────────────
+  // Returns cached attendee profiles for this customer (Issue #195)
+  router.get('/api/customer/:name/attendees', async (c) => {
+    const customerName = decodeURIComponent(c.req.param('name'))
+    const customer = findCustomerByNameOrSlug(customerName)
+
+    if (!customer) {
+      return c.json({ error: `Customer "${customerName}" not found` }, 404)
+    }
+
+    const slug = toSlug(customer.name)
+    const attendees = readAttendeeCache(slug)
+    return c.json({ attendees })
   })
 
   return router
