@@ -78,6 +78,7 @@ import './src/modules/solution-intelligence-module.ts'  // ADR-030
 import './src/modules/tech-stack-module.ts'  // #318
 import './src/modules/value-positioning-module.ts'  // #264
 import './src/modules/ma-module.ts'  // #218
+import './src/modules/competitive-intel-module.ts'  // #319
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
