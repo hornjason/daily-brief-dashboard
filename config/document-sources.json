@@ -1,0 +1,46 @@
+{
+  "sources": [
+    {
+      "id": "value-maps",
+      "name": "Business Value Maps Deck",
+      "type": "google-slides",
+      "identifier": "",
+      "configKey": "valueMapsDeckId",
+      "lastFetched": null,
+      "status": "pending"
+    },
+    {
+      "id": "cloud-marketplace-newsletter",
+      "name": "Cloud Marketplace Newsletter",
+      "type": "email",
+      "identifier": "subject:\"Cloud Marketplaces and Private Offers Newsletter\"",
+      "lastFetched": null,
+      "status": "pending"
+    },
+    {
+      "id": "product-intel-drive",
+      "name": "Product Intel (Drive Folders)",
+      "type": "google-drive-folder",
+      "identifier": "1sgXV9x55ncAJE8pOpS1KSTwjD2tRV5pW",
+      "configKey": "driveParentFolderId",
+      "lastFetched": null,
+      "status": "pending"
+    },
+    {
+      "id": "rh-blog-rss",
+      "name": "Red Hat Blog RSS",
+      "type": "rss",
+      "identifier": "https://www.redhat.com/en/rss/blog",
+      "lastFetched": null,
+      "status": "pending"
+    },
+    {
+      "id": "rh-press-rss",
+      "name": "Red Hat Press Releases RSS",
+      "type": "rss",
+      "identifier": "https://www.redhat.com/en/rss/press-releases",
+      "lastFetched": null,
+      "status": "pending"
+    }
+  ]
+}
