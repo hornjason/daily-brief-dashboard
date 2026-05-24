@@ -24,6 +24,7 @@ export interface SolutionPlaySnapshot {
   talkTrack?: string
   customerWins?: string[]
   linkedAssets?: Array<{ name: string; url: string }>
+  matchReasoning?: string
 }
 
 export interface TemplateOptions {
@@ -482,12 +483,12 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
 
   // Map TDPs to their parent sales plays
   const tdpToPlays: Record<string, string[]> = {
-    'AI': ['The AI-Ready Enterprise', 'Build and Run Applications'],
+    'AI Platform': ['The AI-Ready Enterprise', 'Build and Run Applications'],
     'App Platform': ['Build and Run Applications', 'Modernize Infrastructure'],
     'Automation': ['IT Operations Efficiency', 'Modernize Infrastructure', 'The AI-Ready Enterprise'],
     'Virtualization': ['Modernize Infrastructure', 'IT Operations Efficiency'],
     'Server/Cloud OS': ['Modernize Infrastructure'],
-    'Edge': ['Build and Run Applications', 'Sovereignty'],
+    'Container Mgmt': ['Build and Run Applications', 'Modernize Infrastructure'],
   }
 
   const allTdps = Array.from(byTdp.keys())
@@ -681,6 +682,7 @@ export async function templateAll(
         talkTrack: p.talkTrack,
         customerWins: p.customerWins,
         linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
+        matchReasoning: p.matchReasoning,
       }))
     } catch {
       // Solution context unavailable — return empty array

@@ -183,6 +183,33 @@ describe('activeSolutionPlays', () => {
     expect(ctx.activeSolutionPlays[0].playId).toBe('vmware-migration')
   })
 
+  it('populates matchReasoning with detected tech, source, TDP, and play name', () => {
+    writeTechStackCache('acme', [
+      { name: 'ServiceNow', category: 'tech-stack', context: 'using', confidence: 'MEDIUM', redHatProducts: ['aap'], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    expect(ctx.activeSolutionPlays.length).toBe(1)
+    const play = ctx.activeSolutionPlays[0]
+    expect(play.matchReasoning).toBeDefined()
+    expect(play.matchReasoning.length).toBeGreaterThan(0)
+    expect(play.matchReasoning).toContain('ServiceNow')
+    expect(play.matchReasoning).toContain('tech-stack')
+    expect(play.matchReasoning).toContain('Automation')
+    expect(play.matchReasoning).toContain('ITSM Automation')
+  })
+
+  it('includes multiple detected techs with their sources in matchReasoning', () => {
+    writeTechStackCache('acme', [
+      { name: 'VMware', category: 'subscription', context: 'using', confidence: 'HIGH', redHatProducts: ['ocp'], infrastructure: ['vSphere'] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    const play = ctx.activeSolutionPlays[0]
+    // VMware matched directly, vSphere matched via infrastructure — both from 'subscription' source
+    expect(play.matchReasoning).toContain('VMware (subscription)')
+    expect(play.matchReasoning).toContain('vSphere (subscription)')
+    expect(play.matchReasoning).toContain('Virtualization TDP')
+  })
+
   it('includes valueProps and redHatProducts from catalog', () => {
     writeTechStackCache('acme', [
       { name: 'VMware', category: 'industry-tool', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
