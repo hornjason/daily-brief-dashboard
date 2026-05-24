@@ -1,10 +1,11 @@
 // GitHub Issue #197 — Product lifecycle feature module
 // Registers product lifecycle fetcher with the Feature Module Registry
 // and provides Signal generation for content generation features.
+// GitHub Issue #350 — Version detection from cases and tech-stack
 
 import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchProductLifecycle, readProductLifecycleCache } from '../product-lifecycle.ts'
-import { existsSync, unlinkSync, statSync } from 'fs'
+import { existsSync, unlinkSync, statSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { getCustomerProductContext } from '../lib/customer-product-context.ts'
 
@@ -25,6 +26,80 @@ const PRODUCT_URLS: Record<string, { lifecycleUrl: string; upgradeGuideUrl: stri
     lifecycleUrl: 'https://access.redhat.com/product-life-cycles#/ansible_automation_platform',
     upgradeGuideUrl: 'https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/red_hat_ansible_automation_platform_upgrade_and_migration_guide/',
   },
+}
+
+// ── Version detection from cases and tech-stack (#350) ───────────────────────
+
+const PRODUCT_CASE_PATTERNS: Record<string, RegExp> = {
+  'ocp': /(?:openshift|ocp)\s*(\d+\.\d+(?:\.\d+)?)/i,
+  'rhel': /(?:enterprise\s+linux|rhel)\s*(\d+(?:\.\d+)*)/i,
+  'aap': /(?:ansible\s+automation|aap)\s*(\d+(?:\.\d+)*)/i,
+}
+
+const PRODUCT_TECH_PATTERNS: Record<string, RegExp> = {
+  'ocp': /(?:openshift|ocp)\s*(\d+\.\d+(?:\.\d+)?)/i,
+  'rhel': /(?:enterprise\s+linux|rhel)\s*(\d+(?:\.\d+)*)/i,
+  'aap': /(?:ansible|aap)\s*(\d+(?:\.\d+)*)/i,
+}
+
+function detectVersionsFromCases(productSlug: string, customerSlug: string): string[] {
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  const casesPath = resolve(cacheDir, 'cases.json')
+  if (!existsSync(casesPath)) return []
+
+  const pattern = PRODUCT_CASE_PATTERNS[productSlug]
+  if (!pattern) return []
+
+  try {
+    const raw = JSON.parse(readFileSync(casesPath, 'utf-8'))
+    const cases: any[] = raw.cases ?? (Array.isArray(raw) ? raw : [])
+
+    // Filter to customer cases using slug-based matching
+    const needle = customerSlug.replace(/-/g, ' ').toLowerCase()
+    const customerCases = cases.filter(c => {
+      const name = (c.customerName ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, '')
+      return name.includes(needle) || needle.includes(name.replace(/\s+/g, ' ').trim())
+    })
+
+    const versions = new Set<string>()
+    for (const c of customerCases) {
+      const match = pattern.exec(c.product ?? '')
+      if (match) versions.add(match[1])
+    }
+    return [...versions]
+  } catch { return [] }
+}
+
+function detectVersionsFromTechStack(productSlug: string, customerSlug: string): string[] {
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  const techPath = resolve(cacheDir, 'tech-stack', `${customerSlug}.json`)
+  if (!existsSync(techPath)) return []
+
+  const pattern = PRODUCT_TECH_PATTERNS[productSlug]
+  if (!pattern) return []
+
+  try {
+    const raw = JSON.parse(readFileSync(techPath, 'utf-8'))
+    const technologies: any[] = raw.technologies ?? []
+
+    const versions = new Set<string>()
+    for (const tech of technologies) {
+      const match = pattern.exec(tech.name ?? '')
+      if (match) versions.add(match[1])
+    }
+    return [...versions]
+  } catch { return [] }
+}
+
+function isOlderMajorVersion(detected: string[], currentVersion: string): boolean {
+  if (detected.length === 0) return false
+  const currentMajor = parseInt(currentVersion.split('.')[0], 10)
+  if (isNaN(currentMajor)) return false
+
+  return detected.some(v => {
+    const major = parseInt(v.split('.')[0], 10)
+    return !isNaN(major) && major < currentMajor
+  })
 }
 
 FeatureModuleRegistry.register({
@@ -146,6 +221,16 @@ FeatureModuleRegistry.register({
       const isOwned = context.ownedProducts.includes(product.slug)
       const isInterest = !isOwned && context.interestProducts.includes(product.slug)
 
+      // #350: Detect customer versions from cases and tech-stack
+      const caseVersions = detectVersionsFromCases(product.slug, customerSlug)
+      const techVersions = detectVersionsFromTechStack(product.slug, customerSlug)
+      const detectedVersions = [...new Set([...caseVersions, ...techVersions])]
+      const hasOlderVersion = isOlderMajorVersion(detectedVersions, product.currentVersion)
+
+      if (hasOlderVersion) {
+        rawRelevance = Math.min(1.0, rawRelevance + 0.2)
+      }
+
       const metadata: Record<string, any> = {
         slug: product.slug,
         currentVersion: product.currentVersion,
@@ -156,6 +241,8 @@ FeatureModuleRegistry.register({
         eusAvailable: product.eusAvailable,
         lifecycleUrl: urls.lifecycleUrl,
         upgradeGuideUrl: urls.upgradeGuideUrl,
+        detectedVersions,
+        hasOlderVersion,
       }
 
       if (isOwned) {
