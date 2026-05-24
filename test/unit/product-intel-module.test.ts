@@ -3,10 +3,12 @@
  * Verifies product-intel module is registered with correct config
  */
 
-import { test, expect } from 'bun:test'
+import { test, expect, beforeAll } from 'bun:test'
 import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
-// Import module to trigger registration
-import '../../src/modules/product-intel-module.ts'
+
+beforeAll(async () => {
+  await import('../../src/modules/product-intel-module.ts')
+})
 
 test('product-intel module is registered', () => {
   const module = FeatureModuleRegistry.get('product-intel')

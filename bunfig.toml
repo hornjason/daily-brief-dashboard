@@ -1,2 +1,3 @@
 [test]
 root = "."
+preload = ["./test/unit/test-preload.ts"]

@@ -1,17 +1,10 @@
 // test/unit/feature-module-nav.test.ts
 // Unit tests for FeatureModule nav/accountTab/scope extensions (GitHub Issue #234)
 // Tests getNav(), getAccountTabs(), and nav API endpoint.
+// NOTE: Registry is shared (Bun ESM). Use unique names, filter by test names.
 
-import { describe, test, expect, beforeEach } from 'bun:test'
-import type { FeatureModule, NavDeclaration, AccountTabDeclaration, ModuleScope } from '../../src/feature-module-registry.ts'
-
-let FeatureModuleRegistry: any
-
-beforeEach(async () => {
-  delete require.cache[require.resolve('../../src/feature-module-registry.ts')]
-  const mod = await import('../../src/feature-module-registry.ts')
-  FeatureModuleRegistry = mod.FeatureModuleRegistry
-})
+import { describe, test, expect } from 'bun:test'
+import { FeatureModuleRegistry, type FeatureModule, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../../src/feature-module-registry.ts'
 
 function makeModule(overrides: Partial<FeatureModule> & { name: string }): FeatureModule {
   return {
@@ -24,90 +17,69 @@ function makeModule(overrides: Partial<FeatureModule> & { name: string }): Featu
 }
 
 describe('FeatureModuleRegistry — nav extensions (#234)', () => {
-  // ── getNav() ────────────────────────────────────────────────────────────────
-
-  test('getNav() returns empty array when no modules declare nav', () => {
-    FeatureModuleRegistry.register(makeModule({ name: 'no-nav' }))
-    expect(FeatureModuleRegistry.getNav()).toEqual([])
-  })
-
-  test('getNav() returns modules that declare nav', () => {
-    const nav: NavDeclaration = { label: 'Campaigns', icon: 'megaphone', group: 'actions', path: '/campaigns' }
-    FeatureModuleRegistry.register(makeModule({ name: 'campaigns', nav, scope: 'portfolio' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'no-nav' }))
+  test('getNav() includes modules that declare nav', () => {
+    const nav: NavDeclaration = { label: 'NavTest', icon: 'megaphone', group: 'actions', path: '/nav-test-234' }
+    FeatureModuleRegistry.register(makeModule({ name: 'nav-test-234', nav, scope: 'portfolio' }))
 
     const result = FeatureModuleRegistry.getNav()
-    expect(result).toHaveLength(1)
-    expect(result[0].name).toBe('campaigns')
-    expect(result[0].nav).toEqual(nav)
-    expect(result[0].scope).toBe('portfolio')
+    const entry = result.find(r => r.name === 'nav-test-234')
+    expect(entry).toBeDefined()
+    expect(entry!.nav).toEqual(nav)
+    expect(entry!.scope).toBe('portfolio')
   })
 
   test('getNav() sorts by order ascending, nulls last', () => {
-    const nav1: NavDeclaration = { label: 'B', icon: 'b', group: 'actions', path: '/b', order: 20 }
-    const nav2: NavDeclaration = { label: 'A', icon: 'a', group: 'intelligence', path: '/a', order: 10 }
-    const nav3: NavDeclaration = { label: 'C', icon: 'c', group: 'actions', path: '/c' } // no order
+    const nav1: NavDeclaration = { label: 'B', icon: 'b', group: 'actions', path: '/sort-b', order: 200 }
+    const nav2: NavDeclaration = { label: 'A', icon: 'a', group: 'intelligence', path: '/sort-a', order: 100 }
+    const nav3: NavDeclaration = { label: 'C', icon: 'c', group: 'actions', path: '/sort-c' }
 
-    FeatureModuleRegistry.register(makeModule({ name: 'mod-b', nav: nav1, scope: 'customer' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'mod-a', nav: nav2, scope: 'portfolio' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'mod-c', nav: nav3, scope: 'both' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'nav-sort-b', nav: nav1, scope: 'customer' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'nav-sort-a', nav: nav2, scope: 'portfolio' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'nav-sort-c', nav: nav3, scope: 'both' }))
 
     const result = FeatureModuleRegistry.getNav()
-    expect(result).toHaveLength(3)
-    expect(result[0].name).toBe('mod-a')   // order 10
-    expect(result[1].name).toBe('mod-b')   // order 20
-    expect(result[2].name).toBe('mod-c')   // no order → last
+    const sortNames = result.filter(r => r.name.startsWith('nav-sort-')).map(r => r.name)
+    expect(sortNames).toEqual(['nav-sort-a', 'nav-sort-b', 'nav-sort-c'])
   })
 
   test('getNav() defaults scope to "both" when module omits scope', () => {
-    const nav: NavDeclaration = { label: 'X', icon: 'x', group: 'actions', path: '/x' }
-    FeatureModuleRegistry.register(makeModule({ name: 'no-scope', nav }))
+    const nav: NavDeclaration = { label: 'X', icon: 'x', group: 'actions', path: '/scope-default' }
+    FeatureModuleRegistry.register(makeModule({ name: 'nav-scope-default', nav }))
 
     const result = FeatureModuleRegistry.getNav()
-    expect(result).toHaveLength(1)
-    expect(result[0].scope).toBe('both')
+    const entry = result.find(r => r.name === 'nav-scope-default')
+    expect(entry).toBeDefined()
+    expect(entry!.scope).toBe('both')
   })
 
-  // ── getAccountTabs() ────────────────────────────────────────────────────────
-
-  test('getAccountTabs() returns empty array when no modules declare accountTab', () => {
-    FeatureModuleRegistry.register(makeModule({ name: 'no-tab' }))
-    expect(FeatureModuleRegistry.getAccountTabs()).toEqual([])
-  })
-
-  test('getAccountTabs() returns modules that declare accountTab', () => {
-    const tab: AccountTabDeclaration = { label: 'Intel', icon: 'brain' }
-    FeatureModuleRegistry.register(makeModule({ name: 'intel', accountTab: tab, scope: 'customer' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'no-tab' }))
+  test('getAccountTabs() includes modules that declare accountTab', () => {
+    const tab: AccountTabDeclaration = { label: 'TabTest', icon: 'brain' }
+    FeatureModuleRegistry.register(makeModule({ name: 'tab-test-234', accountTab: tab, scope: 'customer' }))
 
     const result = FeatureModuleRegistry.getAccountTabs()
-    expect(result).toHaveLength(1)
-    expect(result[0].name).toBe('intel')
-    expect(result[0].accountTab).toEqual(tab)
-    expect(result[0].scope).toBe('customer')
+    const entry = result.find(r => r.name === 'tab-test-234')
+    expect(entry).toBeDefined()
+    expect(entry!.accountTab).toEqual(tab)
+    expect(entry!.scope).toBe('customer')
   })
 
   test('getAccountTabs() sorts by order ascending, nulls last', () => {
-    const tab1: AccountTabDeclaration = { label: 'Second', icon: 's', order: 20 }
-    const tab2: AccountTabDeclaration = { label: 'First', icon: 'f', order: 5 }
+    const tab1: AccountTabDeclaration = { label: 'Second', icon: 's', order: 200 }
+    const tab2: AccountTabDeclaration = { label: 'First', icon: 'f', order: 50 }
     const tab3: AccountTabDeclaration = { label: 'Last', icon: 'l' }
 
-    FeatureModuleRegistry.register(makeModule({ name: 'tab-second', accountTab: tab1, scope: 'customer' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'tab-first', accountTab: tab2, scope: 'customer' }))
-    FeatureModuleRegistry.register(makeModule({ name: 'tab-last', accountTab: tab3, scope: 'both' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'tab-sort-second', accountTab: tab1, scope: 'customer' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'tab-sort-first', accountTab: tab2, scope: 'customer' }))
+    FeatureModuleRegistry.register(makeModule({ name: 'tab-sort-last', accountTab: tab3, scope: 'both' }))
 
     const result = FeatureModuleRegistry.getAccountTabs()
-    expect(result).toHaveLength(3)
-    expect(result[0].name).toBe('tab-first')   // order 5
-    expect(result[1].name).toBe('tab-second')   // order 20
-    expect(result[2].name).toBe('tab-last')      // no order → last
+    const sortNames = result.filter(r => r.name.startsWith('tab-sort-')).map(r => r.name)
+    expect(sortNames).toEqual(['tab-sort-first', 'tab-sort-second', 'tab-sort-last'])
   })
-
-  // ── Backward compatibility ────────────────────────────────────────────────
 
   test('existing modules without nav/accountTab/scope still register and work', () => {
     const legacy: FeatureModule = {
-      name: 'legacy-module',
+      name: 'legacy-nav-test',
       cachePaths: (slug) => [`cache/${slug}/legacy.json`],
       fetch: async () => {},
       cleanup: async () => {},
@@ -115,9 +87,8 @@ describe('FeatureModuleRegistry — nav extensions (#234)', () => {
     }
 
     FeatureModuleRegistry.register(legacy)
-    expect(FeatureModuleRegistry.get('legacy-module')).toBeDefined()
-    expect(FeatureModuleRegistry.list()).toHaveLength(1)
-    expect(FeatureModuleRegistry.getNav()).toEqual([])
-    expect(FeatureModuleRegistry.getAccountTabs()).toEqual([])
+    expect(FeatureModuleRegistry.get('legacy-nav-test')).toBeDefined()
+    const navEntries = FeatureModuleRegistry.getNav()
+    expect(navEntries.find(r => r.name === 'legacy-nav-test')).toBeUndefined()
   })
 })

@@ -13,33 +13,36 @@
  *   6. Scheduler contract: tasks in registry, not standalone setTimeout
  */
 
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, beforeAll } from 'bun:test'
 import { readdirSync, readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
 
-// ── Import all modules to trigger registration ────────────────────────────
-import '../../src/modules/campaigns-module.ts'
-import '../../src/modules/news-module.ts'
-import '../../src/modules/tools-module.ts'
-import '../../src/modules/lifecycle-module.ts'
-import '../../src/modules/rss-module.ts'
-import '../../src/modules/events-module.ts'
-import '../../src/modules/product-intel-module.ts'
-import '../../src/modules/meeting-prep-module.ts'
-import '../../src/modules/ccsp-module.ts'
-import '../../src/modules/value-map-module.ts'
-import '../../src/modules/cases-module.ts'
-import '../../src/modules/subscriptions-module.ts'
-import '../../src/modules/emails-module.ts'
-import '../../src/modules/pipeline-module.ts'
-import '../../src/modules/docs-module.ts'
-import '../../src/modules/intelligence-module.ts'
-import '../../src/modules/customer-product-intel-module.ts'
-import '../../src/modules/account-plan-module.ts'
-import '../../src/modules/playbook-module.ts'
-import '../../src/modules/tech-stack-module.ts'
-import '../../src/modules/cloud-marketplace-module.ts'
+// Dynamic imports to ensure FeatureModuleRegistry is fully evaluated before
+// modules call .register() (Bun ESM static import evaluation order issue)
+beforeAll(async () => {
+  await import('../../src/modules/campaigns-module.ts')
+  await import('../../src/modules/news-module.ts')
+  await import('../../src/modules/tools-module.ts')
+  await import('../../src/modules/lifecycle-module.ts')
+  await import('../../src/modules/rss-module.ts')
+  await import('../../src/modules/events-module.ts')
+  await import('../../src/modules/product-intel-module.ts')
+  await import('../../src/modules/meeting-prep-module.ts')
+  await import('../../src/modules/ccsp-module.ts')
+  await import('../../src/modules/value-map-module.ts')
+  await import('../../src/modules/cases-module.ts')
+  await import('../../src/modules/subscriptions-module.ts')
+  await import('../../src/modules/emails-module.ts')
+  await import('../../src/modules/pipeline-module.ts')
+  await import('../../src/modules/docs-module.ts')
+  await import('../../src/modules/intelligence-module.ts')
+  await import('../../src/modules/customer-product-intel-module.ts')
+  await import('../../src/modules/account-plan-module.ts')
+  await import('../../src/modules/playbook-module.ts')
+  await import('../../src/modules/tech-stack-module.ts')
+  await import('../../src/modules/cloud-marketplace-module.ts')
+})
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

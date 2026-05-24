@@ -2,14 +2,16 @@
 // GitHub Issue #175 — news-radar signals() implementation tests
 // Tests the signals() method that maps NewsItem to Signal interface
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'fs'
 import { resolve } from 'path'
-import type { Signal } from '../../src/feature-module-registry'
+import type { Signal } from '../../src/feature-module-registry.ts'
 
-// Import the registry to access the registered module
-import { FeatureModuleRegistry } from '../../src/feature-module-registry'
-import '../../src/modules/news-module'  // Side-effect: registers the module
+import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
+
+beforeAll(async () => {
+  await import('../../src/modules/news-module.ts')
+})
 
 const TEST_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
 const TEST_CONFIG_DIR = resolve(process.env.DATA_DIR ?? 'data', 'config')

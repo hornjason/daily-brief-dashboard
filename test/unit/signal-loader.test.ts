@@ -2,18 +2,8 @@
 // Unit tests for signal loading (GitHub Issue #171)
 // Tests the registry signal collection + legacy cache fallback pattern
 
-import { describe, test, expect, beforeEach } from 'bun:test'
-import type { FeatureModule, Signal } from '../../src/feature-module-registry.ts'
-
-// Reset the registry before each test by re-importing
-let FeatureModuleRegistry: any
-
-beforeEach(async () => {
-  // Clear module cache to get a fresh registry instance
-  delete require.cache[require.resolve('../../src/feature-module-registry.ts')]
-  const mod = await import('../../src/feature-module-registry.ts')
-  FeatureModuleRegistry = mod.FeatureModuleRegistry
-})
+import { describe, test, expect } from 'bun:test'
+import { FeatureModuleRegistry, type FeatureModule, type Signal } from '../../src/feature-module-registry.ts'
 
 describe('FeatureModuleRegistry.collectAllSignals', () => {
   test('collects signals from modules that implement signals()', async () => {

@@ -92,7 +92,7 @@ describe('circuit breaker lifecycle', () => {
   })
 
   test('half-open after cooldown elapses', () => {
-    const cb = new CircuitBreaker('test-cb', () => 1, () => 1) // 1ms cooldown
+    const cb = new CircuitBreaker('test-cb', () => 1, () => 50) // threshold=1, cooldown=50ms
     cb.recordFailure('once')
     expect(cb.isOpen()).toBe(true)
     // Wait past cooldown.
@@ -100,7 +100,7 @@ describe('circuit breaker lifecycle', () => {
       expect(cb.isOpen()).toBe(false)
       expect(cb.getState().state).toBe('half-open')
       resolve()
-    }, 10))
+    }, 100))
   })
 
   test('session-expired pin holds breaker open even with low failure count', () => {

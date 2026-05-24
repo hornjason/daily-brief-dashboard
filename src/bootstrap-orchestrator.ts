@@ -95,7 +95,7 @@ import {
 } from './lib/cache-hierarchy.ts'
 // BKL-ARCH-01 (issue #54): per-step modules for the auto-bootstrap flow
 import {
-  ALL_STEPS,
+  getAllSteps,
   runBootstrapSteps,
   BootstrapCancelledError,
   type BootstrapContext,
@@ -1077,7 +1077,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     }
 
     try {
-      await runBootstrapSteps([...ALL_STEPS], ctx)
+      await runBootstrapSteps([...getAllSteps()], ctx)
     } catch (e: any) {
       if (e instanceof BootstrapCancelledError) {
         // BKL-WIZ-02: Mark remaining pending steps as cancelled.
@@ -1592,7 +1592,7 @@ export function createBootstrapRouter(): Hono {
     Object.assign(autoBootstrapState, {
       running: true,
       aeName,
-      steps: ALL_STEPS.map(s => ({ name: s.name, status: 'pending' as const })),
+      steps: getAllSteps().map(s => ({ name: s.name, status: 'pending' as const })),
       error: null,
       completedAt: null,
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },

@@ -14,14 +14,15 @@
  * FIX: Store classification during fetchCustomerEmails() so it's available to emails-module.ts
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test'
+import { describe, test, expect, beforeAll, beforeEach } from 'bun:test'
 import { classifyEmail } from '../../src/email-extraction.ts'
 import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 
-// Load emails-module to register it with the registry
-import '../../src/modules/emails-module.ts'
+beforeAll(async () => {
+  await import('../../src/modules/emails-module.ts')
+})
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const TEST_CUSTOMER = 'test-customer-email-classification'

@@ -89,8 +89,8 @@ describe('Step 4 — Populate Data Sheets preconditions', () => {
 
 describe('Step registry — names match autoBootstrapState.steps initialization', () => {
   it('exports all 4 step names in canonical order', async () => {
-    const { ALL_STEPS } = await import('../../../src/bootstrap/steps/index.ts')
-    expect(ALL_STEPS.map(s => s.name)).toEqual([
+    const { getAllSteps } = await import('../../../src/bootstrap/steps/index.ts')
+    expect(getAllSteps().map(s => s.name)).toEqual([
       'Create Drive Folder',
       'Create Customer Folders',
       'Read SF Bookings Sheet',

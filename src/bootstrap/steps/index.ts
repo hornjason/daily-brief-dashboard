@@ -11,12 +11,16 @@ import { readSfBookingsStep } from './read-sf-bookings.ts'
 import { populateDataSheetsStep } from './populate-data-sheets.ts'
 import type { BootstrapStepDef } from './types.ts'
 
-export const ALL_STEPS: readonly BootstrapStepDef[] = [
-  createDriveFolderStep,
-  createCustomerFoldersStep,
-  readSfBookingsStep,
-  populateDataSheetsStep,
-] as const
+export function getAllSteps(): readonly BootstrapStepDef[] {
+  return [
+    createDriveFolderStep,
+    createCustomerFoldersStep,
+    readSfBookingsStep,
+    populateDataSheetsStep,
+  ]
+}
+
+export { getAllSteps as ALL_STEPS_FN }
 
 export {
   createDriveFolderStep,
