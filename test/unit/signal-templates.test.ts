@@ -13,6 +13,7 @@ import {
   templateTechStack,
   templateKeyRelationships,
   templateStrategicOpportunities,
+  templateUpcomingEvents,
   templateAll,
   type TemplateOptions,
 } from '../../src/lib/signal-templates.ts'
@@ -255,6 +256,66 @@ describe('templateKeyRelationships', () => {
     const emptyTeam: AccountTeamMember[] = []
     const result = templateKeyRelationships(emptyTeam)
     expect(result).toBeNull()
+  })
+})
+
+// ── Upcoming Events (#377) ─────────────────────────────────────────────────
+
+describe('templateUpcomingEvents', () => {
+  const mockEventSignal: Signal = {
+    source: 'rh-events',
+    type: 'event',
+    headline: 'Red Hat Summit 2026',
+    detail: 'Boston, MA • Jun 15-17, 2026',
+    score: 0.7,
+    timestamp: '2026-06-15',
+    metadata: {
+      format: 'in-person',
+      location: 'Boston, MA',
+      region: 'northeast',
+    },
+  }
+
+  test('returns null when no event signals', () => {
+    const result = templateUpcomingEvents([mockProductSignal, mockCloudSignal])
+    expect(result).toBeNull()
+  })
+
+  test('renders events table with format and location', () => {
+    const result = templateUpcomingEvents([mockEventSignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('| Event | Date | Format | Location |')
+    expect(result).toContain('Red Hat Summit 2026')
+    expect(result).toContain('in-person')
+    expect(result).toContain('Boston, MA')
+  })
+
+  test('handles virtual events without location', () => {
+    const virtualEvent: Signal = {
+      ...mockEventSignal,
+      headline: 'OpenShift Webinar',
+      metadata: { format: 'virtual', location: '', region: 'national' },
+    }
+    const result = templateUpcomingEvents([virtualEvent])
+    expect(result).not.toBeNull()
+    expect(result).toContain('virtual')
+    expect(result).toContain('Virtual')
+  })
+
+  test('caps at 8 rows', () => {
+    const signals = Array(12).fill(null).map((_, i) => ({
+      ...mockEventSignal,
+      headline: `Event ${i}`,
+    }))
+    const result = templateUpcomingEvents(signals)
+    const dataRows = result!.split('\n').filter(l => l.startsWith('|')).length - 2 // minus header + separator
+    expect(dataRows).toBeLessThanOrEqual(8)
+  })
+
+  test('templateAll includes events section', async () => {
+    const result = await templateAll([mockEventSignal])
+    expect(result.deterministic).toContain('## Upcoming Events')
+    expect(result.sections.upcomingEvents).not.toBeNull()
   })
 })
 

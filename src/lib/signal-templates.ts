@@ -79,7 +79,7 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'other' {
   const m = signal.metadata ?? {}
 
   // Metadata-driven routing (most specific first)
@@ -93,6 +93,9 @@ function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' |
   if (m.confidence && (context.includes('evaluat') || context.includes('migrat') || context.includes('migrating_from'))) {
     return 'tech'
   }
+
+  // #377: Events — signals from rh-events or with format metadata and event type
+  if (signal.source === 'rh-events' || (m.format && signal.type === 'event')) return 'event'
 
   // Product: subscription/ccsp/product metadata (default for RH product signals)
   // #375: Also route signals with productTags (rh-rss) or productSlug (value-maps)
@@ -271,6 +274,34 @@ export function templateTechStack(signals: Signal[]): string | null {
     const positioning = String(m.context ?? s.detail.slice(0, 60))
     const confidence = String(m.confidence ?? '').toUpperCase() || 'MEDIUM'
     rows.push(`| ${tech} | ${positioning} | ${confidence} |`)
+  }
+
+  return rows.join('\n')
+}
+
+/**
+ * Upcoming Events section (#377): signals from rh-events showing upcoming
+ * summits, workshops, webinars relevant to the customer.
+ *
+ * Renders: Event name, Date, Format, Location
+ */
+export function templateUpcomingEvents(signals: Signal[]): string | null {
+  const eventSignals = signals.filter(s => routeSignal(s) === 'event')
+  if (eventSignals.length === 0) return null
+
+  const rows: string[] = []
+  rows.push('| Event | Date | Format | Location |')
+  rows.push('|-------|------|--------|----------|')
+
+  for (const s of eventSignals.slice(0, 8)) {
+    const m = s.metadata ?? {}
+    const event = s.headline.slice(0, 50)
+    const date = s.timestamp
+      ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'TBD'
+    const format = String(m.format ?? 'TBD')
+    const location = String(m.location || (format === 'virtual' ? 'Virtual' : 'TBD'))
+    rows.push(`| ${event} | ${date} | ${format} | ${location} |`)
   }
 
   return rows.join('\n')
@@ -655,6 +686,7 @@ export async function templateAll(
   const salesAlignment = templateSalesAlignment(filteredSignals)
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
   const saleshubContext = templateSalesHubContext(filteredSignals)
+  const upcomingEvents = templateUpcomingEvents(filteredSignals)
 
   // Assemble deterministic markdown output
   const sections: string[] = []
@@ -670,6 +702,7 @@ export async function templateAll(
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
   if (cases) sections.push(`## Support Cases\n\n${cases}`)
   if (techStack) sections.push(`## Technology Stack\n\n${techStack}`)
+  if (upcomingEvents) sections.push(`## Upcoming Events\n\n${upcomingEvents}`)
   if (keyRelationships) sections.push(`## Key Relationships\n\n${keyRelationships}`)
 
   const deterministic = sections.join('\n\n')
@@ -762,6 +795,7 @@ export async function templateAll(
       keyRelationships,
       strategicOpportunities,
       saleshubContext,
+      upcomingEvents,
     },
     structured: {
       solutionPlays,
