@@ -33,6 +33,7 @@ import { createBootstrapRouter, resetBootstrapStates } from './src/bootstrap-orc
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { createSheetImportRouter } from './src/sheet-import.ts'
 import { createDriveSourcesRouter } from './src/drive-sources.ts'
+import { createDocumentSourcesRouter } from './src/document-sources-routes.ts'
 import { sanitizeErr, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './src/connection-health.ts'
 // ── M05 extracted modules ───────────────────────────────────────────────────
@@ -312,6 +313,8 @@ app.route('/', createCampaignsRouter())
 // ── GitHub #153: News Radar routes ──────────────────────────────────────────
 app.route('/', createNewsRouter())
 app.route('/', createCloudMarketplaceRouter())
+// ── GitHub #316: Document sources admin routes ────────────────────────────────
+app.route('/', createDocumentSourcesRouter())
 // ── GitHub #168: Batch execution routes ─────────────────────────────────────
 app.route('/', createBatchRouter())
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────────

@@ -13,6 +13,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import { callGemini } from '../gemini-call.ts'
 import { sanitizeErr } from '../utils.ts'
+import { extractNewsletterEvents } from '../newsletter-events.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ interface CloudMarketplaceCache {
   sourceFileIds: string[]
   clouds: CloudSection[]
   cachedAt: string
+  newsletterHtml?: string
 }
 
 // ── Gmail newsletter extraction ────────────────────────────────────────────────
@@ -112,7 +114,7 @@ function extractDriveFileIds(html: string): string[] {
 /**
  * Fetch latest Cloud Marketplace newsletter from Gmail and extract linked Drive files
  */
-async function fetchNewsletterContent(searchQuery: string): Promise<{ newsletterDate: string; fileIds: string[]; slideText: string }> {
+async function fetchNewsletterContent(searchQuery: string): Promise<{ newsletterDate: string; fileIds: string[]; slideText: string; htmlBody: string }> {
   const auth = makeAuth(GMAIL_TOKEN_PATH)
   const gmail = google.gmail({ version: 'v1', auth })
   const drive = google.drive({ version: 'v3', auth })
@@ -171,7 +173,7 @@ async function fetchNewsletterContent(searchQuery: string): Promise<{ newsletter
 
   const slideText = textParts.join('\n\n---\n\n')
 
-  return { newsletterDate, fileIds, slideText }
+  return { newsletterDate, fileIds, slideText, htmlBody }
 }
 
 // ── Gemini extraction ──────────────────────────────────────────────────────────
@@ -338,7 +340,7 @@ FeatureModuleRegistry.register({
 
     try {
       // 1. Fetch newsletter content from Gmail
-      const { newsletterDate, fileIds, slideText } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
+      const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
 
       if (!slideText || slideText.trim().length < 100) {
         console.warn('[cloud-marketplace] insufficient slide text extracted')
@@ -349,13 +351,14 @@ FeatureModuleRegistry.register({
       // 2. Extract cloud data via Gemini
       const clouds = await extractCloudData(slideText, newsletterDate)
 
-      // 3. Write cache
+      // 3. Write cache (include newsletter HTML for event extraction — #316)
       const cache: CloudMarketplaceCache = {
         newsletterDate,
         searchQuery: DEFAULT_SEARCH_QUERY,
         sourceFileIds: fileIds,
         clouds,
         cachedAt: new Date().toISOString(),
+        newsletterHtml: htmlBody.slice(0, 50_000),
       }
 
       writeCloudMarketplaceCache(cache)
@@ -485,6 +488,27 @@ FeatureModuleRegistry.register({
             offeringType: 'incentive',
             hasCloudSpend: hasCloud,
             cloudPartner: ccspPartner,
+          },
+        })
+      }
+    }
+
+    // #316: Extract newsletter events (office hours, recordings, announcements)
+    if (marketplaceCache.newsletterHtml) {
+      const newsletterEvents = extractNewsletterEvents(marketplaceCache.newsletterHtml)
+      for (const ne of newsletterEvents) {
+        signals.push({
+          source: 'cloud-marketplace',
+          type: 'event',
+          headline: ne.title,
+          detail: ne.detail ?? ne.title,
+          rawRelevance: ne.eventType === 'office-hours' ? 0.7 : 0.5,
+          timestamp: marketplaceCache.cachedAt,
+          url: ne.url,
+          metadata: {
+            eventType: ne.eventType,
+            newsletterSource: true,
+            date: ne.date,
           },
         })
       }
