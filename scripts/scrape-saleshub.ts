@@ -373,6 +373,10 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     // Expand accordions
     await clickAccordionExpanders(page)
 
+    // Scroll to trigger lazy-loaded sidebar content (#381)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForTimeout(2_000)
+
     const data = await page.evaluate(() => {
       // Use document.body (not main element) to include sidebar content
       // The "TDPs Powering the Play" section is in the sidebar, outside <main>
@@ -409,6 +413,12 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
 
     // Extract structured sections (#367)
     const sections = parseSalesPlayPageSections(data.mainText, data.links)
+    if (sections.tdpAlignment.length > 0) {
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${sections.tdpAlignment.join(', ')}`)
+    } else {
+      const hasTdpPowering = data.mainText.includes('TDPs Powering')
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty (TDPs Powering in text: ${hasTdpPowering}, text length: ${data.mainText.length})`)
+    }
 
     return {
       name: playName,
