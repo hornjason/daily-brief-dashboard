@@ -296,8 +296,7 @@ async function proactiveRecycle(): Promise<void> {
     await reinitCtx(PROFILE_DIR)
     const newCtx = getCtx()
     if (!newCtx) {
-      console.error('[sync-daemon] proactiveRecycle: failed to re-init browser context')
-      return
+      throw new Error('proactiveRecycle: failed to re-init browser context')
     }
 
     // 6. Re-adopt sister scrapers (CCSP, SF)
@@ -311,6 +310,7 @@ async function proactiveRecycle(): Promise<void> {
     console.log('[sync-daemon] proactiveRecycle: browser recycled successfully')
   } catch (e: any) {
     console.error(`[sync-daemon] proactiveRecycle: failed: ${e?.message ?? e}`)
+    throw e
   }
 }
 
@@ -326,7 +326,12 @@ async function runSyncCycle(): Promise<void> {
     const canRender = await canContextRender(ctx)
     if (!canRender) {
       console.warn('[sync-daemon] pre-sync render check FAILED — recycling browser before sync')
-      await proactiveRecycle()
+      try {
+        await proactiveRecycle()
+      } catch (recycleErr: any) {
+        console.error('[sync-daemon] pre-sync recycle FAILED — skipping sync cycle, will retry next cycle:', recycleErr?.message ?? recycleErr)
+        return
+      }
     } else {
       console.log('[sync-daemon] pre-sync render check passed')
     }
