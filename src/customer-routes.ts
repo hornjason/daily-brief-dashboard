@@ -404,11 +404,45 @@ export function createCustomerRouter(): Hono {
         headline: s.headline,
         score: s.score,
         rawRelevance: s.rawRelevance,
+        timestamp: s.timestamp,
         metadata: s.metadata,
       }))
     }
 
     return c.json(response)
+  })
+
+  // GET /api/customer/:name/signals/debug — Full signal details for debugging (GitHub #281)
+  router.get('/api/customer/:name/signals/debug', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+    const registrySignals = await FeatureModuleRegistry.collectAllSignals(slug)
+
+    const sourceFilter = c.req.query('source')
+    let filtered = registrySignals
+    if (sourceFilter) {
+      filtered = filtered.filter(s => s.source === sourceFilter)
+    }
+
+    return c.json({
+      customer: customer.name,
+      slug,
+      totalSignals: filtered.length,
+      signals: filtered.map(s => ({
+        source: s.source,
+        type: s.type,
+        headline: s.headline,
+        detail: s.detail,
+        score: s.score,
+        rawRelevance: s.rawRelevance,
+        timestamp: s.timestamp,
+        metadata: s.metadata,
+      }))
+    })
   })
 
   // BKL-AI-INTEL-02: Drive discovery fallback. After a cache wipe, getJobStatus

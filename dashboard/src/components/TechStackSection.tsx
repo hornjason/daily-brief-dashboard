@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Code, RefreshCw } from 'lucide-react'
+import SignalWithAging from './SignalWithAging'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ interface TechSignal {
   type: string
   headline: string
   detail: string
+  timestamp: string
   metadata: {
     category?: 'proprietary' | 'industry-tool'
     context?: 'using' | 'evaluating' | 'migrating_from' | 'developing'
@@ -119,7 +121,7 @@ export function TechStackSection({ customerName }: TechStackSectionProps) {
               const { confidence, context, infrastructure, redHatProducts } = signal.metadata
 
               return (
-                <div key={i} className="bg-bg-secondary/30 border border-border/60 rounded-lg p-3 space-y-2">
+                <SignalWithAging key={i} timestamp={signal.timestamp} className="bg-bg-secondary/30 border border-border/60 rounded-lg p-3 space-y-2">
                   {/* Header row: name + confidence */}
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold text-text-primary truncate" title={techName}>
@@ -161,7 +163,7 @@ export function TechStackSection({ customerName }: TechStackSectionProps) {
                       ))}
                     </div>
                   )}
-                </div>
+                </SignalWithAging>
               )
             })}
           </div>

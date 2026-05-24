@@ -74,6 +74,7 @@ export interface EmailHighlight {
   date: string
   snippet: string
   actionRequired: boolean
+  classification?: 'ACTION_REQUIRED' | 'FYI' | 'RESPONSE_NEEDED'  // GitHub Issue #347 — classification for signal scoring
 }
 
 export interface SupportCase {

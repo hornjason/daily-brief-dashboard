@@ -64,6 +64,7 @@ import { ToolsTab } from '../components/tabs/ToolsTab'
 import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
 import { TechStackSection } from '../components/TechStackSection'
+import { TechStackTab } from '../components/tabs/TechStackTab'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1028,6 +1029,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType<{ customerName: string 
   tools: ToolsTab,
   intelligence: IntelligenceTab,
   playbook: PlaybookTab,
+  'tech-stack': TechStackTab,
 }
 
 function renderTabContent(activeTab: string, customerName: string) {

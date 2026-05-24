@@ -29,7 +29,7 @@ import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { loadProductConfig } from './product-release-radar.ts'
-import { extractEmailIntelligence } from './email-extraction.ts'
+import { extractEmailIntelligence, classifyEmail } from './email-extraction.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import type { DocClassification } from './doc-extraction.ts'
 import type { EmailIntelligence, SilentContact } from './email-extraction.ts'
@@ -207,15 +207,23 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
   const emails = details.map(({ data }) => {
     const h = data.payload?.headers ?? []
     const get = (name: string) => h.find((x) => x.name === name)?.value ?? ''
+    const subject = get('Subject')
+    const from = get('From')
+    const snippet = data.snippet ?? ''
+
+    // GitHub Issue #347 — Classify emails during fetch so classification feeds into signal scoring
+    const intel = classifyEmail(subject, snippet, from)
+
     return {
       customer: customer.name,
-      subject: get('Subject'),
-      from: get('From'),
+      subject,
+      from,
       date: get('Date'),
-      snippet: data.snippet ?? '',
+      snippet,
       actionRequired: /requirements?|action|urgent|asap|follow.?up|need|waiting|deadline/i.test(
-        get('Subject') + ' ' + (data.snippet ?? '')
+        subject + ' ' + snippet
       ),
+      classification: intel.classification, // #347 — store classification for emails-module scoring
     } satisfies EmailHighlight
   })
 
@@ -865,11 +873,11 @@ export async function generateBrief(
       emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
       console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
 
-      // Append deterministic Sales Alignment section after Gemini output
-      const { templateSalesAlignment } = await import('./lib/signal-templates.ts')
-      const salesAlignment = templateSalesAlignment(registrySignals)
-      if (salesAlignment) {
-        brief = `${brief}\n\n## Sales Alignment\n\n${salesAlignment}`
+      // Append deterministic Sales Alignment section via templateAll() (ADR-031)
+      const { templateAll } = await import('./lib/signal-templates.ts')
+      const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug: toSlug(customer.name) })
+      if (templateResult.sections.salesAlignment) {
+        brief = `${brief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
         console.log(`[brief] Appended Sales Alignment section`)
       }
     }
@@ -998,13 +1006,13 @@ Keep total brief under 250 words.`
       'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
       prompt,
     )
-    // Append deterministic Sales Alignment section
-    const { templateSalesAlignment } = await import('./lib/signal-templates.ts')
+    // Append deterministic Sales Alignment section via templateAll() (ADR-031)
+    const { templateAll } = await import('./lib/signal-templates.ts')
     const customerSlug = toSlug(customer.name)
     const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
-    const salesAlignment = templateSalesAlignment(registrySignals)
-    if (salesAlignment) {
-      fallbackBrief = `${fallbackBrief}\n\n## Sales Alignment\n\n${salesAlignment}`
+    const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug })
+    if (templateResult.sections.salesAlignment) {
+      fallbackBrief = `${fallbackBrief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
     }
     return fallbackBrief
   } catch (fallbackErr: any) {

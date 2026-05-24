@@ -82,7 +82,7 @@ FeatureModuleRegistry.register({
       type: 'email' as const,
       headline: e.subject ?? e.snippet?.substring(0, 80) ?? 'Email',
       detail: `From: ${e.from ?? 'Unknown'} | ${e.date ?? ''}${e.classification ? ` | ${e.classification}` : ''}`,
-      rawRelevance: e.classification === 'action_required' ? 0.8 : e.classification === 'important' ? 0.6 : 0.4,
+      rawRelevance: e.classification === 'ACTION_REQUIRED' ? 0.8 : e.classification === 'RESPONSE_NEEDED' ? 0.6 : 0.4,
       timestamp: e.date ?? new Date().toISOString(),
       metadata: {
         customerSlug,

@@ -11,6 +11,22 @@ import { getCustomerProductContext } from '../lib/customer-product-context.ts'
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifecycle.json')
 const LIFECYCLE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
+// GitHub Issue #351 — Static URL mapping for lifecycle pages and upgrade guides
+const PRODUCT_URLS: Record<string, { lifecycleUrl: string; upgradeGuideUrl: string | null }> = {
+  'ocp': {
+    lifecycleUrl: 'https://access.redhat.com/product-life-cycles#/openshift_container_platform',
+    upgradeGuideUrl: 'https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/upgrading/',
+  },
+  'rhel': {
+    lifecycleUrl: 'https://access.redhat.com/product-life-cycles#/red_hat_enterprise_linux',
+    upgradeGuideUrl: 'https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/upgrading_from_rhel_9_to_rhel_10/',
+  },
+  'aap': {
+    lifecycleUrl: 'https://access.redhat.com/product-life-cycles#/ansible_automation_platform',
+    upgradeGuideUrl: 'https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/red_hat_ansible_automation_platform_upgrade_and_migration_guide/',
+  },
+}
+
 FeatureModuleRegistry.register({
   name: 'product-lifecycle',
   displayName: 'Product Lifecycle',
@@ -72,6 +88,12 @@ FeatureModuleRegistry.register({
     const now = new Date()
 
     for (const product of cache.products) {
+      // GitHub Issue #351 — Get lifecycle and upgrade guide URLs early
+      const urls = PRODUCT_URLS[product.slug] || {
+        lifecycleUrl: 'https://access.redhat.com/product-life-cycles',
+        upgradeGuideUrl: null
+      }
+
       // ADR-029: rawRelevance based on lifecycle urgency
       let rawRelevance = 0.5
 
@@ -112,6 +134,12 @@ FeatureModuleRegistry.register({
         parts.push(`Next version: ${product.nextVersion} (expected ${new Date(product.nextExpected).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })})`)
       }
 
+      // GitHub Issue #351 — Include lifecycle and upgrade guide URLs in detail
+      parts.push(`Lifecycle: ${urls.lifecycleUrl}`)
+      if (urls.upgradeGuideUrl) {
+        parts.push(`Upgrade guide: ${urls.upgradeGuideUrl}`)
+      }
+
       const detail = parts.join(' | ')
 
       // ADR-029: cross-reference against customer subscriptions/interests
@@ -126,6 +154,8 @@ FeatureModuleRegistry.register({
         nextVersion: product.nextVersion,
         nextExpected: product.nextExpected,
         eusAvailable: product.eusAvailable,
+        lifecycleUrl: urls.lifecycleUrl,
+        upgradeGuideUrl: urls.upgradeGuideUrl,
       }
 
       if (isOwned) {

@@ -368,6 +368,12 @@ FeatureModuleRegistry.register({
   scope: 'customer',
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
+  accountTab: {
+    label: 'Tech Stack',
+    icon: 'Code',
+    order: 15,
+  },
+
   cachePaths: (slug: string) => [`data/cache/tech-stack/${slug}.json`],
 
   cacheTtlMs: TECH_STACK_TTL_MS,
