@@ -22,6 +22,7 @@ import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { readAccountPlan, generateAndSaveAccountPlan } from './account-plan.ts'
+import { readCachedPositioning, generateValuePositioning } from './value-positioning.ts'
 import { getAiConfig } from './ai-config.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import * as CustomerService from './customer-service.ts'
@@ -808,6 +809,45 @@ export function createCustomerRouter(): Hono {
     const plan = readAccountPlan(slug, CACHE_DIR)
     if (!plan) return c.json({ notGenerated: true })
     return c.json({ markdown: plan.markdown, generatedAt: plan.generatedAt, driveUrl: plan.driveUrl })
+  })
+
+  // ── #264: Value Positioning — proactive value proposition briefs ────────────
+
+  const _valuePositioningInFlight = new Set<string>()
+
+  router.get('/api/customers/:id/value-positioning', (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const cached = readCachedPositioning(slug)
+    if (!cached) return c.json({ notGenerated: true })
+    return c.json(cached)
+  })
+
+  router.post('/api/customers/:id/value-positioning/generate', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    if (_valuePositioningInFlight.has(slug)) {
+      return c.json({ error: 'Generation already in progress for this customer' }, 409)
+    }
+
+    _valuePositioningInFlight.add(slug)
+    try {
+      const result = await generateValuePositioning(customer)
+      return c.json({ ok: true, ...result })
+    } catch (e: any) {
+      console.error(`[value-positioning] Generation failed for ${customer.name}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    } finally {
+      _valuePositioningInFlight.delete(slug)
+    }
   })
 
   // ── BKL-AI16: Product Q&A — grounded Gemini query for RHEL / OCP / AAP ─────
