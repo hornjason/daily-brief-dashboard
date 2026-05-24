@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
+import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, getSalesPlayByName, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { resolve } from 'path'
 
@@ -10,7 +10,26 @@ const FIXTURE_KNOWLEDGE = {
   version: 1,
   scrapedAt: '2026-05-21T20:00:00Z',
   salesPlays: [
-    { name: 'Modernize Infrastructure', description: 'Modernize IT infrastructure', linkedTdps: ['Automation', 'Virtualization'] },
+    {
+      name: 'Modernize Infrastructure',
+      description: 'Modernize IT infrastructure',
+      linkedTdps: ['Automation', 'Virtualization'],
+      customerLens: {
+        pain: ['Legacy infrastructure costs rising', 'VMware licensing uncertainty'],
+        outcomes: ['Reduced TCO by 30-40%', 'Faster provisioning'],
+        impact: ['Operational efficiency', 'Risk reduction'],
+      },
+      realWorldExamples: [
+        { customer: 'GlobalBank', outcome: 'Migrated 2000 VMs in 6 months, saving $4M annually' },
+        { customer: 'RetailCorp', outcome: 'Reduced provisioning time from weeks to hours' },
+      ],
+      emailTemplateUrl: 'https://example.com/email-template',
+      discoveryQuestionsUrl: '',
+      introPitchDeckUrl: '',
+      personas: ['CTO', 'VP Infrastructure'],
+      tdpAlignment: ['Automation', 'Virtualization'],
+      regionalCampaigns: [],
+    },
   ],
   tdps: [
     {
@@ -34,6 +53,11 @@ const FIXTURE_KNOWLEDGE = {
       whatToSay: ['Event-driven workflows replace manual troubleshooting'],
       whatToShare: [{ name: 'AIOps Customer Deck', url: 'https://docs.google.com/presentation/d/abc', type: 'google-slides' }],
       parentTdp: 'Automation TDP',
+      extractedContent: 'AIOps enables event-driven automation that reduces mean time to resolution across hybrid cloud environments.',
+      metrics: [
+        { value: '60% MTTR reduction', context: 'Average across enterprise AIOps deployments', source: 'tactic' },
+        { value: '3x faster incident response', context: 'Compared to manual troubleshooting workflows', source: 'tactic' },
+      ],
     },
     {
       name: 'Automate at Scale',
@@ -42,6 +66,8 @@ const FIXTURE_KNOWLEDGE = {
       whatToSay: ['Enterprise-grade automation standard'],
       whatToShare: [],
       parentTdp: 'Automation TDP',
+      extractedContent: '',
+      metrics: [],
     },
     {
       name: 'VMware Migration',
@@ -50,6 +76,10 @@ const FIXTURE_KNOWLEDGE = {
       whatToSay: [],
       whatToShare: [{ name: 'VMware Migration Deck', url: 'https://docs.google.com/presentation/d/xyz', type: 'google-slides' }],
       parentTdp: 'Virtualization TDP',
+      extractedContent: 'Migration pathway from VMware to OpenShift Virtualization with full VM lifecycle management.',
+      metrics: [
+        { value: '40% licensing savings', context: 'Compared to VMware Enterprise Plus', source: 'tactic' },
+      ],
     },
   ],
   products: [
@@ -131,6 +161,33 @@ describe('getTdpDescription', () => {
 
   it('returns empty for unknown TDP', () => {
     expect(getTdpDescription('NonExistent')).toBe('')
+  })
+})
+
+describe('getSalesPlayByName', () => {
+  it('returns sales play by exact name', () => {
+    const play = getSalesPlayByName('Modernize Infrastructure')
+    expect(play).toBeDefined()
+    expect(play!.name).toBe('Modernize Infrastructure')
+    expect(play!.customerLens.pain).toContain('Legacy infrastructure costs rising')
+    expect(play!.realWorldExamples.length).toBe(2)
+    expect(play!.realWorldExamples[0].customer).toBe('GlobalBank')
+  })
+
+  it('matches case-insensitively', () => {
+    const play = getSalesPlayByName('modernize infrastructure')
+    expect(play).toBeDefined()
+    expect(play!.name).toBe('Modernize Infrastructure')
+  })
+
+  it('returns undefined for unknown play', () => {
+    expect(getSalesPlayByName('NonExistent Play')).toBeUndefined()
+  })
+
+  it('returns undefined when knowledge file missing', () => {
+    rmSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'))
+    resetKnowledgeCache()
+    expect(getSalesPlayByName('Modernize Infrastructure')).toBeUndefined()
   })
 })
 

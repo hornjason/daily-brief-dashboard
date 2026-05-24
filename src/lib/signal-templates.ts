@@ -11,8 +11,8 @@
 
 import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
-import { getTacticsByTdp, getTdpDescription } from './saleshub-knowledge-loader.ts'
-import { isValidCustomerWin, isValidAsset } from './saleshub-filters.ts'
+import { getTacticsByTdp, getTdpDescription, getSalesPlayByName } from './saleshub-knowledge-loader.ts'
+import { isValidCustomerWin, isValidAsset, isValidMetric } from './saleshub-filters.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,9 @@ export interface SolutionPlaySnapshot {
   customerWins?: string[]
   linkedAssets?: Array<{ name: string; url: string }>
   matchReasoning?: string
+  customerLens?: { pain: string[]; outcomes: string[]; impact: string[] }
+  realWorldExamples?: Array<{ customer: string; outcome: string }>
+  extractedMetrics?: Array<{ value: string; context: string }>
 }
 
 export interface TemplateOptions {
@@ -514,6 +517,35 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
     }
   }
 
+  // Enriched content from SalesHub knowledge (#371)
+  for (const [tdp] of byTdp) {
+    const tactics = getTacticsByTdp(tdp)
+    const metricsFromTactics = tactics.flatMap(t => (t.metrics ?? []) as Array<{ value: string; context: string }>).filter(isValidMetric).slice(0, 3)
+    if (metricsFromTactics.length > 0) {
+      lines.push(`  Key Metrics:`)
+      for (const m of metricsFromTactics) {
+        lines.push(`    - ${m.value} -- ${m.context}`)
+      }
+    }
+  }
+
+  // Customer Lens from matched sales plays
+  const seenPlays = new Set<string>()
+  for (const [, plays] of byTdp) {
+    for (const play of plays) {
+      if (seenPlays.has(play.name)) continue
+      seenPlays.add(play.name)
+      const salesPlay = getSalesPlayByName(play.name)
+      if (salesPlay?.customerLens?.pain?.length > 0) {
+        lines.push(`  Customer Pain: ${salesPlay.customerLens.pain.slice(0, 2).join('; ')}`)
+      }
+      if (salesPlay?.realWorldExamples?.length > 0) {
+        const ex = salesPlay.realWorldExamples[0]
+        lines.push(`  Proof Point: ${ex.customer} -- ${ex.outcome}`)
+      }
+    }
+  }
+
   return lines.join('\n')
 }
 
@@ -553,6 +585,17 @@ export function templateSalesHubContext(signals: Signal[]): string | null {
       tdpLines.push(`\n**${tactic.name}**`)
       if (tactic.talkTrack) {
         tdpLines.push(`*Talk track:* ${tactic.talkTrack.slice(0, 250)}`)
+      }
+      // Extracted content from SalesHub knowledge (#371)
+      if (tactic.extractedContent) {
+        tdpLines.push(`*Extracted insights:* ${tactic.extractedContent.slice(0, 200)}`)
+      }
+      const validMetrics = ((tactic.metrics ?? []) as Array<{ value: string; context: string }>).filter(isValidMetric).slice(0, 3)
+      if (validMetrics.length > 0) {
+        tdpLines.push('*Key metrics:*')
+        for (const m of validMetrics) {
+          tdpLines.push(`- ${m.value} -- ${m.context}`)
+        }
       }
       const validWins = tactic.customerWins.filter(isValidCustomerWin)
       if (validWins.length > 0) {
@@ -674,16 +717,30 @@ export async function templateAll(
     try {
       const { getCustomerSolutionContext } = await import('./customer-solution-context.ts')
       const solutionCtx = getCustomerSolutionContext(options.customerSlug)
-      solutionPlays = solutionCtx.activeSolutionPlays.map(p => ({
-        tdp: p.tdp,
-        playName: p.playName,
-        triggerTechnologies: p.matchedTechnologies,
-        confidence: p.confidence,
-        talkTrack: p.talkTrack,
-        customerWins: p.customerWins,
-        linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
-        matchReasoning: p.matchReasoning,
-      }))
+      solutionPlays = solutionCtx.activeSolutionPlays.map(p => {
+        // Look up SalesPlay for customerLens and realWorldExamples (#371)
+        const salesPlay = getSalesPlayByName(p.playName)
+        // Collect metrics from tactics under this play's TDP
+        const tdpTactics = getTacticsByTdp(p.tdp)
+        const extractedMetrics = tdpTactics
+          .flatMap(t => (t.metrics ?? []) as Array<{ value: string; context: string }>)
+          .filter(isValidMetric)
+          .slice(0, 5)
+
+        return {
+          tdp: p.tdp,
+          playName: p.playName,
+          triggerTechnologies: p.matchedTechnologies,
+          confidence: p.confidence,
+          talkTrack: p.talkTrack,
+          customerWins: p.customerWins,
+          linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
+          matchReasoning: p.matchReasoning,
+          customerLens: salesPlay?.customerLens,
+          realWorldExamples: salesPlay?.realWorldExamples?.slice(0, 3),
+          extractedMetrics: extractedMetrics.length > 0 ? extractedMetrics : undefined,
+        }
+      })
     } catch {
       // Solution context unavailable — return empty array
     }

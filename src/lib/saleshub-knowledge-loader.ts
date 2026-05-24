@@ -152,6 +152,14 @@ export function getTdpDescription(tdpName: string): string {
   return tdp?.description ?? ''
 }
 
+export function getSalesPlayByName(playName: string): SalesPlayNode | undefined {
+  const kb = loadKnowledgeBase()
+  if (!kb) return undefined
+  return kb.salesPlays.find(sp =>
+    sp.name.toLowerCase() === playName.toLowerCase()
+  )
+}
+
 export function getKnowledgeStats(): { tdpCount: number; tacticCount: number; salesPlayCount: number; productCount: number; scrapedAt: string | null } {
   const kb = loadKnowledgeBase()
   if (!kb) return { tdpCount: 0, tacticCount: 0, salesPlayCount: 0, productCount: 0, scrapedAt: null }
