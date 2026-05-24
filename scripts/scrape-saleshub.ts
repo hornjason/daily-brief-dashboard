@@ -378,8 +378,7 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     await page.waitForTimeout(2_000)
 
     const data = await page.evaluate(() => {
-      // Use document.body (not main element) to include sidebar content
-      // The "TDPs Powering the Play" section is in the sidebar, outside <main>
+      // Use document.body to include sidebar content (#381)
       const mainText = document.body?.innerText ?? ''
 
       // Extract description — first meaningful paragraph
@@ -399,7 +398,23 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
         href: a.getAttribute('href') ?? '',
       }))
 
-      return { description, mainText: mainText.slice(0, 20000), links }
+      // Extract TDP alignment from sidebar DOM elements (#381)
+      // The "TDPs Powering the Play" sidebar renders TDP names as card elements
+      // that may not appear in innerText (rendered as images/icons with text)
+      const KNOWN_TDP_NAMES = ['AI Platform', 'Server/Cloud Operating System', 'Container Management',
+        'Automation', 'App Platform', 'Application Platform', 'Virtualization', 'Server/Cloud OS']
+      const sidebarTdpNames: string[] = []
+      const allElements = document.querySelectorAll('span, div, a, p')
+      for (const el of allElements) {
+        const t = el.textContent?.trim() ?? ''
+        if (t.length > 3 && t.length < 50 && !t.includes('\n') && el.children.length < 2) {
+          if (KNOWN_TDP_NAMES.some(k => k.toLowerCase() === t.toLowerCase())) {
+            if (!sidebarTdpNames.includes(t)) sidebarTdpNames.push(t)
+          }
+        }
+      }
+
+      return { description, mainText: mainText.slice(0, 20000), links, sidebarTdpNames }
     })
 
     // Identify linked TDPs from page text and links
@@ -413,14 +428,16 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
 
     // Extract structured sections (#367)
     const sections = parseSalesPlayPageSections(data.mainText, data.links)
-    if (sections.tdpAlignment.length > 0) {
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${sections.tdpAlignment.join(', ')}`)
+
+    // Use DOM-extracted TDP names if text parsing found none (#381)
+    // The sidebar TDP cards render as images/icons — innerText doesn't capture them
+    const tdpAlignment = sections.tdpAlignment.length > 0
+      ? sections.tdpAlignment
+      : data.sidebarTdpNames
+    if (tdpAlignment.length > 0) {
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${tdpAlignment.join(', ')}`)
     } else {
-      const hasTdpPowering = data.mainText.includes('TDPs Powering')
-      const tdpIdx = data.mainText.indexOf('TDPs Powering')
-      const contextSnippet = tdpIdx > -1 ? JSON.stringify(data.mainText.slice(tdpIdx, tdpIdx + 300)) : 'NOT FOUND'
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty (TDPs Powering in text: ${hasTdpPowering}, text length: ${data.mainText.length})`)
-      console.log(`[scrape-saleshub] ${playName}: context around TDPs Powering: ${contextSnippet}`)
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty`)
     }
 
     return {
@@ -434,7 +451,7 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
       discoveryQuestionsUrl: sections.discoveryQuestionsUrl,
       introPitchDeckUrl: sections.introPitchDeckUrl,
       personas: sections.personas,
-      tdpAlignment: sections.tdpAlignment,
+      tdpAlignment,
       regionalCampaigns: sections.regionalCampaigns,
     }
   } catch (e: any) {
