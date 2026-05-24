@@ -28,10 +28,13 @@ import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
 import {
   parseTdpSectionsFromText,
   parseSalesTacticSections,
+  parseTdpPageSections,
+  parseSalesPlayPageSections,
   buildSalesHubKnowledge,
   type SalesHubKnowledge,
   type ScrapedSalesPlay,
   type ScrapedSalesTactic,
+  type ScrapedTdpPage,
 } from './saleshub-knowledge-extraction.ts'
 import { discoverAllPages } from './saleshub-page-discovery.ts'
 
@@ -264,6 +267,40 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
   }
 }
 
+// ── Pass 1.5: TDP Page Structured Extraction (#366) ────────────────────────
+
+async function extractTdpPage(page: Page, tdpName: string, tdpUrl: string): Promise<ScrapedTdpPage | null> {
+  try {
+    console.log(`[scrape-saleshub] Scraping TDP page: ${tdpName}`)
+    await page.goto(tdpUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+    // Expand accordions to reveal all sections
+    await clickAccordionExpanders(page)
+
+    const data = await page.evaluate(() => {
+      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
+      const mainText = mainEl?.innerText ?? ''
+
+      const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
+        text: a.textContent?.trim() ?? '',
+        href: a.getAttribute('href') ?? '',
+      })).filter(l => l.text && l.href && !l.href.startsWith('#') && !l.href.startsWith('javascript'))
+
+      return { mainText: mainText.slice(0, 30000), links }
+    })
+
+    const sections = parseTdpPageSections(data.mainText, data.links)
+    sections.name = tdpName
+
+    console.log(`[scrape-saleshub] TDP ${tdpName}: ${sections.customerWins.length} wins, ${sections.whatToSay.length} say, ${sections.whatToShare.length} share, ${sections.whatToShow.length} show`)
+    return sections
+  } catch (e: any) {
+    console.error(`[scrape-saleshub] Failed to scrape TDP page ${tdpName}: ${e.message}`)
+    return null
+  }
+}
+
 // ── Pass 2: Sales Play Page Extraction ───────────────────────────────────────
 
 async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
@@ -369,11 +406,22 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
       }
     }
 
+    // Extract structured sections (#367)
+    const sections = parseSalesPlayPageSections(data.mainText, data.links)
+
     return {
       name: playName,
       description: data.description,
       linkedTdps,
       url: playUrl,
+      customerLens: sections.customerLens,
+      realWorldExamples: sections.realWorldExamples,
+      emailTemplateUrl: sections.emailTemplateUrl,
+      discoveryQuestionsUrl: sections.discoveryQuestionsUrl,
+      introPitchDeckUrl: sections.introPitchDeckUrl,
+      personas: sections.personas,
+      tdpAlignment: sections.tdpAlignment,
+      regionalCampaigns: sections.regionalCampaigns,
     }
   } catch (e: any) {
     console.error(`[scrape-saleshub] Failed to scrape Sales Play ${playName}: ${e.message}`)
@@ -567,6 +615,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   const products: SalesHubProduct[] = []
   const salesPlays: ScrapedSalesPlay[] = []
   const tactics: ScrapedSalesTactic[] = []
+  const tdpPages: ScrapedTdpPage[] = []
 
   try {
     // ── API-based Page Discovery (run FIRST while session is fresh) ────────
@@ -634,6 +683,20 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       await scrapePage.waitForTimeout(1_000)
     }
 
+    // ── Pass 1.5: TDP Pages (#366) ────────────────────────────────────────────
+    console.log(`[scrape-saleshub] === PASS 1.5: TDP Pages (${discovered.tdps.length} discovered) ===`)
+    for (let i = 0; i < discovered.tdps.length; i++) {
+      const tdp = discovered.tdps[i]
+      console.log(`[scrape-saleshub] (${i + 1}/${discovered.tdps.length}) TDP: ${tdp.name}`)
+
+      const tdpPage = await extractTdpPage(scrapePage, tdp.name, tdp.url)
+      if (tdpPage) {
+        tdpPages.push(tdpPage)
+      }
+
+      await scrapePage.waitForTimeout(1_000)
+    }
+
     // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
     console.log(`[scrape-saleshub] === PASS 2: Sales Play Pages (${discovered.plays.length} discovered) ===`)
     const playLinks = discovered.plays
@@ -670,7 +733,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
     // ── Build Knowledge Base ─────────────────────────────────────────────────
     console.log('[scrape-saleshub] Building knowledge base…')
-    const knowledge = buildSalesHubKnowledge(products, salesPlays, tactics)
+    const knowledge = buildSalesHubKnowledge(products, salesPlays, tactics, tdpPages)
 
     // Write knowledge file to cache
     const knowledgePath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')

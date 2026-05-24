@@ -10222,6 +10222,7 @@ BKL-TEAM-01 → #205 — AccountTeam Phase 2: Parse team members from territory 
 BKL-TEAM-02 → #206 — Wire AccountTeam into briefs, meeting prep, email outreach
 BKL-TEAM-03 → #207 — AccountTeam role taxonomy refinement (manager subtypes)
 BKL-SYNC-L3-07 → #223 — Auto-recover dead RH browser context in keepalive (closed)
+BKL-SYNC-L3-08 — proactiveRecycle silently swallows browser re-init failure, daemon hangs (closed, fixed 2026-05-24)
 BKL-SALESHUB-01 → #355 — SalesHub Intelligence Module: contextual TDP/Play/Tactic recommendations per customer
 BKL-SALESHUB-02 → #356 — ADR-030 quality debt: missing tests, module registration, doc updates
 BKL-SALESHUB-03 → #357 — PRD: SalesHub Intelligence Module

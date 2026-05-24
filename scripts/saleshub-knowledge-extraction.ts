@@ -22,6 +22,14 @@ export interface SalesPlayNode {
   name: string
   description: string
   linkedTdps: string[]
+  customerLens: { pain: string[]; outcomes: string[]; impact: string[] }
+  realWorldExamples: Array<{ customer: string; outcome: string }>
+  emailTemplateUrl: string
+  discoveryQuestionsUrl: string
+  introPitchDeckUrl: string
+  personas: string[]
+  tdpAlignment: string[]
+  regionalCampaigns: Array<{ name: string; url: string }>
 }
 
 export interface TdpNode {
@@ -29,6 +37,13 @@ export interface TdpNode {
   description: string
   tactics: string[]
   products: string[]
+  customerWins: Array<{ name: string; description: string }>
+  whatToSay: Array<{ name: string; url: string; type: string }>
+  whatToShare: Array<{ name: string; url: string }>
+  whatToShow: Array<{ name: string; url: string; type: string }>
+  services: Array<{ name: string; description: string }>
+  cheatsheetUrl: string
+  customerDeckUrl: string
 }
 
 export interface TacticNode {
@@ -70,6 +85,25 @@ export interface ScrapedSalesPlay {
   description: string
   linkedTdps: string[]
   url: string
+  customerLens?: { pain: string[]; outcomes: string[]; impact: string[] }
+  realWorldExamples?: Array<{ customer: string; outcome: string }>
+  emailTemplateUrl?: string
+  discoveryQuestionsUrl?: string
+  introPitchDeckUrl?: string
+  personas?: string[]
+  tdpAlignment?: string[]
+  regionalCampaigns?: Array<{ name: string; url: string }>
+}
+
+export interface ScrapedTdpPage {
+  name: string
+  customerWins: Array<{ name: string; description: string }>
+  whatToSay: Array<{ name: string; url: string; type: string }>
+  whatToShare: Array<{ name: string; url: string }>
+  whatToShow: Array<{ name: string; url: string; type: string }>
+  services: Array<{ name: string; description: string }>
+  cheatsheetUrl: string
+  customerDeckUrl: string
 }
 
 export interface ScrapedSalesTactic {
@@ -245,6 +279,333 @@ export function parseSalesTacticSections(text: string): {
   return result
 }
 
+// ── TDP Page Section Parsing (#366) ─────────────────────────────────────────
+
+/**
+ * Parse structured sections from a TDP page's innerText and links.
+ * Extracts: Customer Wins, What to Say, What to Share, What to Show,
+ * Services and Partner Solutions, 5-Minute Briefs, Develop Your Skills.
+ */
+export function parseTdpPageSections(
+  text: string,
+  links: Array<{ text: string; href: string }>,
+): ScrapedTdpPage {
+  const result: ScrapedTdpPage = {
+    name: '',
+    customerWins: [],
+    whatToSay: [],
+    whatToShare: [],
+    whatToShow: [],
+    services: [],
+    cheatsheetUrl: '',
+    customerDeckUrl: '',
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  type Section = 'none' | 'customer-wins' | 'what-to-say' | 'what-to-share' | 'what-to-show' | 'services' | 'briefs' | 'skills'
+  let currentSection: Section = 'none'
+
+  for (const line of lines) {
+    const lower = line.toLowerCase()
+
+    // Section header detection
+    if (lower === 'customer wins' || lower.startsWith('customer wins')) {
+      currentSection = 'customer-wins'
+      continue
+    }
+    if (lower === 'what to say' || lower.startsWith('what to say')) {
+      currentSection = 'what-to-say'
+      continue
+    }
+    if (lower === 'what to share' || lower.startsWith('what to share')) {
+      currentSection = 'what-to-share'
+      continue
+    }
+    if (lower === 'what to show' || lower.startsWith('what to show')) {
+      currentSection = 'what-to-show'
+      continue
+    }
+    if (lower.startsWith('services and partner') || lower.startsWith('partner solutions')) {
+      currentSection = 'services'
+      continue
+    }
+    if (lower.startsWith('5-minute brief') || lower.startsWith('5 minute brief')) {
+      currentSection = 'briefs'
+      continue
+    }
+    if (lower.startsWith('develop your skill') || lower.startsWith('training and certification')) {
+      currentSection = 'skills'
+      continue
+    }
+
+    // Boundary detection — stop accumulating into current section on next major header
+    if (lower === 'sales tactic' || lower === 'sales tactics' ||
+        lower.startsWith('product features') || lower.startsWith('deployment options') ||
+        lower.startsWith('content details') || lower.startsWith('content properties')) {
+      currentSection = 'none'
+      continue
+    }
+
+    // Content accumulation
+    if (line.length < 5) continue
+
+    switch (currentSection) {
+      case 'customer-wins':
+        // Customer wins are named case studies: "Company — outcome" or multi-line
+        if (line.length > 10) {
+          // Split on dash/em-dash for name/description pattern
+          const dashIdx = line.indexOf(' — ')
+          const hyphenIdx = dashIdx === -1 ? line.indexOf(' - ') : -1
+          const splitIdx = dashIdx !== -1 ? dashIdx : hyphenIdx
+          if (splitIdx > 3) {
+            result.customerWins.push({
+              name: line.slice(0, splitIdx).trim(),
+              description: line.slice(splitIdx + 3).trim(),
+            })
+          } else {
+            result.customerWins.push({ name: line, description: '' })
+          }
+        }
+        break
+      case 'what-to-say':
+        if (line.length > 5) {
+          const matchingLink = links.find(l =>
+            l.text.toLowerCase().includes(line.toLowerCase().slice(0, 20)) ||
+            line.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
+          )
+          result.whatToSay.push({
+            name: line,
+            url: matchingLink?.href ?? '',
+            type: matchingLink?.href ? classifyLinkType(matchingLink.href) : 'seismic',
+          })
+        }
+        break
+      case 'what-to-share':
+        if (line.length > 5) {
+          const matchingLink = links.find(l =>
+            l.text.toLowerCase().includes(line.toLowerCase().slice(0, 20)) ||
+            line.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
+          )
+          result.whatToShare.push({
+            name: line,
+            url: matchingLink?.href ?? '',
+          })
+        }
+        break
+      case 'what-to-show':
+        if (line.length > 5) {
+          const matchingLink = links.find(l =>
+            l.text.toLowerCase().includes(line.toLowerCase().slice(0, 20)) ||
+            line.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
+          )
+          result.whatToShow.push({
+            name: line,
+            url: matchingLink?.href ?? '',
+            type: lower.includes('demo') ? 'demo' : lower.includes('workshop') ? 'workshop' : 'resource',
+          })
+        }
+        break
+      case 'services':
+        if (line.length > 10) {
+          result.services.push({ name: line, description: '' })
+        }
+        break
+      // briefs and skills sections — informational, not structured for now
+    }
+  }
+
+  // Extract cheatsheet and customer deck URLs from links
+  for (const link of links) {
+    const lower = link.text.toLowerCase()
+    if (lower.includes('cheatsheet') || lower.includes('cheat sheet')) {
+      if (!result.cheatsheetUrl) result.cheatsheetUrl = link.href
+    }
+    if (lower.includes('customer deck') || lower.includes('customer-facing deck')) {
+      if (!result.customerDeckUrl) result.customerDeckUrl = link.href
+    }
+  }
+
+  return result
+}
+
+// ── Sales Play Page Section Parsing (#367) ──────────────────────────────────
+
+/**
+ * Parse structured sections from a Sales Play page's innerText and links.
+ * Extracts: Customer Lens, Real-World Examples, What to Say, What to Share,
+ * Personas & Challenges, TDP Alignment, Regional Campaigns.
+ */
+export function parseSalesPlayPageSections(
+  text: string,
+  links: Array<{ text: string; href: string }>,
+): Omit<ScrapedSalesPlay, 'name' | 'description' | 'linkedTdps' | 'url'> {
+  const result = {
+    customerLens: { pain: [] as string[], outcomes: [] as string[], impact: [] as string[] },
+    realWorldExamples: [] as Array<{ customer: string; outcome: string }>,
+    emailTemplateUrl: '',
+    discoveryQuestionsUrl: '',
+    introPitchDeckUrl: '',
+    personas: [] as string[],
+    tdpAlignment: [] as string[],
+    regionalCampaigns: [] as Array<{ name: string; url: string }>,
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  type Section = 'none' | 'customer-lens-pain' | 'customer-lens-outcomes' | 'customer-lens-impact' |
+    'real-world' | 'what-to-say' | 'what-to-share' | 'personas' | 'tdp-alignment' | 'regional'
+  let currentSection: Section = 'none'
+
+  for (const line of lines) {
+    const lower = line.toLowerCase()
+
+    // Section header detection
+    if (lower === 'customer lens' || lower.startsWith('customer lens')) {
+      // Customer Lens has three columns; we detect sub-headers
+      currentSection = 'customer-lens-pain'
+      continue
+    }
+    if (lower === 'pain' || lower === 'pain points' || lower.startsWith('customer pain')) {
+      currentSection = 'customer-lens-pain'
+      continue
+    }
+    if (lower === 'outcomes' || lower === 'desired outcomes' || lower.startsWith('business outcomes')) {
+      currentSection = 'customer-lens-outcomes'
+      continue
+    }
+    if (lower === 'impact' || lower === 'business impact' || lower.startsWith('measurable impact')) {
+      currentSection = 'customer-lens-impact'
+      continue
+    }
+    if (lower === 'real-world examples' || lower.startsWith('real-world example') || lower.startsWith('real world example')) {
+      currentSection = 'real-world'
+      continue
+    }
+    if (lower === 'what to say' || lower.startsWith('what to say')) {
+      currentSection = 'what-to-say'
+      continue
+    }
+    if (lower === 'what to share' || lower.startsWith('what to share')) {
+      currentSection = 'what-to-share'
+      continue
+    }
+    if (lower.startsWith('personas') || lower.startsWith('personas & challenges') || lower.startsWith('personas and challenges')) {
+      currentSection = 'personas'
+      continue
+    }
+    if (lower.startsWith('tdps powering') || lower.startsWith('tdp alignment') || lower.startsWith('supporting tdps')) {
+      currentSection = 'tdp-alignment'
+      continue
+    }
+    if (lower.includes('regional campaign') || lower.includes('americas commercial') || lower.includes('americas enterprise')) {
+      currentSection = 'regional'
+      // If this line itself is a campaign name, capture it
+      if (line.length > 5 && !lower.startsWith('regional')) {
+        const matchingLink = links.find(l =>
+          l.text.toLowerCase().includes(lower.slice(0, 20)),
+        )
+        result.regionalCampaigns.push({ name: line, url: matchingLink?.href ?? '' })
+      }
+      continue
+    }
+
+    // Boundary: stop on unrelated major sections
+    if (lower === 'sales tactic' || lower === 'sales tactics' ||
+        lower.startsWith('content details') || lower.startsWith('content properties')) {
+      currentSection = 'none'
+      continue
+    }
+
+    if (line.length < 5) continue
+
+    switch (currentSection) {
+      case 'customer-lens-pain':
+        if (line.length > 8) result.customerLens.pain.push(line)
+        break
+      case 'customer-lens-outcomes':
+        if (line.length > 8) result.customerLens.outcomes.push(line)
+        break
+      case 'customer-lens-impact':
+        if (line.length > 8) result.customerLens.impact.push(line)
+        break
+      case 'real-world':
+        if (line.length > 10) {
+          const dashIdx = line.indexOf(' — ')
+          const hyphenIdx = dashIdx === -1 ? line.indexOf(' - ') : -1
+          const splitIdx = dashIdx !== -1 ? dashIdx : hyphenIdx
+          if (splitIdx > 3) {
+            result.realWorldExamples.push({
+              customer: line.slice(0, splitIdx).trim(),
+              outcome: line.slice(splitIdx + 3).trim(),
+            })
+          } else {
+            result.realWorldExamples.push({ customer: line, outcome: '' })
+          }
+        }
+        break
+      case 'what-to-say':
+        // Look for specific asset types
+        if (line.length > 5) {
+          const matchingLink = links.find(l =>
+            l.text.toLowerCase().includes(line.toLowerCase().slice(0, 20)) ||
+            line.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
+          )
+          const url = matchingLink?.href ?? ''
+          if (lower.includes('email template')) {
+            result.emailTemplateUrl = url
+          } else if (lower.includes('discovery question')) {
+            result.discoveryQuestionsUrl = url
+          } else if (lower.includes('intro') && (lower.includes('pitch') || lower.includes('deck'))) {
+            result.introPitchDeckUrl = url
+          }
+        }
+        break
+      case 'what-to-share':
+        // Informational — links captured via link matching above
+        break
+      case 'personas':
+        if (line.length > 5) result.personas.push(line)
+        break
+      case 'tdp-alignment':
+        if (line.length > 3) result.tdpAlignment.push(line)
+        break
+      case 'regional':
+        if (line.length > 5) {
+          const matchingLink = links.find(l =>
+            l.text.toLowerCase().includes(lower.slice(0, 20)),
+          )
+          result.regionalCampaigns.push({ name: line, url: matchingLink?.href ?? '' })
+        }
+        break
+    }
+  }
+
+  // Also scan links for specific URLs
+  for (const link of links) {
+    const lower = link.text.toLowerCase()
+    if (!result.emailTemplateUrl && lower.includes('email template')) {
+      result.emailTemplateUrl = link.href
+    }
+    if (!result.discoveryQuestionsUrl && (lower.includes('discovery question') || lower.includes('discovery guide'))) {
+      result.discoveryQuestionsUrl = link.href
+    }
+    if (!result.introPitchDeckUrl && lower.includes('intro') && (lower.includes('pitch') || lower.includes('deck'))) {
+      result.introPitchDeckUrl = link.href
+    }
+  }
+
+  return result
+}
+
+/** Classify a URL into a resource type */
+function classifyLinkType(url: string): string {
+  if (url.includes('docs.google.com/document')) return 'google-docs'
+  if (url.includes('docs.google.com/presentation')) return 'google-slides'
+  if (url.endsWith('.pdf') || url.includes('/pdf/')) return 'pdf'
+  return 'seismic'
+}
+
 // ── Assembly Function ────────────────────────────────────────────────────────
 
 /**
@@ -270,6 +631,7 @@ export function buildSalesHubKnowledge(
   products: ScrapedProduct[],
   salesPlays: ScrapedSalesPlay[],
   tactics: ScrapedSalesTactic[],
+  tdpPages?: ScrapedTdpPage[],
 ): SalesHubKnowledge {
   const tdpMap = new Map<string, TdpNode>()
   const tacticNodes: TacticNode[] = []
@@ -296,6 +658,13 @@ export function buildSalesHubKnowledge(
             description: section.description,
             tactics: [],
             products: [product.name],
+            customerWins: [],
+            whatToSay: [],
+            whatToShare: [],
+            whatToShow: [],
+            services: [],
+            cheatsheetUrl: '',
+            customerDeckUrl: '',
           })
         }
       } else {
@@ -348,6 +717,44 @@ export function buildSalesHubKnowledge(
     }
   }
 
+  // Merge TDP page structured sections into TDP nodes (#366)
+  if (tdpPages) {
+    for (const tdpPage of tdpPages) {
+      // Match by name — TDP page name may be "AI Platform" while tdpMap has "AI Platform TDP"
+      let matched = false
+      for (const [, tdp] of tdpMap) {
+        if (tdp.name.toLowerCase().includes(tdpPage.name.toLowerCase()) ||
+            tdpPage.name.toLowerCase().includes(tdp.name.toLowerCase().replace(/ tdp$/i, ''))) {
+          tdp.customerWins = tdpPage.customerWins
+          tdp.whatToSay = tdpPage.whatToSay
+          tdp.whatToShare = tdpPage.whatToShare
+          tdp.whatToShow = tdpPage.whatToShow
+          tdp.services = tdpPage.services
+          tdp.cheatsheetUrl = tdpPage.cheatsheetUrl
+          tdp.customerDeckUrl = tdpPage.customerDeckUrl
+          matched = true
+          break
+        }
+      }
+      // If no match found, create a new TDP node from the page data
+      if (!matched && tdpPage.name) {
+        tdpMap.set(tdpPage.name, {
+          name: tdpPage.name,
+          description: '',
+          tactics: [],
+          products: [],
+          customerWins: tdpPage.customerWins,
+          whatToSay: tdpPage.whatToSay,
+          whatToShare: tdpPage.whatToShare,
+          whatToShow: tdpPage.whatToShow,
+          services: tdpPage.services,
+          cheatsheetUrl: tdpPage.cheatsheetUrl,
+          customerDeckUrl: tdpPage.customerDeckUrl,
+        })
+      }
+    }
+  }
+
   // Build product nodes
   const productNodes: ProductNode[] = products.map(p => ({
     name: p.name,
@@ -362,11 +769,19 @@ export function buildSalesHubKnowledge(
     googleDocsUrls: p.googleDocsUrls,
   }))
 
-  // Build sales play nodes
+  // Build sales play nodes (#367)
   const salesPlayNodes: SalesPlayNode[] = salesPlays.map(sp => ({
     name: sp.name,
     description: sp.description,
     linkedTdps: sp.linkedTdps,
+    customerLens: sp.customerLens ?? { pain: [], outcomes: [], impact: [] },
+    realWorldExamples: sp.realWorldExamples ?? [],
+    emailTemplateUrl: sp.emailTemplateUrl ?? '',
+    discoveryQuestionsUrl: sp.discoveryQuestionsUrl ?? '',
+    introPitchDeckUrl: sp.introPitchDeckUrl ?? '',
+    personas: sp.personas ?? [],
+    tdpAlignment: sp.tdpAlignment ?? [],
+    regionalCampaigns: sp.regionalCampaigns ?? [],
   }))
 
   return {
