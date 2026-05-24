@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Step0RegionAccess } from '../Step0RegionAccess'
 import { formatRelTime } from '../../lib/format'
+import { NewsRadarSettings } from '../NewsRadarSettings'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -555,6 +556,12 @@ export function SettingsPanel() {
               setAdminEnabledPods(pods)
             }}
           />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="News Radar">
+        <div className="mt-4">
+          <NewsRadarSettings />
         </div>
       </CollapsibleSection>
 
