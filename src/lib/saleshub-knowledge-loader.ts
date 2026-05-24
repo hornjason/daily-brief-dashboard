@@ -217,43 +217,44 @@ export function getKnowledgeCoverage(): KnowledgeCoverage {
   const allUrls = new Set<string>()
   let docsWithExtractedContent = 0
 
-  // Compute TDP coverage
+  // Compute TDP coverage (null-safe — production data may predate #366/#368 field additions)
   const tdps: TdpCoverage[] = kb.tdps.map(tdp => {
     const sections = {
-      customerWins: tdp.customerWins.length > 0,
-      whatToSay: tdp.whatToSay.length > 0,
-      whatToShare: tdp.whatToShare.length > 0,
-      whatToShow: tdp.whatToShow.length > 0,
-      services: tdp.services.length > 0,
-      cheatsheet: tdp.cheatsheetUrl.length > 0,
-      customerDeck: tdp.customerDeckUrl.length > 0,
+      customerWins: (tdp.customerWins ?? []).length > 0,
+      whatToSay: (tdp.whatToSay ?? []).length > 0,
+      whatToShare: (tdp.whatToShare ?? []).length > 0,
+      whatToShow: (tdp.whatToShow ?? []).length > 0,
+      services: (tdp.services ?? []).length > 0,
+      cheatsheet: (tdp.cheatsheetUrl ?? '').length > 0,
+      customerDeck: (tdp.customerDeckUrl ?? '').length > 0,
     }
     const sectionCount = Object.values(sections).filter(Boolean).length
 
     // Collect URLs from this TDP
-    for (const item of tdp.whatToSay) { if (item.url) allUrls.add(item.url) }
-    for (const item of tdp.whatToShare) { if (item.url) allUrls.add(item.url) }
-    for (const item of tdp.whatToShow) { if (item.url) allUrls.add(item.url) }
+    for (const item of tdp.whatToSay ?? []) { if (item.url) allUrls.add(item.url) }
+    for (const item of tdp.whatToShare ?? []) { if (item.url) allUrls.add(item.url) }
+    for (const item of tdp.whatToShow ?? []) { if (item.url) allUrls.add(item.url) }
     if (tdp.cheatsheetUrl) allUrls.add(tdp.cheatsheetUrl)
     if (tdp.customerDeckUrl) allUrls.add(tdp.customerDeckUrl)
 
     // Count tactics with extracted content for this TDP
     const tdpTactics = kb.tactics.filter(t => t.parentTdp === tdp.name)
-    const extractedContentCount = tdpTactics.filter(t => t.extractedContent.length > 0).length
+    const extractedContentCount = tdpTactics.filter(t => (t.extractedContent ?? '').length > 0).length
 
-    return { name: tdp.name, sections, sectionCount, tacticCount: tdp.tactics.length, extractedContentCount }
+    return { name: tdp.name, sections, sectionCount, tacticCount: (tdp.tactics ?? []).length, extractedContentCount }
   })
 
-  // Compute Play coverage
+  // Compute Play coverage (null-safe — production data may predate #367 field additions)
   const plays: PlayCoverage[] = kb.salesPlays.map(play => {
-    const hasCustomerLens = play.customerLens.pain.length > 0 || play.customerLens.outcomes.length > 0 || play.customerLens.impact.length > 0
+    const lens = play.customerLens ?? { pain: [], outcomes: [], impact: [] }
+    const hasCustomerLens = lens.pain.length > 0 || lens.outcomes.length > 0 || lens.impact.length > 0
     const sections = {
       customerLens: hasCustomerLens,
-      realWorldExamples: play.realWorldExamples.length > 0,
-      emailTemplate: play.emailTemplateUrl.length > 0,
-      discoveryQuestions: play.discoveryQuestionsUrl.length > 0,
-      introPitchDeck: play.introPitchDeckUrl.length > 0,
-      personas: play.personas.length > 0,
+      realWorldExamples: (play.realWorldExamples ?? []).length > 0,
+      emailTemplate: (play.emailTemplateUrl ?? '').length > 0,
+      discoveryQuestions: (play.discoveryQuestionsUrl ?? '').length > 0,
+      introPitchDeck: (play.introPitchDeckUrl ?? '').length > 0,
+      personas: (play.personas ?? []).length > 0,
     }
     const sectionCount = Object.values(sections).filter(Boolean).length
     return { name: play.name, sections, sectionCount }
@@ -261,8 +262,8 @@ export function getKnowledgeCoverage(): KnowledgeCoverage {
 
   // Collect URLs from tactics and count extracted content
   for (const tactic of kb.tactics) {
-    for (const item of tactic.whatToShare) { if (item.url) allUrls.add(item.url) }
-    if (tactic.extractedContent.length > 0) docsWithExtractedContent++
+    for (const item of tactic.whatToShare ?? []) { if (item.url) allUrls.add(item.url) }
+    if ((tactic.extractedContent ?? '').length > 0) docsWithExtractedContent++
   }
 
   // Overall coverage: filled sections / total possible sections
