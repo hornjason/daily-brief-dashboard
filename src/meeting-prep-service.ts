@@ -30,6 +30,7 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { readProductLifecycleCache } from './product-lifecycle.ts'
 import { getAllProductSummaries } from './product-release-radar.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
+import { getTdpByName, getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readCCSPCache } from './cache-layer.ts'
@@ -812,6 +813,40 @@ ${(() => {
         `- **${p.playName}** (${p.tdp}, ${p.confidence}): ${p.triggerTechnologies.join(', ')}${p.talkTrack ? `\n  Talk track: ${p.talkTrack.slice(0, 200)}` : ''}`
       ).join('\n')
     : 'No solution plays identified'
+})()}
+
+### Tactical Recommendations (from SalesHub knowledge)
+${(() => {
+  const plays = playbook.deterministic?.solutionPlays ?? []
+  if (plays.length === 0) return 'No tactical recommendations — no solution plays matched'
+  const recs: string[] = []
+  for (const play of plays) {
+    const tdpNode = getTdpByName(play.tdp)
+    const salesPlay = getSalesPlayByName(play.playName)
+
+    if (tdpNode?.whatToShow?.length) {
+      recs.push(`**Recommended Demos (${play.tdp}):**`)
+      for (const demo of tdpNode.whatToShow.slice(0, 3)) {
+        recs.push(`- [${demo.name}](${demo.url}) — ${demo.type}`)
+      }
+    }
+
+    const examples = play.realWorldExamples ?? salesPlay?.realWorldExamples ?? []
+    if (examples.length > 0) {
+      recs.push(`**Reference Case Studies (${play.playName}):**`)
+      for (const ex of examples.slice(0, 3)) {
+        recs.push(`- ${ex.customer} — ${ex.outcome}`)
+      }
+    }
+
+    if (tdpNode?.services?.length) {
+      recs.push(`**Services to Propose (${play.tdp}):**`)
+      for (const svc of tdpNode.services.slice(0, 3)) {
+        recs.push(`- ${svc.name}: ${svc.description}`)
+      }
+    }
+  }
+  return recs.length > 0 ? recs.join('\n') : 'No tactical recommendations available for matched plays'
 })()}
 
 ### Renewals & Risk (from playbook)

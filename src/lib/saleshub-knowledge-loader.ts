@@ -152,6 +152,16 @@ export function getTdpDescription(tdpName: string): string {
   return tdp?.description ?? ''
 }
 
+export function getTdpByName(tdpName: string): TdpNode | undefined {
+  const kb = loadKnowledgeBase()
+  if (!kb) return undefined
+  const normalized = tdpName.toLowerCase()
+  return kb.tdps.find(t =>
+    t.name.toLowerCase().includes(normalized) ||
+    normalized.includes(t.name.toLowerCase())
+  )
+}
+
 export function getSalesPlayByName(playName: string): SalesPlayNode | undefined {
   const kb = loadKnowledgeBase()
   if (!kb) return undefined

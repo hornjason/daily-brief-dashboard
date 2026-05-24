@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, getSalesPlayByName, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
+import { getTacticsByTdp, getTalkTrack, getTdpDescription, getKnowledgeStats, getSalesPlayByName, getTdpByName, resetKnowledgeCache } from '../../src/lib/saleshub-knowledge-loader'
 import { writeFileSync, mkdirSync, rmSync } from 'fs'
 import { resolve } from 'path'
 
@@ -37,12 +37,38 @@ const FIXTURE_KNOWLEDGE = {
       description: 'The Automation TDP positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT.',
       tactics: ['AIOps: Turn Intelligence into Action', 'Automate at Scale'],
       products: ['Red Hat Ansible Automation Platform'],
+      whatToShow: [
+        { name: 'AIOps Live Demo', url: 'https://demo.example.com/aiops', type: 'live-demo' },
+        { name: 'EDA Workflow Demo', url: 'https://demo.example.com/eda', type: 'recorded-demo' },
+      ],
+      services: [
+        { name: 'Automation Adoption Program', description: 'Guided onboarding for enterprise automation at scale' },
+        { name: 'Consulting Engagement', description: 'Architecture review and best practices' },
+      ],
+      customerWins: [],
+      whatToSay: [],
+      whatToShare: [],
+      cheatsheetUrl: '',
+      customerDeckUrl: '',
+      extractedContent: '',
+      metrics: [],
     },
     {
       name: 'Virtualization TDP',
       description: 'The Virtualization TDP positions OpenShift Virtualization for VMware migration.',
       tactics: ['VMware Migration'],
       products: ['Red Hat OpenShift Virtualization'],
+      whatToShow: [
+        { name: 'VMware Migration Demo', url: 'https://demo.example.com/vmware', type: 'live-demo' },
+      ],
+      services: [],
+      customerWins: [],
+      whatToSay: [],
+      whatToShare: [],
+      cheatsheetUrl: '',
+      customerDeckUrl: '',
+      extractedContent: '',
+      metrics: [],
     },
   ],
   tactics: [
@@ -188,6 +214,40 @@ describe('getSalesPlayByName', () => {
     rmSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'))
     resetKnowledgeCache()
     expect(getSalesPlayByName('Modernize Infrastructure')).toBeUndefined()
+  })
+})
+
+describe('getTdpByName', () => {
+  it('returns TDP node by name', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.name).toBe('Automation TDP')
+    expect(tdp!.description).toContain('mission-critical foundation')
+  })
+
+  it('returns TDP with whatToShow data', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.whatToShow).toHaveLength(2)
+    expect(tdp!.whatToShow[0].name).toBe('AIOps Live Demo')
+    expect(tdp!.whatToShow[0].url).toBe('https://demo.example.com/aiops')
+  })
+
+  it('returns TDP with services data', () => {
+    const tdp = getTdpByName('Automation')
+    expect(tdp).toBeDefined()
+    expect(tdp!.services).toHaveLength(2)
+    expect(tdp!.services[0].name).toBe('Automation Adoption Program')
+  })
+
+  it('returns undefined for unknown TDP', () => {
+    expect(getTdpByName('NonExistent')).toBeUndefined()
+  })
+
+  it('returns undefined when knowledge file missing', () => {
+    rmSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'))
+    resetKnowledgeCache()
+    expect(getTdpByName('Automation')).toBeUndefined()
   })
 })
 

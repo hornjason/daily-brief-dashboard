@@ -31,6 +31,7 @@ import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
+import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ export async function callGeminiForCampaign(opts: {
   registrySignals: Signal[]
   voiceInstruction?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[] }>
+  emailTemplateContext?: string
 }): Promise<string> {
   // Assemble user prompt with material + signals
   const intelligenceSummary = opts.customerSignals.intelligence?.company
@@ -235,7 +237,7 @@ ${subscriptionsSummary}
 ${registrySignalsSummary}
 
 ${opts.voiceInstruction ? `\n## Voice Instruction:\n${opts.voiceInstruction}\n` : ''}
-
+${opts.emailTemplateContext ?? ''}
 ---
 Now generate a complete campaign for ${opts.customerName} with positioning and email templates.
 
@@ -481,6 +483,30 @@ export async function generateCampaign(
     }
   }
 
+  // 4a. Check for SalesHub email template base (#372)
+  let emailTemplateContext = ''
+  try {
+    const { getCustomerSolutionContext } = await import('./lib/customer-solution-context.ts')
+    const solutionCtx = getCustomerSolutionContext(slug)
+    for (const play of solutionCtx.activeSolutionPlays) {
+      const salesPlay = getSalesPlayByName(play.playName)
+      if (salesPlay?.emailTemplateUrl) {
+        try {
+          const resp = await fetch(salesPlay.emailTemplateUrl, { signal: AbortSignal.timeout(10000) })
+          if (resp.ok) {
+            const templateText = await resp.text()
+            const cleanTemplate = templateText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000)
+            emailTemplateContext = `\n## SalesHub Email Template Base (${play.playName})\nUse this template as the base structure and language. Personalize with customer signals but preserve the template's positioning language:\n\n${cleanTemplate}\n`
+            console.log(`[campaigns] Using SalesHub email template from ${play.playName}`)
+          }
+        } catch { /* skip on template fetch failure */ }
+        break // Use first template found
+      }
+    }
+  } catch {
+    // Solution context unavailable — proceed without template
+  }
+
   // 4. Generate campaign via Gemini + quality gate (ADR-024)
   const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
@@ -490,6 +516,7 @@ export async function generateCampaign(
     registrySignals,
     voiceInstruction,
     personas: config?.personas,
+    emailTemplateContext,
   })
 
   const gateResult = await validateAndRetry(
@@ -505,6 +532,7 @@ export async function generateCampaign(
         registrySignals,
         voiceInstruction,
         personas: config?.personas,
+        emailTemplateContext,
       })
     }
   )
