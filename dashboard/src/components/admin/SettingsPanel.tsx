@@ -337,6 +337,187 @@ function ConfigBackupSection() {
   )
 }
 
+// ── Value Maps Section (#315) ──────────────────────────────────────────────────
+
+interface ValueMapsStatus {
+  deckId: string | null
+  configured: boolean
+  lastRefreshed: string | null
+  fileSize: number
+  productCount: number
+  hasStaticFallback: boolean
+}
+
+function ValueMapsSection() {
+  const [status, setStatus] = useState<ValueMapsStatus | null>(null)
+  const [deckInput, setDeckInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const fetchStatus = useCallback(() => {
+    fetch('/api/settings/value-maps')
+      .then((r) => r.json())
+      .then((d) => {
+        setStatus(d)
+        setDeckInput(d.deckId ?? '')
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchStatus() }, [fetchStatus])
+
+  const handleTest = async () => {
+    if (!deckInput.trim()) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/settings/value-maps/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckId: deckInput.trim() }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setTestResult({ ok: true, message: `"${d.name}" — ${d.contentLength.toLocaleString()} chars` })
+      } else {
+        setTestResult({ ok: false, message: d.error ?? 'Test failed' })
+      }
+    } catch {
+      setTestResult({ ok: false, message: 'Network error' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/settings/value-maps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckId: deckInput.trim() }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setResult({ ok: true, message: d.deckId ? 'Saved' : 'Cleared' })
+        fetchStatus()
+        setTimeout(() => setResult(null), 2000)
+      } else {
+        setResult({ ok: false, message: d.error ?? 'Save failed' })
+      }
+    } catch {
+      setResult({ ok: false, message: 'Network error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/settings/value-maps/refresh', { method: 'POST' })
+      const d = await res.json()
+      if (res.ok) {
+        setResult({ ok: true, message: `Refreshed — ${d.contentLength.toLocaleString()} chars` })
+        fetchStatus()
+        setTimeout(() => setResult(null), 3000)
+      } else {
+        setResult({ ok: false, message: d.error ?? 'Refresh failed' })
+      }
+    } catch {
+      setResult({ ok: false, message: 'Network error' })
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  if (!status) return <div className="mt-4 text-xs text-gray-500">Loading...</div>
+
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-xs text-gray-500">
+        Business value maps provide proof points for product alignment. Paste a Google Slides deck ID or URL, or leave blank to use the built-in static data.
+      </p>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={deckInput}
+          onChange={(e) => { setDeckInput(e.target.value); setTestResult(null) }}
+          placeholder="Deck ID or Google Slides URL"
+          data-testid="value-maps-deck-input"
+          className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent"
+        />
+        <button
+          onClick={handleTest}
+          disabled={testing || !deckInput.trim()}
+          data-testid="value-maps-test-btn"
+          className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0"
+        >
+          {testing ? 'Testing...' : 'Test'}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          data-testid="value-maps-save-btn"
+          className="px-3 py-1.5 text-xs font-medium rounded bg-accent/20 text-accent hover:bg-accent/30 disabled:opacity-40 transition-colors shrink-0"
+        >
+          {saving ? 'Saving...' : result?.ok ? 'Saved' : 'Save'}
+        </button>
+      </div>
+
+      {testResult && (
+        <div data-testid="value-maps-test-result" className={`text-xs ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+          {testResult.message}
+        </div>
+      )}
+
+      {result && !testResult && (
+        <div className={`text-xs ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
+          {result.message}
+        </div>
+      )}
+
+      {/* Status info */}
+      <div className="pt-3 border-t border-gray-700 space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Source</span>
+          <span className="text-gray-300">
+            {status.configured ? 'Google Slides (Drive)' : 'Built-in static data'}
+          </span>
+        </div>
+        {status.lastRefreshed && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">Last refreshed</span>
+            <span className="text-gray-300">{formatRelTime(status.lastRefreshed)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">Products with data</span>
+          <span className="text-gray-300">{status.productCount}</span>
+        </div>
+        {status.configured && (
+          <div className="mt-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              data-testid="value-maps-refresh-btn"
+              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 text-white transition-colors"
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh Now'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Panel ─────────────────────────────────────────────────────────────────
 
 export function SettingsPanel() {
@@ -375,6 +556,10 @@ export function SettingsPanel() {
             }}
           />
         </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Value Maps">
+        <ValueMapsSection />
       </CollapsibleSection>
 
       <CollapsibleSection title="Config Backup">
