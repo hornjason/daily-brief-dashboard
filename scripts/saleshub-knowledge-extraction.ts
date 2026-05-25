@@ -478,8 +478,8 @@ export function parseSalesPlayPageSections(
   type Section = 'none' | 'customer-lens-pain' | 'customer-lens-outcomes' | 'customer-lens-impact' |
     'real-world' | 'what-to-say' | 'what-to-share' | 'personas' | 'tdp-alignment' | 'regional'
   let currentSection: Section = 'none'
-  type PersonaSubSection = 'roles' | 'painPoints' | 'discoveryQuestions' | 'valueProps' | 'whatWinsThemOver'
-  let personaSubSection: PersonaSubSection = 'roles' // Default: before any sub-header, content goes to roles
+  type PersonaSubSection = 'none' | 'roles' | 'painPoints' | 'discoveryQuestions' | 'valueProps' | 'whatWinsThemOver'
+  let personaSubSection: PersonaSubSection = 'none'
 
   for (const line of lines) {
     const lower = line.toLowerCase()
@@ -516,6 +516,7 @@ export function parseSalesPlayPageSections(
     }
     if (lower.startsWith('personas') || lower.startsWith('personas & challenges') || lower.startsWith('personas and challenges')) {
       currentSection = 'personas'
+      personaSubSection = 'none'
       continue
     }
     if (lower.startsWith('tdps powering') || lower.startsWith('tdp alignment') || lower.startsWith('supporting tdps')) {
@@ -610,7 +611,7 @@ export function parseSalesPlayPageSections(
           personaSubSection = 'valueProps'
           continue
         }
-        if (line.length > 5) {
+        if (line.length > 5 && personaSubSection !== 'none') {
           result.personaSection[personaSubSection].push(line)
         }
         break

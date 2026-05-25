@@ -518,9 +518,19 @@ What to Share
 Customer reference deck for proof points
 Forrester TEI study showing 300% ROI
 Personas & Challenges
-VP of Engineering struggling with developer productivity
-Platform Engineer needing self-service infrastructure
-CTO evaluating multi-cloud strategy
+Top three that matter most
+VP of Engineering
+Platform Engineer
+CTO / Cloud Architect
+What they care about
+Struggling with developer productivity
+Needing self-service infrastructure
+Ask these questions
+What is slowing your release cycles?
+What wins them over
+Customer references from their industry
+Red Hat advantage
+Open hybrid cloud portability
 TDPs Powering the Play
 Application Platform TDP
 Container Management TDP
@@ -555,9 +565,13 @@ End of content.
     expect(result.introPitchDeckUrl).toBe('https://docs.google.com/presentation/d/xyz')
     expect(result.emailTemplateUrl).toBe('https://example.com/email-template')
 
-    // Personas — all go to roles when no sub-section headers present
+    // Personas — structured sub-sections
     expect(result.personaSection.roles.length).toBe(3)
-    expect(result.personaSection.roles[0]).toContain('VP of Engineering')
+    expect(result.personaSection.roles[0]).toBe('VP of Engineering')
+    expect(result.personaSection.painPoints.length).toBe(2)
+    expect(result.personaSection.discoveryQuestions.length).toBe(1)
+    expect(result.personaSection.whatWinsThemOver.length).toBe(1)
+    expect(result.personaSection.valueProps.length).toBe(1)
 
     // TDP Alignment
     expect(result.tdpAlignment.length).toBe(2)
@@ -640,18 +654,20 @@ End.
     ])
   })
 
-  it('routes all content to roles when no sub-headers found (AC-4 backward compat)', () => {
+  it('skips content before first sub-header in personas section (AC-4)', () => {
     const text = `
 Simple Play
 Personas & Challenges
-VP of Engineering struggling with productivity
-Platform Engineer needing self-service
-CTO evaluating multi-cloud
+Intro text that should be skipped
+Another intro line about the play
+Top three that matter most
+Chief Information Officer
+Chief Technology Officer
 Content Details
 End.
     `
     const result = parseSalesPlayPageSections(text, [])
-    expect(result.personaSection.roles.length).toBe(3)
+    expect(result.personaSection.roles).toEqual(['Chief Information Officer', 'Chief Technology Officer'])
     expect(result.personaSection.painPoints).toEqual([])
     expect(result.personaSection.discoveryQuestions).toEqual([])
     expect(result.personaSection.valueProps).toEqual([])
