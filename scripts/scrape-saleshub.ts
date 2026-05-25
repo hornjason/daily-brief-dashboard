@@ -550,7 +550,7 @@ async function extractSalesTacticPage(page: Page, tacticName: string, tacticUrl:
       return Array.from(document.querySelectorAll('a[href]')).map(a => ({
         text: a.textContent?.trim() ?? '',
         href: a.getAttribute('href') ?? '',
-      })).filter(l => l.text && l.href && l.text.length > 3 && !l.href.startsWith('#'))
+      })).filter(l => l.text && l.href && l.text.length > 3 && !l.href.startsWith('#') && !l.href.startsWith('javascript'))
     })
 
     // Enrich whatToShare with actual URLs from page links

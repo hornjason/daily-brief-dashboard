@@ -622,12 +622,37 @@ function classifyLinkType(url: string): string {
  * Aggregates TDPs across products, deduplicates, and cross-references.
  */
 // Garbage filter: entries that aren't real TDP/tactic content
-function isGarbageEntry(name: string, description: string): boolean {
-  const lower = name.toLowerCase()
+function isGarbageEntry(name: string, description?: string): boolean {
+  const trimmed = name.trim()
+  const lower = trimmed.toLowerCase()
   if (lower.startsWith('visit') || lower.startsWith('arrow') || lower.includes('item(s)')) return true
   if (lower.startsWith('content detail') || lower.startsWith('content propert')) return true
   if (lower.startsWith('rating') || lower.startsWith('review')) return true
-  if (description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
+  // UI chrome and navigation noise
+  if (lower.startsWith('displaying slide')) return true
+  if (lower === 'services') return true
+  if (lower === 'learning resources') return true
+  if (lower === 'business content') return true
+  if (lower === 'social selling') return true
+  if (lower === 'hear from a peer') return true
+  if (lower.startsWith('need to level up')) return true
+  if (lower.startsWith('go to sprout social')) return true
+  if (lower.startsWith('filter by topic')) return true
+  if (lower.startsWith('once you\'ve shared')) return true
+  if (lower === 'how to get started:') return true
+  if (lower === 'how to get started') return true
+  if (lower === 'top three that matter most') return true
+  if (lower === 'what they care about') return true
+  if (lower === 'current reality') return true
+  if (lower === 'ask these questions') return true
+  if (lower === 'what wins them over') return true
+  if (lower.startsWith('pro tip')) return true
+  if (lower.startsWith('field examples')) return true
+  if (lower.startsWith('check out the following')) return true
+  if (lower.startsWith('tagging sales campaigns')) return true
+  if (lower.startsWith('introduction why act now')) return true
+  if (/^\d+$/.test(trimmed)) return true
+  if (description !== undefined && description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
   return false
 }
 
@@ -1016,6 +1041,87 @@ export function buildSalesHubKnowledge(
     tdpAlignment: sp.tdpAlignment ?? [],
     regionalCampaigns: sp.regionalCampaigns ?? [],
   }))
+
+  // ── Clean noise from all text arrays ──
+  for (const play of salesPlayNodes) {
+    if (play.personas) play.personas = play.personas.filter(p => !isGarbageEntry(p))
+  }
+  for (const tactic of tacticNodes) {
+    if (tactic.whatToSay) tactic.whatToSay = tactic.whatToSay.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+    if (tactic.whatToShare) tactic.whatToShare = tactic.whatToShare.filter(s => {
+      if (typeof s === 'string') return !isGarbageEntry(s)
+      if (typeof s === 'object' && s.name) return !isGarbageEntry(s.name) && s.url !== 'javascript:void(0)'
+      return true
+    })
+    if (tactic.customerWins) tactic.customerWins = tactic.customerWins.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+  }
+  for (const [, tdp] of tdpMap) {
+    if (tdp.whatToSay) tdp.whatToSay = tdp.whatToSay.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+    if (tdp.whatToShare) tdp.whatToShare = tdp.whatToShare.filter(s => {
+      if (typeof s === 'string') return !isGarbageEntry(s)
+      if (typeof s === 'object' && s.name) return !isGarbageEntry(s.name) && s.url !== 'javascript:void(0)'
+      return true
+    })
+    if (tdp.whatToShow) tdp.whatToShow = tdp.whatToShow.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+    if (tdp.services) tdp.services = tdp.services.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+    if (tdp.customerWins) tdp.customerWins = tdp.customerWins.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)
+  }
+
+  // ── Deduplicate whatToShare links by URL (keep longest name) ──
+  for (const tactic of tacticNodes) {
+    if (tactic.whatToShare && Array.isArray(tactic.whatToShare)) {
+      const seen = new Map<string, number>()
+      const toRemove = new Set<number>()
+      for (let i = 0; i < tactic.whatToShare.length; i++) {
+        const item = tactic.whatToShare[i]
+        if (typeof item === 'object' && item.url && item.url !== '') {
+          if (seen.has(item.url)) {
+            const keptIdx = seen.get(item.url)!
+            const keptName = (tactic.whatToShare[keptIdx] as any)?.name?.length ?? 0
+            const thisName = item.name?.length ?? 0
+            if (thisName > keptName) {
+              toRemove.add(keptIdx)
+              seen.set(item.url, i)
+            } else {
+              toRemove.add(i)
+            }
+          } else {
+            seen.set(item.url, i)
+          }
+        }
+      }
+      if (toRemove.size > 0) {
+        tactic.whatToShare = tactic.whatToShare.filter((_, i) => !toRemove.has(i))
+      }
+    }
+  }
+  for (const [, tdp] of tdpMap) {
+    if (tdp.whatToShare && Array.isArray(tdp.whatToShare)) {
+      const seen = new Map<string, number>()
+      const toRemove = new Set<number>()
+      for (let i = 0; i < tdp.whatToShare.length; i++) {
+        const item = tdp.whatToShare[i]
+        if (typeof item === 'object' && item.url && item.url !== '') {
+          if (seen.has(item.url)) {
+            const keptIdx = seen.get(item.url)!
+            const keptName = (tdp.whatToShare[keptIdx] as any)?.name?.length ?? 0
+            const thisName = item.name?.length ?? 0
+            if (thisName > keptName) {
+              toRemove.add(keptIdx)
+              seen.set(item.url, i)
+            } else {
+              toRemove.add(i)
+            }
+          } else {
+            seen.set(item.url, i)
+          }
+        }
+      }
+      if (toRemove.size > 0) {
+        tdp.whatToShare = tdp.whatToShare.filter((_, i) => !toRemove.has(i))
+      }
+    }
+  }
 
   return {
     version: 1,
