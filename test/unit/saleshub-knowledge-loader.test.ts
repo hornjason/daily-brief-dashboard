@@ -26,7 +26,13 @@ const FIXTURE_KNOWLEDGE = {
       emailTemplateUrl: 'https://example.com/email-template',
       discoveryQuestionsUrl: '',
       introPitchDeckUrl: '',
-      personas: ['CTO', 'VP Infrastructure'],
+      personaSection: {
+        roles: ['CTO', 'VP Infrastructure'],
+        painPoints: [],
+        discoveryQuestions: [],
+        valueProps: [],
+        whatWinsThemOver: [],
+      },
       tdpAlignment: ['Automation', 'Virtualization'],
       regionalCampaigns: [],
     },
@@ -338,7 +344,7 @@ describe('getKnowledgeCoverage', () => {
     expect(play.sections.emailTemplate).toBe(true)
     expect(play.sections.discoveryQuestions).toBe(false)
     expect(play.sections.introPitchDeck).toBe(false)
-    expect(play.sections.personas).toBe(true)
+    expect(play.sections.personaSection).toBe(true)
     expect(play.sectionCount).toBe(4)
   })
 

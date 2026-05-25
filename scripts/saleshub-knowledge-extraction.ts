@@ -27,7 +27,13 @@ export interface SalesPlayNode {
   emailTemplateUrl: string
   discoveryQuestionsUrl: string
   introPitchDeckUrl: string
-  personas: string[]
+  personaSection: {
+    roles: string[]
+    painPoints: string[]
+    discoveryQuestions: string[]
+    valueProps: string[]
+    whatWinsThemOver: string[]
+  }
   tdpAlignment: string[]
   regionalCampaigns: Array<{ name: string; url: string }>
 }
@@ -94,7 +100,13 @@ export interface ScrapedSalesPlay {
   emailTemplateUrl?: string
   discoveryQuestionsUrl?: string
   introPitchDeckUrl?: string
-  personas?: string[]
+  personaSection?: {
+    roles: string[]
+    painPoints: string[]
+    discoveryQuestions: string[]
+    valueProps: string[]
+    whatWinsThemOver: string[]
+  }
   tdpAlignment?: string[]
   regionalCampaigns?: Array<{ name: string; url: string }>
 }
@@ -450,7 +462,13 @@ export function parseSalesPlayPageSections(
     emailTemplateUrl: '',
     discoveryQuestionsUrl: '',
     introPitchDeckUrl: '',
-    personas: [] as string[],
+    personaSection: {
+      roles: [] as string[],
+      painPoints: [] as string[],
+      discoveryQuestions: [] as string[],
+      valueProps: [] as string[],
+      whatWinsThemOver: [] as string[],
+    },
     tdpAlignment: [] as string[],
     regionalCampaigns: [] as Array<{ name: string; url: string }>,
   }
@@ -460,6 +478,8 @@ export function parseSalesPlayPageSections(
   type Section = 'none' | 'customer-lens-pain' | 'customer-lens-outcomes' | 'customer-lens-impact' |
     'real-world' | 'what-to-say' | 'what-to-share' | 'personas' | 'tdp-alignment' | 'regional'
   let currentSection: Section = 'none'
+  type PersonaSubSection = 'roles' | 'painPoints' | 'discoveryQuestions' | 'valueProps' | 'whatWinsThemOver'
+  let personaSubSection: PersonaSubSection = 'roles' // Default: before any sub-header, content goes to roles
 
   for (const line of lines) {
     const lower = line.toLowerCase()
@@ -568,9 +588,33 @@ export function parseSalesPlayPageSections(
       case 'what-to-share':
         // Informational — links captured via link matching above
         break
-      case 'personas':
-        if (line.length > 5) result.personas.push(line)
+      case 'personas': {
+        // Sub-section state machine: detect positional headers within personas section
+        if (lower === 'top three that matter most' || lower === 'top 3 that matter most') {
+          personaSubSection = 'roles'
+          continue
+        }
+        if (lower === 'what they care about' || lower === 'current reality' || lower === 'impacts') {
+          personaSubSection = 'painPoints'
+          continue
+        }
+        if (lower === 'ask these questions') {
+          personaSubSection = 'discoveryQuestions'
+          continue
+        }
+        if (lower === 'what wins them over') {
+          personaSubSection = 'whatWinsThemOver'
+          continue
+        }
+        if (lower === 'red hat advantage' || lower === 'value drivers' || lower === 'how red hat helps') {
+          personaSubSection = 'valueProps'
+          continue
+        }
+        if (line.length > 5) {
+          result.personaSection[personaSubSection].push(line)
+        }
         break
+      }
       case 'tdp-alignment':
         // Only accept lines matching known TDP names (#381)
         const CANONICAL_TDPS = ['AI Platform', 'Server/Cloud Operating System', 'Container Management',
@@ -625,76 +669,20 @@ function classifyLinkType(url: string): string {
 function isGarbageEntry(name: string, description?: string): boolean {
   const trimmed = name.trim()
   const lower = trimmed.toLowerCase()
+  // Pure UI chrome / SalesHub platform noise (13 patterns — reduced from 70+ in #388)
   if (lower.startsWith('visit') || lower.startsWith('arrow') || lower.includes('item(s)')) return true
   if (lower.startsWith('content detail') || lower.startsWith('content propert')) return true
   if (lower.startsWith('rating') || lower.startsWith('review')) return true
-  // UI chrome and navigation noise
   if (lower.startsWith('displaying slide')) return true
-  if (lower === 'services') return true
-  if (lower === 'learning resources') return true
-  if (lower === 'business content') return true
-  if (lower === 'social selling') return true
-  if (lower === 'hear from a peer') return true
-  if (lower.startsWith('need to level up')) return true
-  if (lower.startsWith('go to sprout social')) return true
-  if (lower.startsWith('filter by topic')) return true
+  if (lower === 'services' || lower === 'learning resources' || lower === 'business content') return true
+  if (lower === 'social selling' || lower === 'hear from a peer') return true
+  if (lower.startsWith('go to sprout social') || lower.startsWith('filter by topic')) return true
+  if (lower === 'how to get started' || lower === 'how to get started:') return true
   if (lower.startsWith('once you\'ve shared')) return true
-  if (lower === 'how to get started:') return true
-  if (lower === 'how to get started') return true
-  if (lower === 'top three that matter most') return true
-  if (lower === 'what they care about') return true
-  if (lower === 'current reality') return true
-  if (lower === 'ask these questions') return true
-  if (lower === 'what wins them over') return true
-  if (lower.startsWith('pro tip')) return true
-  if (lower.startsWith('field examples')) return true
-  if (lower.startsWith('check out the following')) return true
-  if (lower.startsWith('tagging sales campaigns')) return true
-  if (lower.startsWith('introduction why act now')) return true
   if (/^\d+$/.test(trimmed)) return true
-  if (description !== undefined && description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
-  // Section headers and instructional text that leaks into personas
-  if (lower.startsWith('align tdp')) return true
-  if (lower.startsWith('next align')) return true
-  if (lower.startsWith('advance your')) return true
-  if (lower.startsWith('use this play')) return true
-  if (lower.startsWith('use this to')) return true
-  if (lower.startsWith('use the resources')) return true
-  if (lower.startsWith('the build & run')) return true
-  if (lower.startsWith('the ai-ready')) return true
-  if (lower.startsWith('the it operations')) return true
-  if (lower.startsWith('the modernize')) return true
-  if (lower.startsWith('the sovereignty')) return true
-  if (lower === 'red hat advantage') return true
-  if (lower === 'value drivers') return true
-  if (lower === 'how red hat helps') return true
-  if (lower.startsWith('cost optimization')) return true
-  if (lower === 'security & operational consistency') return true
-  if (lower.startsWith('flexibility & minimize')) return true
-  if (lower.startsWith('customers are under')) return true
-  if (lower.startsWith('customers need')) return true
-  if (lower.startsWith('customers want')) return true
-  if (lower.includes('sales tatics') || lower.includes('sales tactics')) return true
-  if (lower.startsWith('practice your')) return true
-  if (lower.startsWith('examples of what')) return true
-  if (lower.startsWith('start practice')) return true
   if (lower === 'coming soon!') return true
-  if (lower.startsWith('confirmed sovereignty')) return true
-  if (lower.includes('sales primer')) return true
-  if (lower === 'sovereignty tagging') return true
-  if (lower.startsWith('digital sovereignty sales')) return true
-  if (lower.startsWith('turn your network')) return true
-  if (lower.startsWith('select an article')) return true
-  if (lower.startsWith('select case studies')) return true
-  if (lower.startsWith('explore the red hat blog')) return true
-  if (lower.startsWith('red hat reduces')) return true
-  if (lower.startsWith('red hat provides')) return true
-  if (lower.startsWith('red hat standardizes')) return true
-  if (lower.startsWith('red hat\'s open')) return true
-  if (lower.startsWith('messaging, talk tracks')) return true
-  if (lower.startsWith('customer-ready assets')) return true
-  if (lower.startsWith('real customer stories')) return true
-  if (lower.startsWith('demos that highlight')) return true
+  if (lower.includes('sales tatics') || lower.includes('sales tactics')) return true
+  if (description !== undefined && description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
   return false
 }
 
@@ -1079,14 +1067,20 @@ export function buildSalesHubKnowledge(
     emailTemplateUrl: sp.emailTemplateUrl ?? '',
     discoveryQuestionsUrl: sp.discoveryQuestionsUrl ?? '',
     introPitchDeckUrl: sp.introPitchDeckUrl ?? '',
-    personas: sp.personas ?? [],
+    personaSection: sp.personaSection ?? { roles: [], painPoints: [], discoveryQuestions: [], valueProps: [], whatWinsThemOver: [] },
     tdpAlignment: sp.tdpAlignment ?? [],
     regionalCampaigns: sp.regionalCampaigns ?? [],
   }))
 
   // ── Clean noise from all text arrays ──
   for (const play of salesPlayNodes) {
-    if (play.personas) play.personas = play.personas.filter(p => !isGarbageEntry(p))
+    if (play.personaSection) {
+      play.personaSection.roles = play.personaSection.roles.filter(p => !isGarbageEntry(p))
+      play.personaSection.painPoints = play.personaSection.painPoints.filter(p => !isGarbageEntry(p))
+      play.personaSection.discoveryQuestions = play.personaSection.discoveryQuestions.filter(p => !isGarbageEntry(p))
+      play.personaSection.valueProps = play.personaSection.valueProps.filter(p => !isGarbageEntry(p))
+      play.personaSection.whatWinsThemOver = play.personaSection.whatWinsThemOver.filter(p => !isGarbageEntry(p))
+    }
   }
   for (const tactic of tacticNodes) {
     if (tactic.whatToSay) tactic.whatToSay = tactic.whatToSay.filter(s => typeof s === 'string' ? !isGarbageEntry(s) : true)

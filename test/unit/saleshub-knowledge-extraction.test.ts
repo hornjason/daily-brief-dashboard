@@ -239,7 +239,13 @@ describe('buildSalesHubKnowledge', () => {
         emailTemplateUrl: 'https://example.com/email-template',
         discoveryQuestionsUrl: 'https://example.com/discovery',
         introPitchDeckUrl: 'https://example.com/deck',
-        personas: ['VP Engineering', 'Platform Engineer'],
+        personaSection: {
+          roles: ['VP Engineering', 'Platform Engineer'],
+          painPoints: [],
+          discoveryQuestions: [],
+          valueProps: [],
+          whatWinsThemOver: [],
+        },
         tdpAlignment: ['App Platform TDP', 'Container Management TDP'],
         regionalCampaigns: [{ name: 'Americas Commercial', url: 'https://example.com/campaign' }],
       },
@@ -251,7 +257,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(play.customerLens.outcomes).toContain('Faster time to market')
     expect(play.realWorldExamples[0].customer).toBe('AcmeCo')
     expect(play.emailTemplateUrl).toBe('https://example.com/email-template')
-    expect(play.personas).toContain('VP Engineering')
+    expect(play.personaSection.roles).toContain('VP Engineering')
     expect(play.tdpAlignment).toContain('App Platform TDP')
     expect(play.regionalCampaigns[0].name).toBe('Americas Commercial')
   })
@@ -389,7 +395,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(play.customerLens).toEqual({ pain: [], outcomes: [], impact: [] })
     expect(play.realWorldExamples).toEqual([])
     expect(play.emailTemplateUrl).toBe('')
-    expect(play.personas).toEqual([])
+    expect(play.personaSection).toEqual({ roles: [], painPoints: [], discoveryQuestions: [], valueProps: [], whatWinsThemOver: [] })
     expect(play.tdpAlignment).toEqual([])
     expect(play.regionalCampaigns).toEqual([])
   })
@@ -549,9 +555,9 @@ End of content.
     expect(result.introPitchDeckUrl).toBe('https://docs.google.com/presentation/d/xyz')
     expect(result.emailTemplateUrl).toBe('https://example.com/email-template')
 
-    // Personas
-    expect(result.personas.length).toBe(3)
-    expect(result.personas[0]).toContain('VP of Engineering')
+    // Personas — all go to roles when no sub-section headers present
+    expect(result.personaSection.roles.length).toBe(3)
+    expect(result.personaSection.roles[0]).toContain('VP of Engineering')
 
     // TDP Alignment
     expect(result.tdpAlignment.length).toBe(2)
@@ -575,7 +581,7 @@ End of content.
     expect(result.customerLens.outcomes).toEqual([])
     expect(result.customerLens.impact).toEqual([])
     expect(result.realWorldExamples).toEqual([])
-    expect(result.personas).toEqual([])
+    expect(result.personaSection).toEqual({ roles: [], painPoints: [], discoveryQuestions: [], valueProps: [], whatWinsThemOver: [] })
     expect(result.tdpAlignment).toEqual([])
     expect(result.emailTemplateUrl).toBe('')
   })
@@ -584,7 +590,107 @@ End of content.
     const result = parseSalesPlayPageSections('', [])
     expect(result.customerLens).toEqual({ pain: [], outcomes: [], impact: [] })
     expect(result.realWorldExamples).toEqual([])
-    expect(result.personas).toEqual([])
+    expect(result.personaSection).toEqual({ roles: [], painPoints: [], discoveryQuestions: [], valueProps: [], whatWinsThemOver: [] })
+  })
+
+  it('parses persona sub-section headers into typed fields (#388)', () => {
+    const text = `
+Build and Run Applications
+Sales Play overview.
+Personas & Challenges
+Top three that matter most
+VP of Engineering
+Platform Engineer
+Chief Technology Officer
+What they care about
+Slow release cycles blocking business agility
+Legacy platforms creating technical debt
+Ask these questions
+What percentage of deployments are manual vs automated?
+How long does a typical release cycle take?
+What wins them over
+Proof of faster time to market
+Red Hat advantage
+Red Hat OpenShift reduces deployment complexity by 60%
+Standardized developer experience across hybrid cloud
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+
+    expect(result.personaSection.roles).toEqual([
+      'VP of Engineering',
+      'Platform Engineer',
+      'Chief Technology Officer',
+    ])
+    expect(result.personaSection.painPoints).toEqual([
+      'Slow release cycles blocking business agility',
+      'Legacy platforms creating technical debt',
+    ])
+    expect(result.personaSection.discoveryQuestions).toEqual([
+      'What percentage of deployments are manual vs automated?',
+      'How long does a typical release cycle take?',
+    ])
+    expect(result.personaSection.whatWinsThemOver).toEqual([
+      'Proof of faster time to market',
+    ])
+    expect(result.personaSection.valueProps).toEqual([
+      'Red Hat OpenShift reduces deployment complexity by 60%',
+      'Standardized developer experience across hybrid cloud',
+    ])
+  })
+
+  it('routes all content to roles when no sub-headers found (AC-4 backward compat)', () => {
+    const text = `
+Simple Play
+Personas & Challenges
+VP of Engineering struggling with productivity
+Platform Engineer needing self-service
+CTO evaluating multi-cloud
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.personaSection.roles.length).toBe(3)
+    expect(result.personaSection.painPoints).toEqual([])
+    expect(result.personaSection.discoveryQuestions).toEqual([])
+    expect(result.personaSection.valueProps).toEqual([])
+    expect(result.personaSection.whatWinsThemOver).toEqual([])
+  })
+
+  it('handles reordered sub-section headers correctly (AC-5)', () => {
+    const text = `
+Reordered Play
+Personas & Challenges
+Ask these questions
+What is your biggest pain point?
+Top three that matter most
+Chief Information Officer
+Chief Information Security Officer
+What wins them over
+Customer references from their industry
+Value drivers
+Reduces operational overhead by 40%
+What they care about
+Security compliance is their top concern
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+
+    expect(result.personaSection.discoveryQuestions).toEqual([
+      'What is your biggest pain point?',
+    ])
+    expect(result.personaSection.roles).toEqual(['Chief Information Officer', 'Chief Information Security Officer'])
+    expect(result.personaSection.whatWinsThemOver).toEqual([
+      'Customer references from their industry',
+    ])
+    expect(result.personaSection.valueProps).toEqual([
+      'Reduces operational overhead by 40%',
+    ])
+    expect(result.personaSection.painPoints).toEqual([
+      'Security compliance is their top concern',
+    ])
   })
 })
 

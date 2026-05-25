@@ -196,7 +196,7 @@ export interface PlayCoverage {
     emailTemplate: boolean
     discoveryQuestions: boolean
     introPitchDeck: boolean
-    personas: boolean
+    personaSection: boolean
   }
   sectionCount: number
 }
@@ -254,7 +254,7 @@ export function getKnowledgeCoverage(): KnowledgeCoverage {
       emailTemplate: (play.emailTemplateUrl ?? '').length > 0,
       discoveryQuestions: (play.discoveryQuestionsUrl ?? '').length > 0,
       introPitchDeck: (play.introPitchDeckUrl ?? '').length > 0,
-      personas: (play.personas ?? []).length > 0,
+      personaSection: (play.personaSection?.roles ?? []).length > 0,
     }
     const sectionCount = Object.values(sections).filter(Boolean).length
     return { name: play.name, sections, sectionCount }

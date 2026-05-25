@@ -462,7 +462,7 @@ async function extractSalesPlayPage(browser: Browser, sessionState: object, play
       emailTemplateUrl: sections.emailTemplateUrl,
       discoveryQuestionsUrl: sections.discoveryQuestionsUrl,
       introPitchDeckUrl: sections.introPitchDeckUrl,
-      personas: sections.personas,
+      personaSection: sections.personaSection,
       tdpAlignment,
       regionalCampaigns: sections.regionalCampaigns,
     }
