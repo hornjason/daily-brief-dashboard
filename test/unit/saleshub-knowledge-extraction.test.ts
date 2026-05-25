@@ -178,7 +178,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(standaloneTactic!.parentTdp).toBe('Automation')
 
     // Verify TDP aggregation from products
-    const automationTdp = knowledge.tdps.find(t => t.name === 'Automation TDP')
+    const automationTdp = knowledge.tdps.find(t => t.name === 'Automation')
     expect(automationTdp).toBeDefined()
 
     // Verify extractedContent and metrics fields are initialized (#369)
@@ -217,7 +217,7 @@ describe('buildSalesHubKnowledge', () => {
     ]
 
     const knowledge = buildSalesHubKnowledge(products, [], [])
-    const automationTdps = knowledge.tdps.filter(t => t.name === 'Automation TDP')
+    const automationTdps = knowledge.tdps.filter(t => t.name === 'Automation')
     expect(automationTdps.length).toBe(1)
     // Should keep the longer description
     expect(automationTdps[0].products.length).toBe(2)
@@ -286,7 +286,7 @@ describe('buildSalesHubKnowledge', () => {
     ]
 
     const knowledge = buildSalesHubKnowledge(products, [], [], tdpPages)
-    const tdp = knowledge.tdps.find(t => t.name === 'Automation TDP')
+    const tdp = knowledge.tdps.find(t => t.name === 'Automation')
     expect(tdp).toBeDefined()
     expect(tdp!.customerWins[0].name).toBe('AcmeCo')
     expect(tdp!.whatToSay[0].name).toBe('Intro Deck')

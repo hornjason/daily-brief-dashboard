@@ -780,6 +780,8 @@ export function buildSalesHubKnowledge(
     'application platform tdp': 'App Platform TDP',
     'container management': 'Container Mgmt',
     'container management tdp': 'Container Mgmt',
+    'automation tdp': 'Automation',
+    'edge': 'AI Platform',
   }
 
   // Normalize TDP names in tdpMap
@@ -810,6 +812,33 @@ export function buildSalesHubKnowledge(
   for (const tactic of tacticNodes) {
     const normalized = TDP_NAME_MAP[tactic.parentTdp.toLowerCase()]
     if (normalized) tactic.parentTdp = normalized
+  }
+
+  // ── Deduplicate tactics with near-identical names (#381) ──
+  {
+    const seen = new Map<string, number>()
+    const toRemove = new Set<number>()
+    for (let i = 0; i < tacticNodes.length; i++) {
+      const key = tacticNodes[i].name.toLowerCase().replace(/:\s*/g, ': ').replace(/\s+/g, ' ').trim()
+      if (seen.has(key)) {
+        const keptIdx = seen.get(key)!
+        if (tacticNodes[i].name.includes(': ') && !tacticNodes[keptIdx].name.includes(': ')) {
+          toRemove.add(keptIdx)
+          seen.set(key, i)
+        } else {
+          toRemove.add(i)
+        }
+      } else {
+        seen.set(key, i)
+      }
+    }
+    if (toRemove.size > 0) {
+      const removed = Array.from(toRemove).map(i => tacticNodes[i].name)
+      console.log(`[knowledge] Deduplicated ${toRemove.size} near-duplicate tactics: ${removed.join(', ')}`)
+      for (let i = tacticNodes.length - 1; i >= 0; i--) {
+        if (toRemove.has(i)) tacticNodes.splice(i, 1)
+      }
+    }
   }
 
   // ── Post-processing: Restructure TDPs to match SalesHub actual structure (#368) ──

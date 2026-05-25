@@ -19,7 +19,7 @@
  */
 
 import { chromium } from '@playwright/test'
-import type { BrowserContext, Page } from '@playwright/test'
+import type { Browser, BrowserContext, Page } from '@playwright/test'
 import { readFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../src/cache-layer.ts'
@@ -358,16 +358,20 @@ async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string;
   return links
 }
 
-async function extractSalesPlayPage(context: BrowserContext, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
+async function extractSalesPlayPage(browser: Browser, sessionState: object, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
   // If no URL (placeholder entry), return the play with just the name
   if (!playUrl) {
     console.log(`[scrape-saleshub] Sales Play placeholder: ${playName}`)
     return { name: playName, description: '', linkedTdps: [], url: '' }
   }
 
-  // Fresh page per Sales Play — shared page accumulates Seismic SPA state
-  // from prior product/TDP navigations that prevents sidebar cards from rendering
-  const page = await context.newPage()
+  // Fresh context per Sales Play — shared context accumulates Seismic SPA state
+  // from 21+ prior product/TDP navigations that prevents sidebar cards from rendering
+  const freshContext = await browser.newContext({
+    storageState: sessionState as any,
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  })
+  const page = await freshContext.newPage()
   try {
     console.log(`[scrape-saleshub] Scraping Sales Play: ${playName}`)
     await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
@@ -466,7 +470,7 @@ async function extractSalesPlayPage(context: BrowserContext, playName: string, p
     console.error(`[scrape-saleshub] Failed to scrape Sales Play ${playName}: ${e.message}`)
     return null
   } finally {
-    await page.close()
+    await freshContext.close()
   }
 }
 
@@ -787,7 +791,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       const playUrl = homePlayUrls.get(pl.name) || pl.url
       console.log(`[scrape-saleshub] (${i + 1}/${playLinks.length}) Sales Play: ${pl.name}`)
 
-      const play = await extractSalesPlayPage(context, pl.name, playUrl)
+      const play = await extractSalesPlayPage(browser, sessionState, pl.name, playUrl)
       if (play) {
         salesPlays.push(play)
       }
