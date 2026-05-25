@@ -265,7 +265,44 @@ async function doKeepalive(): Promise<void> {
       }
     }
 
-    console.log('[sync-daemon] keepalive: OK (Tableau viz rendered + SF home loaded + RH context healthy)')
+    // Verify RH SSO session is actually authenticated (not just browser alive)
+    console.log('[sync-daemon] keepalive: verifying RH SSO session…')
+    const rhPage = await ctx.newPage()
+    try {
+      await rhPage.goto('https://access.redhat.com/support/cases/#/case/list', {
+        waitUntil: 'load', timeout: 30_000,
+      })
+      if (!rhPage.url().includes('access.redhat.com/support')) {
+        await rhPage.waitForURL('**/access.redhat.com/support/**', { timeout: 15_000 }).catch(() => {})
+      }
+      if (rhPage.url().includes('access.redhat.com/support')) {
+        console.log('[sync-daemon] keepalive: RH SSO session verified — authenticated')
+      } else if (rhPage.url().includes('sso.redhat.com')) {
+        // Try auto-fill
+        const rhUsername = process.env.RH_SSO_USERNAME ?? 'rhn-gps-jhorn'
+        console.log(`[sync-daemon] keepalive: RH SSO login page — auto-filling ${rhUsername}`)
+        const loginInput = await rhPage.$('input#username, input[name="username"], input[name="login"]').catch(() => null)
+        if (loginInput) {
+          await loginInput.fill(rhUsername)
+          await rhPage.waitForTimeout(300)
+          const nextBtn = await rhPage.$('button#login-show-step2, button:has-text("Next"), input[type="submit"]').catch(() => null)
+          if (nextBtn) await nextBtn.click().catch(() => {})
+          else await loginInput.press('Enter').catch(() => {})
+          await rhPage.waitForURL('**/access.redhat.com/**', { timeout: 15_000 }).catch(() => {})
+        }
+        if (rhPage.url().includes('access.redhat.com/support')) {
+          console.log('[sync-daemon] keepalive: RH SSO auto-login succeeded')
+        } else {
+          throw new Error(`RH SSO session expired — needs password/MFA (URL: ${rhPage.url()})`)
+        }
+      } else {
+        throw new Error(`RH SSO session expired — unexpected URL: ${rhPage.url()}`)
+      }
+    } finally {
+      await rhPage.close().catch(() => {})
+    }
+
+    console.log('[sync-daemon] keepalive: OK (Tableau viz + SF home + RH SSO all verified)')
   } finally {
     // VNC observation delay — wait 15s before closing so you can watch the navigation
     console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')
