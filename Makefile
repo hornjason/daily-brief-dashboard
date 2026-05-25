@@ -800,12 +800,13 @@ sync-up: sync-down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -p 6082:6080 \
 	  --shm-size=2g \
 	  --memory=4g \
 	  --restart=unless-stopped \
 	  --name pai-sync-l3 \
 	  $(IMAGE_L4)
-	@echo "Sync daemon running"
+	@echo "Sync daemon running (VNC on :6082)"
 
 sync-down:
 	podman stop pai-sync-l3 2>/dev/null || true
