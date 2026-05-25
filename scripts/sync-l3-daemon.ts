@@ -510,7 +510,13 @@ async function main(): Promise<void> {
 
   // Timer 1: SSO keepalive every 2h
   const KEEPALIVE_STATUS_FILE = `${CACHE_DIR}/keepalive-status.json`
+  let keepaliveRunning = false
   setInterval(async () => {
+    if (keepaliveRunning) {
+      console.log('[sync-daemon] keepalive skipped — previous keepalive still running')
+      return
+    }
+    keepaliveRunning = true
     try {
       await doKeepalive()
       console.log('[sync-daemon] keepalive OK')
@@ -538,6 +544,8 @@ async function main(): Promise<void> {
       } catch (emailErr: any) {
         console.error('[sync-daemon] keepalive alert email failed:', emailErr.message)
       }
+    } finally {
+      keepaliveRunning = false
     }
   }, KEEPALIVE_INTERVAL_MS)
 
@@ -588,6 +596,11 @@ async function main(): Promise<void> {
       console.error('[sync-daemon] failed to delete keepalive trigger file:', e.message)
       return
     }
+    if (keepaliveRunning) {
+      console.log('[sync-daemon] keepalive trigger fired but keepalive already running — discarding')
+      return
+    }
+    keepaliveRunning = true
     console.log('[sync-daemon] keepalive trigger file detected — running immediate keepalive')
     try {
       await doKeepalive()
@@ -609,6 +622,8 @@ async function main(): Promise<void> {
         intervalMs: KEEPALIVE_INTERVAL_MS,
         nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
       }))
+    } finally {
+      keepaliveRunning = false
     }
   }, 30_000)
 
