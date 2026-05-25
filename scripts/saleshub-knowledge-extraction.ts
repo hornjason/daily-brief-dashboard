@@ -653,6 +653,48 @@ function isGarbageEntry(name: string, description?: string): boolean {
   if (lower.startsWith('introduction why act now')) return true
   if (/^\d+$/.test(trimmed)) return true
   if (description !== undefined && description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
+  // Section headers and instructional text that leaks into personas
+  if (lower.startsWith('align tdp')) return true
+  if (lower.startsWith('next align')) return true
+  if (lower.startsWith('advance your')) return true
+  if (lower.startsWith('use this play')) return true
+  if (lower.startsWith('use this to')) return true
+  if (lower.startsWith('use the resources')) return true
+  if (lower.startsWith('the build & run')) return true
+  if (lower.startsWith('the ai-ready')) return true
+  if (lower.startsWith('the it operations')) return true
+  if (lower.startsWith('the modernize')) return true
+  if (lower.startsWith('the sovereignty')) return true
+  if (lower === 'red hat advantage') return true
+  if (lower === 'value drivers') return true
+  if (lower === 'how red hat helps') return true
+  if (lower.startsWith('cost optimization')) return true
+  if (lower === 'security & operational consistency') return true
+  if (lower.startsWith('flexibility & minimize')) return true
+  if (lower.startsWith('customers are under')) return true
+  if (lower.startsWith('customers need')) return true
+  if (lower.startsWith('customers want')) return true
+  if (lower.includes('sales tatics') || lower.includes('sales tactics')) return true
+  if (lower.startsWith('practice your')) return true
+  if (lower.startsWith('examples of what')) return true
+  if (lower.startsWith('start practice')) return true
+  if (lower === 'coming soon!') return true
+  if (lower.startsWith('confirmed sovereignty')) return true
+  if (lower.includes('sales primer')) return true
+  if (lower === 'sovereignty tagging') return true
+  if (lower.startsWith('digital sovereignty sales')) return true
+  if (lower.startsWith('turn your network')) return true
+  if (lower.startsWith('select an article')) return true
+  if (lower.startsWith('select case studies')) return true
+  if (lower.startsWith('explore the red hat blog')) return true
+  if (lower.startsWith('red hat reduces')) return true
+  if (lower.startsWith('red hat provides')) return true
+  if (lower.startsWith('red hat standardizes')) return true
+  if (lower.startsWith('red hat\'s open')) return true
+  if (lower.startsWith('messaging, talk tracks')) return true
+  if (lower.startsWith('customer-ready assets')) return true
+  if (lower.startsWith('real customer stories')) return true
+  if (lower.startsWith('demos that highlight')) return true
   return false
 }
 
