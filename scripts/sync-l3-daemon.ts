@@ -266,8 +266,11 @@ async function doKeepalive(): Promise<void> {
     }
 
     // Verify RH SSO session is actually authenticated (not just browser alive)
+    // Re-fetch context — recovery may have replaced it
+    const verifyCtx = getScrapeContext()
+    if (!verifyCtx) throw new Error('No browser context available for RH SSO verification')
     console.log('[sync-daemon] keepalive: verifying RH SSO session…')
-    const rhPage = await ctx.newPage()
+    const rhPage = await verifyCtx.newPage()
     try {
       await rhPage.goto('https://access.redhat.com/support/cases/#/case/list', {
         waitUntil: 'load', timeout: 30_000,
