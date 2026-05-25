@@ -374,17 +374,21 @@ async function extractSalesPlayPage(context: BrowserContext, playName: string, p
     await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
 
     // Extract sidebar TDP alignment BEFORE accordion expansion (#381)
-    // Seismic SPA re-render destroys sidebar content when accordions expand
-    // Wait extra for sidebar to render (SPA loads sidebar asynchronously)
+    // Must use Link/Content URL (not DocCenter URL) for sidebar to render correctly
+    // Try to find a redirect to Link/Content format, or extract from current page
     await page.waitForTimeout(3_000)
     const sidebarTdpNames = await page.evaluate(() => {
       const names: string[] = []
+      // Look for aria-labels that match TDP names (sidebar cards)
+      const KNOWN_TDP_PARTS = ['AI Platform', 'Server', 'Container', 'Automation', 'App Platform', 'Virtualization', 'Operating System']
       const cardItems = document.querySelectorAll('li[aria-label]')
       for (const li of cardItems) {
         const label = li.getAttribute('aria-label') ?? ''
         if (label.startsWith('Open ')) {
           const name = label.replace('Open ', '')
-          if (name.length > 2 && !names.includes(name)) names.push(name)
+          if (name.length > 2 && KNOWN_TDP_PARTS.some(k => name.includes(k)) && !names.includes(name)) {
+            names.push(name)
+          }
         }
       }
       return { names, totalAriaItems: cardItems.length }
@@ -734,15 +738,56 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       await scrapePage.waitForTimeout(1_000)
     }
 
+    // ── Pass 1.9: Home page tile URLs (#381) ──────────────────────────────
+    // DocCenter URLs from page discovery load wrong pages for Sales Plays.
+    // The home page iframes have correct /Link/Content/ URLs that render sidebar cards.
+    console.log(`[scrape-saleshub] === PASS 1.9: Home Page Tile URLs ===`)
+    const homePlayUrls = new Map<string, string>()
+    try {
+      await scrapePage.goto('https://saleshub.redhat.com/apps/home?anchorId=350c3ac4-2f1b-4541-b3df-a65d0e1f70fd', {
+        waitUntil: 'domcontentloaded', timeout: 60_000,
+      })
+      await scrapePage.waitForTimeout(8_000)
+      for (let s = 0; s < 10; s++) {
+        await scrapePage.evaluate(() => window.scrollBy(0, 800))
+        await scrapePage.waitForTimeout(1_500)
+      }
+      // Sales Plays are in Frame 2 (index 2)
+      const frames = scrapePage.frames()
+      if (frames.length > 2) {
+        const tileData = await frames[2].evaluate(() => {
+          const results: Array<{ linkText: string; href: string }> = []
+          for (const a of document.querySelectorAll('a')) {
+            if (a.textContent?.trim() === 'Sales Play Page') {
+              results.push({ linkText: 'Sales Play Page', href: a.getAttribute('href') ?? '' })
+            }
+          }
+          return results
+        })
+        // Map discovered play names to Link/Content URLs by order
+        const knownPlays = discovered.plays.map(p => p.name)
+        for (let j = 0; j < Math.min(knownPlays.length, tileData.length); j++) {
+          if (tileData[j].href) {
+            homePlayUrls.set(knownPlays[j], tileData[j].href)
+            console.log(`[scrape-saleshub] ${knownPlays[j]} → ${tileData[j].href.slice(0, 80)}`)
+          }
+        }
+      }
+    } catch (e: any) {
+      console.log(`[scrape-saleshub] Home page tile scan failed: ${e.message} — falling back to DocCenter URLs`)
+    }
+
     // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
     console.log(`[scrape-saleshub] === PASS 2: Sales Play Pages (${discovered.plays.length} discovered) ===`)
     const playLinks = discovered.plays
 
     for (let i = 0; i < playLinks.length; i++) {
       const pl = playLinks[i]
+      // Prefer Link/Content URL from home page tiles (renders sidebar correctly)
+      const playUrl = homePlayUrls.get(pl.name) || pl.url
       console.log(`[scrape-saleshub] (${i + 1}/${playLinks.length}) Sales Play: ${pl.name}`)
 
-      const play = await extractSalesPlayPage(context, pl.name, pl.url)
+      const play = await extractSalesPlayPage(context, pl.name, playUrl)
       if (play) {
         salesPlays.push(play)
       }
