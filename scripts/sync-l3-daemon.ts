@@ -11,7 +11,7 @@
  */
 
 import { resolve } from 'node:path'
-import { existsSync, unlinkSync } from 'node:fs'
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { initScrapeContext, getScrapeContext, recoverScrapeContext } from '../src/rh-scraper.ts'
 import { adoptCcspContext } from '../src/ccsp-scraper.ts'
 import { initSfContext } from '../src/sf-scraper.ts'
@@ -316,6 +316,8 @@ async function proactiveRecycle(): Promise<void> {
 
 // ── Sync cycle ────────────────────────────────────────────────────────────────
 
+const SYNC_STATUS_FILE = resolve(process.env.CACHE_DIR ?? '/data/cache', 'sync-cycle-status.json')
+
 async function runSyncCycle(): Promise<void> {
   console.log('[sync-daemon] starting daily sync cycle…')
 
@@ -345,8 +347,19 @@ async function runSyncCycle(): Promise<void> {
     } else {
       console.log('[sync-daemon] sync cycle completed successfully')
     }
+    writeFileSync(SYNC_STATUS_FILE, JSON.stringify({
+      lastRun: new Date().toISOString(),
+      status: errorCount > 0 ? 'partial' : 'ok',
+      errors: errorCount,
+      totalPods: result.results.length,
+    }))
   } catch (e: any) {
     console.error('[sync-daemon] sync cycle threw unexpectedly:', e.message)
+    writeFileSync(SYNC_STATUS_FILE, JSON.stringify({
+      lastRun: new Date().toISOString(),
+      status: 'failed',
+      error: e.message,
+    }))
     try {
       await sendBriefEmail(
         ALERT_EMAIL,
@@ -434,12 +447,26 @@ async function main(): Promise<void> {
   console.log('[sync-daemon] started — keepalive every 2h, sync at 5:30am ET')
 
   // Timer 1: SSO keepalive every 2h
+  const KEEPALIVE_STATUS_FILE = `${CACHE_DIR}/keepalive-status.json`
   setInterval(async () => {
     try {
       await doKeepalive()
       console.log('[sync-daemon] keepalive OK')
+      writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        status: 'ok',
+        intervalMs: KEEPALIVE_INTERVAL_MS,
+        nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
+      }))
     } catch (e: any) {
       console.error('[sync-daemon] keepalive FAILED:', e.message)
+      writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        status: 'failed',
+        error: e.message,
+        intervalMs: KEEPALIVE_INTERVAL_MS,
+        nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
+      }))
       try {
         await sendBriefEmail(
           ALERT_EMAIL,
