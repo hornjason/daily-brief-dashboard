@@ -530,8 +530,23 @@ async function main(): Promise<void> {
     try {
       await doKeepalive()
       console.log('[sync-daemon] keepalive trigger: OK')
+      writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        status: 'ok',
+        source: 'trigger',
+        intervalMs: KEEPALIVE_INTERVAL_MS,
+        nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
+      }))
     } catch (e: any) {
       console.error('[sync-daemon] keepalive trigger: FAILED —', e.message)
+      writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        status: 'failed',
+        source: 'trigger',
+        error: e.message,
+        intervalMs: KEEPALIVE_INTERVAL_MS,
+        nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
+      }))
     }
   }, 30_000)
 
