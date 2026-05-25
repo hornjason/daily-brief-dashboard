@@ -370,12 +370,23 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
     await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
 
-    // Expand accordions
-    await clickAccordionExpanders(page)
+    // Extract sidebar TDP alignment BEFORE accordion expansion (#381)
+    // Seismic SPA re-render destroys sidebar content when accordions expand
+    const sidebarTdpNames = await page.evaluate(() => {
+      const names: string[] = []
+      const cardItems = document.querySelectorAll('li[aria-label]')
+      for (const li of cardItems) {
+        const label = li.getAttribute('aria-label') ?? ''
+        if (label.startsWith('Open ')) {
+          const name = label.replace('Open ', '')
+          if (name.length > 2 && !names.includes(name)) names.push(name)
+        }
+      }
+      return names
+    })
 
-    // Scroll to trigger lazy-loaded sidebar content (#381)
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await page.waitForTimeout(2_000)
+    // Expand accordions (this destroys sidebar DOM)
+    await clickAccordionExpanders(page)
 
     const data = await page.evaluate(() => {
       // Use document.body to include sidebar content (#381)
@@ -398,27 +409,7 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
         href: a.getAttribute('href') ?? '',
       }))
 
-      // Extract TDP alignment from "TDPs Powering the Play" sidebar cards (#381)
-      // Strategy: find ALL li[aria-label^="Open "] items, then filter to only those
-      // inside a container that has "TDPs Powering" text. The aria-label is the most
-      // stable selector — survives CSS class minification in headless mode.
-      const sidebarTdpNames: string[] = []
-      const KNOWN_TDP_PARTS = ['AI Platform', 'Server', 'Container', 'Automation', 'App Platform', 'Virtualization', 'Operating System']
-      const cardItems = document.querySelectorAll('li[aria-label]')
-      for (const li of cardItems) {
-        const label = li.getAttribute('aria-label') ?? ''
-        if (label.startsWith('Open ')) {
-          const name = label.replace('Open ', '')
-          // Only accept names that look like TDPs (filter out "Sessions", "Services", etc.)
-          if (KNOWN_TDP_PARTS.some(k => name.includes(k)) && !sidebarTdpNames.includes(name)) {
-            sidebarTdpNames.push(name)
-          }
-        }
-      }
-      // Debug: return what aria-labels exist for diagnosis
-      const debugAriaLabels = Array.from(cardItems).map(li => li.getAttribute('aria-label')).filter(Boolean).slice(0, 20) as string[]
-
-      return { description, mainText: mainText.slice(0, 20000), links, sidebarTdpNames, debugAriaLabels }
+      return { description, mainText: mainText.slice(0, 20000), links }
     })
 
     // Identify linked TDPs from page text and links
@@ -433,15 +424,14 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     // Extract structured sections (#367)
     const sections = parseSalesPlayPageSections(data.mainText, data.links)
 
-    // Use DOM-extracted TDP names if text parsing found none (#381)
-    // The sidebar TDP cards render as images/icons — innerText doesn't capture them
-    const tdpAlignment = sections.tdpAlignment.length > 0
-      ? sections.tdpAlignment
-      : data.sidebarTdpNames
+    // Use pre-accordion sidebar extraction (most reliable), fall back to text parsing
+    const tdpAlignment = sidebarTdpNames.length > 0
+      ? sidebarTdpNames
+      : sections.tdpAlignment
     if (tdpAlignment.length > 0) {
       console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${tdpAlignment.join(', ')}`)
     } else {
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty | aria-labels: ${JSON.stringify(data.debugAriaLabels?.slice(0, 10))}`)
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty`)
     }
 
     return {
