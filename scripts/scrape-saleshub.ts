@@ -399,24 +399,26 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
       }))
 
       // Extract TDP alignment from "TDPs Powering the Play" sidebar cards (#381)
-      // Cards use Seismic's docList widget with TDP names in aria-labels and card-name buttons
+      // Strategy: find ALL li[aria-label^="Open "] items, then filter to only those
+      // inside a container that has "TDPs Powering" text. The aria-label is the most
+      // stable selector — survives CSS class minification in headless mode.
       const sidebarTdpNames: string[] = []
-      // Find the docList widget containing "TDPs Powering"
-      const docListWidgets = document.querySelectorAll('.seismic-page-docListPicker-Viewer')
-      for (const widget of docListWidgets) {
-        const header = widget.querySelector('.seismic-page-docListPicker-Viewer-title-text')
-        if (header?.textContent?.trim()?.includes('TDPs Powering')) {
-          // Extract card names from this specific widget
-          const cardNames = widget.querySelectorAll('button.seismic-page-docList-card-name span')
-          for (const name of cardNames) {
-            const t = name.textContent?.trim() ?? ''
-            if (t.length > 2 && !sidebarTdpNames.includes(t)) sidebarTdpNames.push(t)
+      const KNOWN_TDP_PARTS = ['AI Platform', 'Server', 'Container', 'Automation', 'App Platform', 'Virtualization', 'Operating System']
+      const cardItems = document.querySelectorAll('li[aria-label]')
+      for (const li of cardItems) {
+        const label = li.getAttribute('aria-label') ?? ''
+        if (label.startsWith('Open ')) {
+          const name = label.replace('Open ', '')
+          // Only accept names that look like TDPs (filter out "Sessions", "Services", etc.)
+          if (KNOWN_TDP_PARTS.some(k => name.includes(k)) && !sidebarTdpNames.includes(name)) {
+            sidebarTdpNames.push(name)
           }
-          break
         }
       }
+      // Debug: return what aria-labels exist for diagnosis
+      const debugAriaLabels = Array.from(cardItems).map(li => li.getAttribute('aria-label')).filter(Boolean).slice(0, 20) as string[]
 
-      return { description, mainText: mainText.slice(0, 20000), links, sidebarTdpNames }
+      return { description, mainText: mainText.slice(0, 20000), links, sidebarTdpNames, debugAriaLabels }
     })
 
     // Identify linked TDPs from page text and links
@@ -439,7 +441,7 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     if (tdpAlignment.length > 0) {
       console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${tdpAlignment.join(', ')}`)
     } else {
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty`)
+      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty | aria-labels: ${JSON.stringify(data.debugAriaLabels?.slice(0, 10))}`)
     }
 
     return {
