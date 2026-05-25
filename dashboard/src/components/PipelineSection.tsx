@@ -40,7 +40,9 @@ function trendDelta(series: number[]): number | null {
   const first = series[firstNonZeroIdx]
   const last = series[series.length - 1]
   if (first === 0) return null
-  return ((last - first) / first) * 100
+  const raw = ((last - first) / first) * 100
+  // Cap at +/-999% to avoid absurd display values from tiny base amounts
+  return Math.max(-999, Math.min(999, raw))
 }
 
 function fmtDate(iso: string): string {
@@ -508,7 +510,7 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
                 return (
                   <button key={opp.oppNumber} onClick={() => setSelectedOpp(opp)} className="w-full text-left flex items-center gap-2 py-1 px-1 -mx-1 hover:bg-border/20 rounded group cursor-pointer min-w-0" tabIndex={0}>
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
-                    <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
+                    <span className="text-xs font-medium shrink-0 w-14" style={{ color: stageColor }}>
                       {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
                     </span>
                     <span className="text-sm text-text-primary truncate flex-1 min-w-0" title={opp.accountName}>{opp.accountName}</span>

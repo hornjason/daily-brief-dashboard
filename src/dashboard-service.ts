@@ -630,7 +630,7 @@ export function computePriorityAction(customer: Customer, customers: Customer[])
     if (briefCache?.text) {
       const match = briefCache.text.match(/^## Priority Action\n(.+)/m)
       if (match) {
-        const text = match[1].replace(/^[-*]\s*/, '').trim()
+        const text = match[1].replace(/^[-*]\s*/, '').replace(/\[Source: [^\]]+\]/g, '').trim()
         if (text && !isActionStale(text)) {
           action = { text, severity: 'medium', source: 'brief' }
         }

@@ -16,6 +16,7 @@ import { newsProvider } from './news-provider.ts'
 import { toSlug } from './cache-layer.ts'
 import type { NewsItem } from './news-provider.ts'
 import { loadNewsConfig, updateNewsConfig } from './news-config.ts'
+import { customers } from './server-state.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
@@ -143,10 +144,14 @@ export function createNewsRouter(): Hono {
           // Take top 2 highest-scored articles per customer (GitHub Issue #217)
           const top2 = criticalArticles.slice(0, 2)
 
+          // Resolve slug to display name from customers list
+          const matchedCustomer = customers.find(c => toSlug(c.name) === slug)
+          const displayName = matchedCustomer?.name ?? slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+
           for (const article of top2) {
             highlights.push({
               ...article,
-              customerName: slug,  // Use slug for now; could map back to display name if needed
+              customerName: displayName,
             })
           }
         } catch (e: any) {

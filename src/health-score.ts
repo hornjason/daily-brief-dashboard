@@ -147,14 +147,14 @@ function scoreSubscriptions(
 // v1: meetings are not cached, use neutral score
 
 function scoreMeetings(): { score: number; signal: string } {
-  return { score: 50, signal: 'No cached meeting data (v1)' }
+  return { score: 50, signal: 'No cached meeting data' }
 }
 
 // ── Subscore: Emails ─────────────────────────────────────────────────────────
 // v1: emails are not cached, use neutral score
 
 function scoreEmails(): { score: number; signal: string } {
-  return { score: 50, signal: 'No cached email data (v1)' }
+  return { score: 50, signal: 'No cached email data' }
 }
 
 // ── Subscore: Pipeline ───────────────────────────────────────────────────────
@@ -247,8 +247,7 @@ function scoreCloudSpend(
 // that the composite score reflects only what we actually know.
 
 const NO_DATA_MARKERS = [
-  '(v1)',                         // meetings, emails placeholder
-  'No cached',                    // meetings / emails v1 signal prefix
+  'No cached',                    // meetings / emails signal prefix
   'No cloud spend data',          // CCSP cache missing
   'No subscription data',         // sheets cache missing for customer
   'cannot match cases',           // no account numbers on record

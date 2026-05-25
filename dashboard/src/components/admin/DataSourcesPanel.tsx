@@ -28,6 +28,14 @@ const FRIENDLY_NAMES: Record<string, string> = {
   'tools': 'Business Value Tools',
 }
 
+/** Fallback formatter: converts kebab-case to Title Case when no friendly name is defined. */
+function formatSourceName(name: string): string {
+  return name
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 // ── Source grouping ─────────────────────────────────────────────────────────
 
 interface SourceGroup {
@@ -92,7 +100,7 @@ function DataSourceCard({
           ? 'text-red-400'
           : 'text-gray-400'
 
-  const displayName = source.displayName || FRIENDLY_NAMES[source.name] || source.name
+  const displayName = source.displayName || FRIENDLY_NAMES[source.name] || formatSourceName(source.name)
 
   return (
     <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">

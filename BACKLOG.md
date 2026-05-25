@@ -10232,3 +10232,9 @@ BKL-SALESHUB-06 → #360 — Slice 3: Enrich signals with talk tracks + linked a
 BKL-SALESHUB-07 → #361 — Slice 4: Template engine renders enriched content
 BKL-SALESHUB-08 → #362 — Slice 5: Admin panel freshness + refresh
 BKL-SALESHUB-09 → #363 — Slice 6: Quality validators for SalesHub content
+BKL-ARCH-09 → #382 — SignalIndex: In-memory query layer for cross-cutting customer intelligence
+BKL-REL-01 → #383 — Release audit: full consumer output UI review
+BKL-UX-01 → #384 — Campaign: LinkedIn URL persona override for targeted outreach
+BKL-UX-02 → #385 — Meeting prep: LinkedIn profile URLs for customer attendees
+BKL-TECH-01 → #386 — Tech Stack: Industry Tools too generic — need specific tool names
+BKL-UX-03 → #387 — Events: show description/context for each event on account detail

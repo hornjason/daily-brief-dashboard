@@ -45,6 +45,8 @@ interface RHEvent {
   region: string
   productTags: string[]
   registrationUrl: string | null
+  description?: string
+  enrichedDescription?: string | null
 }
 
 export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
@@ -673,6 +675,13 @@ Register: ${event.registrationUrl}` : ''}`
                 >
                   {/* Event name */}
                   <h3 className="text-lg font-bold text-text-primary">{event.name}</h3>
+
+                  {/* Description */}
+                  {(event.enrichedDescription || event.description) && (
+                    <p className="text-sm text-text-secondary leading-relaxed">
+                      {event.enrichedDescription || event.description}
+                    </p>
+                  )}
 
                   {/* Badges */}
                   <div className="flex items-center gap-2 flex-wrap">

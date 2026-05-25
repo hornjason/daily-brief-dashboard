@@ -15,7 +15,8 @@ import { useApi } from '../hooks/useApi'
 import { Mail, FileText, ExternalLink } from 'lucide-react'
 
 interface CampaignEntry {
-  timestamp: string
+  generatedAt?: string
+  timestamp?: string  // legacy field — prefer generatedAt
   materialUrl?: string
   personas?: string[]
   outputPath?: string
@@ -94,7 +95,12 @@ function AllCustomersCampaigns() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm text-text-primary">
-                      Campaign generated {new Date(campaign.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      Campaign generated {(() => {
+                        const dateStr = campaign.generatedAt || campaign.timestamp
+                        if (!dateStr) return 'Unknown date'
+                        const d = new Date(dateStr)
+                        return isNaN(d.getTime()) ? 'Unknown date' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      })()}
                     </div>
                     {campaign.personas?.length ? (
                       <div className="flex gap-1.5 mt-2">
