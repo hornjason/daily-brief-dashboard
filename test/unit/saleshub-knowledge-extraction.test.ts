@@ -160,7 +160,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(knowledge.scrapedAt).toBeTruthy()
     expect(knowledge.products.length).toBe(1)
     expect(knowledge.salesPlays.length).toBe(1)
-    expect(knowledge.tactics.length).toBe(2) // 1 from product tdpSections (non-TDP entry) + 1 standalone
+    expect(knowledge.tactics.length).toBe(4) // 1 from product tdpSections (non-TDP entry) + 1 standalone + 2 injected (#368: Sovereign Infrastructure, AI Factory)
     expect(knowledge.tdps.length).toBeGreaterThanOrEqual(1)
 
     // Verify product structure
@@ -180,6 +180,12 @@ describe('buildSalesHubKnowledge', () => {
     // Verify TDP aggregation from products
     const automationTdp = knowledge.tdps.find(t => t.name === 'Automation TDP')
     expect(automationTdp).toBeDefined()
+
+    // Verify extractedContent and metrics fields are initialized (#369)
+    expect(automationTdp!.extractedContent).toBe('')
+    expect(automationTdp!.metrics).toEqual([])
+    expect(standaloneTactic!.extractedContent).toBe('')
+    expect(standaloneTactic!.metrics).toEqual([])
   })
 
   it('deduplicates TDPs by name', () => {
@@ -289,6 +295,83 @@ describe('buildSalesHubKnowledge', () => {
     expect(tdp!.services[0].name).toBe('IBM Consulting')
     expect(tdp!.cheatsheetUrl).toBe('https://example.com/cheatsheet')
     expect(tdp!.customerDeckUrl).toBe('https://example.com/customer-deck')
+  })
+
+  it('restructures TDPs to match SalesHub actual structure (#368)', () => {
+    // Build products that produce App Platform TDP with container mgmt tactics
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'openshift',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [
+          { name: 'App Platform TDP', description: 'Application platform for cloud-native apps' },
+          { name: 'Kubernetes for 3rd party workloads (Non-AI)', description: 'Run 3rd party non-AI workloads on OpenShift' },
+          { name: 'Kubernetes for 3rd party AI workloads', description: 'Run 3rd party AI workloads on OpenShift' },
+          { name: 'Multicluster management & security at scale for Kubernetes', description: 'Manage multiple clusters' },
+          { name: 'Secure the software supply chain', description: 'Supply chain security with ACS' },
+          { name: 'Cloud marketplaces and private offers', description: 'Purchase through cloud marketplaces' },
+          { name: 'Container Adoption Journey', description: 'Adoption path for containers' },
+          { name: 'AI TDP', description: 'AI Technology Decision Point' },
+          { name: 'Agentic AI', description: 'Deploy agentic AI applications' },
+          { name: 'Edge TDP', description: 'Edge computing decision point' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+
+    // Container Mgmt TDP should exist with 5 tactics
+    const containerMgmt = knowledge.tdps.find(t => t.name === 'Container Mgmt')
+    expect(containerMgmt).toBeDefined()
+    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party AI workloads')
+    expect(containerMgmt!.tactics).toContain('Multicluster management & security at scale for Kubernetes')
+    expect(containerMgmt!.tactics).toContain('Secure the software supply chain')
+    expect(containerMgmt!.tactics).toContain('Sovereign Infrastructure')
+    expect(containerMgmt!.tactics.length).toBe(5)
+
+    // Edge TDP should NOT exist
+    const edge = knowledge.tdps.find(t => t.name.toLowerCase().includes('edge'))
+    expect(edge).toBeUndefined()
+
+    // AI should be renamed to AI Platform
+    const aiTdp = knowledge.tdps.find(t => t.name === 'AI Platform')
+    expect(aiTdp).toBeDefined()
+    const oldAi = knowledge.tdps.find(t => t.name === 'AI TDP' || t.name === 'AI')
+    expect(oldAi).toBeUndefined()
+
+    // Sovereign Infrastructure should exist under Container Mgmt
+    const sovereign = knowledge.tactics.find(t => t.name === 'Sovereign Infrastructure')
+    expect(sovereign).toBeDefined()
+    expect(sovereign!.parentTdp).toBe('Container Mgmt')
+
+    // Red Hat AI Factory with NVIDIA should exist under AI Platform
+    const aiFactory = knowledge.tactics.find(t => t.name === 'Red Hat AI Factory with NVIDIA')
+    expect(aiFactory).toBeDefined()
+    expect(aiFactory!.parentTdp).toBe('AI Platform')
+
+    // App Platform should NOT have the moved tactics
+    const appPlatform = knowledge.tdps.find(t => t.name === 'App Platform TDP')
+    expect(appPlatform).toBeDefined()
+    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party AI workloads')
+    expect(appPlatform!.tactics).not.toContain('Multicluster management & security at scale for Kubernetes')
+    expect(appPlatform!.tactics).not.toContain('Secure the software supply chain')
+    // App Platform should still have its non-moved tactics
+    expect(appPlatform!.tactics).toContain('Cloud marketplaces and private offers')
+    expect(appPlatform!.tactics).toContain('Container Adoption Journey')
+
+    // Agentic AI should have parentTdp updated to AI Platform
+    const agenticAi = knowledge.tactics.find(t => t.name === 'Agentic AI')
+    expect(agenticAi).toBeDefined()
+    expect(agenticAi!.parentTdp).toBe('AI Platform')
   })
 
   it('defaults SalesPlay new fields when not provided (#367)', () => {
@@ -502,5 +585,154 @@ End of content.
     expect(result.customerLens).toEqual({ pain: [], outcomes: [], impact: [] })
     expect(result.realWorldExamples).toEqual([])
     expect(result.personas).toEqual([])
+  })
+})
+
+describe('TDP name normalization (#381)', () => {
+  it('normalizes "Server/Cloud Operating System TDP" to "Server/Cloud OS"', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'rhel',
+        name: 'RHEL',
+        description: 'Enterprise Linux',
+        url: 'https://example.com/rhel',
+        tdpSections: [{ name: 'Server/Cloud Operating System TDP', description: 'RHEL server TDP' }],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    const serverOs = knowledge.tdps.find(t => t.name === 'Server/Cloud OS')
+    expect(serverOs).toBeDefined()
+    const oldName = knowledge.tdps.find(t => t.name === 'Server/Cloud Operating System TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('normalizes "Application Platform TDP" to "App Platform TDP"', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'ocp',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [{ name: 'Application Platform TDP', description: 'App platform TDP' }],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    const appPlatform = knowledge.tdps.find(t => t.name === 'App Platform TDP')
+    expect(appPlatform).toBeDefined()
+    const oldName = knowledge.tdps.find(t => t.name === 'Application Platform TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('merges duplicate TDPs after normalization (Container Management TDP + Container Mgmt)', () => {
+    const products: ScrapedProduct[] = [
+      {
+        slug: 'ocp',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://example.com/ocp',
+        tdpSections: [
+          { name: 'App Platform TDP', description: 'Application platform' },
+          { name: 'Container Management TDP', description: 'Container mgmt from scrape' },
+          { name: 'Kubernetes for 3rd party workloads (Non-AI)', description: 'Run 3rd party non-AI workloads' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-24T00:00:00Z',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [])
+    // "Container Management TDP" should be normalized to "Container Mgmt" and merged with
+    // the Container Mgmt TDP created by #368 restructure
+    const containerMgmt = knowledge.tdps.filter(t => t.name === 'Container Mgmt')
+    expect(containerMgmt.length).toBe(1)
+    const oldName = knowledge.tdps.find(t => t.name === 'Container Management TDP')
+    expect(oldName).toBeUndefined()
+  })
+
+  it('normalizes tactic parentTdp references', () => {
+    const tactics: ScrapedSalesTactic[] = [
+      {
+        name: 'RHEL Image Mode',
+        talkTrack: 'Deploy bootable images',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        parentTdp: 'Server/Cloud Operating System',
+        url: 'https://example.com/image-mode',
+      },
+      {
+        name: 'Container Adoption',
+        talkTrack: 'Adopt containers',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        parentTdp: 'Container Management',
+        url: 'https://example.com/container-adoption',
+      },
+    ]
+
+    const knowledge = buildSalesHubKnowledge([], [], tactics)
+    const imageMode = knowledge.tactics.find(t => t.name === 'RHEL Image Mode')
+    expect(imageMode).toBeDefined()
+    expect(imageMode!.parentTdp).toBe('Server/Cloud OS')
+
+    const containerAdoption = knowledge.tactics.find(t => t.name === 'Container Adoption')
+    expect(containerAdoption).toBeDefined()
+    expect(containerAdoption!.parentTdp).toBe('Container Mgmt')
+  })
+})
+
+describe('tdpAlignment parsing filter (#381)', () => {
+  it('stops at non-TDP lines like sidebar nav text', () => {
+    const text = `
+Build and Run Applications
+Sales Play overview.
+TDPs Powering the Play
+AI Platform
+Container Management
+Account research in minutes
+Quick links to resources
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.tdpAlignment.length).toBe(2)
+    expect(result.tdpAlignment).toContain('AI Platform')
+    expect(result.tdpAlignment).toContain('Container Management')
+    // Garbage lines should NOT be included
+    expect(result.tdpAlignment).not.toContain('Account research in minutes')
+    expect(result.tdpAlignment).not.toContain('Quick links to resources')
+  })
+
+  it('accepts all canonical TDP name variants', () => {
+    const text = `
+Some Play
+TDPs Powering the Play
+AI Platform
+Server/Cloud Operating System
+Container Management
+Automation
+App Platform
+Virtualization
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.tdpAlignment.length).toBe(6)
   })
 })

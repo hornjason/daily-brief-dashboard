@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
@@ -655,6 +655,164 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       return c.json({ ok: true, provider: getBriefProvider(), preview: result.slice(0, 120) })
     } catch (e: any) {
       return c.json({ ok: false, error: sanitizeErr(e) })
+    }
+  })
+
+  // ── Value Maps settings (#315) ─────────────────────────────────────────────
+
+  router.get('/api/settings/value-maps', (c) => {
+    try {
+      let deckId: string | null = null
+      try {
+        const raw = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8'))
+        deckId = raw.valueMapsDeckId ?? null
+      } catch { /* settings.json missing */ }
+
+      // Check cached file status
+      const valueMapsPath = resolve(process.env.CACHE_DIR ?? 'data/cache', 'value-maps/business-value-maps.txt')
+      let lastRefreshed: string | null = null
+      let fileSize = 0
+      let productCount = 0
+      try {
+        const stat = statSync(valueMapsPath)
+        lastRefreshed = stat.mtime.toISOString()
+        fileSize = stat.size
+        const content = readFileSync(valueMapsPath, 'utf-8')
+        productCount = content.split('\n').filter((l: string) =>
+          l.toLowerCase().includes('value map') && l.toLowerCase().includes('red hat')
+        ).length
+      } catch { /* file missing */ }
+
+      return c.json({
+        deckId,
+        configured: !!deckId,
+        lastRefreshed,
+        fileSize,
+        productCount,
+        hasStaticFallback: true,
+      })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  router.post('/api/settings/value-maps', async (c) => {
+    try {
+      const body = await c.req.json<{ deckId?: string }>().catch(() => ({ deckId: undefined }))
+      const rawInput = (body.deckId ?? '').trim()
+
+      // Allow clearing the deck ID
+      if (!rawInput) {
+        let settings: Record<string, unknown> = {}
+        try { settings = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8')) } catch {}
+        delete settings.valueMapsDeckId
+        writeJsonAtomic(SETTINGS_PATH_MOD, settings)
+        return c.json({ ok: true, deckId: null })
+      }
+
+      // Extract deck ID from URL or raw ID
+      const urlMatch = rawInput.match(/\/d\/([a-zA-Z0-9_-]+)/)
+      const deckId = urlMatch ? urlMatch[1] : rawInput
+
+      if (!/^[a-zA-Z0-9_-]{10,100}$/.test(deckId)) {
+        return c.json({ error: 'Invalid deck ID format — must be a Google Drive file ID or Slides URL' }, 400)
+      }
+
+      let settings: Record<string, unknown> = {}
+      try { settings = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8')) } catch {}
+      writeJsonAtomic(SETTINGS_PATH_MOD, { ...settings, valueMapsDeckId: deckId })
+
+      return c.json({ ok: true, deckId })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  router.post('/api/settings/value-maps/test', async (c) => {
+    try {
+      const body = await c.req.json<{ deckId?: string }>().catch(() => ({ deckId: undefined }))
+      const rawInput = (body.deckId ?? '').trim()
+
+      if (!rawInput) return c.json({ error: 'deckId is required' }, 400)
+
+      const urlMatch = rawInput.match(/\/d\/([a-zA-Z0-9_-]+)/)
+      const deckId = urlMatch ? urlMatch[1] : rawInput
+
+      if (!/^[a-zA-Z0-9_-]{10,100}$/.test(deckId)) {
+        return c.json({ error: 'Invalid deck ID format' }, 400)
+      }
+
+      const { google } = await import('googleapis')
+      const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+
+      // Get file metadata to verify access
+      const meta = await drive.files.get({ fileId: deckId, fields: 'id,name,mimeType,modifiedTime' })
+
+      // Try exporting as text to validate it's a Slides deck
+      const res = await drive.files.export(
+        { fileId: deckId, mimeType: 'text/plain' },
+        { responseType: 'text' }
+      )
+      const content = typeof res.data === 'string' ? res.data : String(res.data)
+
+      return c.json({
+        ok: true,
+        name: meta.data.name,
+        mimeType: meta.data.mimeType,
+        modifiedTime: meta.data.modifiedTime,
+        contentLength: content.length,
+      })
+    } catch (e: any) {
+      const msg = String(e?.message ?? '')
+      if (msg.includes('not found') || msg.includes('404')) {
+        return c.json({ error: 'Deck not found — check the ID and ensure the file is shared with your Google account' }, 404)
+      }
+      if (msg.includes('permission') || msg.includes('403')) {
+        return c.json({ error: 'Permission denied — ensure the deck is shared with the authorized Google account' }, 403)
+      }
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  router.post('/api/settings/value-maps/refresh', async (c) => {
+    try {
+      let deckId: string | null = null
+      try {
+        const raw = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8'))
+        deckId = raw.valueMapsDeckId ?? null
+      } catch { /* settings.json missing */ }
+
+      if (!deckId) {
+        return c.json({ error: 'No deck ID configured — set one first in Admin > Settings' }, 400)
+      }
+
+      const { google } = await import('googleapis')
+      const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
+      const { clearValueMapCache } = await import('./value-map-loader.ts')
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+
+      const res = await drive.files.export(
+        { fileId: deckId, mimeType: 'text/plain' },
+        { responseType: 'text' }
+      )
+      const content = typeof res.data === 'string' ? res.data : String(res.data)
+
+      if (content.length < 100) {
+        return c.json({ error: `Drive export returned only ${content.length} chars — likely empty deck` }, 400)
+      }
+
+      const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+      const dir = resolve(cacheDir, 'value-maps')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(resolve(dir, 'business-value-maps.txt'), content)
+      clearValueMapCache()
+
+      return c.json({ ok: true, contentLength: content.length, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

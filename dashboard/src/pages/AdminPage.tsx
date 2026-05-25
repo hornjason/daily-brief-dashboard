@@ -3,7 +3,9 @@ import { SystemOverviewPanel } from '../components/admin/SystemOverviewPanel'
 import { DataSourcesPanel } from '../components/admin/DataSourcesPanel'
 import { OperationsPanel } from '../components/admin/OperationsPanel'
 import { SettingsPanel } from '../components/admin/SettingsPanel'
+import { SalesHubCoveragePanel } from '../components/admin/SalesHubCoveragePanel'
 import { RSSFeedsManagementSection } from '../components/admin/RSSFeedsSection'
+import { DocumentSourcesPanel } from '../components/admin/DocumentSourcesPanel'
 import { useApi } from '../hooks/useApi'
 
 export function AdminPage() {
@@ -55,6 +57,20 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Settings</h2>
           <p className="text-xs text-gray-500 mb-3">Configure automation, AI features, and data backup</p>
           <SettingsPanel />
+        </div>
+
+        {/* SalesHub Coverage — GitHub Issue #373 */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">SalesHub Coverage</h2>
+          <p className="text-xs text-gray-500 mb-3">Content coverage across Technology Decision Points and Sales Plays</p>
+          <SalesHubCoveragePanel />
+        </div>
+
+        {/* Document Sources — GitHub Issue #316 */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Document Sources</h2>
+          <p className="text-xs text-gray-500 mb-3">Configurable document and data sources -- Google Drive, URLs, email queries, RSS feeds</p>
+          <DocumentSourcesPanel />
         </div>
 
         {/* RSS Feeds Management — GitHub Issue #270 */}

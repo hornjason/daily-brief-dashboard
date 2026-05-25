@@ -44,6 +44,8 @@ export interface TdpNode {
   services: Array<{ name: string; description: string }>
   cheatsheetUrl: string
   customerDeckUrl: string
+  extractedContent: string
+  metrics: Array<{ value: string; context: string; source: string }>
 }
 
 export interface TacticNode {
@@ -53,6 +55,8 @@ export interface TacticNode {
   whatToSay: string[]
   whatToShare: Array<{ name: string; url: string; type: string }>
   parentTdp: string
+  extractedContent: string
+  metrics: Array<{ value: string; context: string; source: string }>
 }
 
 export interface ProductNode {
@@ -568,7 +572,12 @@ export function parseSalesPlayPageSections(
         if (line.length > 5) result.personas.push(line)
         break
       case 'tdp-alignment':
-        if (line.length > 3) result.tdpAlignment.push(line)
+        // Only accept lines matching known TDP names (#381)
+        const CANONICAL_TDPS = ['AI Platform', 'Server/Cloud Operating System', 'Container Management',
+          'Automation', 'App Platform', 'Application Platform', 'Virtualization', 'Server/Cloud OS']
+        if (line.length > 3 && CANONICAL_TDPS.some(t => t.toLowerCase() === lower || lower.includes(t.toLowerCase()))) {
+          result.tdpAlignment.push(line)
+        }
         break
       case 'regional':
         if (line.length > 5) {
@@ -665,6 +674,8 @@ export function buildSalesHubKnowledge(
             services: [],
             cheatsheetUrl: '',
             customerDeckUrl: '',
+            extractedContent: '',
+            metrics: [],
           })
         }
       } else {
@@ -677,6 +688,8 @@ export function buildSalesHubKnowledge(
           whatToSay: [],
           whatToShare: [],
           parentTdp,
+          extractedContent: '',
+          metrics: [],
         })
         // Link tactic to its parent TDP
         const tdp = tdpMap.get(parentTdp)
@@ -705,6 +718,8 @@ export function buildSalesHubKnowledge(
         whatToSay: tactic.whatToSay,
         whatToShare: tactic.whatToShare,
         parentTdp: tactic.parentTdp,
+        extractedContent: '',
+        metrics: [],
       })
     }
     // Link to TDP
@@ -750,10 +765,199 @@ export function buildSalesHubKnowledge(
           services: tdpPage.services,
           cheatsheetUrl: tdpPage.cheatsheetUrl,
           customerDeckUrl: tdpPage.customerDeckUrl,
+          extractedContent: '',
+          metrics: [],
         })
       }
     }
   }
+
+  // ── TDP name normalization (#381) ──
+  const TDP_NAME_MAP: Record<string, string> = {
+    'server/cloud operating system': 'Server/Cloud OS',
+    'server/cloud operating system tdp': 'Server/Cloud OS',
+    'application platform': 'App Platform',
+    'application platform tdp': 'App Platform TDP',
+    'container management': 'Container Mgmt',
+    'container management tdp': 'Container Mgmt',
+  }
+
+  // Normalize TDP names in tdpMap
+  for (const [key, tdp] of tdpMap) {
+    const normalized = TDP_NAME_MAP[tdp.name.toLowerCase()]
+    if (normalized && normalized !== tdp.name) {
+      tdpMap.delete(key)
+      // Merge into existing entry if one exists
+      const existing = tdpMap.get(normalized)
+      if (existing) {
+        for (const t of tdp.tactics) { if (!existing.tactics.includes(t)) existing.tactics.push(t) }
+        for (const p of tdp.products) { if (!existing.products.includes(p)) existing.products.push(p) }
+        if (tdp.customerWins.length > existing.customerWins.length) existing.customerWins = tdp.customerWins
+        if (tdp.whatToSay.length > existing.whatToSay.length) existing.whatToSay = tdp.whatToSay
+        if (tdp.whatToShare.length > existing.whatToShare.length) existing.whatToShare = tdp.whatToShare
+        if (tdp.whatToShow.length > existing.whatToShow.length) existing.whatToShow = tdp.whatToShow
+        if (tdp.services.length > existing.services.length) existing.services = tdp.services
+        if (!existing.cheatsheetUrl && tdp.cheatsheetUrl) existing.cheatsheetUrl = tdp.cheatsheetUrl
+        if (!existing.customerDeckUrl && tdp.customerDeckUrl) existing.customerDeckUrl = tdp.customerDeckUrl
+      } else {
+        tdp.name = normalized
+        tdpMap.set(normalized, tdp)
+      }
+    }
+  }
+
+  // Also normalize tactic parentTdp references
+  for (const tactic of tacticNodes) {
+    const normalized = TDP_NAME_MAP[tactic.parentTdp.toLowerCase()]
+    if (normalized) tactic.parentTdp = normalized
+  }
+
+  // ── Post-processing: Restructure TDPs to match SalesHub actual structure (#368) ──
+
+  // Helper for case-insensitive substring matching
+  const fuzzyMatch = (haystack: string, needle: string) =>
+    haystack.toLowerCase().includes(needle.toLowerCase())
+
+  // (a) Create Container Mgmt TDP and move tactics from App Platform
+  const containerMgmtTacticPatterns = [
+    'kubernetes', // matches both K8s tactics (filtered below)
+    'multicluster',
+    'supply chain',
+  ]
+  const containerMgmtTacticNames: string[] = []
+
+  // Find tactics to move by scanning tacticNodes
+  for (const tactic of tacticNodes) {
+    const name = tactic.name.toLowerCase()
+    const shouldMove =
+      (name.includes('kubernetes') && (name.includes('non-ai') || name.includes('3rd party ai') || name.includes('3rd party workloads'))) ||
+      name.includes('multicluster') ||
+      name.includes('supply chain')
+    if (shouldMove) {
+      tactic.parentTdp = 'Container Mgmt'
+      containerMgmtTacticNames.push(tactic.name)
+    }
+  }
+
+  // Add "Sovereign Infrastructure" tactic if not already present
+  if (!tacticNodes.find(t => fuzzyMatch(t.name, 'sovereign infrastructure'))) {
+    tacticNodes.push({
+      name: 'Sovereign Infrastructure',
+      talkTrack: '',
+      customerWins: [],
+      whatToSay: [],
+      whatToShare: [],
+      parentTdp: 'Container Mgmt',
+      extractedContent: '',
+      metrics: [],
+    })
+  } else {
+    // Update parentTdp if it exists
+    const sovereign = tacticNodes.find(t => fuzzyMatch(t.name, 'sovereign infrastructure'))
+    if (sovereign) sovereign.parentTdp = 'Container Mgmt'
+  }
+  containerMgmtTacticNames.push('Sovereign Infrastructure')
+
+  // Create Container Mgmt TDP node if it doesn't exist
+  if (!tdpMap.has('Container Mgmt')) {
+    tdpMap.set('Container Mgmt', {
+      name: 'Container Mgmt',
+      description: 'The Container Management Technology Decision Point positions Red Hat OpenShift for enterprise Kubernetes container management, multi-cluster operations, supply chain security, and sovereign infrastructure.',
+      tactics: [...containerMgmtTacticNames],
+      products: [],
+      customerWins: [],
+      whatToSay: [],
+      whatToShare: [],
+      whatToShow: [],
+      services: [],
+      cheatsheetUrl: '',
+      customerDeckUrl: '',
+      extractedContent: '',
+      metrics: [],
+    })
+  } else {
+    const cm = tdpMap.get('Container Mgmt')!
+    for (const name of containerMgmtTacticNames) {
+      if (!cm.tactics.includes(name)) cm.tactics.push(name)
+    }
+  }
+
+  // Remove moved tactics from App Platform TDP(s)
+  for (const [, tdp] of tdpMap) {
+    if (fuzzyMatch(tdp.name, 'app platform')) {
+      tdp.tactics = tdp.tactics.filter(t => !containerMgmtTacticNames.includes(t))
+    }
+  }
+
+  // Copy products from App Platform to Container Mgmt (they share OpenShift)
+  for (const [, tdp] of tdpMap) {
+    if (fuzzyMatch(tdp.name, 'app platform')) {
+      const cm = tdpMap.get('Container Mgmt')!
+      for (const prod of tdp.products) {
+        if (!cm.products.includes(prod)) cm.products.push(prod)
+      }
+    }
+  }
+
+  // (b) Add "Red Hat AI Factory with NVIDIA" tactic if not present
+  // Determine the AI Platform TDP name (may be "AI TDP", "AI", or "AI Platform")
+  let aiTdpName = ''
+  for (const [, tdp] of tdpMap) {
+    if (/^ai(\s+tdp)?$/i.test(tdp.name.trim()) || fuzzyMatch(tdp.name, 'ai platform')) {
+      aiTdpName = tdp.name
+      break
+    }
+  }
+  if (!tacticNodes.find(t => fuzzyMatch(t.name, 'ai factory') && fuzzyMatch(t.name, 'nvidia'))) {
+    const parentForAiFactory = aiTdpName || 'AI Platform'
+    tacticNodes.push({
+      name: 'Red Hat AI Factory with NVIDIA',
+      talkTrack: '',
+      customerWins: [],
+      whatToSay: [],
+      whatToShare: [],
+      parentTdp: parentForAiFactory,
+      extractedContent: '',
+      metrics: [],
+    })
+    // Add to AI TDP's tactics list
+    if (aiTdpName) {
+      const aiTdp = tdpMap.get(aiTdpName)!
+      if (!aiTdp.tactics.includes('Red Hat AI Factory with NVIDIA')) {
+        aiTdp.tactics.push('Red Hat AI Factory with NVIDIA')
+      }
+    }
+  }
+
+  // (c) Remove Edge TDP entirely
+  for (const [key, tdp] of tdpMap) {
+    if (fuzzyMatch(tdp.name, 'edge')) {
+      tdpMap.delete(key)
+    }
+  }
+
+  // (d) Rename AI → AI Platform
+  for (const [key, tdp] of tdpMap) {
+    if (/^ai(\s+tdp)?$/i.test(tdp.name.trim())) {
+      tdpMap.delete(key)
+      tdp.name = 'AI Platform'
+      tdpMap.set('AI Platform', tdp)
+      break // Only one AI TDP to rename
+    }
+  }
+  // Update tacticNodes parentTdp references from AI/AI TDP to AI Platform
+  for (const tactic of tacticNodes) {
+    if (/^ai(\s+tdp)?$/i.test(tactic.parentTdp.trim())) {
+      tactic.parentTdp = 'AI Platform'
+    }
+  }
+  // Update AI Factory tactic parentTdp if it was set to old name
+  const aiFactoryTactic = tacticNodes.find(t => fuzzyMatch(t.name, 'ai factory') && fuzzyMatch(t.name, 'nvidia'))
+  if (aiFactoryTactic && aiFactoryTactic.parentTdp !== 'AI Platform') {
+    aiFactoryTactic.parentTdp = 'AI Platform'
+  }
+
+  // (e) Ensure Container Mgmt tactics list is accurate (already done above)
 
   // Build product nodes
   const productNodes: ProductNode[] = products.map(p => ({

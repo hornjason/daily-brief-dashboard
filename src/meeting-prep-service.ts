@@ -30,6 +30,7 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { readProductLifecycleCache } from './product-lifecycle.ts'
 import { getAllProductSummaries } from './product-release-radar.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
+import { getTdpByName, getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readCCSPCache } from './cache-layer.ts'
@@ -37,6 +38,12 @@ import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
 import { buildProductAlignmentTable, buildSummitAnnouncementsTable, buildEnhancedLifecycleTable, buildRSSIntelligenceTable } from './meeting-prep-enrichment.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
+import {
+  extractActionItems,
+  findPreviousPrepForSeries,
+  buildCarryForwardContext,
+  type PrepHistoryWithSeries,
+} from './recurring-meeting-intel.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +56,7 @@ export interface MeetingPrepRequest {
   meetingStart: string
   attendees: string[]
   attendeeDetails?: Array<{ email: string; displayName?: string }>
+  recurringEventId?: string // #269: for series tracking
   context?: {
     objective?: string
     productFocus?: string[]
@@ -70,6 +78,8 @@ export interface PrepHistoryEntry {
   title: string
   generatedAt: string
   customerName?: string
+  recurringEventId?: string // #269: series tracking
+  actionItems?: string[]    // #269: extracted for carry-forward
 }
 
 interface PartnerConfig {
@@ -490,6 +500,88 @@ export async function generateMeetingPrep(
     }
   }
 
+  // ── Step 1a: Recurring meeting carry-forward (#269) ────────────────────
+  let carryForwardContext = ''
+  const isRecurring = !!meeting.recurringEventId
+  if (isRecurring) {
+    console.log(`[meeting-prep] Recurring meeting detected (series: ${meeting.recurringEventId})`)
+    const history = readHistory(slug) as PrepHistoryWithSeries[]
+    const previousPrep = findPreviousPrepForSeries(
+      meeting.recurringEventId!,
+      meeting.meetingStart,
+      history
+    )
+
+    if (previousPrep) {
+      // Try to read the cached content for action item extraction
+      const contentPath = resolve(CACHE_DIR, 'meeting-prep', `${slug}-latest.json`)
+      let actionItems: string[] = previousPrep.actionItems ?? []
+
+      if (actionItems.length === 0 && existsSync(contentPath)) {
+        try {
+          const cached = JSON.parse(readFileSync(contentPath, 'utf-8'))
+          if (cached.content) {
+            actionItems = extractActionItems(cached.content)
+          }
+        } catch { /* no cached content */ }
+      }
+
+      carryForwardContext = buildCarryForwardContext(actionItems, previousPrep.meetingStart)
+      if (carryForwardContext) {
+        console.log(`[meeting-prep] Carry-forward: ${actionItems.length} action items from ${previousPrep.meetingStart}`)
+      }
+    }
+  }
+
+  // ── Step 1a-2: Scan customer Drive folder for recent docs (#269) ──────
+  let driveDocsContext = ''
+  try {
+    const customerFolderId = await findCustomerDriveFolder(customer)
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    // Find docs modified since last prep (or last 14 days)
+    const lastPrepHistory = readHistory(slug)
+    const lastPrepDate = lastPrepHistory[0]?.generatedAt
+    const sinceDate = lastPrepDate
+      ? new Date(lastPrepDate)
+      : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+
+    const recentDocs = await drive.files.list({
+      q: `'${customerFolderId}' in parents and mimeType = 'application/vnd.google-apps.document' and modifiedTime > '${sinceDate.toISOString()}' and trashed = false`,
+      fields: 'files(id,name,modifiedTime,webViewLink)',
+      pageSize: 10,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+
+    const docs = recentDocs.data.files ?? []
+    if (docs.length > 0) {
+      // Extract text from recent docs (capped)
+      const docTexts: string[] = []
+      for (const doc of docs.slice(0, 5)) {
+        try {
+          const exported = await drive.files.export({
+            fileId: doc.id!,
+            mimeType: 'text/plain',
+          })
+          const text = typeof exported.data === 'string'
+            ? exported.data.slice(0, 2000)
+            : ''
+          if (text) {
+            docTexts.push(`### ${doc.name} (modified ${new Date(doc.modifiedTime!).toLocaleDateString()})\n${text}`)
+          }
+        } catch { /* skip unreadable docs */ }
+      }
+      if (docTexts.length > 0) {
+        driveDocsContext = `## Account Notes & Recent Documents\nThe following documents were found in the customer's Drive folder, modified since the last prep:\n\n${docTexts.join('\n\n')}`
+        console.log(`[meeting-prep] Drive scan: ${docTexts.length} recent docs found for ${customer.name}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[meeting-prep] Drive folder scan failed for ${customer.name}:`, e.message)
+  }
+
   // ── Step 1b: Load additional data sources ──────────────────────────────
 
   // Determine product focus: explicit context > subscription data > inferred from objective
@@ -814,11 +906,47 @@ ${(() => {
     : 'No solution plays identified'
 })()}
 
+### Tactical Recommendations (from SalesHub knowledge)
+${(() => {
+  const plays = playbook.deterministic?.solutionPlays ?? []
+  if (plays.length === 0) return 'No tactical recommendations — no solution plays matched'
+  const recs: string[] = []
+  for (const play of plays) {
+    const tdpNode = getTdpByName(play.tdp)
+    const salesPlay = getSalesPlayByName(play.playName)
+
+    if (tdpNode?.whatToShow?.length) {
+      recs.push(`**Recommended Demos (${play.tdp}):**`)
+      for (const demo of tdpNode.whatToShow.slice(0, 3)) {
+        recs.push(`- [${demo.name}](${demo.url}) — ${demo.type}`)
+      }
+    }
+
+    const examples = play.realWorldExamples ?? salesPlay?.realWorldExamples ?? []
+    if (examples.length > 0) {
+      recs.push(`**Reference Case Studies (${play.playName}):**`)
+      for (const ex of examples.slice(0, 3)) {
+        recs.push(`- ${ex.customer} — ${ex.outcome}`)
+      }
+    }
+
+    if (tdpNode?.services?.length) {
+      recs.push(`**Services to Propose (${play.tdp}):**`)
+      for (const svc of tdpNode.services.slice(0, 3)) {
+        recs.push(`- ${svc.name}: ${svc.description}`)
+      }
+    }
+  }
+  return recs.length > 0 ? recs.join('\n') : 'No tactical recommendations available for matched plays'
+})()}
+
 ### Renewals & Risk (from playbook)
 ${renewalsRisk}
 
 ## Additional Context for This Meeting
 
+${carryForwardContext ? `### Previous Meeting Follow-up\n${carryForwardContext}\n` : ''}
+${driveDocsContext ? `### Account Documents\n${driveDocsContext}\n` : ''}
 ### Meeting Attendees (full research)
 ${attendeeResearch || 'No attendee research available'}
 
@@ -830,10 +958,10 @@ ${rssContext || 'No recent news available'}
 
 ---
 
-Generate the document with these EXACT 10 sections, drawing from the playbook context above:
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). If outstanding items from the last meeting are provided above, start with those — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 10 sections, drawing from the playbook context above:
 
 # Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — see Outstanding Items below*` : ''}
 
 ### 1. Meeting Objective
 [Restate the meeting purpose in context of the playbook's strategic position. 2-3 lines max.]
@@ -987,12 +1115,14 @@ ${attendeeResearch || 'No attendee research available'}
 ## Open Support Cases
 ${caseSummary}
 
+${carryForwardContext ? `## Previous Meeting Follow-up\n${carryForwardContext}\n` : ''}
+${driveDocsContext || ''}
 ---
 
-Generate the document with these EXACT 10 sections:
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). If outstanding items from the last meeting are provided above, start with those — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 10 sections:
 
 # Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — see Outstanding Items below*` : ''}
 
 ### 1. Meeting Objective
 [State the meeting purpose. If attendees are from a partner/integrator, focus on the partnership objective for ${customer.name}. 2-3 lines max.]
@@ -1175,6 +1305,7 @@ Also note other certified partners that could help. Skip individual attendee pro
   // ── Step 6: Cache the result ──────────────────────────────────────────────
 
   const generatedAt = new Date().toISOString()
+  const generatedActionItems = extractActionItems(prepContent)
   const entry: PrepHistoryEntry = {
     meetingTitle: meeting.meetingTitle,
     meetingStart: meeting.meetingStart,
@@ -1182,6 +1313,8 @@ Also note other certified partners that could help. Skip individual attendee pro
     title: docTitle,
     generatedAt,
     customerName: customer.name,
+    recurringEventId: meeting.recurringEventId,
+    actionItems: generatedActionItems.length > 0 ? generatedActionItems : undefined,
   }
 
   appendHistory(slug, entry)

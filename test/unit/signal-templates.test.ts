@@ -13,6 +13,7 @@ import {
   templateTechStack,
   templateKeyRelationships,
   templateStrategicOpportunities,
+  templateUpcomingEvents,
   templateAll,
   type TemplateOptions,
 } from '../../src/lib/signal-templates.ts'
@@ -149,6 +150,47 @@ describe('templateCloudMarketplace', () => {
     expect(result).toContain('| AWS | $125,000 | Commit, EDP | OpenShift, RHEL |')
   })
 
+  test('aggregates program names from individual program signals (#378)', () => {
+    // Individual program signals have offeringType: 'program' but no programs array
+    const programSignal1: Signal = {
+      source: 'cloud-marketplace',
+      type: 'product-intel',
+      headline: 'AWS program: EDP — leverage existing $50,000 spend',
+      detail: 'Enterprise Discount Program',
+      score: 0.8,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        provider: 'AWS',
+        offeringType: 'program',
+        hasCloudSpend: true,
+        acvPlus: 50000,
+      },
+    }
+    const programSignal2: Signal = {
+      source: 'cloud-marketplace',
+      type: 'product-intel',
+      headline: 'AWS program: CPPO — leverage existing $50,000 spend',
+      detail: 'Channel Partner Private Offer',
+      score: 0.8,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        provider: 'AWS',
+        offeringType: 'program',
+        hasCloudSpend: true,
+        acvPlus: 50000,
+      },
+    }
+
+    const result = templateCloudMarketplace([programSignal1, programSignal2])
+    expect(result).not.toBeNull()
+    // Should aggregate program names from headlines into Programs column
+    expect(result).toContain('EDP')
+    expect(result).toContain('CPPO')
+    // Should show one aggregated row per provider, not individual rows
+    const awsRows = result!.split('\n').filter(l => l.includes('| AWS |'))
+    expect(awsRows.length).toBe(1)
+  })
+
   test('handles missing ACV', () => {
     const signalNoACV: Signal = {
       ...mockCloudSignal,
@@ -255,6 +297,100 @@ describe('templateKeyRelationships', () => {
     const emptyTeam: AccountTeamMember[] = []
     const result = templateKeyRelationships(emptyTeam)
     expect(result).toBeNull()
+  })
+})
+
+// ── Upcoming Events (#377) ─────────────────────────────────────────────────
+
+describe('templateUpcomingEvents', () => {
+  const mockEventSignal: Signal = {
+    source: 'rh-events',
+    type: 'event',
+    headline: 'Red Hat Summit 2026',
+    detail: 'Boston, MA • Jun 15-17, 2026',
+    score: 0.7,
+    timestamp: '2026-06-15',
+    metadata: {
+      format: 'in-person',
+      location: 'Boston, MA',
+      region: 'northeast',
+    },
+  }
+
+  test('returns null when no event signals', () => {
+    const result = templateUpcomingEvents([mockProductSignal, mockCloudSignal])
+    expect(result).toBeNull()
+  })
+
+  test('renders events table with format and location', () => {
+    const result = templateUpcomingEvents([mockEventSignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('| Event | Date | Format | Location |')
+    expect(result).toContain('Red Hat Summit 2026')
+    expect(result).toContain('in-person')
+    expect(result).toContain('Boston, MA')
+  })
+
+  test('handles virtual events without location', () => {
+    const virtualEvent: Signal = {
+      ...mockEventSignal,
+      headline: 'OpenShift Webinar',
+      metadata: { format: 'virtual', location: '', region: 'national' },
+    }
+    const result = templateUpcomingEvents([virtualEvent])
+    expect(result).not.toBeNull()
+    expect(result).toContain('virtual')
+    expect(result).toContain('Virtual')
+  })
+
+  test('caps at 8 rows', () => {
+    const signals = Array(12).fill(null).map((_, i) => ({
+      ...mockEventSignal,
+      headline: `Event ${i}`,
+    }))
+    const result = templateUpcomingEvents(signals)
+    const dataRows = result!.split('\n').filter(l => l.startsWith('|')).length - 2 // minus header + separator
+    expect(dataRows).toBeLessThanOrEqual(8)
+  })
+
+  test('templateAll includes events section', async () => {
+    const result = await templateAll([mockEventSignal])
+    expect(result.deterministic).toContain('## Upcoming Events')
+    expect(result.sections.upcomingEvents).not.toBeNull()
+  })
+})
+
+// ── Account Plan (#380) ───────────────────────────────────────────────────
+
+describe('templateAccountPlan', () => {
+  const mockAccountPlanSignal: Signal = {
+    source: 'account-plan',
+    type: 'account-plan',
+    headline: 'Acme Corp Account Plan',
+    detail: 'Key objectives: cloud migration to OpenShift, automation with Ansible, security modernization with ACS.',
+    score: 0.9,
+    timestamp: new Date().toISOString(),
+    metadata: {
+      customerSlug: 'acme-corp',
+      contentLength: 2500,
+    },
+  }
+
+  test('templateAll includes account plan in deterministic output for playbook', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'playbook' })
+    expect(result.deterministic).toContain('## Account Plan')
+    expect(result.deterministic).toContain('cloud migration')
+    expect(result.sections.accountPlan).not.toBeNull()
+  })
+
+  test('templateAll includes account plan in deterministic output for brief', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'brief' })
+    expect(result.deterministic).toContain('## Account Plan')
+  })
+
+  test('account plan does not appear in campaign format', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'campaign' })
+    expect(result.deterministic).not.toContain('## Account Plan')
   })
 })
 

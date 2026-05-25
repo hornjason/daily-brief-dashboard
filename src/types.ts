@@ -137,6 +137,7 @@ export interface CalendarEvent {
   description?: string // event description / agenda (plain text, first 300 chars)
   notesUrl?: string    // first Google Doc link found in description
   solo?: boolean       // true when only the calendar owner is on the event
+  recurringEventId?: string // #269: Google Calendar recurring series ID
 }
 
 export type AccountTeamRole = 'ae' | 'asa' | 'ssp' | 'ssa' | 'manager'

@@ -330,6 +330,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         description: plainDesc,
         notesUrl,
         solo: solo && matchedCustomers.length === 0,
+        recurringEventId: ev.recurringEventId ?? undefined, // #269
       } satisfies CalendarEvent
     })
     .filter((ev) => ev !== null) as CalendarEvent[]

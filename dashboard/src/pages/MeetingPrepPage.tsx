@@ -22,6 +22,7 @@ interface CalendarEvent {
   needsPrep?: boolean
   solo?: boolean
   joinUrl?: string
+  recurringEventId?: string
 }
 
 interface PrepHistoryEntry {
@@ -114,6 +115,11 @@ function MeetingCard({
               <Clock className="w-3 h-3" />
               {formatTime(meeting.start, meeting.end)}
             </span>
+            {meeting.recurringEventId && (
+              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 text-xs">
+                Recurring
+              </span>
+            )}
             {customerMatch && (
               <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/30 text-xs">
                 {customerMatch}
@@ -404,6 +410,7 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
           meetingTitle: meeting.title,
           meetingStart: meeting.start,
           attendees: meeting.attendees ?? [],
+          recurringEventId: meeting.recurringEventId,
           ...(context ? { context } : {}),
         }),
         signal: controller.signal,

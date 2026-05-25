@@ -6,48 +6,43 @@
       "name": "Build and Run Applications",
       "description": "The Build & Run sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables modernize legacy applications, build new cloud-native apps faster and improve developer productivity - while reducing costs, increasing agility and maintaining security.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "App Platform",
-        "Automation",
-        "Edge"
+        "Automation"
       ]
     },
     {
       "name": "IT Operations Efficiency",
       "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations\u2014reducing cost, minimizing risk and freeing IT teams to focus on innovation across datacenter, cloud and edge.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "Automation",
-        "Virtualization",
-        "Edge"
+        "Virtualization"
       ]
     },
     {
       "name": "Modernize Infrastructure",
       "description": "The Modernize Infrastructure sales play is a guide for positioning Red Hat as the trusted, open hybrid platform for organizations to standardize, secure and modernize their legacy infrastructure - reducing operational complexity and cost, and build secured, scalable foundation for future innovation across hybrid environments.",
       "linkedTdps": [
-        "AI",
+        "AI Platform",
         "App Platform",
         "Automation",
-        "Virtualization",
-        "Edge"
+        "Virtualization"
       ]
     },
     {
       "name": "Sovereignty",
       "description": "Digital sovereignty is no longer just a geopolitical concern\u2014it is a strategic business imperative driven by the",
       "linkedTdps": [
-        "AI",
-        "Edge"
+        "AI Platform"
       ]
     },
     {
       "name": "The AI-Ready Enterprise",
       "description": "The AI-Ready Enterprise sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables enterprises to scale AI operations reliably and cost-effectively while maintaining control over their data, security, and choice of infrastructure.",
       "linkedTdps": [
-        "AI",
-        "Automation",
-        "Edge"
+        "AI Platform",
+        "Automation"
       ]
     }
   ],
@@ -63,49 +58,61 @@
       ],
       "products": [
         "Red Hat Ansible Automation Platform"
-      ]
+      ],
+      "extractedContent": "",
+      "metrics": []
     },
     {
-      "name": "AI",
-      "description": "The AI Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, and enterprise-grade agentic AI deployments.",
+      "name": "AI Platform",
+      "description": "The AI Platform Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, enterprise-grade agentic AI deployments, and AI Factory with NVIDIA.",
       "tactics": [
         "Agentic AI",
         "Inference at Scale",
         "Production AI",
-        "Sovereign (Private) AI"
+        "Sovereign (Private) AI",
+        "Red Hat AI Factory with NVIDIA"
       ],
       "products": [
         "Red Hat AI",
         "Red Hat OpenShift"
-      ]
+      ],
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "App Platform",
-      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development, container management, and platform engineering.",
+      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development and platform engineering.",
       "tactics": [
         "Cloud marketplaces and private offers",
         "Container Adoption Journey",
         "DevX & platform engineering to build modern applications",
-        "Kubernetes for 3rd party AI workloads",
-        "Kubernetes for 3rd party workloads (Non-AI)",
-        "Multicluster management & security at scale for Kubernetes",
-        "Operationalize AI",
-        "Secure the software supply chain"
+        "Operationalize AI"
       ],
       "products": [
         "Red Hat OpenShift",
         "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
         "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
-      ]
+      ],
+      "extractedContent": "",
+      "metrics": []
     },
     {
-      "name": "Edge",
-      "description": "The Edge Technology Decision Point positions Red Hat for deploying and managing workloads at the edge with lightweight OpenShift (SNO, MicroShift) and RHEL for Edge. Covers zero-touch provisioning, AI inference at the edge, and sovereign edge deployments.",
-      "tactics": [],
+      "name": "Container Mgmt",
+      "description": "The Container Management Technology Decision Point positions Red Hat OpenShift for enterprise Kubernetes container management, multi-cluster operations, supply chain security, and sovereign infrastructure.",
+      "tactics": [
+        "Kubernetes for 3rd party workloads (Non-AI)",
+        "Kubernetes for 3rd party AI workloads",
+        "Multicluster management & security at scale for Kubernetes",
+        "Secure the software supply chain",
+        "Sovereign Infrastructure"
+      ],
       "products": [
         "Red Hat OpenShift",
-        "Red Hat Enterprise Linux"
-      ]
+        "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
+        "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
+      ],
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Server/Cloud OS",
@@ -119,7 +126,9 @@
       "products": [
         "Red Hat Enterprise Linux",
         "Red Hat Satellite"
-      ]
+      ],
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Virtualization",
@@ -131,7 +140,9 @@
         "Red Hat OpenShift Virtualization",
         "Red Hat OpenShift",
         "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
-      ]
+      ],
+      "extractedContent": "",
+      "metrics": []
     }
   ],
   "tactics": [
@@ -198,7 +209,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation"
+      "parentTdp": "Automation",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Optimize and Modernize IT Ops",
@@ -326,7 +339,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation"
+      "parentTdp": "Automation",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Automate at Scale",
@@ -381,7 +396,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation"
+      "parentTdp": "Automation",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Network automation",
@@ -448,7 +465,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation"
+      "parentTdp": "Automation",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Agentic AI",
@@ -463,7 +482,9 @@
         "Intro to Agentic AI"
       ],
       "whatToShare": [],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Cloud marketplaces and private offers",
@@ -471,7 +492,9 @@
       "customerWins": [],
       "whatToSay": [],
       "whatToShare": [],
-      "parentTdp": "App Platform"
+      "parentTdp": "App Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Container Adoption Journey",
@@ -479,7 +502,9 @@
       "customerWins": [],
       "whatToSay": [],
       "whatToShare": [],
-      "parentTdp": "App Platform"
+      "parentTdp": "App Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Deploy new critical & AI applications on RHEL",
@@ -525,7 +550,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Server/Cloud OS"
+      "parentTdp": "Server/Cloud OS",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "DevX & platform engineering to build modern applications",
@@ -571,7 +598,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "App Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Inference at Scale",
@@ -631,7 +660,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Kubernetes for 3rd party AI workloads",
@@ -662,7 +693,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Kubernetes for 3rd party workloads (Non-AI)",
@@ -778,7 +811,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Migrate to the Cloud",
@@ -895,7 +930,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Server/Cloud OS"
+      "parentTdp": "Server/Cloud OS",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Multicluster management & security at scale for Kubernetes",
@@ -926,7 +963,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Operationalize AI",
@@ -945,7 +984,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "App Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Production AI",
@@ -1025,7 +1066,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Secure and Manage RHEL",
@@ -1076,7 +1119,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Server/Cloud OS"
+      "parentTdp": "Server/Cloud OS",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Secure the software supply chain",
@@ -1122,7 +1167,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "App Platform"
+      "parentTdp": "Container Mgmt",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Sovereign (Private) AI",
@@ -1155,7 +1202,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "AI"
+      "parentTdp": "AI Platform",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "Standardize & Modernize your Operating System",
@@ -1217,7 +1266,9 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Server/Cloud OS"
+      "parentTdp": "Server/Cloud OS",
+      "extractedContent": "",
+      "metrics": []
     },
     {
       "name": "VM migration & modernization",
@@ -1309,7 +1360,29 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Virtualization"
+      "parentTdp": "Virtualization",
+      "extractedContent": "",
+      "metrics": []
+    },
+    {
+      "name": "Sovereign Infrastructure",
+      "talkTrack": "",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Container Mgmt",
+      "extractedContent": "",
+      "metrics": []
+    },
+    {
+      "name": "Red Hat AI Factory with NVIDIA",
+      "talkTrack": "",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "AI Platform",
+      "extractedContent": "",
+      "metrics": []
     }
   ],
   "products": [

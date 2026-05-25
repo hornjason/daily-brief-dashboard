@@ -65,6 +65,7 @@ import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
 import { TechStackSection } from '../components/TechStackSection'
 import { TechStackTab } from '../components/tabs/TechStackTab'
+import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1590,6 +1591,13 @@ export function CustomerDetailPage() {
           <SignalInventoryPanel customerName={customerName} />
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
+          <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Cloud className="w-4 h-4 text-accent" />
+              <h2 className="text-base font-semibold text-text-primary">Cloud Marketplace</h2>
+            </div>
+            <CloudMarketplaceDetail />
+          </div>
           {/* BKL-HERO-18: L4-only — Cases section absent on L3 hero install */}
           {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />

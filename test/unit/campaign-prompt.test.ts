@@ -164,3 +164,23 @@ describe('CAMPAIGN_SYSTEM_PROMPT validation', () => {
     expect(systemPrompt.toLowerCase()).toMatch(/never reference.*internal data/)
   })
 })
+
+describe('callGeminiForCampaign emailTemplateContext (#372)', () => {
+  // Read the function source to verify it accepts and injects emailTemplateContext
+  const funcSource = readFileSync(resolve(import.meta.dir, '../../src/campaign-service.ts'), 'utf-8')
+
+  test('callGeminiForCampaign accepts emailTemplateContext parameter', () => {
+    expect(funcSource).toContain('emailTemplateContext?: string')
+  })
+
+  test('emailTemplateContext is injected into user prompt', () => {
+    expect(funcSource).toContain('${opts.emailTemplateContext')
+  })
+
+  test('campaign falls back gracefully when no emailTemplateUrl exists', () => {
+    // The emailTemplateContext defaults to empty string when no template is found
+    expect(funcSource).toContain("let emailTemplateContext = ''")
+    // It's wrapped in try/catch for graceful fallback
+    expect(funcSource).toContain('Solution context unavailable')
+  })
+})

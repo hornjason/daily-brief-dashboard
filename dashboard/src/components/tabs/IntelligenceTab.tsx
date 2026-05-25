@@ -7,6 +7,7 @@
 
 import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
+import SignalWithAging from '../SignalWithAging'
 
 interface IntelligenceTabProps {
   customerName: string
@@ -669,8 +670,10 @@ Register: ${event.registrationUrl}` : ''}`
           {!eventsLoading && !eventsError && events.length > 0 && (
             <div className="space-y-4">
               {events.map((event, idx) => (
-                <div
+                <SignalWithAging
                   key={idx}
+                  timestamp={event.date}
+                  showTimestamp={false}
                   className="bg-surface border border-border rounded-lg p-6 space-y-4 hover:border-accent/50 transition-colors"
                 >
                   {/* Event name */}
@@ -734,7 +737,7 @@ Register: ${event.registrationUrl}` : ''}`
                       </a>
                     )}
                   </div>
-                </div>
+                </SignalWithAging>
               ))}
             </div>
           )}

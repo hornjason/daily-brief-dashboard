@@ -11,8 +11,8 @@
 
 import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
-import { getTacticsByTdp, getTdpDescription } from './saleshub-knowledge-loader.ts'
-import { isValidCustomerWin, isValidAsset } from './saleshub-filters.ts'
+import { getTacticsByTdp, getTdpDescription, getSalesPlayByName } from './saleshub-knowledge-loader.ts'
+import { isValidCustomerWin, isValidAsset, isValidMetric } from './saleshub-filters.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,10 @@ export interface SolutionPlaySnapshot {
   talkTrack?: string
   customerWins?: string[]
   linkedAssets?: Array<{ name: string; url: string }>
+  matchReasoning?: string
+  customerLens?: { pain: string[]; outcomes: string[]; impact: string[] }
+  realWorldExamples?: Array<{ customer: string; outcome: string }>
+  extractedMetrics?: Array<{ value: string; context: string }>
 }
 
 export interface TemplateOptions {
@@ -55,6 +59,8 @@ export interface TemplateResult {
     salesAlignment: string | null
     strategicOpportunities: string | null
     saleshubContext: string | null
+    upcomingEvents: string | null
+    accountPlan: string | null
   }
   /** Structured data for rich consumers (React components, HTML renderers) */
   structured: {
@@ -75,7 +81,7 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'other' {
   const m = signal.metadata ?? {}
 
   // Metadata-driven routing (most specific first)
@@ -90,8 +96,15 @@ function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' |
     return 'tech'
   }
 
+  // #377: Events — signals from rh-events or with format metadata and event type
+  if (signal.source === 'rh-events' || (m.format && signal.type === 'event')) return 'event'
+
+  // #380: Account plan — strategic context, deterministic in playbook/brief
+  if (signal.source === 'account-plan' || signal.type === 'account-plan') return 'account-plan'
+
   // Product: subscription/ccsp/product metadata (default for RH product signals)
-  if (m.redHatProducts || m.product) return 'product'
+  // #375: Also route signals with productTags (rh-rss) or productSlug (value-maps)
+  if (m.redHatProducts || m.product || (Array.isArray(m.productTags) && m.productTags.length > 0) || m.productSlug) return 'product'
 
   // Fallback to source name for legacy signals
   if (signal.source === 'cloud-marketplace') return 'cloud'
@@ -137,7 +150,9 @@ export function templateProductAlignment(signals: Signal[]): string | null {
     const m = s.metadata ?? {}
     const products = m.redHatProducts
     const firstProduct = Array.isArray(products) && products.length > 0 ? products[0] : null
-    const product = String(m.product ?? firstProduct ?? 'Unknown')
+    // #375/#379: Also read productTags (rh-rss) and productSlug (value-maps)
+    const firstTag = Array.isArray(m.productTags) && m.productTags.length > 0 ? m.productTags[0] : null
+    const product = String(m.product ?? firstProduct ?? m.productSlug ?? firstTag ?? 'Unknown')
     const confidence = String(m.confidence ?? '').toUpperCase() || 'MEDIUM'
     const context = String(m.context ?? s.detail.slice(0, 60)) || s.headline.slice(0, 60)
     rows.push(`| ${product} | ${confidence} | ${context} |`)
@@ -156,19 +171,49 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
   const cloudSignals = signals.filter(s => routeSignal(s) === 'cloud')
   if (cloudSignals.length === 0) return null
 
+  // #378: Aggregate by provider — collect programs and offerings from all signals
+  // Individual program/incentive signals have offeringType but no programs array
+  const byProvider = new Map<string, { acv: number; programs: Set<string>; offerings: Set<string> }>()
+
+  for (const s of cloudSignals) {
+    const m = s.metadata ?? {}
+    const provider = String(m.provider ?? 'Unknown')
+    const entry = byProvider.get(provider) ?? { acv: 0, programs: new Set(), offerings: new Set() }
+
+    // Take max ACV across signals for this provider
+    if (m.acvPlus && Number(m.acvPlus) > entry.acv) entry.acv = Number(m.acvPlus)
+
+    // Collect from explicit programs array (aggregate CCSP signals)
+    if (Array.isArray(m.programs)) {
+      for (const p of m.programs) entry.programs.add(String(p))
+    }
+
+    // Collect from individual program/incentive signals (offeringType-based)
+    if (m.offeringType === 'program' || m.offeringType === 'incentive') {
+      // Extract program name from headline pattern: "Provider program: NAME — ..."
+      const match = s.headline.match(/(?:program|incentive):\s*([^—–-]+)/i)
+      if (match) entry.programs.add(match[1].trim())
+    }
+
+    // Collect offerings
+    if (Array.isArray(m.productOfferingGroup)) {
+      for (const o of m.productOfferingGroup) entry.offerings.add(String(o))
+    } else if (m.offeringType === 'product' && m.productOfferingGroup) {
+      entry.offerings.add(String(m.productOfferingGroup))
+    }
+
+    byProvider.set(provider, entry)
+  }
+
   const rows: string[] = []
   rows.push('| Provider | ACV | Programs | Offerings |')
   rows.push('|----------|-----|----------|-----------|')
 
-  for (const s of cloudSignals.slice(0, 8)) {
-    const m = s.metadata ?? {}
-    const provider = String(m.provider ?? 'Unknown')
-    const acv = m.acvPlus ? `$${Math.round(Number(m.acvPlus)).toLocaleString()}` : 'N/A'
-    const programs = Array.isArray(m.programs) ? m.programs.join(', ') : 'N/A'
-    const offerings = Array.isArray(m.productOfferingGroup)
-      ? m.productOfferingGroup.join(', ')
-      : String(m.productOfferingGroup ?? 'N/A')
-    rows.push(`| ${provider} | ${acv} | ${programs} | ${offerings.slice(0, 40)} |`)
+  for (const [provider, data] of byProvider) {
+    const acv = data.acv > 0 ? `$${Math.round(data.acv).toLocaleString()}` : 'N/A'
+    const programs = data.programs.size > 0 ? Array.from(data.programs).join(', ') : 'N/A'
+    const offerings = data.offerings.size > 0 ? Array.from(data.offerings).join(', ').slice(0, 40) : 'N/A'
+    rows.push(`| ${provider} | ${acv} | ${programs} | ${offerings} |`)
   }
 
   return rows.join('\n')
@@ -264,6 +309,34 @@ export function templateTechStack(signals: Signal[]): string | null {
     const positioning = String(m.context ?? s.detail.slice(0, 60))
     const confidence = String(m.confidence ?? '').toUpperCase() || 'MEDIUM'
     rows.push(`| ${tech} | ${positioning} | ${confidence} |`)
+  }
+
+  return rows.join('\n')
+}
+
+/**
+ * Upcoming Events section (#377): signals from rh-events showing upcoming
+ * summits, workshops, webinars relevant to the customer.
+ *
+ * Renders: Event name, Date, Format, Location
+ */
+export function templateUpcomingEvents(signals: Signal[]): string | null {
+  const eventSignals = signals.filter(s => routeSignal(s) === 'event')
+  if (eventSignals.length === 0) return null
+
+  const rows: string[] = []
+  rows.push('| Event | Date | Format | Location |')
+  rows.push('|-------|------|--------|----------|')
+
+  for (const s of eventSignals.slice(0, 8)) {
+    const m = s.metadata ?? {}
+    const event = s.headline.slice(0, 50)
+    const date = s.timestamp
+      ? new Date(s.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'TBD'
+    const format = String(m.format ?? 'TBD')
+    const location = String(m.location || (format === 'virtual' ? 'Virtual' : 'TBD'))
+    rows.push(`| ${event} | ${date} | ${format} | ${location} |`)
   }
 
   return rows.join('\n')
@@ -482,12 +555,12 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
 
   // Map TDPs to their parent sales plays
   const tdpToPlays: Record<string, string[]> = {
-    'AI': ['The AI-Ready Enterprise', 'Build and Run Applications'],
+    'AI Platform': ['The AI-Ready Enterprise', 'Build and Run Applications'],
     'App Platform': ['Build and Run Applications', 'Modernize Infrastructure'],
     'Automation': ['IT Operations Efficiency', 'Modernize Infrastructure', 'The AI-Ready Enterprise'],
     'Virtualization': ['Modernize Infrastructure', 'IT Operations Efficiency'],
     'Server/Cloud OS': ['Modernize Infrastructure'],
-    'Edge': ['Build and Run Applications', 'Sovereignty'],
+    'Container Mgmt': ['Build and Run Applications', 'Modernize Infrastructure'],
   }
 
   const allTdps = Array.from(byTdp.keys())
@@ -510,6 +583,35 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
       const rawConf = play.confidence
       const confBadge = (rawConf === 'LOW' || rawConf === 'low') ? '⚪' : (rawConf === 'MEDIUM' || rawConf === 'medium') ? '🟡' : '🟢'
       lines.push(`  ${confBadge} ${play.name} (${play.techs.join(', ')})`)
+    }
+  }
+
+  // Enriched content from SalesHub knowledge (#371)
+  for (const [tdp] of byTdp) {
+    const tactics = getTacticsByTdp(tdp)
+    const metricsFromTactics = tactics.flatMap(t => (t.metrics ?? []) as Array<{ value: string; context: string }>).filter(isValidMetric).slice(0, 3)
+    if (metricsFromTactics.length > 0) {
+      lines.push(`  Key Metrics:`)
+      for (const m of metricsFromTactics) {
+        lines.push(`    - ${m.value} -- ${m.context}`)
+      }
+    }
+  }
+
+  // Customer Lens from matched sales plays
+  const seenPlays = new Set<string>()
+  for (const [, plays] of byTdp) {
+    for (const play of plays) {
+      if (seenPlays.has(play.name)) continue
+      seenPlays.add(play.name)
+      const salesPlay = getSalesPlayByName(play.name)
+      if (salesPlay?.customerLens?.pain?.length > 0) {
+        lines.push(`  Customer Pain: ${salesPlay.customerLens.pain.slice(0, 2).join('; ')}`)
+      }
+      if (salesPlay?.realWorldExamples?.length > 0) {
+        const ex = salesPlay.realWorldExamples[0]
+        lines.push(`  Proof Point: ${ex.customer} -- ${ex.outcome}`)
+      }
     }
   }
 
@@ -552,6 +654,17 @@ export function templateSalesHubContext(signals: Signal[]): string | null {
       tdpLines.push(`\n**${tactic.name}**`)
       if (tactic.talkTrack) {
         tdpLines.push(`*Talk track:* ${tactic.talkTrack.slice(0, 250)}`)
+      }
+      // Extracted content from SalesHub knowledge (#371)
+      if (tactic.extractedContent) {
+        tdpLines.push(`*Extracted insights:* ${tactic.extractedContent.slice(0, 200)}`)
+      }
+      const validMetrics = ((tactic.metrics ?? []) as Array<{ value: string; context: string }>).filter(isValidMetric).slice(0, 3)
+      if (validMetrics.length > 0) {
+        tdpLines.push('*Key metrics:*')
+        for (const m of validMetrics) {
+          tdpLines.push(`- ${m.value} -- ${m.context}`)
+        }
       }
       const validWins = tactic.customerWins.filter(isValidCustomerWin)
       if (validWins.length > 0) {
@@ -608,6 +721,13 @@ export async function templateAll(
   const salesAlignment = templateSalesAlignment(filteredSignals)
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
   const saleshubContext = templateSalesHubContext(filteredSignals)
+  const upcomingEvents = templateUpcomingEvents(filteredSignals)
+
+  // #380: Account plan — render as text section for playbook/brief only
+  const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
+  const accountPlan = accountPlanSignals.length > 0
+    ? accountPlanSignals.map(s => s.detail).join('\n\n')
+    : null
 
   // Assemble deterministic markdown output
   const sections: string[] = []
@@ -623,6 +743,11 @@ export async function templateAll(
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
   if (cases) sections.push(`## Support Cases\n\n${cases}`)
   if (techStack) sections.push(`## Technology Stack\n\n${techStack}`)
+  if (upcomingEvents) sections.push(`## Upcoming Events\n\n${upcomingEvents}`)
+  // #380: Account plan — long-form text, only in playbook/brief (not campaign)
+  if (accountPlan && (options.format === 'playbook' || options.format === 'brief' || options.format === 'meeting-prep')) {
+    sections.push(`## Account Plan\n\n${accountPlan}`)
+  }
   if (keyRelationships) sections.push(`## Key Relationships\n\n${keyRelationships}`)
 
   const deterministic = sections.join('\n\n')
@@ -673,15 +798,30 @@ export async function templateAll(
     try {
       const { getCustomerSolutionContext } = await import('./customer-solution-context.ts')
       const solutionCtx = getCustomerSolutionContext(options.customerSlug)
-      solutionPlays = solutionCtx.activeSolutionPlays.map(p => ({
-        tdp: p.tdp,
-        playName: p.playName,
-        triggerTechnologies: p.matchedTechnologies,
-        confidence: p.confidence,
-        talkTrack: p.talkTrack,
-        customerWins: p.customerWins,
-        linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
-      }))
+      solutionPlays = solutionCtx.activeSolutionPlays.map(p => {
+        // Look up SalesPlay for customerLens and realWorldExamples (#371)
+        const salesPlay = getSalesPlayByName(p.playName)
+        // Collect metrics from tactics under this play's TDP
+        const tdpTactics = getTacticsByTdp(p.tdp)
+        const extractedMetrics = tdpTactics
+          .flatMap(t => (t.metrics ?? []) as Array<{ value: string; context: string }>)
+          .filter(isValidMetric)
+          .slice(0, 5)
+
+        return {
+          tdp: p.tdp,
+          playName: p.playName,
+          triggerTechnologies: p.matchedTechnologies,
+          confidence: p.confidence,
+          talkTrack: p.talkTrack,
+          customerWins: p.customerWins,
+          linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
+          matchReasoning: p.matchReasoning,
+          customerLens: salesPlay?.customerLens,
+          realWorldExamples: salesPlay?.realWorldExamples?.slice(0, 3),
+          extractedMetrics: extractedMetrics.length > 0 ? extractedMetrics : undefined,
+        }
+      })
     } catch {
       // Solution context unavailable — return empty array
     }
@@ -700,6 +840,8 @@ export async function templateAll(
       keyRelationships,
       strategicOpportunities,
       saleshubContext,
+      upcomingEvents,
+      accountPlan,
     },
     structured: {
       solutionPlays,

@@ -44,6 +44,7 @@ export interface ActiveSolutionPlay {
   linkedAssets?: Array<{ name: string; url: string; type: string }>
   cloudAmplifier?: { provider: string; spend: number }
   category: string
+  matchReasoning: string
 }
 
 export interface MarketplaceOpportunity {
@@ -254,11 +255,17 @@ const RESULT_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 // ── Cross-Reference Engine ──────────────────────────────────────────────
 
+interface MatchedTechDetail {
+  tech: string
+  source: string
+}
+
 function matchTechnologies(
   detectedTechs: TechEntry[],
   triggerTechnologies: string[]
-): { matched: string[]; bestConfidence: 'HIGH' | 'MEDIUM' | 'LOW' } {
+): { matched: string[]; matchedDetails: MatchedTechDetail[]; bestConfidence: 'HIGH' | 'MEDIUM' | 'LOW' } {
   const matched: string[] = []
+  const matchedDetails: MatchedTechDetail[] = []
   let bestConfidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW'
   const confidenceOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
 
@@ -268,6 +275,7 @@ function matchTechnologies(
     const techNameLower = tech.name.toLowerCase()
     if (triggerSet.has(techNameLower)) {
       matched.push(tech.name)
+      matchedDetails.push({ tech: tech.name, source: tech.category })
       if (confidenceOrder[tech.confidence] > confidenceOrder[bestConfidence]) {
         bestConfidence = tech.confidence
       }
@@ -276,6 +284,7 @@ function matchTechnologies(
     for (const infra of tech.infrastructure ?? []) {
       if (triggerSet.has(infra.toLowerCase()) && !matched.includes(infra)) {
         matched.push(infra)
+        matchedDetails.push({ tech: infra, source: tech.category })
         if (confidenceOrder[tech.confidence] > confidenceOrder[bestConfidence]) {
           bestConfidence = tech.confidence
         }
@@ -283,7 +292,7 @@ function matchTechnologies(
     }
   }
 
-  return { matched, bestConfidence }
+  return { matched, matchedDetails, bestConfidence }
 }
 
 // ── Main Function ────────────────────────────────────────────────────────
@@ -301,9 +310,14 @@ export function getCustomerSolutionContext(customerSlug: string): CustomerSoluti
 
   if (detectedTechs.length > 0 && catalog.plays.length > 0) {
     for (const play of catalog.plays) {
-      const { matched, bestConfidence } = matchTechnologies(detectedTechs, play.triggerTechnologies)
+      const { matched, matchedDetails, bestConfidence } = matchTechnologies(detectedTechs, play.triggerTechnologies)
 
       if (matched.length > 0) {
+        const detectedPart = matchedDetails
+          .map(d => `${d.tech} (${d.source})`)
+          .join(', ')
+        const matchReasoning = `Detected ${detectedPart} → matched triggers for ${play.tdp} TDP → ${play.name}`
+
         activeSolutionPlays.push({
           playId: play.id,
           playName: play.name,
@@ -313,6 +327,7 @@ export function getCustomerSolutionContext(customerSlug: string): CustomerSoluti
           redHatProducts: play.redHatProducts,
           valueProps: play.valueProps,
           category: play.category,
+          matchReasoning,
         })
       }
     }

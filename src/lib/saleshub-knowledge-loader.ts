@@ -152,6 +152,140 @@ export function getTdpDescription(tdpName: string): string {
   return tdp?.description ?? ''
 }
 
+export function getTdpByName(tdpName: string): TdpNode | undefined {
+  const kb = loadKnowledgeBase()
+  if (!kb) return undefined
+  const normalized = tdpName.toLowerCase()
+  return kb.tdps.find(t =>
+    t.name.toLowerCase().includes(normalized) ||
+    normalized.includes(t.name.toLowerCase())
+  )
+}
+
+export function getSalesPlayByName(playName: string): SalesPlayNode | undefined {
+  const kb = loadKnowledgeBase()
+  if (!kb) return undefined
+  return kb.salesPlays.find(sp =>
+    sp.name.toLowerCase() === playName.toLowerCase()
+  )
+}
+
+// ── Coverage Types ─────────────────────────────────────────────────────────
+
+export interface TdpCoverage {
+  name: string
+  sections: {
+    customerWins: boolean
+    whatToSay: boolean
+    whatToShare: boolean
+    whatToShow: boolean
+    services: boolean
+    cheatsheet: boolean
+    customerDeck: boolean
+  }
+  sectionCount: number
+  tacticCount: number
+  extractedContentCount: number
+}
+
+export interface PlayCoverage {
+  name: string
+  sections: {
+    customerLens: boolean
+    realWorldExamples: boolean
+    emailTemplate: boolean
+    discoveryQuestions: boolean
+    introPitchDeck: boolean
+    personas: boolean
+  }
+  sectionCount: number
+}
+
+export interface KnowledgeCoverage {
+  tdps: TdpCoverage[]
+  plays: PlayCoverage[]
+  totalLinkedDocs: number
+  docsWithExtractedContent: number
+  overallCoveragePercent: number
+  scrapedAt: string | null
+}
+
+export function getKnowledgeCoverage(): KnowledgeCoverage {
+  const kb = loadKnowledgeBase()
+  if (!kb) return { tdps: [], plays: [], totalLinkedDocs: 0, docsWithExtractedContent: 0, overallCoveragePercent: 0, scrapedAt: null }
+
+  const allUrls = new Set<string>()
+  let docsWithExtractedContent = 0
+
+  // Compute TDP coverage (null-safe — production data may predate #366/#368 field additions)
+  const tdps: TdpCoverage[] = kb.tdps.map(tdp => {
+    const sections = {
+      customerWins: (tdp.customerWins ?? []).length > 0,
+      whatToSay: (tdp.whatToSay ?? []).length > 0,
+      whatToShare: (tdp.whatToShare ?? []).length > 0,
+      whatToShow: (tdp.whatToShow ?? []).length > 0,
+      services: (tdp.services ?? []).length > 0,
+      cheatsheet: (tdp.cheatsheetUrl ?? '').length > 0,
+      customerDeck: (tdp.customerDeckUrl ?? '').length > 0,
+    }
+    const sectionCount = Object.values(sections).filter(Boolean).length
+
+    // Collect URLs from this TDP
+    for (const item of tdp.whatToSay ?? []) { if (item.url) allUrls.add(item.url) }
+    for (const item of tdp.whatToShare ?? []) { if (item.url) allUrls.add(item.url) }
+    for (const item of tdp.whatToShow ?? []) { if (item.url) allUrls.add(item.url) }
+    if (tdp.cheatsheetUrl) allUrls.add(tdp.cheatsheetUrl)
+    if (tdp.customerDeckUrl) allUrls.add(tdp.customerDeckUrl)
+
+    // Count tactics with extracted content for this TDP
+    const tdpTactics = kb.tactics.filter(t => t.parentTdp === tdp.name)
+    const extractedContentCount = tdpTactics.filter(t => (t.extractedContent ?? '').length > 0).length
+
+    return { name: tdp.name, sections, sectionCount, tacticCount: (tdp.tactics ?? []).length, extractedContentCount }
+  })
+
+  // Compute Play coverage (null-safe — production data may predate #367 field additions)
+  const plays: PlayCoverage[] = kb.salesPlays.map(play => {
+    const lens = play.customerLens ?? { pain: [], outcomes: [], impact: [] }
+    const hasCustomerLens = lens.pain.length > 0 || lens.outcomes.length > 0 || lens.impact.length > 0
+    const sections = {
+      customerLens: hasCustomerLens,
+      realWorldExamples: (play.realWorldExamples ?? []).length > 0,
+      emailTemplate: (play.emailTemplateUrl ?? '').length > 0,
+      discoveryQuestions: (play.discoveryQuestionsUrl ?? '').length > 0,
+      introPitchDeck: (play.introPitchDeckUrl ?? '').length > 0,
+      personas: (play.personas ?? []).length > 0,
+    }
+    const sectionCount = Object.values(sections).filter(Boolean).length
+    return { name: play.name, sections, sectionCount }
+  })
+
+  // Collect URLs from tactics and count extracted content
+  for (const tactic of kb.tactics) {
+    for (const item of tactic.whatToShare ?? []) { if (item.url) allUrls.add(item.url) }
+    if ((tactic.extractedContent ?? '').length > 0) docsWithExtractedContent++
+  }
+
+  // Overall coverage: filled sections / total possible sections
+  const tdpFilledSections = tdps.reduce((sum, t) => sum + t.sectionCount, 0)
+  const tdpTotalSections = tdps.length * 7
+  const playFilledSections = plays.reduce((sum, p) => sum + p.sectionCount, 0)
+  const playTotalSections = plays.length * 6
+  const totalPossible = tdpTotalSections + playTotalSections
+  const overallCoveragePercent = totalPossible > 0
+    ? Math.round(((tdpFilledSections + playFilledSections) / totalPossible) * 100)
+    : 0
+
+  return {
+    tdps,
+    plays,
+    totalLinkedDocs: allUrls.size,
+    docsWithExtractedContent,
+    overallCoveragePercent,
+    scrapedAt: kb.scrapedAt,
+  }
+}
+
 export function getKnowledgeStats(): { tdpCount: number; tacticCount: number; salesPlayCount: number; productCount: number; scrapedAt: string | null } {
   const kb = loadKnowledgeBase()
   if (!kb) return { tdpCount: 0, tacticCount: 0, salesPlayCount: 0, productCount: 0, scrapedAt: null }
