@@ -372,18 +372,27 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
 
     // Extract sidebar TDP alignment BEFORE accordion expansion (#381)
     // Seismic SPA re-render destroys sidebar content when accordions expand
+    // Wait extra for sidebar to render (SPA loads sidebar asynchronously)
+    await page.waitForTimeout(3_000)
     const sidebarTdpNames = await page.evaluate(() => {
       const names: string[] = []
       const cardItems = document.querySelectorAll('li[aria-label]')
+      const allLabels: string[] = []
       for (const li of cardItems) {
         const label = li.getAttribute('aria-label') ?? ''
+        allLabels.push(label)
         if (label.startsWith('Open ')) {
           const name = label.replace('Open ', '')
           if (name.length > 2 && !names.includes(name)) names.push(name)
         }
       }
-      return names
+      return { names, totalAriaItems: cardItems.length, allLabels: allLabels.slice(0, 15) }
     })
+    if (sidebarTdpNames.names.length > 0) {
+      console.log(`[scrape-saleshub] ${playName}: pre-accordion sidebar TDPs: ${sidebarTdpNames.names.join(', ')}`)
+    } else {
+      console.log(`[scrape-saleshub] ${playName}: no sidebar TDPs found (${sidebarTdpNames.totalAriaItems} aria-label items: ${JSON.stringify(sidebarTdpNames.allLabels)})`)
+    }
 
     // Expand accordions (this destroys sidebar DOM)
     await clickAccordionExpanders(page)
@@ -425,8 +434,8 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     const sections = parseSalesPlayPageSections(data.mainText, data.links)
 
     // Use pre-accordion sidebar extraction (most reliable), fall back to text parsing
-    const tdpAlignment = sidebarTdpNames.length > 0
-      ? sidebarTdpNames
+    const tdpAlignment = sidebarTdpNames.names.length > 0
+      ? sidebarTdpNames.names
       : sections.tdpAlignment
     if (tdpAlignment.length > 0) {
       console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${tdpAlignment.join(', ')}`)
