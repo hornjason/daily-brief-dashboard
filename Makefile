@@ -813,6 +813,13 @@ sync-down:
 	podman rm   pai-sync-l3 2>/dev/null || true
 
 sync-logs:
+	@echo "━━━ Keepalive Status ━━━"
+	@podman exec pai-sync-l3 cat /data/cache/keepalive-status.json 2>/dev/null | python3 -m json.tool || echo "  No keepalive runs yet"
+	@echo ""
+	@echo "━━━ Sync Cycle Status ━━━"
+	@podman exec pai-sync-l3 cat /data/cache/sync-cycle-status.json 2>/dev/null | python3 -m json.tool || echo "  No sync runs yet"
+	@echo ""
+	@echo "━━━ Live Logs (Ctrl+C to exit) ━━━"
 	podman logs -f pai-sync-l3
 
 sync-status:
