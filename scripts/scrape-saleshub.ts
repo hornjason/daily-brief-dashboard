@@ -358,13 +358,16 @@ async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string;
   return links
 }
 
-async function extractSalesPlayPage(page: Page, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
+async function extractSalesPlayPage(context: BrowserContext, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
   // If no URL (placeholder entry), return the play with just the name
   if (!playUrl) {
     console.log(`[scrape-saleshub] Sales Play placeholder: ${playName}`)
     return { name: playName, description: '', linkedTdps: [], url: '' }
   }
 
+  // Fresh page per Sales Play — shared page accumulates Seismic SPA state
+  // from prior product/TDP navigations that prevents sidebar cards from rendering
+  const page = await context.newPage()
   try {
     console.log(`[scrape-saleshub] Scraping Sales Play: ${playName}`)
     await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
@@ -377,21 +380,19 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     const sidebarTdpNames = await page.evaluate(() => {
       const names: string[] = []
       const cardItems = document.querySelectorAll('li[aria-label]')
-      const allLabels: string[] = []
       for (const li of cardItems) {
         const label = li.getAttribute('aria-label') ?? ''
-        allLabels.push(label)
         if (label.startsWith('Open ')) {
           const name = label.replace('Open ', '')
           if (name.length > 2 && !names.includes(name)) names.push(name)
         }
       }
-      return { names, totalAriaItems: cardItems.length, allLabels: allLabels.slice(0, 15) }
+      return { names, totalAriaItems: cardItems.length }
     })
     if (sidebarTdpNames.names.length > 0) {
       console.log(`[scrape-saleshub] ${playName}: pre-accordion sidebar TDPs: ${sidebarTdpNames.names.join(', ')}`)
     } else {
-      console.log(`[scrape-saleshub] ${playName}: no sidebar TDPs found (${sidebarTdpNames.totalAriaItems} aria-label items: ${JSON.stringify(sidebarTdpNames.allLabels)})`)
+      console.log(`[scrape-saleshub] ${playName}: no sidebar TDPs found (${sidebarTdpNames.totalAriaItems} aria-label items)`)
     }
 
     // Expand accordions (this destroys sidebar DOM)
@@ -460,6 +461,8 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
   } catch (e: any) {
     console.error(`[scrape-saleshub] Failed to scrape Sales Play ${playName}: ${e.message}`)
     return null
+  } finally {
+    await page.close()
   }
 }
 
@@ -739,7 +742,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       const pl = playLinks[i]
       console.log(`[scrape-saleshub] (${i + 1}/${playLinks.length}) Sales Play: ${pl.name}`)
 
-      const play = await extractSalesPlayPage(scrapePage, pl.name, pl.url)
+      const play = await extractSalesPlayPage(context, pl.name, pl.url)
       if (play) {
         salesPlays.push(play)
       }
