@@ -567,6 +567,35 @@ async function keepAlive(): Promise<void> {
     if (page.url().includes('access.redhat.com/support')) {
       console.log('[rh-scraper] keep-alive: session active (page nav)')
       await persistSessionState()
+    } else if (page.url().includes('sso.redhat.com')) {
+      // RH SSO login page — auto-fill username and submit
+      const rhUsername = process.env.RH_SSO_USERNAME ?? 'rhn-gps-jhorn'
+      console.log(`[rh-scraper] keep-alive: SSO login page detected — auto-filling ${rhUsername}`)
+      try {
+        const loginInput = await page.$('input#username, input[name="username"], input[name="login"]').catch(() => null)
+        if (loginInput) {
+          await loginInput.fill(rhUsername)
+          await page.waitForTimeout(300)
+          const nextBtn = await page.$('button#login-show-step2, button:has-text("Next"), input[type="submit"]').catch(() => null)
+          if (nextBtn) await nextBtn.click().catch(() => {})
+          else await loginInput.press('Enter').catch(() => {})
+          // Wait for SSO to process — if session cookie is still valid, it redirects straight through
+          await page.waitForURL('**/access.redhat.com/**', { timeout: 15_000 }).catch(() => {})
+          if (page.url().includes('access.redhat.com/support')) {
+            console.log('[rh-scraper] keep-alive: SSO auto-login succeeded')
+            await persistSessionState()
+          } else {
+            console.warn(`[rh-scraper] keep-alive: SSO needs password/MFA — URL: ${page.url()}`)
+            _onSessionExpired?.()
+          }
+        } else {
+          console.warn('[rh-scraper] keep-alive: SSO login page but no username input found')
+          _onSessionExpired?.()
+        }
+      } catch (e: any) {
+        console.warn(`[rh-scraper] keep-alive: SSO auto-fill failed — ${e.message}`)
+        _onSessionExpired?.()
+      }
     } else {
       console.warn('[rh-scraper] keep-alive: session expired — reconnect via dashboard')
       _onSessionExpired?.()

@@ -148,37 +148,59 @@ async function doKeepalive(): Promise<void> {
         .catch(() => false))
 
     if (isLoginPage) {
-      // Auto-fill email if TABLEAU_USER_EMAIL is set (mirrors ccsp-tableau-fetch.ts)
-      const tableauUserEmail = process.env.TABLEAU_USER_EMAIL ?? ''
-      if (tableauUserEmail) {
-        console.log(`[sync-daemon] keepalive: SSO login detected — auto-filling email ${tableauUserEmail}`)
+      const isRhExternalLogin = currentUrl.includes('sso.redhat.com') || currentUrl.includes('redhat-external')
+      if (isRhExternalLogin) {
+        // RH external SSO (customer portal) — needs rhn-gps username
+        const rhUsername = process.env.RH_SSO_USERNAME ?? 'rhn-gps-jhorn'
+        console.log(`[sync-daemon] keepalive: RH external login detected — auto-filling ${rhUsername}`)
         try {
-          const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i], input[name="identifier"], input[name="username"]')
-            .catch(() => null)
-          if (emailInput) {
-            const currentVal = await emailInput.inputValue().catch(() => '')
-            if (!currentVal) {
-              await emailInput.fill(tableauUserEmail)
-              await page.waitForTimeout(300)
-              const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next"), button:has-text("Log in")')
-                .catch(() => null)
-              if (submitBtn) {
-                await submitBtn.click().catch(() => {})
-              } else {
-                await emailInput.press('Enter').catch(() => {})
-              }
-              console.log('[sync-daemon] keepalive: auto-filled email and submitted')
-              // Wait for SSO to redirect back
-              await page.waitForTimeout(10_000)
-              currentUrl = page.url()
-              console.log(`[sync-daemon] keepalive: URL after email submit: ${currentUrl}`)
-            }
+          const loginInput = await page.$('input#username, input[name="username"], input[name="login"]').catch(() => null)
+          if (loginInput) {
+            await loginInput.fill(rhUsername)
+            await page.waitForTimeout(300)
+            const nextBtn = await page.$('button#login-show-step2, button:has-text("Next"), input[type="submit"]').catch(() => null)
+            if (nextBtn) await nextBtn.click().catch(() => {})
+            else await loginInput.press('Enter').catch(() => {})
+            await page.waitForTimeout(10_000)
+            currentUrl = page.url()
+            console.log(`[sync-daemon] keepalive: URL after RH login submit: ${currentUrl}`)
           }
         } catch (e: any) {
-          console.warn(`[sync-daemon] keepalive: email auto-fill failed: ${e.message}`)
+          console.warn(`[sync-daemon] keepalive: RH login auto-fill failed: ${e.message}`)
         }
       } else {
-        throw new Error(`Tableau session expired — login required (URL: ${currentUrl}, no TABLEAU_USER_EMAIL set)`)
+        // Tableau SSO — auto-fill email
+        const tableauUserEmail = process.env.TABLEAU_USER_EMAIL ?? ''
+        if (tableauUserEmail) {
+          console.log(`[sync-daemon] keepalive: Tableau SSO login detected — auto-filling email ${tableauUserEmail}`)
+          try {
+            const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i], input[name="identifier"], input[name="username"]')
+              .catch(() => null)
+            if (emailInput) {
+              const currentVal = await emailInput.inputValue().catch(() => '')
+              if (!currentVal) {
+                await emailInput.fill(tableauUserEmail)
+                await page.waitForTimeout(300)
+                const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next"), button:has-text("Log in")')
+                  .catch(() => null)
+                if (submitBtn) {
+                  await submitBtn.click().catch(() => {})
+                } else {
+                  await emailInput.press('Enter').catch(() => {})
+                }
+                console.log('[sync-daemon] keepalive: auto-filled email and submitted')
+                // Wait for SSO to redirect back
+                await page.waitForTimeout(10_000)
+                currentUrl = page.url()
+                console.log(`[sync-daemon] keepalive: URL after email submit: ${currentUrl}`)
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[sync-daemon] keepalive: email auto-fill failed: ${e.message}`)
+          }
+        } else {
+          throw new Error(`Tableau session expired — login required (URL: ${currentUrl}, no TABLEAU_USER_EMAIL set)`)
+        }
       }
     }
 
