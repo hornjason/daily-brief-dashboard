@@ -611,6 +611,23 @@ export function parseSalesPlayPageSections(
           personaSubSection = 'valueProps'
           continue
         }
+        // Boundary: stop collecting when we hit instructional/navigation noise
+        if (lower.startsWith('check out this guide') ||
+            lower.startsWith('next align tdp') ||
+            lower.startsWith('map the customer') ||
+            lower.startsWith('practice your') ||
+            lower.startsWith('examples of what') ||
+            lower.startsWith('start practice') ||
+            lower.startsWith('field examples') ||
+            lower.startsWith('need to level up') ||
+            lower.startsWith('turn your network') ||
+            lower.startsWith('select an article') ||
+            lower.startsWith('select case studies') ||
+            lower.startsWith('tagging sales campaigns') ||
+            lower.startsWith('offering red hat services')) {
+          personaSubSection = 'none'
+          continue
+        }
         if (line.length > 5 && personaSubSection !== 'none') {
           result.personaSection[personaSubSection].push(line)
         }

@@ -708,6 +708,30 @@ End.
       'Security compliance is their top concern',
     ])
   })
+
+  it('stops collecting at instructional/navigation noise boundaries', () => {
+    const text = `
+Noise Test Play
+Personas & Challenges
+What wins them over
+Faster path to production
+Cost-efficient model serving
+Check out this guide for more questions to ask
+Next align TDP to Sales Tactic
+Automate at Scale
+Network Automation
+Practice your skills
+Examples of what good looks like
+Start practice - coming soon!
+Content Details
+End.
+    `
+    const result = parseSalesPlayPageSections(text, [])
+    expect(result.personaSection.whatWinsThemOver).toEqual([
+      'Faster path to production',
+      'Cost-efficient model serving',
+    ])
+  })
 })
 
 describe('TDP name normalization (#381)', () => {
