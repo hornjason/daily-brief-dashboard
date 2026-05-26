@@ -48,7 +48,7 @@ export function SettingsCard({
       {children}
       {error && <p className="text-xs text-critical">{error}</p>}
       <button
-        onClick={onSave}
+        onClick={() => onSave()}
         disabled={!dirty || saving}
         className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
       >
