@@ -871,6 +871,21 @@ async function bootstrapPOD(opts: {
       .then(r => r.json())
       .then((d: any) => console.log(`[pod-bootstrap] feature extraction triggered: ${d?.products?.length ?? 0} products`))
       .catch(e => console.warn('[pod-bootstrap] feature extraction trigger failed:', e?.message))
+
+    // GitHub #423: Post-bootstrap intelligence layer triggers — fire-and-forget
+    // so the dashboard isn't empty on day 0. These populate customer news,
+    // RSS feeds, and events data that the intelligence layer depends on.
+    fetch(`${baseUrl}/api/admin/rss-feeds/refresh`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] RSS feeds refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] RSS feeds refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/refresh/news`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] News Radar refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] News Radar refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/customer/_global/modules/rh-events/sync`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] Events sync triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] Events sync trigger failed:', e?.message))
   }
 
   // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — it runs on its own timer
@@ -1304,6 +1319,20 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
       .then(r => r.json())
       .then((d: any) => console.log(`[auto-bootstrap] feature extraction triggered: ${d?.products?.length ?? 0} products`))
       .catch(e => console.warn('[auto-bootstrap] feature extraction trigger failed:', e?.message))
+
+    // GitHub #423: Post-bootstrap intelligence layer triggers — fire-and-forget
+    // so the dashboard isn't empty on day 0 even for single-AE bootstrap.
+    fetch(`${baseUrl}/api/admin/rss-feeds/refresh`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] RSS feeds refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] RSS feeds refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/refresh/news`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] News Radar refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] News Radar refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/customer/_global/modules/rh-events/sync`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] Events sync triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] Events sync trigger failed:', e?.message))
 
     // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
     // during bootstrap. The next scheduled run will pick up account discovery
