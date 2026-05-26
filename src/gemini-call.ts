@@ -182,8 +182,22 @@ export function buildRequestBody(
     body.generationConfig.temperature = options.temperature
   }
 
-  // Structured output
-  if (options.responseSchema) {
+  // Grounding + responseSchema guard (issue #425):
+  // Gemini flash models reject requests that combine Google Search grounding
+  // (tools: [{ google_search }]) with controlled generation (responseSchema).
+  // When both are requested, prefer grounding and drop responseSchema — callers
+  // should use a two-pass pattern (research with grounding, then structure with
+  // responseSchema on a second call).
+  if (options.grounding && options.responseSchema) {
+    console.warn(
+      `[callGemini] WARNING: grounding + responseSchema both set for callType="${options.callType}" — ` +
+      `dropping responseSchema (controlled generation is incompatible with Search tool). ` +
+      `Use a two-pass pattern: grounding call for research, then a separate structured call.`
+    )
+  }
+
+  // Structured output — only when grounding is NOT also set
+  if (options.responseSchema && !options.grounding) {
     body.generationConfig.responseMimeType = 'application/json'
     body.generationConfig.responseSchema = options.responseSchema
   }

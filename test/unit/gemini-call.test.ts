@@ -493,6 +493,62 @@ describe('callGemini() — integration with primitives', () => {
   })
 })
 
+// ── Grounding + responseSchema guard (issue #425) ──────────────────────────
+
+describe('buildRequestBody() — grounding vs responseSchema guard', () => {
+  test('drops responseSchema and responseMimeType when grounding is also set', () => {
+    const { buildRequestBody } = require('../../src/gemini-call.ts')
+
+    const schema = { type: 'object', properties: { name: { type: 'string' } } }
+    const body: any = buildRequestBody(
+      'system prompt',
+      'user prompt',
+      { callType: 'test', grounding: true, responseSchema: schema },
+      'gemini-2.5-flash'
+    )
+
+    // Grounding should be present
+    expect(body.tools).toBeDefined()
+    expect(body.tools[0].google_search).toBeDefined()
+
+    // responseSchema and responseMimeType must be stripped
+    expect(body.generationConfig.responseSchema).toBeUndefined()
+    expect(body.generationConfig.responseMimeType).toBeUndefined()
+  })
+
+  test('keeps responseSchema when grounding is NOT set', () => {
+    const { buildRequestBody } = require('../../src/gemini-call.ts')
+
+    const schema = { type: 'object', properties: { name: { type: 'string' } } }
+    const body: any = buildRequestBody(
+      'system prompt',
+      'user prompt',
+      { callType: 'test', responseSchema: schema },
+      'gemini-2.5-flash'
+    )
+
+    expect(body.tools).toBeUndefined()
+    expect(body.generationConfig.responseSchema).toEqual(schema)
+    expect(body.generationConfig.responseMimeType).toBe('application/json')
+  })
+
+  test('keeps grounding when responseSchema is NOT set', () => {
+    const { buildRequestBody } = require('../../src/gemini-call.ts')
+
+    const body: any = buildRequestBody(
+      'system prompt',
+      'user prompt',
+      { callType: 'test', grounding: true },
+      'gemini-2.5-flash'
+    )
+
+    expect(body.tools).toBeDefined()
+    expect(body.tools[0].google_search).toBeDefined()
+    expect(body.generationConfig.responseSchema).toBeUndefined()
+    expect(body.generationConfig.responseMimeType).toBeUndefined()
+  })
+})
+
 // ── Type exports test ────────────────────────────────────────────────────────
 
 describe('callGemini() — type exports', () => {

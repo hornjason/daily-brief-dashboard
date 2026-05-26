@@ -173,26 +173,50 @@ const INDUSTRY_SCHEMA = {
 export async function identifyIndustry(customerName: string): Promise<IndustryResult> {
   console.log(`[acct-intel] Identifying industry for ${customerName}`)
 
-  const geminiResult = await callGemini(
-    `You are an industry classification analyst. Use Google Search to verify current information about the company. Return accurate, specific industry and market segment classifications.`,
-    `What industry and market segment does "${sanitizePromptInput(customerName, 200)}" operate in?
+  // Two-pass pattern (issue #425): Gemini flash rejects grounding + responseSchema
+  // together. Pass 1 researches with grounding; pass 2 structures the result.
 
-Return:
-- industry: The broad industry (e.g. "Financial Services", "Healthcare", "Technology", "Retail")
-- segment: The specific market segment within that industry (e.g. "Cloud Infrastructure", "Digital Payments", "Enterprise SaaS")
-- description: One sentence describing what the company does
-- competitors: Top 3 direct competitors by name`,
+  // Pass 1: Research with grounding — get current company info from Google Search
+  const researchResult = await callGemini(
+    `You are an industry classification analyst. Use Google Search to verify current information about the company.`,
+    `Research "${sanitizePromptInput(customerName, 200)}" and provide:
+1. The broad industry they operate in (e.g. "Financial Services", "Healthcare", "Technology", "Retail")
+2. The specific market segment within that industry (e.g. "Cloud Infrastructure", "Digital Payments", "Enterprise SaaS")
+3. A one-sentence description of what the company does
+4. Their top 3 direct competitors by name
+
+Be specific and cite current information.`,
     {
-      callType: 'intelligence-industry',
+      callType: 'intelligence-industry-research',
       customerName,
       grounding: true,
-      responseSchema: INDUSTRY_SCHEMA,
       model: 'full',
       temperature: 1.0,
     }
   )
 
-  const result = JSON.parse(geminiResult.text)
+  // Pass 2: Structure into JSON schema — no grounding needed, uses research text as context
+  const structureResult = await callGemini(
+    `You are a JSON formatter. Extract the industry classification from the research text below and return it as structured JSON. Do not add information beyond what is in the research text.`,
+    `Extract the industry classification from this research into the required JSON format:
+
+${researchResult.text}
+
+Return JSON with these fields:
+- industry: The broad industry
+- segment: The specific market segment
+- description: One sentence describing what the company does
+- competitors: Array of top 3 direct competitor names`,
+    {
+      callType: 'intelligence-industry-structure',
+      customerName,
+      responseSchema: INDUSTRY_SCHEMA,
+      model: 'full',
+      temperature: 0.2,
+    }
+  )
+
+  const result = JSON.parse(structureResult.text)
   console.log(`[acct-intel] ${customerName} → ${result.industry} / ${result.segment}`)
   return result
 }
