@@ -456,7 +456,7 @@ export async function generateMeetingPrep(
     // assembleMeetingPrep for attendee context + health signals
     assembleMeetingPrepForMeeting(customer, meeting),
     // Customer signals (intelligence, product intel, etc.)
-    loadCustomerSignals(slug, customer.name).catch((e) => {
+    loadCustomerSignals(slug, customer.name, { ensureFresh: true }).catch((e) => {
       console.warn(`[meeting-prep] Signal loading failed:`, e.message)
       return { signals: {}, registrySignals: [], loaded: [], missing: [] }
     }),

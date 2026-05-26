@@ -70,7 +70,7 @@ describe('Post-bootstrap auto-refresh triggers (#423)', () => {
       // Find the POD bootstrap completion section (after BKL-TOKEN-03 comment)
       const tokenIdx = source.indexOf('BKL-TOKEN-03')
       expect(tokenIdx).toBeGreaterThan(-1)
-      const postSection = source.slice(tokenIdx, tokenIdx + 3000)
+      const postSection = source.slice(tokenIdx, tokenIdx + 4000)
 
       // Each trigger should be a fetch() with .catch() — not awaited
       const triggers = [
@@ -80,11 +80,30 @@ describe('Post-bootstrap auto-refresh triggers (#423)', () => {
         '/api/admin/rss-feeds/refresh',
         '/api/refresh/news',
         '/api/customer/_global/modules/rh-events/sync',
+        '/api/scrape/rh',
+        '/api/customer/_global/modules/emails/sync',
+        '/api/saleshub/refresh',
       ]
 
       for (const endpoint of triggers) {
         expect(postSection).toContain(endpoint)
       }
+    })
+
+    it('AC-7: triggers RH Cases (offline token API) after POD bootstrap', () => {
+      expect(source).toContain('/api/scrape/rh')
+      const idx = source.indexOf('/api/scrape/rh')
+      const surrounding = source.slice(Math.max(0, idx - 200), idx + 200)
+      expect(surrounding).toContain('fetch(')
+      expect(surrounding).toContain('.catch(')
+    })
+
+    it('AC-8: triggers Emails sync after POD bootstrap', () => {
+      expect(source).toContain('/api/customer/_global/modules/emails/sync')
+    })
+
+    it('AC-9: triggers SalesHub refresh after POD bootstrap', () => {
+      expect(source).toContain('/api/saleshub/refresh')
     })
   })
 
@@ -109,6 +128,24 @@ describe('Post-bootstrap auto-refresh triggers (#423)', () => {
       const fnIdx = source.indexOf('function runAutoBootstrap')
       const fnBody = source.slice(fnIdx)
       expect(fnBody).toContain('/api/customer/_global/modules/rh-events/sync')
+    })
+
+    it('triggers RH Cases after single-AE bootstrap', () => {
+      const fnIdx = source.indexOf('function runAutoBootstrap')
+      const fnBody = source.slice(fnIdx)
+      expect(fnBody).toContain('/api/scrape/rh')
+    })
+
+    it('triggers Emails sync after single-AE bootstrap', () => {
+      const fnIdx = source.indexOf('function runAutoBootstrap')
+      const fnBody = source.slice(fnIdx)
+      expect(fnBody).toContain('/api/customer/_global/modules/emails/sync')
+    })
+
+    it('triggers SalesHub refresh after single-AE bootstrap', () => {
+      const fnIdx = source.indexOf('function runAutoBootstrap')
+      const fnBody = source.slice(fnIdx)
+      expect(fnBody).toContain('/api/saleshub/refresh')
     })
   })
 })

@@ -886,6 +886,19 @@ async function bootstrapPOD(opts: {
     fetch(`${baseUrl}/api/customer/_global/modules/rh-events/sync`, { method: 'POST' })
       .then(r => console.log(`[pod-bootstrap] Events sync triggered: ${r.status}`))
       .catch(e => console.warn('[pod-bootstrap] Events sync trigger failed:', e?.message))
+
+    // Zero-cost triggers: no Gemini, no browser — API calls and file reads only
+    fetch(`${baseUrl}/api/scrape/rh`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] RH Cases refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] RH Cases refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/customer/_global/modules/emails/sync`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] Emails sync triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] Emails sync trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/saleshub/refresh`, { method: 'POST' })
+      .then(r => console.log(`[pod-bootstrap] SalesHub refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[pod-bootstrap] SalesHub refresh trigger failed:', e?.message))
   }
 
   // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — it runs on its own timer
@@ -1334,9 +1347,18 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
       .then(r => console.log(`[auto-bootstrap] Events sync triggered: ${r.status}`))
       .catch(e => console.warn('[auto-bootstrap] Events sync trigger failed:', e?.message))
 
-    // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
-    // during bootstrap. The next scheduled run will pick up account discovery
-    // for the new AE.
+    // Zero-cost triggers: no Gemini, no browser — API calls and file reads only
+    fetch(`${baseUrl}/api/scrape/rh`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] RH Cases refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] RH Cases refresh trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/customer/_global/modules/emails/sync`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] Emails sync triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] Emails sync trigger failed:', e?.message))
+
+    fetch(`${baseUrl}/api/saleshub/refresh`, { method: 'POST' })
+      .then(r => console.log(`[auto-bootstrap] SalesHub refresh triggered: ${r.status}`))
+      .catch(e => console.warn('[auto-bootstrap] SalesHub refresh trigger failed:', e?.message))
 
     notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
   })()

@@ -462,7 +462,7 @@ export async function generateCampaign(
   await FeatureModuleRegistry.refreshStaleSignals(slug).catch(() => {})
 
   // 3. Load all customer signals (legacy cache + registry signals)
-  const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name)
+  const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
   // 3. Load voice profile if not provided in config
