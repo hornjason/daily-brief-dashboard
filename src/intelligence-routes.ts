@@ -270,8 +270,33 @@ export function createIntelligenceRouter(): Hono {
       return aDate - bDate
     })
 
+    // Merge enriched descriptions if available (#387)
+    const enrichedCachePath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events-enriched.json')
+    let enrichmentMap: Record<string, string> = {}
+    if (existsSync(enrichedCachePath)) {
+      try {
+        const enriched = JSON.parse(readFileSync(enrichedCachePath, 'utf-8'))
+        if (enriched.enrichments) {
+          for (const [key, entry] of Object.entries(enriched.enrichments) as [string, any][]) {
+            if (entry?.enrichedDescription) {
+              enrichmentMap[key] = entry.enrichedDescription
+            }
+          }
+        }
+      } catch { /* ignore corrupt enrichment cache */ }
+    }
+
+    const eventsWithDescriptions = upcomingEvents.map(event => {
+      const enrichmentKey = `${event.name}:${event.date}`
+      const enrichedDescription = enrichmentMap[enrichmentKey] ?? null
+      return {
+        ...event,
+        enrichedDescription,
+      }
+    })
+
     return c.json({
-      events: upcomingEvents,
+      events: eventsWithDescriptions,
       cachedAt: eventsData.fetchedAt,
     })
   })

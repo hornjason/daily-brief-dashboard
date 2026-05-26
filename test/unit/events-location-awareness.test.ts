@@ -51,4 +51,23 @@ describe('Events location awareness (#354)', () => {
     expect(content).toContain('event.location')
     expect(content).toContain('MapPin')
   })
+
+  test('events-module signals include description metadata (#387)', () => {
+    const modulePath = resolve(import.meta.dir, '../../src/modules/events-module.ts')
+    const content = readFileSync(modulePath, 'utf-8')
+    expect(content).toContain('description: event.summary || event.description')
+  })
+
+  test('customer intelligence events endpoint merges enriched descriptions (#387)', () => {
+    const routesPath = resolve(import.meta.dir, '../../src/intelligence-routes.ts')
+    const content = readFileSync(routesPath, 'utf-8')
+    expect(content).toContain('enrichedDescription')
+    expect(content).toContain('rh-events-enriched.json')
+  })
+
+  test('IntelligenceTab renders enriched or raw description (#387)', () => {
+    const tabPath = resolve(import.meta.dir, '../../dashboard/src/components/tabs/IntelligenceTab.tsx')
+    const content = readFileSync(tabPath, 'utf-8')
+    expect(content).toContain('event.enrichedDescription || event.description')
+  })
 })

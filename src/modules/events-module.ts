@@ -218,6 +218,7 @@ FeatureModuleRegistry.register({
         customerRegion: customerRegion ?? undefined,
         productTags: event.productTags,
         registrationUrl: event.registrationUrl,
+        description: event.summary || event.description || '',
       }
 
       if (productMatch) {

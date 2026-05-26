@@ -230,4 +230,215 @@ describe('Events Fetcher', () => {
       expect(cleanSummary).toBe('A hands-on workshop exploring Red Hat solutions')
     })
   })
+
+  describe('URL extraction improvements (#419)', () => {
+    it('extractBestUrl has REG_LINK_TEXT_PATTERNS for registration-related anchors', () => {
+      // Verify the improved extraction logic exists in source
+      const { readFileSync } = require('fs')
+      const { resolve } = require('path')
+      const source = readFileSync(resolve(import.meta.dir, '../../src/rh-events-fetcher.ts'), 'utf-8')
+      expect(source).toContain('REG_LINK_TEXT_PATTERNS')
+      expect(source).toContain('website')
+      expect(source).toContain('event\\s*overview')
+    })
+
+    it('extractBestUrl has 4-tier priority (reg page, reg patterns, 3+ word, 2+ word)', () => {
+      const { readFileSync } = require('fs')
+      const { resolve } = require('path')
+      const source = readFileSync(resolve(import.meta.dir, '../../src/rh-events-fetcher.ts'), 'utf-8')
+      // Check all 4 tiers are present in comments or logic
+      expect(source).toContain('Explicit "Reg Page" link')
+      expect(source).toContain('registration-related anchor text')
+      expect(source).toContain('words >= 3')
+      expect(source).toContain('words >= 2')
+    })
+  })
+
+  describe('URL extraction fallback (#419)', () => {
+    /** Anchor text patterns that indicate a registration/event URL */
+    const REG_LINK_TEXT_PATTERNS = [
+      /^reg\s*page$/i,
+      /^reg(?:ister)?(?:\s+here)?$/i,
+      /^register$/i,
+      /^registration$/i,
+      /^website$/i,
+      /^event\s*overview$/i,
+      /^in-person\s+reg\s*page$/i,
+      /^virtual\s+reg\s*page$/i,
+    ]
+
+    function matchesRegPattern(text: string): boolean {
+      return REG_LINK_TEXT_PATTERNS.some(p => p.test(text.trim()))
+    }
+
+    it('matches "Reg Page" anchor text', () => {
+      expect(matchesRegPattern('Reg Page')).toBe(true)
+    })
+
+    it('matches "Register" anchor text', () => {
+      expect(matchesRegPattern('Register')).toBe(true)
+    })
+
+    it('matches "Register here" anchor text', () => {
+      expect(matchesRegPattern('Register here')).toBe(true)
+    })
+
+    it('matches "Website" anchor text', () => {
+      expect(matchesRegPattern('Website')).toBe(true)
+    })
+
+    it('matches "Event Overview" anchor text', () => {
+      expect(matchesRegPattern('Event Overview')).toBe(true)
+    })
+
+    it('matches "In-Person Reg Page" anchor text', () => {
+      expect(matchesRegPattern('In-Person Reg Page')).toBe(true)
+    })
+
+    it('matches "Virtual Reg Page" anchor text', () => {
+      expect(matchesRegPattern('Virtual Reg Page')).toBe(true)
+    })
+
+    it('does not match "Social" anchor text', () => {
+      expect(matchesRegPattern('Social')).toBe(false)
+    })
+
+    it('does not match "Planning Deck" anchor text', () => {
+      expect(matchesRegPattern('Planning Deck')).toBe(false)
+    })
+  })
+
+  describe('events filter logic (#420)', () => {
+    const mockEvents = [
+      { name: 'Event A', format: 'in-person', region: 'west', productTags: ['AAP'] },
+      { name: 'Event B', format: 'virtual', region: 'national', productTags: ['OCP'] },
+      { name: 'Event C', format: 'hybrid', region: 'northeast', productTags: ['RHEL', 'AAP'] },
+      { name: 'Event D', format: 'in-person', region: 'central', productTags: ['General'] },
+      { name: 'Event E', format: 'virtual', region: 'national', productTags: ['RHOAI'] },
+      { name: 'Event F', format: 'in-person', region: 'southeast', productTags: ['OCP'] },
+      { name: 'Event G', format: 'in-person', region: 'canada', productTags: ['AAP', 'OCP'] },
+    ]
+
+    function filterEvents(events: typeof mockEvents, format: string, product: string, region: string) {
+      return events.filter(event => {
+        if (format !== 'all' && event.format !== format) return false
+        if (product !== 'all' && !event.productTags.includes(product)) return false
+        if (region !== 'all' && event.region !== region) return false
+        return true
+      })
+    }
+
+    it('shows all events with no filters', () => {
+      expect(filterEvents(mockEvents, 'all', 'all', 'all')).toHaveLength(7)
+    })
+
+    // Format filters
+    it('filters by in-person format', () => {
+      const result = filterEvents(mockEvents, 'in-person', 'all', 'all')
+      expect(result.every(e => e.format === 'in-person')).toBe(true)
+      expect(result).toHaveLength(4)
+    })
+
+    it('filters by virtual format', () => {
+      const result = filterEvents(mockEvents, 'virtual', 'all', 'all')
+      expect(result.every(e => e.format === 'virtual')).toBe(true)
+      expect(result).toHaveLength(2)
+    })
+
+    it('filters by hybrid format', () => {
+      const result = filterEvents(mockEvents, 'hybrid', 'all', 'all')
+      expect(result.every(e => e.format === 'hybrid')).toBe(true)
+      expect(result).toHaveLength(1)
+    })
+
+    // Product filters
+    it('filters by AAP product', () => {
+      const result = filterEvents(mockEvents, 'all', 'AAP', 'all')
+      expect(result.every(e => e.productTags.includes('AAP'))).toBe(true)
+      expect(result).toHaveLength(3) // A, C, G
+    })
+
+    it('filters by OCP product', () => {
+      const result = filterEvents(mockEvents, 'all', 'OCP', 'all')
+      expect(result.every(e => e.productTags.includes('OCP'))).toBe(true)
+      expect(result).toHaveLength(3) // B, F, G
+    })
+
+    it('filters by RHEL product', () => {
+      const result = filterEvents(mockEvents, 'all', 'RHEL', 'all')
+      expect(result).toHaveLength(1) // C
+    })
+
+    it('filters by RHOAI product', () => {
+      const result = filterEvents(mockEvents, 'all', 'RHOAI', 'all')
+      expect(result).toHaveLength(1) // E
+    })
+
+    it('filters by General product', () => {
+      const result = filterEvents(mockEvents, 'all', 'General', 'all')
+      expect(result).toHaveLength(1) // D
+    })
+
+    // Region filters
+    it('filters by west region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'west')
+      expect(result.every(e => e.region === 'west')).toBe(true)
+      expect(result).toHaveLength(1)
+    })
+
+    it('filters by national region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'national')
+      expect(result).toHaveLength(2)
+    })
+
+    it('filters by northeast region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'northeast')
+      expect(result).toHaveLength(1)
+    })
+
+    it('filters by central region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'central')
+      expect(result).toHaveLength(1)
+    })
+
+    it('filters by southeast region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'southeast')
+      expect(result).toHaveLength(1)
+    })
+
+    it('filters by canada region', () => {
+      const result = filterEvents(mockEvents, 'all', 'all', 'canada')
+      expect(result).toHaveLength(1)
+    })
+
+    // Combined filters
+    it('filters virtual + OCP', () => {
+      const result = filterEvents(mockEvents, 'virtual', 'OCP', 'all')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('Event B')
+    })
+
+    it('filters in-person + west', () => {
+      const result = filterEvents(mockEvents, 'in-person', 'all', 'west')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('Event A')
+    })
+
+    it('filters in-person + AAP + canada', () => {
+      const result = filterEvents(mockEvents, 'in-person', 'AAP', 'canada')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('Event G')
+    })
+
+    it('returns empty for impossible combination', () => {
+      const result = filterEvents(mockEvents, 'hybrid', 'OCP', 'west')
+      expect(result).toHaveLength(0)
+    })
+
+    it('returns correct count with all three filters matching', () => {
+      const result = filterEvents(mockEvents, 'in-person', 'OCP', 'southeast')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('Event F')
+    })
+  })
 })

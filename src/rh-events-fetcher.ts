@@ -296,22 +296,52 @@ function extractAllLinks(htmlLine: string): ExtractedLink[] {
   return results
 }
 
+/** Anchor text patterns that indicate a registration/event URL */
+const REG_LINK_TEXT_PATTERNS = [
+  /^reg\s*page$/i,
+  /^reg(?:ister)?(?:\s+here)?$/i,
+  /^register$/i,
+  /^registration$/i,
+  /^website$/i,
+  /^event\s*overview$/i,
+  /^in-person\s+reg\s*page$/i,
+  /^virtual\s+reg\s*page$/i,
+]
+
 /**
  * Extract the best registration/event URL from HTML.
  * Priority:
- *   1. Explicit "Reg Page" link
- *   2. A descriptive link (3+ words, not metadata) — the event name is often hyperlinked
+ *   1. Explicit "Reg Page" link (exact match)
+ *   2. Any registration-related anchor text (Register, Website, Event Overview, etc.)
+ *   3. A descriptive link (3+ words, not metadata) — the event name is often hyperlinked
+ *   4. Any remaining non-metadata link with 2+ words
  */
 function extractBestUrl(htmlLine: string): { url: string; linkName: string | null } | null {
   // 1. Try explicit "Reg Page" link first
   const regPage = extractRegUrlFromHTML(htmlLine)
   if (regPage) return { url: regPage, linkName: null }
 
-  // 2. Try descriptive links (event name is often the link text)
   const links = extractAllLinks(htmlLine)
+
+  // 2. Try registration-related anchor text patterns
+  for (const link of links) {
+    if (REG_LINK_TEXT_PATTERNS.some(p => p.test(link.text.trim()))) {
+      return { url: link.url, linkName: null }
+    }
+  }
+
+  // 3. Try descriptive links (event name is often the link text)
   for (const link of links) {
     const words = link.text.split(/\s+/).length
     if (words >= 3 && !isMetadataPart(link.text) && !isLocationTimePart(link.text)) {
+      return { url: link.url, linkName: link.text }
+    }
+  }
+
+  // 4. Try any remaining non-metadata link with 2+ words
+  for (const link of links) {
+    const words = link.text.split(/\s+/).length
+    if (words >= 2 && !isMetadataPart(link.text) && !isLocationTimePart(link.text)) {
       return { url: link.url, linkName: link.text }
     }
   }
