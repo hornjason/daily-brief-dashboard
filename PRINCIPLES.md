@@ -65,6 +65,19 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 4. **Does every consumer that should see this data actually see it?** Trace the signal through template engine to each consumer output. Verify with the debug endpoint: `GET /api/customer/:name/signals/debug`
 5. **What happens when this data is missing or stale?** Module health guard should flag it. Admin page should show actionable fix.
 6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
+7. **If this is a consumer that generates output, does it call `ensureFresh: true`?** Any consumer that produces user-facing content (campaigns, meeting prep, playbooks, account plans, email outreach) MUST call `loadCustomerSignals(slug, name, { ensureFresh: true })` before generation. This guarantees all signal modules are current before the output is built. Without this, consumers generate from empty or stale data — producing low-quality output that damages trust. No consumer may skip this. The cost (a few seconds of cache checks + selective refresh) is always worth it vs generating from stale signals.
+8. **Does this module appear in the admin Data Sources panel?** Every registered module must have: a `refreshEndpoint` (so users can manually refresh), a display name that matches Signal Quality names, and `recordOutcome()` called after every refresh so "Last checked" updates. If a module is invisible to the admin panel, it's invisible to the user — they can't diagnose or fix stale data.
+
+## Consumer → ensureFresh Contract
+
+| Consumer | Must call `ensureFresh: true`? | Current status |
+|----------|-------------------------------|----------------|
+| Playbook | ✅ Yes | ✅ Implemented |
+| Campaign | ✅ Yes | ❌ **MISSING** — uses stale signals |
+| Meeting Prep | ✅ Yes | ❌ **MISSING** — uses stale signals |
+| Email Outreach | ✅ Yes | ❌ **MISSING** — uses stale signals |
+| Account Brief | ✅ Yes (on-demand generation) | ✅ Implemented (on first view) |
+| Account Plan | ✅ Yes | ❌ **MISSING** |
 
 ## Anti-patterns
 
@@ -75,6 +88,9 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 - ❌ Shipping without checking the signal debug endpoint for the new data
 - ❌ Building a module with cached data but no `ensureFresh()` — consumers will generate with stale/missing data
 - ❌ Hardcoding refresh sources in signal-loader — use the registry auto-discovery pattern
+- ❌ Consumer calling `loadCustomerSignals()` WITHOUT `{ ensureFresh: true }` before generating output — produces content from stale/empty data
+- ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
+- ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
 
 ## Signal Scoring Quick Reference (ADR-027)
 
