@@ -6,6 +6,7 @@
  */
 
 import { Hono } from 'hono'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { sanitizeErr } from './utils.ts'
 import {
   getAllProductSummaries,
@@ -238,9 +239,12 @@ export function createProductIntelRouter(): Hono {
   router.post('/api/products/features/refresh-all', async (c) => {
     try {
       const result = await refreshAllProductFeatures(_generatingKeys)
+      // GitHub Issue #390: update freshness dashboard after feature refresh
+      FeatureModuleRegistry.recordOutcome('product-intel', { success: true })
       return c.json(result)
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/features/refresh-all error:', sanitizeErr(e))
+      FeatureModuleRegistry.recordOutcome('product-intel', { success: false, error: sanitizeErr(e) })
       const status = e.message.includes('already in progress') ? 409 : 500
       return c.json({ error: sanitizeErr(e) }, status)
     }
@@ -315,9 +319,16 @@ export function createProductIntelRouter(): Hono {
     try {
       await refreshAllProducts()
       const summaries = getAllProductSummaries()
+      // GitHub Issue #390: update freshness for all modules sharing this endpoint
+      FeatureModuleRegistry.recordOutcome('customer-product-intel', { success: true, recordCount: summaries.length })
+      FeatureModuleRegistry.recordOutcome('product-lifecycle', { success: true })
+      FeatureModuleRegistry.recordOutcome('value-maps', { success: true })
       return c.json({ success: true, count: summaries.length, products: summaries })
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/refresh-all error:', sanitizeErr(e))
+      FeatureModuleRegistry.recordOutcome('customer-product-intel', { success: false, error: sanitizeErr(e) })
+      FeatureModuleRegistry.recordOutcome('product-lifecycle', { success: false, error: sanitizeErr(e) })
+      FeatureModuleRegistry.recordOutcome('value-maps', { success: false, error: sanitizeErr(e) })
       return c.json({ error: sanitizeErr(e) }, 500)
     } finally {
       _generatingKeys.delete(mutexKey)

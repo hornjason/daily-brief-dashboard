@@ -24,6 +24,7 @@ import type { ProductLifecycle } from './product-lifecycle.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
 import { enrichEvents } from './event-enricher.ts'
 import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig, type RSSItem } from './rh-rss-fetcher.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
@@ -712,9 +713,12 @@ export function createIntelligenceRouter(): Hono {
     try {
       console.log('[intelligence-routes] Triggering manual RSS refresh')
       await fetchRedHatRSS()
+      // GitHub Issue #390: update freshness dashboard after RSS refresh
+      FeatureModuleRegistry.recordOutcome('rh-rss', { success: true })
       return c.json({ status: 'complete' })
     } catch (e: any) {
       console.warn('[intelligence-routes] RSS refresh failed:', e?.message ?? e)
+      FeatureModuleRegistry.recordOutcome('rh-rss', { success: false, error: e?.message ?? 'RSS refresh failed' })
       return c.json({ error: e?.message ?? 'RSS refresh failed' }, 500)
     }
   })

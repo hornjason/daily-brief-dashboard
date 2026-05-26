@@ -383,6 +383,23 @@ export function createRefreshRouter(): Hono {
     FeatureModuleRegistry.recordOutcome('tech-stack', { success: failed === 0, recordCount: success })
     return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
   })
+  router.post('/api/refresh/news', async (c) => {
+    try {
+      const { newsProvider } = await import('./news-provider.ts')
+      let success = 0, failed = 0
+      for (const customer of customers) {
+        try {
+          await newsProvider.searchNews(customer.name)
+          success++
+        } catch { failed++ }
+      }
+      FeatureModuleRegistry.recordOutcome('news-radar', { success: failed === 0, recordCount: success })
+      return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      FeatureModuleRegistry.recordOutcome('news-radar', { success: false, error: e?.message })
+      return c.json({ ok: false, error: e?.message }, 500)
+    }
+  })
   router.post('/api/refresh/cloud-marketplace', async (c) => {
     const mod = FeatureModuleRegistry.get('cloud-marketplace')
     if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)

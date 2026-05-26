@@ -691,6 +691,13 @@ export function createCustomerRouter(): Hono {
       _batchState.current = null
       _batchState.completedAt = new Date().toISOString()
       console.log(`[acct-intel] Batch generation complete: ${_batchState.completed - _batchState.failed} succeeded, ${_batchState.failed} failed out of ${_batchState.total}`)
+      // GitHub Issue #390: update freshness dashboard after batch completes
+      const { FeatureModuleRegistry: FMR } = await import('./feature-module-registry.ts')
+      FMR.recordOutcome('intelligence', {
+        success: _batchState.failed === 0,
+        recordCount: _batchState.completed - _batchState.failed,
+        error: _batchState.failed > 0 ? `${_batchState.failed} customers failed` : undefined,
+      })
     })()
 
     return c.json({ message: 'Batch generation started', total: customerList.length })
