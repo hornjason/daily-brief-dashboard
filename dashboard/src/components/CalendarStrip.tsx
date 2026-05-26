@@ -324,17 +324,29 @@ function CustomerPrepCard({
       </div>
 
       {/* Attendees */}
-      {ev.attendees && ev.attendees.length > 0 && (
-        <div className="px-4 pb-3 flex items-center gap-1.5 flex-wrap">
-          <Users className="w-3 h-3 text-text-secondary shrink-0" />
-          {ev.attendees.slice(0, 3).map((email) => (
-            <span key={email} className="text-xs bg-border/40 text-text-secondary px-1.5 py-0.5 rounded truncate max-w-[120px]" title={email}>
-              {email.split('@')[0]}
-            </span>
-          ))}
-          {ev.attendees.length > 3 && <span className="text-xs text-text-secondary">+{ev.attendees.length - 3}</span>}
-        </div>
-      )}
+      {(ev.attendeeDetails?.length || ev.attendees?.length) ? (() => {
+        const displays = getAttendeeDisplays(ev)
+        const customerAttendees = displays.filter(d => !d.isRedHat)
+        const rhAttendees = displays.filter(d => d.isRedHat)
+        const visibleCustomer = customerAttendees.slice(0, 3)
+        const remaining = customerAttendees.length - 3 + rhAttendees.length
+        return (
+          <div className="px-4 pb-3 flex items-center gap-1.5 flex-wrap">
+            <Users className="w-3 h-3 text-text-secondary shrink-0" />
+            {visibleCustomer.map((d) => (
+              <span key={d.email} className="text-xs bg-accent/10 text-accent px-1.5 py-0.5 rounded truncate max-w-[160px]" title={d.email}>
+                {d.label}
+              </span>
+            ))}
+            {rhAttendees.length > 0 && customerAttendees.length <= 3 && rhAttendees.slice(0, 2).map((d) => (
+              <span key={d.email} className="text-xs bg-border/40 text-text-secondary px-1.5 py-0.5 rounded truncate max-w-[140px]" title={d.email}>
+                {d.label}
+              </span>
+            ))}
+            {remaining > 3 && <span className="text-xs text-text-secondary">+{remaining - 3}</span>}
+          </div>
+        )
+      })() : null}
 
       {/* Agenda */}
       {ev.description && (
@@ -482,17 +494,29 @@ function WeekCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgendaOpen: (ev: 
           )}
         </div>
       ) : null}
-      {ev.attendees && ev.attendees.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Users className="w-3 h-3 text-text-secondary shrink-0" />
-          {ev.attendees.slice(0, 3).map((email) => (
-            <span key={email} className="text-xs bg-border/40 text-text-secondary px-1.5 py-0.5 rounded truncate max-w-[100px]" title={email}>
-              {email.split('@')[0]}
-            </span>
-          ))}
-          {ev.attendees.length > 3 && <span className="text-xs text-text-secondary">+{ev.attendees.length - 3}</span>}
-        </div>
-      )}
+      {(ev.attendeeDetails?.length || ev.attendees?.length) ? (() => {
+        const displays = getAttendeeDisplays(ev)
+        const customerAttendees = displays.filter(d => !d.isRedHat)
+        const rhAttendees = displays.filter(d => d.isRedHat)
+        const visibleCustomer = customerAttendees.slice(0, 3)
+        const remainingCount = Math.max(0, customerAttendees.length - 3) + rhAttendees.length
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Users className="w-3 h-3 text-text-secondary shrink-0" />
+            {visibleCustomer.map((d) => (
+              <span key={d.email} className="text-xs bg-accent/10 text-accent px-1.5 py-0.5 rounded truncate max-w-[140px]" title={d.email}>
+                {d.label}
+              </span>
+            ))}
+            {customerAttendees.length === 0 && rhAttendees.slice(0, 2).map((d) => (
+              <span key={d.email} className="text-xs bg-border/40 text-text-secondary px-1.5 py-0.5 rounded truncate max-w-[120px]" title={d.email}>
+                {d.label}
+              </span>
+            ))}
+            {remainingCount > 0 && <span className="text-xs text-text-secondary">+{remainingCount}</span>}
+          </div>
+        )
+      })() : null}
       {isCustomer && ev.description && (
         <button onClick={() => onAgendaOpen(ev)} className="text-left group">
           <p className="text-xs text-text-secondary leading-relaxed line-clamp-2 group-hover:text-text-primary transition-colors">{ev.description}</p>
@@ -517,6 +541,35 @@ function WeekCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgendaOpen: (ev: 
       )}
     </div>
   )
+}
+
+// ── Attendee display helpers ─────────────────────────────────────────────────
+
+interface AttendeeDisplay {
+  label: string
+  isRedHat: boolean
+  email: string
+}
+
+function getAttendeeDisplays(ev: CalendarEvent): AttendeeDisplay[] {
+  const details = ev.attendeeDetails ?? []
+  const emails = ev.attendees ?? []
+
+  // If we have attendeeDetails, use them for richer display
+  if (details.length > 0) {
+    return details.map(d => ({
+      label: d.displayName ?? d.email,
+      isRedHat: d.email.endsWith('@redhat.com'),
+      email: d.email,
+    }))
+  }
+
+  // Fallback: use raw email list
+  return emails.map(email => ({
+    label: email,
+    isRedHat: email.endsWith('@redhat.com'),
+    email,
+  }))
 }
 
 // ── Main component ────────────────────────────────────────────────────────────

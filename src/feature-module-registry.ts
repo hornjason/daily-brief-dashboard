@@ -677,14 +677,15 @@ export const FeatureModuleRegistry = {
       warnings: string[]
       signalCount: number
       tierDistribution: Record<string, number>
+      scope: string
     }>
   }> {
     const modules = this.getRegisteredModules()
-    const results: Array<{ name: string; status: 'healthy' | 'warning' | 'error'; warnings: string[]; signalCount: number; tierDistribution: Record<string, number> }> = []
+    const results: Array<{ name: string; status: 'healthy' | 'warning' | 'error'; warnings: string[]; signalCount: number; tierDistribution: Record<string, number>; scope: string }> = []
 
     for (const mod of modules) {
       if (!mod.signals) {
-        results.push({ name: mod.name, status: 'healthy', warnings: [], signalCount: 0, tierDistribution: {} })
+        results.push({ name: mod.name, status: 'healthy', warnings: [], signalCount: 0, tierDistribution: {}, scope: mod.scope ?? 'both' })
         continue
       }
 
@@ -734,9 +735,9 @@ export const FeatureModuleRegistry = {
         const status = warnings.some(w => w.includes('All signals scoring as Noise')) ? 'error' as const
           : warnings.length > 0 ? 'warning' as const : 'healthy' as const
 
-        results.push({ name: mod.name, status, warnings, signalCount: scored.length, tierDistribution: tierDist })
+        results.push({ name: mod.name, status, warnings, signalCount: scored.length, tierDistribution: tierDist, scope: mod.scope ?? 'both' })
       } catch (e: any) {
-        results.push({ name: mod.name, status: 'error', warnings: [`Module threw: ${e.message}`], signalCount: 0, tierDistribution: {} })
+        results.push({ name: mod.name, status: 'error', warnings: [`Module threw: ${e.message}`], signalCount: 0, tierDistribution: {}, scope: mod.scope ?? 'both' })
       }
     }
 

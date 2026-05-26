@@ -150,6 +150,7 @@ interface HealthModule {
   status: 'healthy' | 'warning' | 'error'
   warnings: string[]
   signalCount: number
+  scope?: 'portfolio' | 'customer' | 'both'
 }
 
 type DetailPanel = 'quality' | 'tasks' | 'currency' | 'coverage' | 'crossref' | null
@@ -170,16 +171,19 @@ interface CrossrefStatus {
 }
 
 const FRIENDLY_NAMES: Record<string, string> = {
-  'news-radar': 'Customer News', 'product-lifecycle': 'Product End-of-Life',
+  'news-radar': 'Customer News', 'product-lifecycle': 'Product End-of-Life Dates',
   'rh-rss': 'Red Hat Blog & Press', 'rh-events': 'Red Hat Events',
-  'product-intel': 'Product Features', 'ccsp': 'Cloud Spend (CCSP)',
+  'product-intel': 'Product Features & Releases', 'ccsp': 'Cloud Spend (CCSP)',
   'value-maps': 'Business Value Maps', 'cases': 'Support Cases',
   'subscriptions': 'Subscriptions', 'pipeline': 'Sales Pipeline',
-  'customer-docs': 'Customer Documents', 'customer-product-intel': 'Product Talking Points',
+  'customer-docs': 'Customer Drive Documents', 'customer-product-intel': 'Product Talking Points',
   'emails': 'Email History', 'intelligence': 'Company Intelligence',
-  'account-plan': 'Account Plans', 'cloud-marketplace': 'Cloud Marketplace',
+  'account-plan': 'Account Plans', 'cloud-marketplace': 'Cloud Marketplace Programs',
   'tech-stack': 'Technology Detection', 'playbook': 'Engagement Playbook',
   'campaigns': 'Email Campaigns', 'meeting-prep': 'Meeting Prep', 'tools': 'Business Value Tools',
+  'solution-intelligence': 'Solution Intelligence', 'mergers-acquisitions': 'Mergers & Acquisitions',
+  'competitive-intel': 'Competitive Intelligence', 'saleshub': 'Sales Hub',
+  'partner-catalog': 'Partner Catalog', 'value-positioning': 'Value Positioning',
 }
 
 export function SystemOverviewPanel() {
@@ -331,16 +335,25 @@ export function SystemOverviewPanel() {
                 </div>
               </div>
             ))}
-            {health.filter(m => m.status === 'warning').map(m => (
-              <div key={m.name} className="flex items-start gap-2">
-                <Circle className="w-2.5 h-2.5 fill-current text-yellow-400 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-gray-200 font-medium">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
-                  <span className="text-gray-500"> — {m.signalCount} signals</span>
-                  {m.warnings.map((w, i) => <div key={i} className="text-yellow-400">{w}</div>)}
+            {health.filter(m => m.status === 'warning').map(m => {
+              const isCustomerScope = m.scope === 'customer'
+              return (
+                <div key={m.name} className="flex items-start gap-2">
+                  <Circle className="w-2.5 h-2.5 fill-current text-yellow-400 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="text-gray-200 font-medium">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
+                    <span className="text-gray-500"> — {m.signalCount} signals</span>
+                    {m.warnings.map((w, i) => (
+                      <div key={i} className="text-yellow-400">
+                        {isCustomerScope && w === 'No signals returned'
+                          ? 'Customer-specific — view per account'
+                          : w}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {health.filter(m => m.status === 'healthy' && m.signalCount > 0).map(m => (
               <div key={m.name} className="flex items-center gap-2">
                 <Circle className="w-2.5 h-2.5 fill-current text-green-400 shrink-0" />
