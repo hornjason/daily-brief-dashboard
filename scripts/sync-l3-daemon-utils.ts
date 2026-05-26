@@ -21,7 +21,7 @@ export async function isContextHealthy(
   try {
     // Race between the health check and a timeout
     const result = await Promise.race([
-      ctx.pages().then(() => true),
+      Promise.resolve(ctx.pages()).then(() => true),
       new Promise<false>(resolve => setTimeout(() => resolve(false), timeoutMs)),
     ])
     return result
