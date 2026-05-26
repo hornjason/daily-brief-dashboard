@@ -605,10 +605,10 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
       if (seenPlays.has(play.name)) continue
       seenPlays.add(play.name)
       const salesPlay = getSalesPlayByName(play.name)
-      if (salesPlay?.customerLens?.pain?.length > 0) {
+      if (salesPlay?.customerLens?.pain && salesPlay.customerLens.pain.length > 0) {
         lines.push(`  Customer Pain: ${salesPlay.customerLens.pain.slice(0, 2).join('; ')}`)
       }
-      if (salesPlay?.realWorldExamples?.length > 0) {
+      if (salesPlay?.realWorldExamples && salesPlay.realWorldExamples.length > 0) {
         const ex = salesPlay.realWorldExamples[0]
         lines.push(`  Proof Point: ${ex.customer} -- ${ex.outcome}`)
       }

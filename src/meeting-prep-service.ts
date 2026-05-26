@@ -922,7 +922,7 @@ ${(() => {
       }
     }
 
-    const examples = play.realWorldExamples ?? salesPlay?.realWorldExamples ?? []
+    const examples = (play as any).realWorldExamples ?? salesPlay?.realWorldExamples ?? []
     if (examples.length > 0) {
       recs.push(`**Reference Case Studies (${play.playName}):**`)
       for (const ex of examples.slice(0, 3)) {
