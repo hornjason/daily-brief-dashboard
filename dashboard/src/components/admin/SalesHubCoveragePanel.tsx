@@ -196,6 +196,7 @@ export function SalesHubCoveragePanel() {
   const [coverage, setCoverage] = useState<KnowledgeCoverage | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
 
   const loadCoverage = useCallback(async () => {
     try {
@@ -212,14 +213,22 @@ export function SalesHubCoveragePanel() {
 
   const handleRefresh = async () => {
     setRefreshing(true)
+    setRefreshError(null)
     try {
-      await fetch('/api/saleshub/refresh', { method: 'POST' })
+      const res = await fetch('/api/saleshub/refresh', { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        setRefreshError(body.error ?? `Refresh failed (HTTP ${res.status})`)
+        setRefreshing(false)
+        return
+      }
       // Wait a moment then reload coverage
       setTimeout(() => {
         loadCoverage()
         setRefreshing(false)
       }, 2000)
     } catch {
+      setRefreshError('Network error — could not reach server')
       setRefreshing(false)
     }
   }
@@ -271,6 +280,11 @@ export function SalesHubCoveragePanel() {
           Refresh SalesHub
         </button>
       </div>
+      {refreshError && (
+        <div className="px-4 py-2 bg-red-900/30 border-b border-red-800 text-xs text-red-300">
+          {refreshError}
+        </div>
+      )}
 
       {/* Knowledge summary */}
       <div className="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400 space-y-0.5">

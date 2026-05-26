@@ -72,6 +72,7 @@ import { SETTINGS_PATH } from './drive-config-sync.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { CONFIG_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
@@ -1296,17 +1297,39 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   app.post('/api/saleshub/refresh', (c) => {
-    if (!isPrimary()) {
-      return c.json({ error: 'SalesHub refresh only available on primary (Mac Mini) node' }, 404)
+    if (isPrimary()) {
+      // Primary/Mac Mini: trigger the full SalesHub scrape
+      const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+      const { writeFileSync } = require('fs')
+      const { resolve } = require('path')
+      try {
+        writeFileSync(resolve(CACHE_DIR, 'saleshub-trigger'), '')
+        FeatureModuleRegistry.recordOutcome('saleshub', { success: true })
+        return c.json({ ok: true, message: 'SalesHub scrape triggered — check logs for progress' })
+      } catch (e: any) {
+        FeatureModuleRegistry.recordOutcome('saleshub', { success: false, error: e.message })
+        return c.json({ error: `Failed to write trigger: ${e.message}` }, 500)
+      }
     }
-    const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
-    const { writeFileSync } = require('fs')
-    const { resolve } = require('path')
+
+    // Hero/L3 installs: re-read JSON files from disk (no scraping needed)
     try {
-      writeFileSync(resolve(CACHE_DIR, 'saleshub-trigger'), '')
-      return c.json({ ok: true, message: 'SalesHub scrape triggered — check logs for progress' })
+      const { resetKnowledgeCache, getKnowledgeStats } = require('./lib/saleshub-knowledge-loader.ts')
+      resetKnowledgeCache()
+      const stats = getKnowledgeStats()
+      const totalRecords = stats.tdpCount + stats.salesPlayCount + stats.tacticCount
+      FeatureModuleRegistry.recordOutcome('saleshub', {
+        success: true,
+        recordCount: totalRecords,
+      })
+      return c.json({
+        ok: true,
+        message: `SalesHub knowledge reloaded from disk: ${stats.tdpCount} TDPs, ${stats.salesPlayCount} plays, ${stats.tacticCount} tactics`,
+        stats,
+      })
     } catch (e: any) {
-      return c.json({ error: `Failed to write trigger: ${e.message}` }, 500)
+      FeatureModuleRegistry.recordOutcome('saleshub', { success: false, error: e.message })
+      return c.json({ error: `Failed to reload SalesHub knowledge: ${e.message}` }, 500)
     }
   })
 }
