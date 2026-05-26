@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-26
 ---
 
 # Data Freshness Architecture
@@ -294,3 +294,71 @@ Add interval settings for all 5 sources to `POST /api/settings/refresh`. Enforce
 | BKL-M37 — RH Cases default interval tighten (4h → 1–2h) | Phase 5 | 🆕 New | Cases change most frequently |
 | BKL-M38 — Configurable intervals with server-side floors | Phase 6 | 🆕 New | Protected Advanced settings UI |
 | BKL-M39 — Dashboard freshness UX (staleness badges) | Phase 7 | 🆕 New | Per-section source timestamps |
+
+---
+
+## Post-Bootstrap Signal Source Audit (2026-05-26)
+
+*Audited from fresh hero install walkthrough. Maps every registered signal source against what fires after bootstrap.*
+
+### All 26 Signal Sources
+
+| # | Source | What It Does | Refresh Endpoint | Fires Post-Bootstrap? | Day-0 Need |
+|---|---|---|---|---|---|
+| 1 | ccsp | Cloud spend from Tableau CSV via Drive | `/api/refresh/ccsp` | ✅ During bootstrap | ✅ Have |
+| 2 | pipeline | SF pipeline opps from Drive CSV | `/api/refresh/pipeline` | ✅ During bootstrap | ✅ Have |
+| 3 | subscriptions | Product subscriptions from SF Bookings sheets | `/api/refresh/subscriptions` | ✅ During bootstrap | ✅ Have |
+| 4 | cases | RH Portal cases via offline token API (NOT L4 browser scrape) | `/api/scrape/rh` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 5 | emails | Gmail threads per customer — engagement, contacts, brand voice | `/api/customer/_global/modules/emails/sync` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 6 | intelligence | Gemini company + industry briefs | `/api/intelligence/generate-all` | ✅ Fires post-bootstrap | ✅ Have |
+| 7 | news-radar | Gemini web search for customer news articles | `/api/refresh/news` | ✅ Fires post-bootstrap | ✅ Have |
+| 8 | customer-product-intel | Product + customer signal synthesis | `/api/products/refresh-all` | ✅ Fires post-bootstrap | ✅ Have |
+| 9 | account-plan | Gemini account plan generation per customer | `/api/customer/_global/modules/account-plan/sync` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 10 | competitive-intel | Gemini competitive landscape scan per customer | `/api/refresh/competitive-intel` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 11 | tech-stack | Gemini analysis of customer tech environment | `/api/refresh/tech-stack` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 12 | mergers-acquisitions | Gemini M&A signal search per customer | `/api/refresh/ma` | ❌ NOT TRIGGERED | ⚠️ **Should add** |
+| 13 | rh-rss | Red Hat blog/press RSS feeds (27 configured) | `/api/admin/rss-feeds/refresh` | ✅ Fires post-bootstrap | ✅ Have |
+| 14 | rh-events | Red Hat events from newsletter | `/api/customer/_global/modules/rh-events/sync` | ✅ Fires post-bootstrap | ✅ Have |
+| 15 | product-intel | Product feature releases from redhat.com | `/api/products/features/refresh-all` | ✅ Fires post-bootstrap | ✅ Have |
+| 16 | product-lifecycle | Product end-of-life dates | `/api/products/refresh-all` | ✅ Fires post-bootstrap | ✅ Have |
+| 17 | value-maps | Business value proof points (30 products built-in) | `/api/products/refresh-all` | ✅ Fires post-bootstrap | ✅ Have |
+| 18 | saleshub | SalesHub TDPs, sales plays, tactics from JSON | `/api/saleshub/refresh` | ❌ NOT TRIGGERED | ✅ **Must add** |
+| 19 | partner-catalog | Partner ecosystem data (static) | NONE | ❌ No endpoint | ⚠️ **Needs endpoint** |
+| 20 | campaigns | Generated email campaigns | NONE | ❌ Not needed | User creates on-demand |
+| 21 | meeting-prep | Generated meeting prep docs | NONE | ❌ Not needed | User creates on-demand |
+| 22 | playbook | Customer engagement playbook | NONE | ❌ Not needed | User creates on-demand |
+| 23 | tools | Tools/utilities output | NONE | ❌ Not needed | On-demand |
+| 24 | customer-docs | Drive document scan | NONE | ❌ Not needed | On-demand |
+| 25 | solution-intelligence | Solution play matching (derived from tech-stack + SalesHub) | NONE | ❌ Not needed | Derived — auto-populates when dependencies ready |
+| 26 | value-positioning | Value proposition generation | NONE | ❌ Not needed | On-demand |
+
+### Gap Summary
+
+**6 must-add to post-bootstrap triggers:**
+
+| Source | Why Day-0 | Endpoint |
+|---|---|---|
+| cases | Support cases are critical context for every customer conversation | `/api/scrape/rh` |
+| emails | Brand voice detection, engagement tracking, contact discovery | `/api/customer/_global/modules/emails/sync` |
+| account-plan | No account plans until manually generated | `/api/customer/_global/modules/account-plan/sync` |
+| competitive-intel | No competitive signals visible | `/api/refresh/competitive-intel` |
+| tech-stack | "No technology data detected" on every customer | `/api/refresh/tech-stack` |
+| saleshub | Knowledge base not loaded into registry | `/api/saleshub/refresh` |
+
+**1 should-add:**
+
+| Source | Why | Endpoint |
+|---|---|---|
+| mergers-acquisitions | M&A signals valuable but not critical day-0 | `/api/refresh/ma` |
+
+**1 needs endpoint created:**
+
+| Source | Why | Current State |
+|---|---|---|
+| partner-catalog | Partner data loads at startup but no refresh mechanism | No POST endpoint exists |
+
+**8 don't need triggering** — user-initiated/on-demand content (campaigns, meeting-prep, playbook, tools, customer-docs, solution-intelligence, value-positioning) or derived data that auto-populates when dependencies are ready.
+
+### Correction Log
+
+- **RH Cases (#4):** Previously documented as "L4 browser scrape." INCORRECT. Uses `REDHAT_OFFLINE_TOKEN` env var for API call to `access.redhat.com/hydra`. Works on hero installs when token is in `.env`. Corrected 2026-05-26.
