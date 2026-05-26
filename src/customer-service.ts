@@ -203,6 +203,8 @@ export function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, source
   const canonicalNames = new Map<string, string>() // lowercased → first-seen original
   function getCanonical(name: string): string {
     const key = name.toLowerCase().trim()
+      .replace(/,?\s*(inc\.?|llc\.?|ltd\.?|corp\.?|co\.?|l\.?p\.?)$/i, '')
+      .trim()
     if (!canonicalNames.has(key)) canonicalNames.set(key, name)
     return canonicalNames.get(key)!
   }

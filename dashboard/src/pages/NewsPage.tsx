@@ -21,7 +21,8 @@ interface NewsHighlight {
   url: string
   source: string
   score: number
-  publishedAt: string
+  publishedAt?: string
+  publishedDate?: string
   products: string[]
 }
 
@@ -80,11 +81,11 @@ function AllCustomersNews() {
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className="text-xs text-text-secondary">{article.source}</span>
-                      {article.publishedAt && (
+                      {(article.publishedAt || article.publishedDate) && (
                         <>
                           <span className="text-xs text-text-secondary/50">·</span>
                           <span className="text-xs text-text-secondary">
-                            {new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {new Date(article.publishedAt || article.publishedDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </span>
                         </>
                       )}

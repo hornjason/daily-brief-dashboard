@@ -18,6 +18,7 @@ interface CampaignEntry {
   generatedAt?: string
   timestamp?: string  // legacy field — prefer generatedAt
   materialUrl?: string
+  materialTitle?: string
   personas?: string[]
   outputPath?: string
 }
@@ -88,20 +89,28 @@ function AllCustomersCampaigns() {
           <h3 className="text-sm font-semibold text-text-primary mb-3 uppercase tracking-wider">{name}</h3>
           <div className="space-y-2">
             {campaigns[name].map((campaign, i) => (
-              <div
+              <a
                 key={i}
-                className="p-4 rounded-lg bg-surface/50 border border-border/50"
+                href={`/api/customer/${encodeURIComponent(name)}/campaigns/${i}/preview`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block p-4 rounded-lg bg-surface/50 border border-border/50 hover:border-accent/50 hover:bg-surface transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm text-text-primary">
-                      Campaign generated {(() => {
+                    <div className="text-sm font-medium text-text-primary">
+                      {campaign.materialTitle || `Campaign generated ${(() => {
                         const dateStr = campaign.generatedAt || campaign.timestamp
                         if (!dateStr) return 'Unknown date'
                         const d = new Date(dateStr)
                         return isNaN(d.getTime()) ? 'Unknown date' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                      })()}
+                      })()}`}
                     </div>
+                    {campaign.generatedAt && campaign.materialTitle && (
+                      <div className="text-xs text-text-secondary mt-0.5">
+                        Generated {new Date(campaign.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    )}
                     {campaign.personas?.length ? (
                       <div className="flex gap-1.5 mt-2">
                         {campaign.personas.map(p => (
@@ -110,11 +119,9 @@ function AllCustomersCampaigns() {
                       </div>
                     ) : null}
                   </div>
-                  {campaign.outputPath && (
-                    <FileText className="w-4 h-4 text-text-secondary shrink-0 mt-1" />
-                  )}
+                  <ExternalLink className="w-4 h-4 text-text-secondary shrink-0 mt-1" />
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
