@@ -536,6 +536,19 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
               <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full">
                 {playbook.deterministic.solutionPlays.length} active
               </span>
+              {(playbook as any).solutionPlaysStale && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirm('Regenerate playbook to refresh solution plays with latest SalesHub data?')) {
+                      handleGenerate()
+                    }
+                  }}
+                  className="text-xs px-2 py-0.5 bg-warning/10 text-warning rounded-full border border-warning/20 hover:bg-warning/20 transition-colors"
+                >
+                  Stale -- click to refresh
+                </button>
+              )}
             </div>
             {expandedSections.has('solutionPlays') ? (
               <ChevronUp className="w-5 h-5 text-text-secondary" />

@@ -18,6 +18,7 @@ import type { PlaybookState } from './playbook-types.ts'
 import { customers } from './server-state.ts'
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
+import { getKnowledgeStats } from './lib/saleshub-knowledge-loader.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { driveClient } from './lib/drive-client.ts'
@@ -77,7 +78,16 @@ export function createPlaybookRouter(): Hono {
       return c.json({ error: `Playbook not found for customer "${customer.name}"` }, 404)
     }
 
-    return c.json(playbook)
+    // Staleness detection: if playbook solution plays lack talkTrack but
+    // SalesHub knowledge base has sales plays with talk tracks, flag as stale
+    const solutionPlays = playbook.deterministic?.solutionPlays ?? []
+    const hasEmptyTalkTracks = solutionPlays.length > 0 && solutionPlays.every((sp: any) => !sp.talkTrack)
+    const kbStats = getKnowledgeStats()
+    const kbHasPlays = kbStats.salesPlayCount > 0
+
+    const solutionPlaysStale = hasEmptyTalkTracks && kbHasPlays
+
+    return c.json({ ...playbook, solutionPlaysStale })
   })
 
   // ── POST /api/customer/:name/playbook/generate ─────────────────────────

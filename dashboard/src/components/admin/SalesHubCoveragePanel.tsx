@@ -272,9 +272,26 @@ export function SalesHubCoveragePanel() {
         </button>
       </div>
 
-      {/* Summary line */}
-      <div className="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400">
-        {coverage.docsWithExtractedContent} of {coverage.totalLinkedDocs} linked documents have extracted content
+      {/* Knowledge summary */}
+      <div className="px-4 py-2 border-b border-gray-700/50 text-xs text-gray-400 space-y-0.5">
+        <div className="flex items-center gap-3">
+          <span className="text-gray-200 font-medium">{coverage.tdps.length} TDPs</span>
+          <span className="text-gray-600">&middot;</span>
+          <span className="text-gray-200 font-medium">{coverage.plays.length} Sales Plays</span>
+          {coverage.tdps.length > 0 && (
+            <>
+              <span className="text-gray-600">&middot;</span>
+              <span className="text-gray-200 font-medium">
+                {coverage.tdps.reduce((sum, t) => sum + t.tacticCount, 0)} Tactics
+              </span>
+            </>
+          )}
+        </div>
+        {coverage.totalLinkedDocs > 0 && (
+          <div className="text-gray-500">
+            {coverage.docsWithExtractedContent} of {coverage.totalLinkedDocs} linked documents have extracted content
+          </div>
+        )}
       </div>
 
       {/* Coverage details */}

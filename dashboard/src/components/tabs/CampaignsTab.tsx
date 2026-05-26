@@ -112,39 +112,37 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
           <h2 className="text-base font-semibold text-text-primary">Campaign History</h2>
           <div className="space-y-2">
             {campaigns.map(campaign => (
-              <div
+              <a
                 key={campaign.id}
-                className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-2"
+                href={`/api/customer/${encodeURIComponent(customerName)}/campaigns/${campaign.id}/preview`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-2 hover:border-accent/30 hover:bg-zinc-900/70 transition-colors cursor-pointer group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">
-                      {campaign.materialTitle}
+                    <p className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors">
+                      {campaign.materialTitle || 'Untitled Campaign'}
                     </p>
-                    <p className="text-xs text-zinc-500">
-                      {formatRelTime(campaign.generatedAt)}
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Generated {formatRelTime(campaign.generatedAt)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`/api/customer/${encodeURIComponent(customerName)}/campaigns/${campaign.id}/preview`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800/50 text-zinc-300 hover:bg-zinc-800 border border-zinc-700 transition-colors"
-                    >
-                      Preview
-                    </a>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <a
                       href={campaign.driveUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      Open in Drive
+                      Drive
                     </a>
                     <button
-                      onClick={async () => {
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
                         const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/campaigns/${campaign.id}`, { method: 'DELETE' })
                         if (res.ok) {
                           setCampaigns(prev => prev.filter(c => c.id !== campaign.id))
@@ -156,7 +154,7 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
                     </button>
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
