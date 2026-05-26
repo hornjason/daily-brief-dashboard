@@ -6,6 +6,7 @@
  * Displays: PipelineSection (per-stage breakdown) + CloudSpendSection (per-product breakdown).
  * Fetches its own pipeline and CCSP data via useApi.
  */
+import { useState, useCallback } from 'react'
 import { useApi } from '../hooks/useApi'
 import { PipelineSection } from '../components/PipelineSection'
 import { CloudSpendSection } from '../components/CloudSpendSection'
@@ -37,15 +38,43 @@ export function BookOfBusinessPage({
   })()
   const ccspApi = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
 
+  // Section-specific refresh handlers that call the correct server API
+  const [pipelineRefreshing, setPipelineRefreshing] = useState(false)
+  const [ccspRefreshing, setCcspRefreshing] = useState(false)
+
+  const handleRefreshPipeline = useCallback(async () => {
+    setPipelineRefreshing(true)
+    try {
+      await fetch('/api/refresh/pipeline', { method: 'POST' })
+    } catch (err) {
+      console.error('[BookOfBusiness] pipeline refresh failed', err)
+    } finally {
+      setPipelineRefreshing(false)
+      onRefresh()
+    }
+  }, [onRefresh])
+
+  const handleRefreshCcsp = useCallback(async () => {
+    setCcspRefreshing(true)
+    try {
+      await fetch('/api/refresh/ccsp', { method: 'POST' })
+    } catch (err) {
+      console.error('[BookOfBusiness] ccsp refresh failed', err)
+    } finally {
+      setCcspRefreshing(false)
+      onRefresh()
+    }
+  }, [onRefresh])
+
   return (
     <main className="flex-1 overflow-y-auto p-6 space-y-6">
       {/* Pipeline */}
       <section id="section-pipeline" data-section="section-pipeline">
         <PipelineSection
           data={pipelineApi.data}
-          loading={pipelineApi.loading}
+          loading={pipelineApi.loading || pipelineRefreshing}
           error={pipelineApi.error}
-          onRefresh={onRefresh}
+          onRefresh={handleRefreshPipeline}
           selectedProducts={productFilterSelected}
         />
       </section>
@@ -55,9 +84,9 @@ export function BookOfBusinessPage({
         <section id="section-cloudspend" data-section="section-cloudspend">
           <CloudSpendSection
             data={ccspApi.data}
-            loading={ccspApi.loading}
+            loading={ccspApi.loading || ccspRefreshing}
             error={ccspApi.error}
-            onRefresh={onRefresh}
+            onRefresh={handleRefreshCcsp}
           />
         </section>
       )}

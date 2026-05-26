@@ -9,9 +9,9 @@ import { toSlug } from '../cache-layer.ts'
 import { existsSync, unlinkSync, readdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { getCustomerProductContext } from '../lib/customer-product-context.ts'
+import { CACHE_DIR as BASE_CACHE_DIR } from '../lib/paths.ts'
 
-const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../../data')
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'product-intel')
 const PRODUCT_INTEL_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 FeatureModuleRegistry.register({

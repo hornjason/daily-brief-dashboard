@@ -78,8 +78,16 @@ function AllCustomersNews() {
                     {article.summary && (
                       <p className="text-xs text-text-secondary mt-1 line-clamp-2">{article.summary}</p>
                     )}
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className="text-xs text-text-secondary">{article.source}</span>
+                      {article.publishedAt && (
+                        <>
+                          <span className="text-xs text-text-secondary/50">·</span>
+                          <span className="text-xs text-text-secondary">
+                            {new Date(article.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </>
+                      )}
                       {article.score > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded ${
                           article.score >= 7 ? 'bg-health-red-bg text-health-red' :

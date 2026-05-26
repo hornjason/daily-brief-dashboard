@@ -90,6 +90,34 @@ export function HomePage({
   })()
   const ccspApi = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
 
+  // Section-specific refresh handlers that call the correct server API
+  const [pipelineRefreshing, setPipelineRefreshing] = useState(false)
+  const [ccspRefreshing, setCcspRefreshing] = useState(false)
+
+  const handleRefreshPipeline = useCallback(async () => {
+    setPipelineRefreshing(true)
+    try {
+      await fetch('/api/refresh/pipeline', { method: 'POST' })
+    } catch (err) {
+      console.error('[HomePage] pipeline refresh failed', err)
+    } finally {
+      setPipelineRefreshing(false)
+      onRefresh() // bump refreshKey to re-fetch data
+    }
+  }, [onRefresh])
+
+  const handleRefreshCcsp = useCallback(async () => {
+    setCcspRefreshing(true)
+    try {
+      await fetch('/api/refresh/ccsp', { method: 'POST' })
+    } catch (err) {
+      console.error('[HomePage] ccsp refresh failed', err)
+    } finally {
+      setCcspRefreshing(false)
+      onRefresh() // bump refreshKey to re-fetch data
+    }
+  }, [onRefresh])
+
   const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
 
   // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────
@@ -248,13 +276,13 @@ export function HomePage({
           <div className="border-t border-border p-5 space-y-6">
             {/* Pipeline */}
             <section id="section-pipeline" data-section="section-pipeline">
-              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={onRefresh} selectedProducts={productFilterSelected} />
+              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading || pipelineRefreshing} error={pipelineApi.error} onRefresh={handleRefreshPipeline} selectedProducts={productFilterSelected} />
             </section>
 
             {/* Cloud Spend */}
             {filteredAccounts.length > 0 && (ccspApi.data || ccspApi.loading || ccspApi.error) && (
               <section id="section-cloudspend" data-section="section-cloudspend">
-                <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={onRefresh} />
+                <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading || ccspRefreshing} error={ccspApi.error} onRefresh={handleRefreshCcsp} />
               </section>
             )}
           </div>

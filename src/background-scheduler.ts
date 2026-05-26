@@ -1,6 +1,7 @@
 import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
+import { DATA_DIR, CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { createHash } from 'crypto'
 import { customers, aes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
@@ -254,8 +255,8 @@ export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERV
 
 // ── CCSP daily scrape at 6:30am ET ──────────────────────────────────────────
 
-const CCSP_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-data.json')
-const CCSP_DELTA_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-delta.json')
+const CCSP_CACHE_PATH = resolve(CACHE_DIR, 'ccsp-data.json')
+const CCSP_DELTA_PATH = resolve(CACHE_DIR, 'ccsp-delta.json')
 
 async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
   // Read previous cache before scrape
@@ -420,7 +421,7 @@ export function scheduleSupportableSync(): void { /* no-op */ }
 // At delivery time: aggregates cached data → renderBriefHtml() → sendBriefEmail().
 // NOT migrated to scheduler registry because it needs to re-read config on each cycle.
 
-const EMAIL_SETTINGS_PATH_SCHED = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
+const EMAIL_SETTINGS_PATH_SCHED = resolve(CONFIG_DIR, 'email-settings.json')
 
 interface EmailSettingsSched {
   enabled: boolean
@@ -909,7 +910,7 @@ export function initBackgroundScheduler(opts: {
 
   // Territory sync — daily 1:45am ET (primary only)
   if (isPrimary) {
-    const TERRITORY_NOTIFICATIONS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
+    const TERRITORY_NOTIFICATIONS_PATH = resolve(CACHE_DIR, 'territory-notifications.json')
     interface TerritoryNotification {
       type: 'removal' | 'reassignment'
       customer: string

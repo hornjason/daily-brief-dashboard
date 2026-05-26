@@ -5,6 +5,7 @@
 import { Hono } from 'hono'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
+import { DATA_DIR, CACHE_DIR } from './lib/paths.ts'
 import { aes, customers } from './server-state.ts'
 import { readSheetCache, readPipelineCache } from './cache-layer.ts'
 import { readPodConfig, getAeNamesForPod } from './pod-config.ts'
@@ -27,7 +28,7 @@ export function createTerritoryRouter(): Hono {
 
   // GET /api/territory/notifications
   app.get('/api/territory/notifications', async (c) => {
-    const notifPath = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
+    const notifPath = resolve(CACHE_DIR, 'territory-notifications.json')
     try {
       if (!existsSync(notifPath)) return c.json({ updatedAt: null, pending: [] })
       const data = JSON.parse(readFileSync(notifPath, 'utf-8'))

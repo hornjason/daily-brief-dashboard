@@ -28,6 +28,7 @@ import type { CCSPRecord } from './sheets.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
 import { listPodBookingSheets, matchPodSheet, fetchSfBookingsRaw, deriveSfCustomersByTerritory } from './sf-bookings-reader.ts'
+import { CONFIG_DIR as PATHS_CONFIG_DIR } from './lib/paths.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -42,7 +43,7 @@ export function initRestoreRoutes(opts: { cacheDir: string }): void {
 // account discovery. This function fires in the background after every restore
 // to re-populate aliases from the SF bookings POD sheets.
 async function repopulateAliasesFromSfBookings(): Promise<void> {
-  const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+  const SETTINGS_PATH = resolve(PATHS_CONFIG_DIR, 'settings.json')
   let podBookingsFolderId: string | null = null
   try {
     podBookingsFolderId = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')).podBookingsFolderId ?? null

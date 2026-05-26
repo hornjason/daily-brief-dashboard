@@ -198,6 +198,15 @@ export async function pregenAllBriefs(podId?: string): Promise<{ status?: string
 // ── CCSP Operations ───────────────────────────────────────────────────────────
 
 export function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning: boolean): CCSPSummary {
+  // #395: Normalize account names to merge "Crowdstrike" / "CROWDSTRIKE" into one entry.
+  // The first-seen casing becomes the display name; the lowercase key is used for dedup.
+  const canonicalNames = new Map<string, string>() // lowercased → first-seen original
+  function getCanonical(name: string): string {
+    const key = name.toLowerCase().trim()
+    if (!canonicalNames.has(key)) canonicalNames.set(key, name)
+    return canonicalNames.get(key)!
+  }
+
   const byCustomer    = new Map<string, number>()
   const byQuarter     = new Map<string, number>()
   const byPartner     = new Map<string, number>()
@@ -206,13 +215,14 @@ export function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, source
   let totalAcv = 0
 
   for (const r of records) {
-    byCustomer.set(r.accountName, (byCustomer.get(r.accountName) ?? 0) + r.acvPlus)
+    const canonName = getCanonical(r.accountName)
+    byCustomer.set(canonName, (byCustomer.get(canonName) ?? 0) + r.acvPlus)
     if (r.quarter) byQuarter.set(r.quarter, (byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
     byPartner.set(r.cloudPartner, (byPartner.get(r.cloudPartner) ?? 0) + r.acvPlus)
     totalAcv += r.acvPlus
     // Per-account partner breakdown
-    if (!custPartner.has(r.accountName)) custPartner.set(r.accountName, new Map())
-    const pm = custPartner.get(r.accountName)!
+    if (!custPartner.has(canonName)) custPartner.set(canonName, new Map())
+    const pm = custPartner.get(canonName)!
     pm.set(r.cloudPartner, (pm.get(r.cloudPartner) ?? 0) + r.acvPlus)
     // Per-AE aggregation (BKL-W2-28)
     if (r.ae) {
@@ -220,7 +230,7 @@ export function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, source
       const aeData = byAE.get(r.ae)!
       aeData.acv += r.acvPlus
       if (r.quarter) aeData.byQuarter.set(r.quarter, (aeData.byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
-      aeData.byCustomer.set(r.accountName, (aeData.byCustomer.get(r.accountName) ?? 0) + r.acvPlus)
+      aeData.byCustomer.set(canonName, (aeData.byCustomer.get(canonName) ?? 0) + r.acvPlus)
     }
   }
 

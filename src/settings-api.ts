@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 import { Hono } from 'hono'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { backupNow } from './backup-config.ts'
@@ -32,7 +33,7 @@ export function initSettingsApi(dataSourcesPath: string, settingsPath?: string):
 
 // ── Email delivery settings (BKL-E05) ────────────────────────────────────────
 
-const EMAIL_SETTINGS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
+const EMAIL_SETTINGS_PATH = resolve(CONFIG_DIR, 'email-settings.json')
 
 export interface EmailSettings {
   enabled: boolean

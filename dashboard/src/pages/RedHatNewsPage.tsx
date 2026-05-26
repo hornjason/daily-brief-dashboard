@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { ModulePageShell } from '../components/ModulePageShell'
-import { Newspaper, Calendar, Filter, ExternalLink, RefreshCw } from 'lucide-react'
+import { Newspaper, Calendar, Filter, ExternalLink, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface RSSItem {
   title: string
@@ -47,6 +47,28 @@ function getSourceLabel(source: string): string {
     default:
       return source
   }
+}
+
+function ExpandableDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = text.length > 200
+
+  return (
+    <div>
+      <p className={`text-sm text-text-secondary ${!expanded && isLong ? 'line-clamp-2' : ''}`}>
+        {text}
+      </p>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="flex items-center gap-1 mt-1 text-xs text-accent hover:text-accent/80 transition-colors"
+        >
+          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {expanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function RedHatNewsPage() {
@@ -213,9 +235,7 @@ export function RedHatNewsPage() {
                 </div>
 
                 {item.description && (
-                  <p className="text-sm text-text-secondary line-clamp-2">
-                    {item.description}
-                  </p>
+                  <ExpandableDescription text={item.description} />
                 )}
               </div>
             ))}

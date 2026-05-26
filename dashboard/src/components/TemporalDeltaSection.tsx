@@ -60,14 +60,9 @@ export default function TemporalDeltaSection({ customerName }: { customerName: s
     )
   }
 
-  // Has previous but no changes
+  // Has previous but no changes — show minimal indicator, not a full section
   if (!data.changes?.length) {
-    return (
-      <div className="rounded-lg border border-border-primary bg-surface-primary px-4 py-3 flex items-center gap-2">
-        <Clock className="w-3.5 h-3.5 text-text-secondary" />
-        <p className="text-xs text-text-secondary">No changes since {data.lastBriefDate}</p>
-      </div>
-    )
+    return null
   }
 
   return (

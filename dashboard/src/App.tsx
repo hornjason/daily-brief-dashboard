@@ -211,10 +211,19 @@ function Dashboard() {
   const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}` : ''
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline${pipelineQueryStr}`)
 
-  const anyLoading = accountsApi.loading || casesApi.loading
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const anyLoading = accountsApi.loading || casesApi.loading || isRefreshing
 
-  const handleRefresh = useCallback(() => {
-    setRefreshKey((k) => k + 1)
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await fetch('/api/refresh', { method: 'POST' })
+    } catch (err) {
+      console.error('[App] refresh API call failed', err)
+    } finally {
+      setIsRefreshing(false)
+      setRefreshKey((k) => k + 1)
+    }
   }, [])
 
   const handleAeFilterChange = useCallback((ae: string) => {

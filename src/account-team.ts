@@ -9,6 +9,7 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { getUserSettingsPath } from './config-reconciler.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { CACHE_DIR } from './lib/paths.ts'
 import { aes } from './server-state.ts'
 import type { Customer, AccountTeamMember, AccountTeamRole, TerritoryTeamsCache, TerritoryTeamEntry, AE } from './types.ts'
 
@@ -94,8 +95,7 @@ export function getAccountTeam(customer: Customer, filter?: AccountTeamFilter): 
 
   // Load territory team data from cache (read once, cache in memory)
   if (!teamCacheData) {
-    const cacheDir = process.env.CACHE_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'cache')
-    const teamCachePath = resolve(cacheDir, 'territory-teams.json')
+    const teamCachePath = resolve(CACHE_DIR, 'territory-teams.json')
 
     if (existsSync(teamCachePath)) {
       try {
@@ -187,8 +187,7 @@ export function getAccountTeam(customer: Customer, filter?: AccountTeamFilter): 
  * Writes to territory-teams.json and updates the in-memory cache.
  */
 export function persistTeamCache(teamData: Record<string, TerritoryTeamEntry>): void {
-  const cacheDir = process.env.CACHE_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'cache')
-  const teamCachePath = resolve(cacheDir, 'territory-teams.json')
+  const teamCachePath = resolve(CACHE_DIR, 'territory-teams.json')
   const cache: TerritoryTeamsCache = {
     updatedAt: new Date().toISOString(),
     teams: teamData,

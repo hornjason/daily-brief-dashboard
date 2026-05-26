@@ -18,11 +18,13 @@ interface CalendarEvent {
   start: string
   end: string
   attendees?: string[]
+  attendeeDetails?: Array<{ email: string; displayName?: string }>
   customers?: string[]
   needsPrep?: boolean
   solo?: boolean
   joinUrl?: string
   recurringEventId?: string
+  description?: string
 }
 
 interface PrepHistoryEntry {
@@ -130,10 +132,18 @@ function MeetingCard({
             <div className="flex items-center gap-1 mt-2 text-xs text-text-secondary">
               <Users className="w-3 h-3 shrink-0" />
               <span className="truncate">
-                {attendeeList.slice(0, 4).map(a => a.split('@')[0]).join(', ')}
+                {attendeeList.slice(0, 4).map(email => {
+                  const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
+                  return detail?.displayName ? `${detail.displayName} (${email})` : email
+                }).join(', ')}
                 {attendeeList.length > 4 ? ` +${attendeeList.length - 4}` : ''}
               </span>
             </div>
+          )}
+          {meeting.description && (
+            <p className="mt-2 text-xs text-text-secondary/80 line-clamp-2 italic">
+              {meeting.description}
+            </p>
           )}
           {!autoCustomer && !manualCustomer && (
             <button

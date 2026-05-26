@@ -688,6 +688,12 @@ export const FeatureModuleRegistry = {
         continue
       }
 
+      // GitHub Issue #391/#396 — Determine if this module is expected to produce
+      // customer-specific signals. Portfolio-scope modules produce general data
+      // (RSS, events, value-maps, product-intel, partner-catalog, lifecycle) and
+      // should NOT be flagged for missing customerSlug.
+      const isGeneralModule = mod.scope === 'portfolio'
+
       try {
         const slug = testCustomerSlug ?? '_global'
         const signals = await mod.signals(slug)
@@ -704,10 +710,26 @@ export const FeatureModuleRegistry = {
           else tierDist.Noise++
         }
 
-        if (scored.length === 0) warnings.push('No signals returned')
-        if (scored.length > 0 && tierDist.Noise === scored.length) warnings.push('All signals scoring as Noise — check metadata')
-        if (scored.length > 0 && new Set(scored.map(s => s.rawRelevance)).size === 1) warnings.push('All signals have same rawRelevance — no differentiation')
-        if (scored.length > 0 && !scored.some(s => s.metadata?.customerSlug)) warnings.push('No customerSlug in metadata — all scoring as general')
+        // "No signals" is only a warning for customer-specific modules.
+        // General modules with zero signals are fine — they just have no data yet.
+        if (scored.length === 0 && !isGeneralModule) warnings.push('No signals returned')
+
+        // All-Noise is only a real problem for customer-specific modules.
+        // General modules score in the general range (0.10-0.35) which maps to Noise tier — expected behavior.
+        if (scored.length > 0 && tierDist.Noise === scored.length && !isGeneralModule) {
+          warnings.push('All signals scoring as Noise — check metadata')
+        }
+        // Same-rawRelevance warning is advisory only for customer-specific modules.
+        // General modules often use uniform rawRelevance intentionally.
+        if (!isGeneralModule && scored.length > 0 && new Set(scored.map(s => s.rawRelevance)).size === 1) {
+          warnings.push('All signals have same rawRelevance — no differentiation')
+        }
+
+        // Only flag missing customerSlug for customer-specific modules (#391/#396).
+        // Portfolio-scope modules correctly produce general signals without customerSlug.
+        if (!isGeneralModule && scored.length > 0 && !scored.some(s => s.metadata?.customerSlug)) {
+          warnings.push('No customerSlug in metadata — all scoring as general')
+        }
 
         const status = warnings.some(w => w.includes('All signals scoring as Noise')) ? 'error' as const
           : warnings.length > 0 ? 'warning' as const : 'healthy' as const

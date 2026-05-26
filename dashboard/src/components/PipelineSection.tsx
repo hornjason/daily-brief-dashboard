@@ -211,6 +211,7 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
   }, [aeFilterSelected, data])
 
   const productActive = selectedProducts.length > 0
+  const ownerActive = !!activeOwner
 
   // Apply product filter to opp lists
   const allTopOpps     = data?.topOpps        ?? []
@@ -218,17 +219,21 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
   const topOpps        = productActive ? allTopOpps.filter(o => oppMatchesProducts(o, selectedProducts)) : allTopOpps
   const closedOpps     = productActive ? allClosedOpps.filter(o => oppMatchesProducts(o, selectedProducts)) : allClosedOpps
 
-  // Recompute summary stats from filtered opps when product filter is active
-  const totalAcv       = productActive ? topOpps.reduce((s, o) => s + o.acv, 0) : (data?.totalAcv ?? 0)
-  const openCount      = productActive ? topOpps.length : (data?.openCount ?? 0)
-  const renewalAcv     = productActive ? topOpps.filter(o => o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.renewalAcv ?? 0)
-  const newAcv         = productActive ? topOpps.filter(o => !o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.newAcv ?? 0)
+  // #394: Layer AE filter on top of product filter for summary stats
+  const summaryOpps    = ownerActive ? topOpps.filter(o => o.owner === activeOwner) : topOpps
+
+  // Recompute summary stats from filtered opps when any filter is active
+  const anyFilterActive = productActive || ownerActive
+  const totalAcv       = anyFilterActive ? summaryOpps.reduce((s, o) => s + o.acv, 0) : (data?.totalAcv ?? 0)
+  const openCount      = anyFilterActive ? summaryOpps.length : (data?.openCount ?? 0)
+  const renewalAcv     = anyFilterActive ? summaryOpps.filter(o => o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.renewalAcv ?? 0)
+  const newAcv         = anyFilterActive ? summaryOpps.filter(o => !o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.newAcv ?? 0)
   const byOwner        = data?.byOwner        ?? []
 
-  // Recompute byStage from filtered opps when product filter is active
-  const byStage = productActive ? (() => {
+  // Recompute byStage from filtered opps when any filter is active
+  const byStage = anyFilterActive ? (() => {
     const stageMap = new Map<string, { acv: number; count: number }>()
-    for (const o of topOpps) {
+    for (const o of summaryOpps) {
       const slot = stageMap.get(o.forecastCategory) ?? { acv: 0, count: 0 }
       slot.acv += o.acv
       slot.count += 1

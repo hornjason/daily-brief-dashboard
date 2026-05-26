@@ -10,8 +10,9 @@ import { existsSync, writeFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import { google } from 'googleapis'
+import { CACHE_DIR as BASE_CACHE_DIR, DATA_DIR } from './lib/paths.ts'
 
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'events')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-events.json')
 
 // Google Doc ID for NA Revenue Marketing Newsletter
@@ -548,7 +549,7 @@ export async function fetchRHEvents(): Promise<void> {
   try {
     console.log(`[rh-events] fetching from Google Doc ${DOC_ID}`)
 
-    const tokenPath = resolve(process.env.DATA_DIR ?? 'data', 'token.json')
+    const tokenPath = resolve(DATA_DIR, 'token.json')
     const auth = await makeAuth(tokenPath)
     const drive = google.drive({ version: 'v3', auth })
 

@@ -22,6 +22,7 @@
 import { existsSync, readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
+import { CACHE_DIR } from './lib/paths.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ export interface SyncState {
 
 // ── File path ─────────────────────────────────────────────────────────────────
 
-const SYNC_STATE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'sync-state.json')
+const SYNC_STATE_PATH = resolve(CACHE_DIR, 'sync-state.json')
 
 const DEFAULT_STATE: SyncState = {
   date: '',

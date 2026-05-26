@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { DATA_DIR, CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import {
   normalizeSettings,
   getRegionById,
@@ -27,7 +28,7 @@ import {
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 
 const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
-const TERRITORY_NOTIFICATIONS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
+const TERRITORY_NOTIFICATIONS_PATH = resolve(CACHE_DIR, 'territory-notifications.json')
 
 interface TerritoryNotification {
   type: 'removal' | 'reassignment'
@@ -38,7 +39,7 @@ interface TerritoryNotification {
 
 function loadSettingsRaw(): Record<string, unknown> {
   try {
-    const p = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+    const p = resolve(CONFIG_DIR, 'settings.json')
     return JSON.parse(readFileSync(p, 'utf-8'))
   } catch {
     return {}
@@ -55,7 +56,7 @@ function resolveRegionSheetId(region: RegionConfig): string {
   const fromRegion = extractSheetIdFromUrl(region.territorySheetUrl ?? '')
   if (fromRegion) return fromRegion
   try {
-    const configPath = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'data-sources.json')
+    const configPath = resolve(CONFIG_DIR, 'data-sources.json')
     const ds = JSON.parse(readFileSync(configPath, 'utf-8'))
     return (ds.podConfig?.territorySheetId as string | undefined) ?? process.env.TERRITORY_SHEET_ID ?? TERRITORY_SHEET_ID_FALLBACK
   } catch {

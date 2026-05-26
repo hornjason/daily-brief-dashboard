@@ -21,6 +21,7 @@ import { createHash } from 'crypto'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { loadProductConfig } from './product-release-radar.ts'
+import { CACHE_DIR as BASE_CACHE_DIR } from './lib/paths.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,8 +42,7 @@ export interface DriveCorpus {
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'product-intel')
 
 const TEXT_CAP  = 15_000
 const MAX_FILES = 10

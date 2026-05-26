@@ -13,6 +13,7 @@ services:
       - ./data:/data
     environment:
       PORT: "7777"
+      DATA_DIR: /data
       CONFIG_DIR: /data/config
       CACHE_DIR: /data/cache
       RH_PROFILE_DIR: /data/rh-profile

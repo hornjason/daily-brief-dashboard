@@ -96,6 +96,7 @@ RUN bunx playwright install chromium --no-shell
 #   or use: make up
 #
 ENV PORT=7777
+ENV DATA_DIR=/data
 ENV CONFIG_DIR=/data/config
 ENV CACHE_DIR=/data/cache
 ENV RH_PROFILE_DIR=/data/rh-profile

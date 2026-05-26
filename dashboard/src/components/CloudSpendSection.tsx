@@ -327,11 +327,14 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
   }, [aeFilterSelected, data])
 
   const customers = data?.byCustomer ?? []
-  const partners = data?.byPartner ?? []
+  const globalPartners = data?.byPartner ?? []
+
+  // #394: When an AE is selected, derive totals from that AE's data only
+  const activeAEData = activeAE ? data?.byAE?.find(a => a.ae === activeAE) : null
 
   // BKL-UX82: scope totals to the rolling 4-quarter window
   const QTR_FMT = /^\d{4}-Q\d$/
-  const allQuarters = data?.byQuarter ?? []
+  const allQuarters = activeAEData ? activeAEData.byQuarter : (data?.byQuarter ?? [])
   const rollingQuarters = (() => {
     const valid = allQuarters.filter(q => QTR_FMT.test(q.quarter))
     const sorted = [...valid].sort((a, b) => a.quarter.localeCompare(b.quarter))
@@ -339,6 +342,21 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
   })()
   const rollingQSet = new Set(rollingQuarters.map(q => q.quarter))
   const totalAcv = rollingQuarters.reduce((s, q) => s + q.acv, 0)
+
+  // #394: When AE is selected, recompute byPartner from that AE's records
+  // The API doesn't return per-AE partner breakdown, so we derive it from
+  // the AE's top accounts cross-referenced with global customer partner data
+  const partners = activeAEData ? (() => {
+    const aeAccountNames = new Set((activeAEData.topAccounts ?? []).map(a => a.name))
+    const partnerMap = new Map<string, number>()
+    for (const c of customers) {
+      if (!aeAccountNames.has(c.name)) continue
+      for (const p of c.partners ?? []) {
+        partnerMap.set(p.partner, (partnerMap.get(p.partner) ?? 0) + p.acv)
+      }
+    }
+    return [...partnerMap.entries()].sort((a, b) => b[1] - a[1]).map(([partner, acv]) => ({ partner, acv }))
+  })() : globalPartners
 
   // BKL-G17: reporting period range badge (e.g. "2025 Q3–Q4")
   const reportingPeriod = rollingQuarters.length > 0 ? (() => {
@@ -352,8 +370,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
     return fy1 === fy2 ? `${fy1} ${q1}–${q2}` : `${fy1} ${q1} – ${fy2} ${q2}`
   })() : null
 
-  // Top accounts: filter by selected AE
-  const activeAEData = activeAE ? data?.byAE?.find(a => a.ae === activeAE) : null
+  // Top accounts: filter by selected AE (activeAEData computed above)
   const displayedAccounts = activeAE
     ? (activeAEData?.topAccounts ?? [])
     : customers.slice(0, 10).map(c => ({ name: c.name, acv: c.acv }))
@@ -432,7 +449,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
             ) : (
               <div className="text-3xl font-bold text-text-primary tabular-nums">{fmt(totalAcv)}</div>
             )}
-            <div className="text-xs text-text-secondary">{customers.length} accounts</div>
+            <div className="text-xs text-text-secondary">{activeAEData ? (activeAEData.topAccounts?.length ?? 0) : customers.length} accounts</div>
           </div>
 
           <div>
