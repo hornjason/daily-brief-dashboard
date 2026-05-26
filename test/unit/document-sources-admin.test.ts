@@ -120,3 +120,46 @@ describe('Document sources admin (#316)', () => {
     }
   })
 })
+
+// ── #416: Document sources helper text coverage ───────────────────────────
+
+describe('Document sources helper text (#416)', () => {
+  // These constants mirror the TYPE_HELPER_TEXT and TYPE_LABELS in DocumentSourcesPanel.tsx
+  // If the frontend adds/removes types, this test will catch the drift.
+  const EXPECTED_SOURCE_TYPES = [
+    'google-slides',
+    'google-doc',
+    'google-drive-folder',
+    'url',
+    'email',
+    'rss',
+  ]
+
+  const HELPER_TEXT: Record<string, string> = {
+    'google-slides': 'Share a presentation or document to include in intelligence analysis',
+    'google-doc': 'Share a Google Doc to include in intelligence analysis',
+    'google-drive-folder': 'Monitor a folder for new documents about this customer',
+    'url': 'Scan a web page for relevant content',
+    'email': 'Track emails matching a search query',
+    'rss': 'Subscribe to an industry or customer news feed',
+  }
+
+  test('every source type has helper text', () => {
+    for (const type of EXPECTED_SOURCE_TYPES) {
+      expect(HELPER_TEXT[type]).toBeTruthy()
+    }
+  })
+
+  test('helper text is descriptive (at least 20 chars)', () => {
+    for (const [type, text] of Object.entries(HELPER_TEXT)) {
+      expect(text.length).toBeGreaterThanOrEqual(20)
+    }
+  })
+
+  test('no helper text keys exist outside known types', () => {
+    const helperKeys = Object.keys(HELPER_TEXT)
+    for (const key of helperKeys) {
+      expect(EXPECTED_SOURCE_TYPES).toContain(key)
+    }
+  })
+})

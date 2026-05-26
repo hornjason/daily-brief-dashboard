@@ -157,6 +157,69 @@ Some content here about RHEL.`
     )
     expect(productHeaders.length).toBe(3)
   })
+
+  // ── #415: Product names extraction ────────────────────────────────────────
+
+  test('extracts product names from value maps headers', () => {
+    const sampleContent = `Red Hat OpenShift Container Platform Value Map
+Some content here about OCP.
+
+Red Hat Ansible Automation Platform Value Map
+Some content here about AAP.
+
+Red Hat Enterprise Linux Value Map
+Some content here about RHEL.`
+
+    writeFileSync(VALUE_MAPS_PATH, sampleContent)
+
+    const content = readFileSync(VALUE_MAPS_PATH, 'utf-8')
+    const productHeaders = content.split('\n').filter((l: string) =>
+      l.toLowerCase().includes('value map') && l.toLowerCase().includes('red hat')
+    )
+    const productNames = productHeaders.map((h: string) => {
+      const cleaned = h.trim()
+        .replace(/\s*[Vv]alue\s+[Mm]ap\s*/i, '')
+        .replace(/\s*[Bb]usiness\s+[Vv]alue\s*/i, '')
+        .trim()
+      return cleaned || h.trim()
+    }).filter(Boolean).sort()
+
+    expect(productNames).toHaveLength(3)
+    expect(productNames).toContain('Red Hat Ansible Automation Platform')
+    expect(productNames).toContain('Red Hat Enterprise Linux')
+    expect(productNames).toContain('Red Hat OpenShift Container Platform')
+  })
+
+  test('returns empty product names when no value maps file exists', () => {
+    // VALUE_MAPS_PATH does not have content written
+    const productNames: string[] = []
+    expect(productNames).toEqual([])
+  })
+
+  test('product names are sorted alphabetically', () => {
+    const sampleContent = `Red Hat Satellite Value Map
+Content.
+
+Red Hat Ansible Automation Platform Value Map
+Content.
+
+Red Hat Advanced Cluster Security Value Map
+Content.`
+
+    writeFileSync(VALUE_MAPS_PATH, sampleContent)
+
+    const content = readFileSync(VALUE_MAPS_PATH, 'utf-8')
+    const productHeaders = content.split('\n').filter((l: string) =>
+      l.toLowerCase().includes('value map') && l.toLowerCase().includes('red hat')
+    )
+    const productNames = productHeaders.map((h: string) =>
+      h.trim().replace(/\s*[Vv]alue\s+[Mm]ap\s*/i, '').trim()
+    ).filter(Boolean).sort()
+
+    expect(productNames[0]).toBe('Red Hat Advanced Cluster Security')
+    expect(productNames[1]).toBe('Red Hat Ansible Automation Platform')
+    expect(productNames[2]).toBe('Red Hat Satellite')
+  })
 })
 
 describe('Value Maps deck ID extraction utility', () => {

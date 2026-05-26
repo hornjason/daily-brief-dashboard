@@ -346,6 +346,7 @@ interface ValueMapsStatus {
   lastRefreshed: string | null
   fileSize: number
   productCount: number
+  productNames: string[]
   hasStaticFallback: boolean
 }
 
@@ -357,6 +358,7 @@ function ValueMapsSection() {
   const [refreshing, setRefreshing] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [productsExpanded, setProductsExpanded] = useState(false)
 
   const fetchStatus = useCallback(() => {
     fetch('/api/settings/value-maps')
@@ -498,9 +500,31 @@ function ValueMapsSection() {
             <span className="text-gray-300">{formatRelTime(status.lastRefreshed)}</span>
           </div>
         )}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">Products with data</span>
-          <span className="text-gray-300">{status.productCount}</span>
+        <div className="text-xs">
+          <button
+            onClick={() => setProductsExpanded(!productsExpanded)}
+            className="w-full flex items-center justify-between hover:bg-gray-700/30 rounded px-0 py-0.5 transition-colors"
+            data-testid="value-maps-products-toggle"
+          >
+            <span className="text-gray-400">Products with data</span>
+            <span className="text-gray-300 flex items-center gap-1">
+              {status.productCount}
+              {status.productNames.length > 0 && (
+                productsExpanded
+                  ? <ChevronDown className="w-3 h-3 text-gray-500" />
+                  : <ChevronRight className="w-3 h-3 text-gray-500" />
+              )}
+            </span>
+          </button>
+          {productsExpanded && status.productNames.length > 0 && (
+            <ul className="mt-1.5 ml-2 space-y-0.5" data-testid="value-maps-product-list">
+              {status.productNames.map((name, i) => (
+                <li key={i} className="text-gray-400 text-xs pl-2 border-l border-gray-700">
+                  {name}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {status.configured && (
           <div className="mt-2">

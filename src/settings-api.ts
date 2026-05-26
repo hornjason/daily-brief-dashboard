@@ -674,14 +674,24 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       let lastRefreshed: string | null = null
       let fileSize = 0
       let productCount = 0
+      let productNames: string[] = []
       try {
         const stat = statSync(valueMapsPath)
         lastRefreshed = stat.mtime.toISOString()
         fileSize = stat.size
         const content = readFileSync(valueMapsPath, 'utf-8')
-        productCount = content.split('\n').filter((l: string) =>
+        const productHeaders = content.split('\n').filter((l: string) =>
           l.toLowerCase().includes('value map') && l.toLowerCase().includes('red hat')
-        ).length
+        )
+        productCount = productHeaders.length
+        // Extract clean product names from headers like "Red Hat OpenShift Container Platform Value Map"
+        productNames = productHeaders.map((h: string) => {
+          const cleaned = h.trim()
+            .replace(/\s*[Vv]alue\s+[Mm]ap\s*/i, '')
+            .replace(/\s*[Bb]usiness\s+[Vv]alue\s*/i, '')
+            .trim()
+          return cleaned || h.trim()
+        }).filter(Boolean).sort()
       } catch { /* file missing */ }
 
       return c.json({
@@ -690,6 +700,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
         lastRefreshed,
         fileSize,
         productCount,
+        productNames,
         hasStaticFallback: true,
       })
     } catch (e: any) {

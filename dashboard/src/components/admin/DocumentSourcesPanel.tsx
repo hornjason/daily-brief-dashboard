@@ -38,6 +38,15 @@ const STATUS_COLORS: Record<string, string> = {
   stale: 'text-orange-400',
 }
 
+const TYPE_HELPER_TEXT: Record<string, string> = {
+  'google-slides': 'Share a presentation or document to include in intelligence analysis',
+  'google-doc': 'Share a Google Doc to include in intelligence analysis',
+  'google-drive-folder': 'Monitor a folder for new documents about this customer',
+  'url': 'Scan a web page for relevant content',
+  'email': 'Track emails matching a search query',
+  'rss': 'Subscribe to an industry or customer news feed',
+}
+
 function AddSourceForm({ onAdd, onCancel }: { onAdd: (s: Partial<DocumentSource>) => void; onCancel: () => void }) {
   const [name, setName] = useState('')
   const [type, setType] = useState('url')
@@ -71,6 +80,11 @@ function AddSourceForm({ onAdd, onCancel }: { onAdd: (s: Partial<DocumentSource>
           className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500"
         />
       </div>
+      {TYPE_HELPER_TEXT[type] && (
+        <p className="text-xs text-gray-500" data-testid="doc-source-type-helper">
+          {TYPE_HELPER_TEXT[type]}
+        </p>
+      )}
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300">
           Cancel
@@ -210,6 +224,13 @@ export function DocumentSourcesPanel() {
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-gray-500" data-testid="doc-sources-purpose">
+        Document sources enrich customer intelligence. Added sources are scanned periodically
+        and their content feeds into account briefs, meeting prep, and campaign generation.
+        Add Google Drive folders with customer-specific documents, URLs to relevant industry
+        content, or email queries to track customer communications.
+      </p>
+
       <div className="flex items-center justify-between">
         <div>
           <span className="text-sm text-gray-400">{sources.length} configured source{sources.length !== 1 ? 's' : ''}</span>
