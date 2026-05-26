@@ -276,7 +276,7 @@ export function HomePage({
           <div className="border-t border-border p-5 space-y-6">
             {/* Pipeline */}
             <section id="section-pipeline" data-section="section-pipeline">
-              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading || pipelineRefreshing} error={pipelineApi.error} onRefresh={handleRefreshPipeline} selectedProducts={productFilterSelected} />
+              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading || pipelineRefreshing} error={pipelineApi.error} onRefresh={handleRefreshPipeline} selectedProducts={productFilterSelected} aeFilterSelected={aeFilterSelected} />
             </section>
 
             {/* Cloud Spend */}
