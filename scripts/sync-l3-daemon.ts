@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs'
 import { initScrapeContext, getScrapeContext, recoverScrapeContext } from '../src/rh-scraper.ts'
 import { adoptCcspContext } from '../src/ccsp-scraper.ts'
-import { initSfContext } from '../src/sf-scraper.ts'
+// initSfContext removed — SF now adopts the RH headed context (BKL-VNC-BLACK)
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
 import { scrapeSalesHub } from './scrape-saleshub.ts'
@@ -361,13 +361,9 @@ async function proactiveRecycle(): Promise<void> {
       throw new Error('proactiveRecycle: failed to re-init browser context')
     }
 
-    // 6. Re-adopt sister scrapers (CCSP, SF)
+    // 6. Re-adopt sister scrapers (CCSP, SF) — all share the RH headed context
     adoptCcspContext(newCtx)
-    try {
-      await initSfContext(PROFILE_DIR)
-    } catch (e: any) {
-      console.warn(`[sync-daemon] proactiveRecycle: SF re-init warning: ${e?.message}`)
-    }
+    adoptSfContext(newCtx, PROFILE_DIR)
 
     console.log('[sync-daemon] proactiveRecycle: browser recycled successfully')
   } catch (e: any) {
@@ -464,12 +460,11 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  try {
-    await initSfContext(PROFILE_DIR)
-    console.log('[sync-daemon] SF context initialized')
-  } catch (e: any) {
-    // SF init failure is non-fatal at startup — SF shares the RH profile
-    console.warn('[sync-daemon] SF context init warning (non-fatal):', e.message)
+  // SF adopts the RH headed context — no separate Chrome launch
+  const rhCtx = getScrapeContext()
+  if (rhCtx) {
+    adoptSfContext(rhCtx, PROFILE_DIR)
+    console.log('[sync-daemon] SF context adopted from RH')
   }
 
   // ADR-006 §2 H5 — Boot cleanup: delete any stale trigger files from a prior run.
