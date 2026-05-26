@@ -39,7 +39,7 @@ import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 
 export interface CampaignRequest {
   materialUrl: string
-  personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[] }>
+  personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   style?: string
   valueProps?: Array<{ id: string; claim: string; detail: string }>
 }
@@ -192,7 +192,7 @@ export async function callGeminiForCampaign(opts: {
   customerSignals: CustomerSignals
   registrySignals: Signal[]
   voiceInstruction?: string
-  personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[] }>
+  personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   emailTemplateContext?: string
 }): Promise<string> {
   // Assemble user prompt with material + signals
@@ -213,12 +213,21 @@ export async function callGeminiForCampaign(opts: {
     : 'No registry signals available.'
 
   // Build persona list (filter to enabled only)
-  const enabledPersonas = opts.personas?.filter(p => p.enabled).map(p => p.role) ?? [
-    'VP Infrastructure',
-    'VP Operations',
-    'CIO',
+  const enabledPersonas = opts.personas?.filter(p => p.enabled) ?? [
+    { role: 'VP Infrastructure', enabled: true },
+    { role: 'VP Operations', enabled: true },
+    { role: 'CIO', enabled: true },
   ]
-  const personasStr = enabledPersonas.join(', ')
+
+  // Build persona instructions — use LinkedIn URL for targeted individuals, generic role otherwise
+  const personaLines = enabledPersonas.map(persona => {
+    if (persona.linkedinUrl) {
+      const label = persona.name ?? persona.role
+      return `- ${label}: Research this LinkedIn profile: ${persona.linkedinUrl} — personalize the email for this specific individual`
+    }
+    return `- ${persona.role}`
+  })
+  const personasStr = personaLines.join('\n')
 
   const userPrompt = `## Material: ${opts.materialTitle}
 

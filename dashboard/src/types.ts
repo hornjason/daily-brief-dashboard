@@ -46,7 +46,7 @@ export interface CalendarEvent {
   start: string
   end: string
   attendees?: string[]
-  attendeeDetails?: Array<{ email: string; displayName?: string }>
+  attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>
   needsPrep: boolean
   customers?: string[]
   organizer?: string

@@ -18,7 +18,7 @@ interface CalendarEvent {
   start: string
   end: string
   attendees?: string[]
-  attendeeDetails?: Array<{ email: string; displayName?: string }>
+  attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>
   customers?: string[]
   needsPrep?: boolean
   solo?: boolean
@@ -96,6 +96,7 @@ function MeetingCard({
   const [showContext, setShowContext] = useState(false)
   const [objective, setObjective] = useState('')
   const [notes, setNotes] = useState('')
+  const [linkedinUrls, setLinkedinUrls] = useState<Record<string, string>>({})
   const customerMatch = manualCustomer ?? autoCustomer
 
   const handleGenerate = () => {
@@ -103,7 +104,21 @@ function MeetingCard({
       objective: objective || undefined,
       notes: notes || undefined,
     } : undefined
-    onPrep(meeting, manualCustomer ?? undefined, context)
+    // Merge LinkedIn URLs into attendeeDetails for this meeting
+    const enrichedMeeting = { ...meeting }
+    if (Object.keys(linkedinUrls).length > 0) {
+      const existingDetails = meeting.attendeeDetails ?? []
+      const externalAttendees = (meeting.attendees ?? []).filter(e => !e.endsWith('@redhat.com'))
+      enrichedMeeting.attendeeDetails = externalAttendees.map(email => {
+        const existing = existingDetails.find(d => d.email === email)
+        return {
+          email,
+          displayName: existing?.displayName,
+          ...(linkedinUrls[email] ? { linkedinUrl: linkedinUrls[email] } : {}),
+        }
+      })
+    }
+    onPrep(enrichedMeeting, manualCustomer ?? undefined, context)
     setShowContext(false)
   }
 
@@ -253,6 +268,30 @@ function MeetingCard({
               className="w-full text-xs px-3 py-2 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent resize-none"
             />
           </div>
+          {/* LinkedIn URL inputs for external attendees (#385) */}
+          {attendeeList.filter(e => !e.endsWith('@redhat.com')).length > 0 && (
+            <div>
+              <label className="text-xs text-text-secondary block mb-1">Attendee LinkedIn URLs (optional)</label>
+              <div className="space-y-1.5">
+                {attendeeList.filter(e => !e.endsWith('@redhat.com')).map(email => {
+                  const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
+                  const label = detail?.displayName ?? email
+                  return (
+                    <div key={email} className="flex items-center gap-2">
+                      <span className="text-xs text-text-secondary w-36 truncate shrink-0" title={email}>{label}</span>
+                      <input
+                        type="url"
+                        value={linkedinUrls[email] ?? ''}
+                        onChange={e => setLinkedinUrls(prev => ({ ...prev, [email]: e.target.value }))}
+                        placeholder="https://linkedin.com/in/..."
+                        className="flex-1 text-xs px-2 py-1 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent"
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <button
               onClick={handleGenerate}
@@ -420,6 +459,7 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
           meetingTitle: meeting.title,
           meetingStart: meeting.start,
           attendees: meeting.attendees ?? [],
+          attendeeDetails: meeting.attendeeDetails,
           recurringEventId: meeting.recurringEventId,
           ...(context ? { context } : {}),
         }),

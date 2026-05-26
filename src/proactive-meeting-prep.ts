@@ -70,7 +70,7 @@ function deriveDisplayName(email: string): string {
 
 export function buildAttendeeCache(
   attendees: string[],
-  attendeeDetails: Array<{ email: string; displayName?: string }>,
+  attendeeDetails: Array<{ email: string; displayName?: string; linkedinUrl?: string }>,
   customerName: string,
   existingProfiles?: AttendeeProfile[],
 ): AttendeeProfile[] {
@@ -152,7 +152,7 @@ export function findMeetingsNeedingPrep(
 export async function runProactivePrepScan(
   fetchCalendarFn: () => Promise<CalendarEvent[]>,
   customers: Customer[],
-  generatePrepFn: (customer: Customer, meeting: { meetingTitle: string; meetingStart: string; attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string }> }) => Promise<{ docUrl: string; title: string; generatedAt: string }>,
+  generatePrepFn: (customer: Customer, meeting: { meetingTitle: string; meetingStart: string; attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> }) => Promise<{ docUrl: string; title: string; generatedAt: string }>,
   readHistoryFn: (slug: string) => Array<{ meetingTitle: string; meetingStart: string }>,
   toSlugFn: (name: string) => string,
   notifyFn?: (title: string, message: string) => Promise<void>,

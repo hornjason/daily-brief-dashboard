@@ -17,7 +17,7 @@ import { RefreshCw, AlertCircle, Plus, Trash2 } from 'lucide-react'
 export interface CampaignConfig {
   materialUrl: string
   materialTitle: string
-  personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean }>
+  personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
   valueProps: Array<{ id: string; claim: string; detail: string }>
   style: string
 }
@@ -52,7 +52,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
 
   // Preview state — editable config
   const [materialTitle, setMaterialTitle] = useState('')
-  const [personas, setPersonas] = useState<Array<{ role: string; relevantVPs: string[]; enabled: boolean }>>([])
+  const [personas, setPersonas] = useState<Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>>([])
   const [valueProps, setValueProps] = useState<Array<{ id: string; claim: string; detail: string }>>([])
   const [style, setStyle] = useState('')
 
@@ -241,7 +241,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   }
 
   function addPersona() {
-    setPersonas(prev => [...prev, { role: 'New Persona', relevantVPs: [], enabled: true }])
+    setPersonas(prev => [...prev, { role: 'New Persona', relevantVPs: [], enabled: true, linkedinUrl: undefined, name: undefined }])
   }
 
   function removePersona(index: number) {
@@ -386,26 +386,46 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
         <h3 className="text-sm font-semibold text-text-primary">Personas</h3>
         <div className="space-y-2">
           {personas.map((persona, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-700 rounded-lg">
-              <input
-                type="checkbox"
-                checked={persona.enabled}
-                onChange={() => togglePersona(idx)}
-                className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-accent focus:ring-2 focus:ring-accent/50"
-              />
-              <input
-                type="text"
-                value={persona.role}
-                onChange={e => updatePersonaRole(idx, e.target.value)}
-                className="flex-1 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-              <button
-                onClick={() => removePersona(idx)}
-                className="p-1 text-zinc-500 hover:text-warning transition-colors"
-                aria-label="Remove persona"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+            <div key={idx} className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-2">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={persona.enabled}
+                  onChange={() => togglePersona(idx)}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-accent focus:ring-2 focus:ring-accent/50"
+                />
+                <input
+                  type="text"
+                  value={persona.role}
+                  onChange={e => updatePersonaRole(idx, e.target.value)}
+                  placeholder="Role (e.g., VP Infrastructure)"
+                  className="flex-1 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+                <button
+                  onClick={() => removePersona(idx)}
+                  className="p-1 text-zinc-500 hover:text-warning transition-colors"
+                  aria-label="Remove persona"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              {/* LinkedIn URL + Name for targeted individual (#384) */}
+              <div className="flex items-center gap-2 pl-7">
+                <input
+                  type="text"
+                  value={persona.name ?? ''}
+                  onChange={e => setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, name: e.target.value || undefined } : p))}
+                  placeholder="Name (optional)"
+                  className="w-40 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+                <input
+                  type="url"
+                  value={persona.linkedinUrl ?? ''}
+                  onChange={e => setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, linkedinUrl: e.target.value || undefined } : p))}
+                  placeholder="LinkedIn URL (optional)"
+                  className="flex-1 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+              </div>
             </div>
           ))}
         </div>

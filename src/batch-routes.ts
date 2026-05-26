@@ -24,7 +24,7 @@ interface BatchExecuteRequest {
   customerNames: string[]
   config?: {
     materialUrl?: string
-    personas?: Array<{ role: string; relevantVPs: string[]; enabled: boolean }>
+    personas?: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
     style?: string
     valueProps?: Array<{ id: string; claim: string; detail: string }>
   }

@@ -55,7 +55,7 @@ export interface MeetingPrepRequest {
   meetingTitle: string
   meetingStart: string
   attendees: string[]
-  attendeeDetails?: Array<{ email: string; displayName?: string }>
+  attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>
   recurringEventId?: string // #269: for series tracking
   context?: {
     objective?: string
@@ -208,7 +208,7 @@ export function deriveCompanyFromDomain(email: string): string {
   return company.charAt(0).toUpperCase() + company.slice(1)
 }
 
-export function getAttendeeDisplayName(meeting: { attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string }> }, email: string): string {
+export function getAttendeeDisplayName(meeting: { attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> }, email: string): string {
   const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
   if (detail?.displayName) return detail.displayName
   // Derive from email: courtney.jimenez@insight.com → Courtney Jimenez
@@ -354,7 +354,7 @@ export function buildIntelligenceContext(slug: string): string {
 export function buildFallbackAttendeeTable(
   attendees: string[],
   prepData: any,
-  meeting?: { attendeeDetails?: Array<{ email: string; displayName?: string }> }
+  meeting?: { attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> }
 ): string {
   if (attendees.length === 0) return 'No attendees listed'
 
@@ -705,6 +705,10 @@ export async function generateMeetingPrep(
     try {
       const attendeeLines = customerAttendees.map(email => {
         const name = getAttendeeDisplayName(meeting, email)
+        const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
+        if (detail?.linkedinUrl) {
+          return `- "${name}" at ${customer.name} (${email}) — Research this LinkedIn profile: ${detail.linkedinUrl}`
+        }
         return `- "${name}" at ${customer.name} (${email}) — search: "${name}" site:linkedin.com ${customer.name}`
       }).join('\n')
 
