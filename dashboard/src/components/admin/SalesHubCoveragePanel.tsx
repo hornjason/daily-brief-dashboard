@@ -222,9 +222,10 @@ export function SalesHubCoveragePanel() {
         setRefreshing(false)
         return
       }
-      // Wait a moment then reload coverage
-      setTimeout(() => {
-        loadCoverage()
+      // Reload coverage and update timestamp to reflect the refresh
+      setTimeout(async () => {
+        await loadCoverage()
+        setCoverage(prev => prev ? { ...prev, scrapedAt: new Date().toISOString() } : prev)
         setRefreshing(false)
       }, 2000)
     } catch {
