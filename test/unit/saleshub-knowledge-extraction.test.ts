@@ -333,14 +333,19 @@ describe('buildSalesHubKnowledge', () => {
 
     const knowledge = buildSalesHubKnowledge(products, [], [])
 
+    // Helper: extract tactic names from object or string format (#365)
+    const tacticNames = (tactics: Array<string | { name: string }>) =>
+      tactics.map(t => typeof t === 'string' ? t : t.name)
+
     // Container Mgmt TDP should exist with 5 tactics
     const containerMgmt = knowledge.tdps.find(t => t.name === 'Container Mgmt')
     expect(containerMgmt).toBeDefined()
-    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party workloads (Non-AI)')
-    expect(containerMgmt!.tactics).toContain('Kubernetes for 3rd party AI workloads')
-    expect(containerMgmt!.tactics).toContain('Multicluster management & security at scale for Kubernetes')
-    expect(containerMgmt!.tactics).toContain('Secure the software supply chain')
-    expect(containerMgmt!.tactics).toContain('Sovereign Infrastructure')
+    const cmNames = tacticNames(containerMgmt!.tactics)
+    expect(cmNames).toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(cmNames).toContain('Kubernetes for 3rd party AI workloads')
+    expect(cmNames).toContain('Multicluster management & security at scale for Kubernetes')
+    expect(cmNames).toContain('Secure the software supply chain')
+    expect(cmNames).toContain('Sovereign Infrastructure')
     expect(containerMgmt!.tactics.length).toBe(5)
 
     // Edge TDP should NOT exist
@@ -366,13 +371,14 @@ describe('buildSalesHubKnowledge', () => {
     // App Platform should NOT have the moved tactics
     const appPlatform = knowledge.tdps.find(t => t.name === 'App Platform TDP')
     expect(appPlatform).toBeDefined()
-    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party workloads (Non-AI)')
-    expect(appPlatform!.tactics).not.toContain('Kubernetes for 3rd party AI workloads')
-    expect(appPlatform!.tactics).not.toContain('Multicluster management & security at scale for Kubernetes')
-    expect(appPlatform!.tactics).not.toContain('Secure the software supply chain')
+    const apNames = tacticNames(appPlatform!.tactics)
+    expect(apNames).not.toContain('Kubernetes for 3rd party workloads (Non-AI)')
+    expect(apNames).not.toContain('Kubernetes for 3rd party AI workloads')
+    expect(apNames).not.toContain('Multicluster management & security at scale for Kubernetes')
+    expect(apNames).not.toContain('Secure the software supply chain')
     // App Platform should still have its non-moved tactics
-    expect(appPlatform!.tactics).toContain('Cloud marketplaces and private offers')
-    expect(appPlatform!.tactics).toContain('Container Adoption Journey')
+    expect(apNames).toContain('Cloud marketplaces and private offers')
+    expect(apNames).toContain('Container Adoption Journey')
 
     // Agentic AI should have parentTdp updated to AI Platform
     const agenticAi = knowledge.tactics.find(t => t.name === 'Agentic AI')
@@ -880,5 +886,294 @@ End.
     `
     const result = parseSalesPlayPageSections(text, [])
     expect(result.tdpAlignment.length).toBe(6)
+  })
+})
+
+describe('TDP merge with content propagation (#365)', () => {
+  // Helper to build realistic test data matching production scrape output
+  function makeProducts(): ScrapedProduct[] {
+    return [
+      {
+        slug: 'ansible-automation-platform',
+        name: 'Ansible Automation Platform',
+        description: 'Enterprise automation',
+        url: 'https://saleshub.redhat.com/ansible',
+        tdpSections: [
+          { name: 'Automation TDP', description: 'Positions AAP for enterprise automation' },
+          { name: 'AIOps: Turn Intelligence into Action', description: 'Event-driven automation' },
+          { name: 'Network Automation', description: 'Multi-vendor network automation' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-25T00:00:00Z',
+      },
+      {
+        slug: 'openshift',
+        name: 'Red Hat OpenShift',
+        description: 'Enterprise Kubernetes',
+        url: 'https://saleshub.redhat.com/openshift',
+        tdpSections: [
+          { name: 'App Platform TDP', description: 'Application platform for cloud-native' },
+          { name: 'AI TDP', description: 'AI Technology Decision Point' },
+          { name: 'Container Adoption Journey', description: 'Adoption path' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-25T00:00:00Z',
+      },
+      {
+        slug: 'rhel',
+        name: 'Red Hat Enterprise Linux',
+        description: 'Enterprise Linux',
+        url: 'https://saleshub.redhat.com/rhel',
+        tdpSections: [
+          { name: 'Server/Cloud Operating System TDP', description: 'RHEL server positioning' },
+          { name: 'RHEL Image Mode', description: 'Bootable container images' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-25T00:00:00Z',
+      },
+      {
+        slug: 'openshift-virt',
+        name: 'Red Hat OpenShift Virtualization',
+        description: 'VM management on OpenShift',
+        url: 'https://saleshub.redhat.com/openshift-virt',
+        tdpSections: [
+          { name: 'Virtualization TDP', description: 'VMware migration positioning' },
+          { name: 'VMware Migration', description: 'Path from VMware' },
+        ],
+        salesTactics: [],
+        googleDocsUrls: [],
+        keyResources: [],
+        decks: [],
+        scrapedAt: '2026-05-25T00:00:00Z',
+      },
+    ]
+  }
+
+  function makeTdpPages(): ScrapedTdpPage[] {
+    return [
+      {
+        name: 'Automation TDP',
+        customerWins: [{ name: 'AcmeCo', description: 'Automated 500 workflows' }, { name: 'BigBank', description: 'Cut MTTR 60%' }],
+        whatToSay: [{ name: 'Intro Deck', url: 'https://example.com/intro', type: 'google-slides' }],
+        whatToShare: [{ name: 'Customer Deck', url: 'https://example.com/deck' }],
+        whatToShow: [{ name: 'Demo Environment', url: 'https://example.com/demo', type: 'demo' }],
+        services: [{ name: 'IBM Consulting', description: 'Deployment services' }],
+        cheatsheetUrl: 'https://example.com/cheatsheet',
+        customerDeckUrl: 'https://example.com/customer-deck',
+      },
+      {
+        name: 'App Platform TDP',
+        customerWins: [{ name: 'RetailCo', description: 'Modernized 200 apps' }],
+        whatToSay: [{ name: 'Platform Deck', url: 'https://example.com/platform', type: 'seismic' }],
+        whatToShare: [{ name: 'Migration Guide', url: 'https://example.com/guide' }],
+        whatToShow: [{ name: 'OCP Demo', url: 'https://example.com/ocp-demo', type: 'demo' }],
+        services: [],
+        cheatsheetUrl: '',
+        customerDeckUrl: '',
+      },
+      {
+        name: 'AI Platform',
+        customerWins: [{ name: 'TechStartup', description: 'Deployed InstructLab in 2 weeks' }],
+        whatToSay: [],
+        whatToShare: [],
+        whatToShow: [{ name: 'AI Demo', url: 'https://example.com/ai-demo', type: 'demo' }],
+        services: [],
+        cheatsheetUrl: '',
+        customerDeckUrl: '',
+      },
+      {
+        name: 'Server/Cloud Operating System',
+        customerWins: [{ name: 'GovCorp', description: 'RHEL 9 migration across 10K servers' }],
+        whatToSay: [{ name: 'RHEL Intro', url: 'https://example.com/rhel-intro', type: 'seismic' }],
+        whatToShare: [],
+        whatToShow: [],
+        services: [{ name: 'RHEL Migration Service', description: 'Guided RHEL migration' }],
+        cheatsheetUrl: 'https://example.com/rhel-cheatsheet',
+        customerDeckUrl: '',
+      },
+      {
+        name: 'Virtualization',
+        customerWins: [{ name: 'ManufCo', description: 'Migrated 1500 VMs from VMware' }],
+        whatToSay: [],
+        whatToShare: [{ name: 'VMware TCO Calculator', url: 'https://example.com/tco' }],
+        whatToShow: [{ name: 'Virt Demo', url: 'https://example.com/virt-demo', type: 'demo' }],
+        services: [],
+        cheatsheetUrl: '',
+        customerDeckUrl: '',
+      },
+    ]
+  }
+
+  function makeTactics(): ScrapedSalesTactic[] {
+    return [
+      {
+        name: 'AIOps: Turn Intelligence into Action',
+        talkTrack: 'Position EDA as the bridge between monitoring and automated remediation',
+        customerWins: ['Acme Corp reduced MTTR by 60%', 'BigBank automated incident response'],
+        whatToSay: ['Event-driven workflows replace manual troubleshooting'],
+        whatToShare: [{ name: 'AIOps Deck', url: 'https://example.com/aiops-deck', type: 'seismic' }],
+        parentTdp: 'Automation',
+        url: 'https://saleshub.redhat.com/tactics/aiops',
+      },
+      {
+        name: 'Network Automation',
+        talkTrack: 'Ansible as the agentless multi-vendor network automation platform',
+        customerWins: ['TelcoCo automated 50+ vendor devices'],
+        whatToSay: ['Multi-vendor support without agents'],
+        whatToShare: [],
+        parentTdp: 'Automation',
+        url: 'https://saleshub.redhat.com/tactics/network',
+      },
+    ]
+  }
+
+  function makeSalesPlays(): ScrapedSalesPlay[] {
+    return [
+      {
+        name: 'Modernize Infrastructure',
+        description: 'Automate and modernize IT infrastructure',
+        linkedTdps: ['Automation', 'Virtualization'],
+        url: 'https://saleshub.redhat.com/plays/modernize',
+        customerLens: {
+          pain: ['Legacy costs rising', 'VMware uncertainty'],
+          outcomes: ['30-40% TCO reduction'],
+          impact: ['Operational efficiency'],
+        },
+        realWorldExamples: [{ customer: 'GlobalBank', outcome: 'Migrated 2000 VMs' }],
+        emailTemplateUrl: 'https://example.com/email',
+        personaSection: {
+          roles: ['CTO', 'VP Infrastructure'],
+          painPoints: ['Budget constraints'],
+          discoveryQuestions: ['How many VMs?'],
+          valueProps: ['Open hybrid cloud'],
+          whatWinsThemOver: ['Customer references'],
+        },
+      },
+    ]
+  }
+
+  it('AC-1: TDP merge matches >=4 of 6 TDPs and populates customerWins', () => {
+    const knowledge = buildSalesHubKnowledge(makeProducts(), makeSalesPlays(), makeTactics(), makeTdpPages())
+
+    // Count TDPs with customerWins populated
+    const tdpsWithWins = knowledge.tdps.filter(t => t.customerWins.length > 0)
+    expect(tdpsWithWins.length).toBeGreaterThanOrEqual(4)
+
+    // Verify specific TDP customer wins
+    const automation = knowledge.tdps.find(t => t.name === 'Automation')
+    expect(automation).toBeDefined()
+    expect(automation!.customerWins.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('AC-2: TDP merge populates whatToSay, whatToShare, whatToShow for matched TDPs', () => {
+    const knowledge = buildSalesHubKnowledge(makeProducts(), makeSalesPlays(), makeTactics(), makeTdpPages())
+
+    const automation = knowledge.tdps.find(t => t.name === 'Automation')
+    expect(automation).toBeDefined()
+    expect(automation!.whatToSay.length).toBeGreaterThanOrEqual(1)
+    expect(automation!.whatToShare.length).toBeGreaterThanOrEqual(1)
+    expect(automation!.whatToShow.length).toBeGreaterThanOrEqual(1)
+
+    // Server/Cloud OS should also have content
+    const serverOs = knowledge.tdps.find(t => t.name === 'Server/Cloud OS')
+    expect(serverOs).toBeDefined()
+    expect(serverOs!.customerWins.length).toBeGreaterThanOrEqual(1)
+    expect(serverOs!.services.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('AC-3: SalesPlay nodes have customerLens and realWorldExamples from scraper data', () => {
+    const knowledge = buildSalesHubKnowledge(makeProducts(), makeSalesPlays(), makeTactics(), makeTdpPages())
+
+    const play = knowledge.salesPlays.find(sp => sp.name === 'Modernize Infrastructure')
+    expect(play).toBeDefined()
+    expect(play!.customerLens.pain.length).toBeGreaterThanOrEqual(1)
+    expect(play!.customerLens.outcomes.length).toBeGreaterThanOrEqual(1)
+    expect(play!.realWorldExamples.length).toBeGreaterThanOrEqual(1)
+    expect(play!.realWorldExamples[0].customer).toBe('GlobalBank')
+    expect(play!.personaSection.roles.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('AC-4: Tactics stored as objects with talkTrack, customerWins, assets', () => {
+    const knowledge = buildSalesHubKnowledge(makeProducts(), makeSalesPlays(), makeTactics(), makeTdpPages())
+
+    const automation = knowledge.tdps.find(t => t.name === 'Automation')
+    expect(automation).toBeDefined()
+    expect(automation!.tactics.length).toBeGreaterThanOrEqual(1)
+
+    // Tactics should be objects, not bare strings
+    for (const tactic of automation!.tactics) {
+      expect(typeof tactic).toBe('object')
+      expect(tactic).toHaveProperty('name')
+      // Tactics with matching ScrapedSalesTactic should have content
+      const tacticObj = tactic as { name: string; talkTrack?: string; customerWins?: string[] }
+      if (tacticObj.name === 'AIOps: Turn Intelligence into Action') {
+        expect(tacticObj.talkTrack).toBeTruthy()
+        expect(tacticObj.customerWins!.length).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it('AC-6: _diagnostics field in output JSON with match statistics', () => {
+    const knowledge = buildSalesHubKnowledge(makeProducts(), makeSalesPlays(), makeTactics(), makeTdpPages())
+
+    expect(knowledge).toHaveProperty('_diagnostics')
+    const diag = (knowledge as any)._diagnostics
+    expect(diag).toHaveProperty('tdpPagesDiscovered')
+    expect(diag).toHaveProperty('tdpPagesMatched')
+    expect(diag).toHaveProperty('tdpPagesUnmatched')
+    expect(diag).toHaveProperty('salesPlayPagesMatched')
+    expect(diag).toHaveProperty('tacticsWithContent')
+    expect(diag).toHaveProperty('tacticsAsStrings')
+    expect(diag.tdpPagesDiscovered).toBe(5)
+    expect(diag.tdpPagesMatched).toBeGreaterThanOrEqual(4)
+    expect(diag.tacticsAsStrings).toBe(0)
+  })
+
+  it('TDP merge handles name variants: "AI Platform" matches "AI TDP"', () => {
+    const products: ScrapedProduct[] = [{
+      slug: 'ocp', name: 'OpenShift', description: '', url: '',
+      tdpSections: [{ name: 'AI TDP', description: 'AI positioning' }],
+      salesTactics: [], googleDocsUrls: [], keyResources: [], decks: [], scrapedAt: '',
+    }]
+    const tdpPages: ScrapedTdpPage[] = [{
+      name: 'AI Platform',
+      customerWins: [{ name: 'AICo', description: 'Deployed AI' }],
+      whatToSay: [], whatToShare: [], whatToShow: [], services: [],
+      cheatsheetUrl: '', customerDeckUrl: '',
+    }]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [], tdpPages)
+    const aiTdp = knowledge.tdps.find(t => t.name === 'AI Platform')
+    expect(aiTdp).toBeDefined()
+    expect(aiTdp!.customerWins.length).toBe(1)
+    expect(aiTdp!.customerWins[0].name).toBe('AICo')
+  })
+
+  it('TDP merge handles name variants: "Server/Cloud Operating System" matches "Server/Cloud Operating System TDP"', () => {
+    const products: ScrapedProduct[] = [{
+      slug: 'rhel', name: 'RHEL', description: '', url: '',
+      tdpSections: [{ name: 'Server/Cloud Operating System TDP', description: 'RHEL' }],
+      salesTactics: [], googleDocsUrls: [], keyResources: [], decks: [], scrapedAt: '',
+    }]
+    const tdpPages: ScrapedTdpPage[] = [{
+      name: 'Server/Cloud Operating System',
+      customerWins: [{ name: 'GovCo', description: 'RHEL 9 migration' }],
+      whatToSay: [], whatToShare: [], whatToShow: [], services: [],
+      cheatsheetUrl: '', customerDeckUrl: '',
+    }]
+
+    const knowledge = buildSalesHubKnowledge(products, [], [], tdpPages)
+    const serverOs = knowledge.tdps.find(t => t.name === 'Server/Cloud OS')
+    expect(serverOs).toBeDefined()
+    expect(serverOs!.customerWins.length).toBe(1)
   })
 })

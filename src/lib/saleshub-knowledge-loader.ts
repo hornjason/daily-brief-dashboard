@@ -78,7 +78,9 @@ export function getTacticsByTdp(tdpName: string): TacticNode[] {
   )
 
   if (tdpNode) {
-    for (const tacticName of tdpNode.tactics) {
+    for (const tacticRef of tdpNode.tactics) {
+      // Handle both string (legacy) and object (new #365) format
+      const tacticName = typeof tacticRef === 'string' ? tacticRef : tacticRef.name
       const tactic = kb.tactics.find(t => t.name === tacticName)
       if (tactic && !directMatches.some(d => d.name === tactic.name)) {
         directMatches.push(tactic)

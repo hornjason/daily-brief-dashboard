@@ -394,3 +394,81 @@ describe('getKnowledgeCoverage', () => {
     expect(automationTdp!.extractedContentCount).toBe(1)
   })
 })
+
+describe('loader handles tactics as objects (#365)', () => {
+  it('getTacticsByTdp works when TDP tactics are objects', () => {
+    // Write fixture with object-style tactics in TDP nodes
+    const objectTacticsKnowledge = {
+      ...FIXTURE_KNOWLEDGE,
+      tdps: [
+        {
+          ...FIXTURE_KNOWLEDGE.tdps[0],
+          tactics: [
+            { name: 'AIOps: Turn Intelligence into Action', talkTrack: 'AIOps talk', customerWins: ['Win1'], assets: [] },
+            { name: 'Automate at Scale', talkTrack: '', customerWins: [], assets: [] },
+          ],
+        },
+        FIXTURE_KNOWLEDGE.tdps[1],
+      ],
+    }
+    writeFileSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'), JSON.stringify(objectTacticsKnowledge))
+    resetKnowledgeCache()
+
+    const tactics = getTacticsByTdp('Automation')
+    expect(tactics.length).toBe(2)
+    const names = tactics.map(t => t.name)
+    expect(names).toContain('AIOps: Turn Intelligence into Action')
+    expect(names).toContain('Automate at Scale')
+  })
+
+  it('getKnowledgeCoverage works with object tactics and populated fields (AC-5)', () => {
+    // Write fixture with populated customer wins
+    const populatedKnowledge = {
+      ...FIXTURE_KNOWLEDGE,
+      tdps: [
+        {
+          ...FIXTURE_KNOWLEDGE.tdps[0],
+          customerWins: [{ name: 'TestCo', description: 'Great result' }],
+          whatToSay: [{ name: 'Intro Deck', url: 'https://example.com/intro', type: 'slides' }],
+          tactics: [
+            { name: 'AIOps: Turn Intelligence into Action', talkTrack: 'AIOps talk', customerWins: ['Win1'], assets: [] },
+          ],
+        },
+        FIXTURE_KNOWLEDGE.tdps[1],
+      ],
+    }
+    writeFileSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'), JSON.stringify(populatedKnowledge))
+    resetKnowledgeCache()
+
+    const coverage = getKnowledgeCoverage()
+    // With customerWins and whatToSay populated, coverage should be higher
+    expect(coverage.overallCoveragePercent).toBeGreaterThan(35)
+
+    const automationTdp = coverage.tdps.find(t => t.name === 'Automation TDP')
+    expect(automationTdp).toBeDefined()
+    expect(automationTdp!.sections.customerWins).toBe(true)
+    expect(automationTdp!.sections.whatToSay).toBe(true)
+  })
+
+  it('getTacticsByTdp handles mixed string and object tactics (legacy compat)', () => {
+    // Write fixture with mixed tactics
+    const mixedKnowledge = {
+      ...FIXTURE_KNOWLEDGE,
+      tdps: [
+        {
+          ...FIXTURE_KNOWLEDGE.tdps[0],
+          tactics: [
+            'AIOps: Turn Intelligence into Action',
+            { name: 'Automate at Scale', talkTrack: 'Scale talk', customerWins: [], assets: [] },
+          ],
+        },
+        FIXTURE_KNOWLEDGE.tdps[1],
+      ],
+    }
+    writeFileSync(resolve(CONFIG_DIR, 'saleshub-knowledge.json'), JSON.stringify(mixedKnowledge))
+    resetKnowledgeCache()
+
+    const tactics = getTacticsByTdp('Automation')
+    expect(tactics.length).toBe(2)
+  })
+})

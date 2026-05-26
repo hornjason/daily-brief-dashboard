@@ -9,6 +9,22 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface TacticSummary {
+  name: string
+  talkTrack: string
+  customerWins: string[]
+  assets: Array<{ name: string; url: string; type: string }>
+}
+
+export interface SalesHubDiagnostics {
+  tdpPagesDiscovered: number
+  tdpPagesMatched: number
+  tdpPagesUnmatched: string[]
+  salesPlayPagesMatched: number
+  tacticsWithContent: number
+  tacticsAsStrings: number
+}
+
 export interface SalesHubKnowledge {
   version: number
   scrapedAt: string
@@ -16,6 +32,7 @@ export interface SalesHubKnowledge {
   tdps: TdpNode[]
   tactics: TacticNode[]
   products: ProductNode[]
+  _diagnostics?: SalesHubDiagnostics
 }
 
 export interface SalesPlayNode {
@@ -41,7 +58,7 @@ export interface SalesPlayNode {
 export interface TdpNode {
   name: string
   description: string
-  tactics: string[]
+  tactics: Array<string | TacticSummary>
   products: string[]
   customerWins: Array<{ name: string; description: string }>
   whatToSay: Array<{ name: string; url: string; type: string }>
@@ -679,6 +696,54 @@ function classifyLinkType(url: string): string {
 
 // ── Assembly Function ────────────────────────────────────────────────────────
 
+// ── TDP name normalization map (used by both merge and post-processing) ──
+const TDP_NAME_MAP: Record<string, string> = {
+  'server/cloud operating system': 'Server/Cloud OS',
+  'server/cloud operating system tdp': 'Server/Cloud OS',
+  'application platform': 'App Platform',
+  'application platform tdp': 'App Platform TDP',
+  'container management': 'Container Mgmt',
+  'container management tdp': 'Container Mgmt',
+  'automation tdp': 'Automation',
+  'edge': 'AI Platform',
+}
+
+/** Strip common TDP name suffixes for fuzzy matching */
+function normalizeTdpNameForMatch(name: string): string {
+  return name
+    .replace(/\s+TDP$/i, '')
+    .replace(/\s*&\s*Sales\s+tactics$/i, '')
+    .trim()
+    .toLowerCase()
+}
+
+/** Try to match a tdpPage name to a tdpMap entry, accounting for name variants */
+function findTdpMatchForPage(
+  tdpMap: Map<string, TdpNode>,
+  pageName: string,
+): TdpNode | null {
+  const pageNorm = normalizeTdpNameForMatch(pageName)
+  const pageCanonical = TDP_NAME_MAP[pageName.toLowerCase()]
+  const pageCanonicalNorm = pageCanonical ? normalizeTdpNameForMatch(pageCanonical) : null
+
+  for (const [, tdp] of tdpMap) {
+    const tdpNorm = normalizeTdpNameForMatch(tdp.name)
+    const tdpCanonical = TDP_NAME_MAP[tdp.name.toLowerCase()]
+    const tdpCanonicalNorm = tdpCanonical ? normalizeTdpNameForMatch(tdpCanonical) : null
+
+    // Exact normalized match
+    if (tdpNorm === pageNorm) return tdp
+    // Canonical name match
+    if (tdpCanonicalNorm && tdpCanonicalNorm === pageNorm) return tdp
+    if (pageCanonicalNorm && tdpNorm === pageCanonicalNorm) return tdp
+    if (tdpCanonicalNorm && pageCanonicalNorm && tdpCanonicalNorm === pageCanonicalNorm) return tdp
+    // Substring match (original logic)
+    if (tdp.name.toLowerCase().includes(pageName.toLowerCase()) ||
+        pageName.toLowerCase().includes(tdpNorm)) return tdp
+  }
+  return null
+}
+
 /**
  * Build the complete SalesHubKnowledge structure from scraped data.
  * Aggregates TDPs across products, deduplicates, and cross-references.
@@ -766,7 +831,7 @@ export function buildSalesHubKnowledge(
         })
         // Link tactic to its parent TDP
         const tdp = tdpMap.get(parentTdp)
-        if (tdp && !tdp.tactics.includes(section.name)) {
+        if (tdp && !tdp.tactics.some(t => (typeof t === 'string' ? t : t.name) === section.name)) {
           tdp.tactics.push(section.name)
         }
       }
@@ -799,33 +864,39 @@ export function buildSalesHubKnowledge(
     if (tactic.parentTdp) {
       for (const [, tdp] of tdpMap) {
         if (tdp.name.toLowerCase().includes(tactic.parentTdp.toLowerCase())) {
-          if (!tdp.tactics.includes(tactic.name)) tdp.tactics.push(tactic.name)
+          if (!tdp.tactics.some(t => (typeof t === 'string' ? t : t.name) === tactic.name)) tdp.tactics.push(tactic.name)
         }
       }
     }
   }
 
-  // Merge TDP page structured sections into TDP nodes (#366)
+  // Merge TDP page structured sections into TDP nodes (#366, improved matching #365)
+  const _diag = {
+    tdpPagesDiscovered: tdpPages?.length ?? 0,
+    tdpPagesMatched: 0,
+    tdpPagesUnmatched: [] as string[],
+    salesPlayPagesMatched: 0,
+    tacticsWithContent: 0,
+    tacticsAsStrings: 0,
+  }
+
   if (tdpPages) {
     for (const tdpPage of tdpPages) {
-      // Match by name — TDP page name may be "AI Platform" while tdpMap has "AI Platform TDP"
-      let matched = false
-      for (const [, tdp] of tdpMap) {
-        if (tdp.name.toLowerCase().includes(tdpPage.name.toLowerCase()) ||
-            tdpPage.name.toLowerCase().includes(tdp.name.toLowerCase().replace(/ tdp$/i, ''))) {
-          tdp.customerWins = tdpPage.customerWins
-          tdp.whatToSay = tdpPage.whatToSay
-          tdp.whatToShare = tdpPage.whatToShare
-          tdp.whatToShow = tdpPage.whatToShow
-          tdp.services = tdpPage.services
-          tdp.cheatsheetUrl = tdpPage.cheatsheetUrl
-          tdp.customerDeckUrl = tdpPage.customerDeckUrl
-          matched = true
-          break
-        }
-      }
-      // If no match found, create a new TDP node from the page data
-      if (!matched && tdpPage.name) {
+      const matchedTdp = findTdpMatchForPage(tdpMap, tdpPage.name)
+      if (matchedTdp) {
+        matchedTdp.customerWins = tdpPage.customerWins
+        matchedTdp.whatToSay = tdpPage.whatToSay
+        matchedTdp.whatToShare = tdpPage.whatToShare
+        matchedTdp.whatToShow = tdpPage.whatToShow
+        matchedTdp.services = tdpPage.services
+        matchedTdp.cheatsheetUrl = tdpPage.cheatsheetUrl
+        matchedTdp.customerDeckUrl = tdpPage.customerDeckUrl
+        _diag.tdpPagesMatched++
+        console.log(`[knowledge] TDP page "${tdpPage.name}" matched → "${matchedTdp.name}"`)
+      } else if (tdpPage.name) {
+        // If no match found, create a new TDP node from the page data
+        _diag.tdpPagesUnmatched.push(tdpPage.name)
+        console.log(`[knowledge] TDP page "${tdpPage.name}" — no match in tdpMap, creating new entry`)
         tdpMap.set(tdpPage.name, {
           name: tdpPage.name,
           description: '',
@@ -846,18 +917,7 @@ export function buildSalesHubKnowledge(
   }
 
   // ── TDP name normalization (#381) ──
-  const TDP_NAME_MAP: Record<string, string> = {
-    'server/cloud operating system': 'Server/Cloud OS',
-    'server/cloud operating system tdp': 'Server/Cloud OS',
-    'application platform': 'App Platform',
-    'application platform tdp': 'App Platform TDP',
-    'container management': 'Container Mgmt',
-    'container management tdp': 'Container Mgmt',
-    'automation tdp': 'Automation',
-    'edge': 'AI Platform',
-  }
-
-  // Normalize TDP names in tdpMap
+  // Normalize TDP names in tdpMap (TDP_NAME_MAP is at module level)
   for (const [key, tdp] of tdpMap) {
     const normalized = TDP_NAME_MAP[tdp.name.toLowerCase()]
     if (normalized && normalized !== tdp.name) {
@@ -865,7 +925,10 @@ export function buildSalesHubKnowledge(
       // Merge into existing entry if one exists
       const existing = tdpMap.get(normalized)
       if (existing) {
-        for (const t of tdp.tactics) { if (!existing.tactics.includes(t)) existing.tactics.push(t) }
+        for (const t of tdp.tactics) {
+          const tName = typeof t === 'string' ? t : t.name
+          if (!existing.tactics.some(et => (typeof et === 'string' ? et : et.name) === tName)) existing.tactics.push(t)
+        }
         for (const p of tdp.products) { if (!existing.products.includes(p)) existing.products.push(p) }
         if (tdp.customerWins.length > existing.customerWins.length) existing.customerWins = tdp.customerWins
         if (tdp.whatToSay.length > existing.whatToSay.length) existing.whatToSay = tdp.whatToSay
@@ -980,14 +1043,17 @@ export function buildSalesHubKnowledge(
   } else {
     const cm = tdpMap.get('Container Mgmt')!
     for (const name of containerMgmtTacticNames) {
-      if (!cm.tactics.includes(name)) cm.tactics.push(name)
+      if (!cm.tactics.some(t => (typeof t === 'string' ? t : t.name) === name)) cm.tactics.push(name)
     }
   }
 
   // Remove moved tactics from App Platform TDP(s)
   for (const [, tdp] of tdpMap) {
     if (fuzzyMatch(tdp.name, 'app platform')) {
-      tdp.tactics = tdp.tactics.filter(t => !containerMgmtTacticNames.includes(t))
+      tdp.tactics = tdp.tactics.filter(t => {
+        const name = typeof t === 'string' ? t : t.name
+        return !containerMgmtTacticNames.includes(name)
+      })
     }
   }
 
@@ -1025,7 +1091,7 @@ export function buildSalesHubKnowledge(
     // Add to AI TDP's tactics list
     if (aiTdpName) {
       const aiTdp = tdpMap.get(aiTdpName)!
-      if (!aiTdp.tactics.includes('Red Hat AI Factory with NVIDIA')) {
+      if (!aiTdp.tactics.some(t => (typeof t === 'string' ? t : t.name) === 'Red Hat AI Factory with NVIDIA')) {
         aiTdp.tactics.push('Red Hat AI Factory with NVIDIA')
       }
     }
@@ -1177,6 +1243,34 @@ export function buildSalesHubKnowledge(
     }
   }
 
+  // ── Convert TDP tactics from strings to objects (#365) ──
+  for (const [, tdp] of tdpMap) {
+    tdp.tactics = tdp.tactics.map(tacticRef => {
+      const name = typeof tacticRef === 'string' ? tacticRef : tacticRef.name
+      // Find matching tactic node for content
+      const tacticNode = tacticNodes.find(t => t.name === name)
+      if (tacticNode) {
+        _diag.tacticsWithContent++
+        return {
+          name: tacticNode.name,
+          talkTrack: tacticNode.talkTrack,
+          customerWins: tacticNode.customerWins,
+          assets: tacticNode.whatToShare,
+        } as TacticSummary
+      }
+      // No matching tactic node found — return minimal object
+      _diag.tacticsAsStrings++
+      return { name, talkTrack: '', customerWins: [], assets: [] } as TacticSummary
+    })
+  }
+
+  // ── Sales Play diagnostics ──
+  _diag.salesPlayPagesMatched = salesPlayNodes.filter(sp =>
+    (sp.customerLens?.pain?.length ?? 0) > 0 ||
+    (sp.realWorldExamples?.length ?? 0) > 0 ||
+    (sp.personaSection?.roles?.length ?? 0) > 0
+  ).length
+
   return {
     version: 1,
     scrapedAt: new Date().toISOString(),
@@ -1184,5 +1278,6 @@ export function buildSalesHubKnowledge(
     tdps: Array.from(tdpMap.values()),
     tactics: tacticNodes,
     products: productNodes,
+    _diagnostics: _diag,
   }
 }
