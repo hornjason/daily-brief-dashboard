@@ -17,6 +17,8 @@ interface RSSItem {
   pubDate: string
   source: 'blog' | 'press-release' | 'developer-blog'
   productTags?: string[]
+  /** Feed category (Corporate, Developer, Research, Security, Product) — GitHub Issue #408 */
+  category?: string
 }
 
 interface RSSCache {
@@ -76,6 +78,7 @@ export function RedHatNewsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [productFilter, setProductFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
   const fetchData = async () => {
     setLoading(true)
@@ -98,6 +101,17 @@ export function RedHatNewsPage() {
     fetchData()
   }, [])
 
+  // GitHub Issue #408 — Discover all categories from feed data
+  const CATEGORY_ORDER = ['Corporate', 'Developer', 'Research', 'Security', 'Product']
+  const allCategories = useMemo(() => {
+    if (!data?.items) return []
+    const cats = new Set<string>()
+    for (const item of data.items) {
+      if (item.category) cats.add(item.category)
+    }
+    return CATEGORY_ORDER.filter(c => cats.has(c))
+  }, [data])
+
   // Discover all product tags
   const allProductTags = useMemo(() => {
     if (!data?.items) return []
@@ -112,14 +126,18 @@ export function RedHatNewsPage() {
     return ['AAP', 'OCP', 'RHEL', 'General'].filter(t => tags.has(t))
   }, [data])
 
-  // Filter items by product
+  // Filter items by category and product
   const filteredItems = useMemo(() => {
     if (!data?.items) return []
-    if (productFilter === 'all') return data.items
-    return data.items.filter(item =>
-      item.productTags?.includes(productFilter)
-    )
-  }, [data, productFilter])
+    let items = data.items
+    if (categoryFilter !== 'all') {
+      items = items.filter(item => item.category === categoryFilter)
+    }
+    if (productFilter !== 'all') {
+      items = items.filter(item => item.productTags?.includes(productFilter))
+    }
+    return items
+  }, [data, categoryFilter, productFilter])
 
   return (
     <ModulePageShell
@@ -161,11 +179,42 @@ export function RedHatNewsPage() {
           </div>
         )}
 
+        {/* Category Filter — GitHub Issue #408 */}
+        {!loading && !error && allCategories.length > 0 && (
+          <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <Filter className="w-4 h-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">Category:</span>
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+                categoryFilter === 'all'
+                  ? 'border-accent bg-accent/10 text-accent font-medium'
+                  : 'border-border text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              All
+            </button>
+            {allCategories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+                  categoryFilter === cat
+                    ? 'border-accent bg-accent/10 text-accent font-medium'
+                    : 'border-border text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Product Filter */}
         {!loading && !error && allProductTags.length > 0 && (
           <div className="mb-6 flex items-center gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-text-secondary" />
-            <span className="text-sm text-text-secondary">Filter:</span>
+            <span className="text-sm text-text-secondary">Product:</span>
             <button
               onClick={() => setProductFilter('all')}
               className={`text-sm px-3 py-1 rounded-full border transition-colors ${
@@ -247,9 +296,13 @@ export function RedHatNewsPage() {
           <div className="py-20 text-center">
             <Newspaper className="w-12 h-12 text-accent/30 mx-auto mb-3" />
             <p className="text-sm text-text-secondary">
-              {productFilter === 'all'
+              {categoryFilter === 'all' && productFilter === 'all'
                 ? 'No news items available'
-                : `No news items tagged with ${productFilter}`}
+                : categoryFilter !== 'all' && productFilter !== 'all'
+                  ? `No news items in ${categoryFilter} tagged with ${productFilter}`
+                  : categoryFilter !== 'all'
+                    ? `No news items in ${categoryFilter}`
+                    : `No news items tagged with ${productFilter}`}
             </p>
           </div>
         )}

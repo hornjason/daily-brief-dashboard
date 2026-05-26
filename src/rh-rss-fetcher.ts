@@ -22,6 +22,8 @@ export interface RSSItem {
   pubDate: string
   source: string
   productTags: string[]
+  /** Feed category from config (Corporate, Developer, Research, Security, Product) — GitHub Issue #408 */
+  category?: string
 }
 
 export interface RSSCache {
@@ -117,8 +119,9 @@ function detectProductTags(text: string): string[] {
  * @param xml RSS feed XML content
  * @param source Feed source identifier (e.g., 'blog', 'security-advisory')
  * @param configTags Optional product tags from feed config to merge with auto-detected tags
+ * @param category Feed category from config (GitHub Issue #408)
  */
-function parseRSSXML(xml: string, source: string, configTags?: string[]): RSSItem[] {
+function parseRSSXML(xml: string, source: string, configTags?: string[], category?: string): RSSItem[] {
   const items: RSSItem[] = []
 
   // Extract all <item>...</item> blocks
@@ -146,6 +149,7 @@ function parseRSSXML(xml: string, source: string, configTags?: string[]): RSSIte
       pubDate: pubDate.trim(),
       source,
       productTags,
+      ...(category ? { category } : {}),
     })
   }
 
@@ -183,7 +187,7 @@ export async function fetchRedHatRSS(): Promise<void> {
       }
 
       const xml = await response.text()
-      const items = parseRSSXML(xml, feed.source, feed.productTags)
+      const items = parseRSSXML(xml, feed.source, feed.productTags, feed.category)
       allItems.push(...items)
 
       console.log(`[rh-rss] ${feed.source}: parsed ${items.length} items`)

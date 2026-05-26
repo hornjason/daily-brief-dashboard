@@ -788,6 +788,31 @@ export async function computeTemporalDelta(customerName: string) {
 
 // ── Data freshness dashboard ──────────────────────────────────────────────────
 
+// GitHub Issue #406 — Data source transparency: show WHERE data comes from
+const SOURCE_DESCRIPTIONS: Record<string, string> = {
+  'ccsp': 'Google Drive CSV (L3 sync)',
+  'pipeline': 'Google Drive CSV (L3 sync)',
+  'subscriptions': 'Google Sheets (SF Bookings)',
+  'cases': 'Red Hat Portal (browser scraper)',
+  'news-radar': 'Web search (Gemini-powered)',
+  'rh-rss': 'RSS/Atom feeds (27 configured)',
+  'rh-events': 'Email newsletter parser',
+  'product-intel': 'redhat.com releases API',
+  'product-lifecycle': 'Red Hat product lifecycle data',
+  'value-maps': 'Built-in slide deck (30 products)',
+  'tech-stack': 'Gemini analysis of customer signals',
+  'cloud-marketplace': 'Partner catalog newsletter',
+  'emails': 'Gmail API (OAuth)',
+  'intelligence': 'Gemini analysis (on-demand)',
+  'account-plan': 'Gemini analysis (on-demand)',
+  'customer-docs': 'Google Drive documents',
+  'customer-product-intel': 'Product + customer signal synthesis',
+  'playbook': 'Gemini-generated engagement plan',
+  'campaigns': 'Gemini-generated email campaigns',
+  'meeting-prep': 'Gemini-generated meeting prep',
+  'tools': 'Built-in business value tools',
+}
+
 export function computeFreshnessStatus() {
   const allStatus = FeatureModuleRegistry.getStatus()
   const allModules = FeatureModuleRegistry.list()
@@ -813,6 +838,7 @@ export function computeFreshnessStatus() {
       return {
         name: module.name,
         displayName: module.displayName ?? module.name,
+        sourceDescription: SOURCE_DESCRIPTIONS[module.name] ?? null,
         lastChecked,
         lastChanged: status.lastChanged ?? lastChecked,
         recordCount: status.recordCount ?? null,

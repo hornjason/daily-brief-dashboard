@@ -72,6 +72,7 @@ const SOURCE_GROUPS: SourceGroup[] = [
 interface DataSourceStatus {
   name: string
   displayName: string
+  sourceDescription: string | null
   lastChecked: string | null
   recordCount: number | null
   status: 'fresh' | 'stale' | 'critical' | 'unknown'
@@ -107,7 +108,12 @@ function DataSourceCard({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Circle className={`w-2.5 h-2.5 fill-current ${statusColor}`} />
-          <span className="text-sm font-medium text-gray-200">{displayName}</span>
+          <div>
+            <span className="text-sm font-medium text-gray-200">{displayName}</span>
+            {source.sourceDescription && (
+              <div className="text-xs text-gray-500">{source.sourceDescription}</div>
+            )}
+          </div>
         </div>
         {source.refreshEndpoint && (
           <button
