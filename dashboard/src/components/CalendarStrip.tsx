@@ -482,6 +482,17 @@ function WeekCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgendaOpen: (ev: 
           )}
         </div>
       ) : null}
+      {ev.attendees && ev.attendees.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Users className="w-3 h-3 text-text-secondary shrink-0" />
+          {ev.attendees.slice(0, 3).map((email) => (
+            <span key={email} className="text-xs bg-border/40 text-text-secondary px-1.5 py-0.5 rounded truncate max-w-[100px]" title={email}>
+              {email.split('@')[0]}
+            </span>
+          ))}
+          {ev.attendees.length > 3 && <span className="text-xs text-text-secondary">+{ev.attendees.length - 3}</span>}
+        </div>
+      )}
       {isCustomer && ev.description && (
         <button onClick={() => onAgendaOpen(ev)} className="text-left group">
           <p className="text-xs text-text-secondary leading-relaxed line-clamp-2 group-hover:text-text-primary transition-colors">{ev.description}</p>
