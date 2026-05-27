@@ -47,13 +47,13 @@ export interface EcosystemPartnerCache {
 
 // ── Cache directory ───────────────────────────────────────────────────────────
 
-const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
-
 /**
  * Returns the resolved path to the ecosystem catalog cache directory.
+ * Reads CACHE_DIR at call time (not module load time) so tests can override it.
  */
 export function getEcosystemCacheDir(): string {
-  return resolve(CACHE_DIR, 'ecosystem-catalog')
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  return resolve(cacheDir, 'ecosystem-catalog')
 }
 
 // ── Loading ───────────────────────────────────────────────────────────────────

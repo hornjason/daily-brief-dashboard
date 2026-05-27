@@ -1296,7 +1296,7 @@ export function registerScrapeRoutes(app: Hono): void {
     return c.json(coverage)
   })
 
-  app.post('/api/saleshub/refresh', (c) => {
+  app.post('/api/saleshub/refresh', async (c) => {
     if (isPrimary()) {
       // Primary/Mac Mini: trigger the full SalesHub scrape
       const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
@@ -1312,8 +1312,15 @@ export function registerScrapeRoutes(app: Hono): void {
       }
     }
 
-    // Hero/L3 installs: re-read JSON files from disk (no scraping needed)
+    // Hero/L3 installs: download from Drive first, then re-read from disk
     try {
+      const { downloadSaleshubFromDrive } = require('./lib/saleshub-drive-sync.ts')
+      let driveDownloaded = false
+      try {
+        driveDownloaded = await downloadSaleshubFromDrive()
+      } catch (e: any) {
+        console.warn(`[scrape-api] SalesHub Drive download failed — falling back to disk: ${e.message}`)
+      }
       const { resetKnowledgeCache, getKnowledgeStats } = require('./lib/saleshub-knowledge-loader.ts')
       resetKnowledgeCache()
       const stats = getKnowledgeStats()
@@ -1322,9 +1329,10 @@ export function registerScrapeRoutes(app: Hono): void {
         success: true,
         recordCount: totalRecords,
       })
+      const source = driveDownloaded ? 'Drive' : 'disk'
       return c.json({
         ok: true,
-        message: `SalesHub knowledge reloaded from disk: ${stats.tdpCount} TDPs, ${stats.salesPlayCount} plays, ${stats.tacticCount} tactics`,
+        message: `SalesHub knowledge reloaded from ${source}: ${stats.tdpCount} TDPs, ${stats.salesPlayCount} plays, ${stats.tacticCount} tactics`,
         stats,
       })
     } catch (e: any) {

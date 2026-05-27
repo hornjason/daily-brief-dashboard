@@ -144,7 +144,7 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 
 **Code verification still mandatory:** Before reporting any item as done or in-progress, verify against actual source code, not GitHub state. Code is ground truth; GitHub tracks intent.
 
-**SalesHub scraper runs ONLY on the Mac Mini** — the laptop has no SalesHub auth (EmployeeIDP SSO). All SalesHub scraper debugging, testing, and fixes must target the Mac Mini. The laptop reads cached `saleshub-knowledge.json` from Google Drive — it cannot run the scraper. Never suggest running `bun scripts/scrape-saleshub.ts` from the laptop.
+**SalesHub scraper runs ONLY on the Mac Mini container** — the laptop has no SalesHub auth (EmployeeIDP SSO). The scraper writes to `data/cache/saleshub/` in the Mac Mini container, then `sync-saleshub-drive.ts` uploads to Google Drive. **GAP:** Hero/laptop containers read `config-templates/saleshub-knowledge.json` baked into the image — there is NO automatic download from Drive. When Mac Mini scrapes new data, it does NOT automatically reach the hero image. This needs an L3 sync mechanism or manual config-templates update + rebuild.
 
 **Scrapers are stable — don't touch without explicit instruction.** The scraper layer (rh-scraper.ts, ccsp-scraper.ts, supportable-scraper.ts, sf-scraper.ts, scraper-manager.ts) took significant effort to stabilize. Any change requires reading SCRAPER-RULES.md first and explicit confirmation from Jason before modifying.
 

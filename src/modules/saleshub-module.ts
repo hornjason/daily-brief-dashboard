@@ -11,6 +11,7 @@
 
 import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 import { resetKnowledgeCache, getKnowledgeStats } from '../lib/saleshub-knowledge-loader.ts'
+import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
 import { resolve } from 'path'
 
 function getConfigDir(): string {
@@ -33,6 +34,12 @@ FeatureModuleRegistry.register({
 
   async fetch(_customerName: string): Promise<void> {
     // SalesHub is portfolio-wide, not customer-specific
+    // Download fresh data from Drive before reading from disk
+    try {
+      await downloadSaleshubFromDrive()
+    } catch (e: any) {
+      console.warn(`[saleshub-module] Drive download failed during fetch — falling back to disk: ${e.message}`)
+    }
     resetKnowledgeCache()
     const stats = getKnowledgeStats()
     FeatureModuleRegistry.recordOutcome('saleshub', {
@@ -46,6 +53,12 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
+    // Download fresh data from Drive before re-reading from disk
+    try {
+      await downloadSaleshubFromDrive()
+    } catch (e: any) {
+      console.warn(`[saleshub-module] Drive download failed during syncNow — falling back to disk: ${e.message}`)
+    }
     // Force re-read of JSON files from disk by resetting the mtime cache
     resetKnowledgeCache()
     const stats = getKnowledgeStats()
