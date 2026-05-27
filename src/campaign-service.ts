@@ -32,6 +32,7 @@ import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts
 import { getAccountTeam } from './account-team.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
+import { templateAll } from './lib/signal-templates.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -191,6 +192,7 @@ export async function callGeminiForCampaign(opts: {
   customerName: string
   customerSignals: CustomerSignals
   registrySignals: Signal[]
+  deterministicContext?: string
   voiceInstruction?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   emailTemplateContext?: string
@@ -238,6 +240,8 @@ ${opts.materialContent.substring(0, 8000)}
 
 ### Company Intelligence:
 ${intelligenceSummary}
+
+${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}
 
 ### Current Subscriptions:
 ${subscriptionsSummary}
@@ -465,7 +469,18 @@ export async function generateCampaign(
   const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
-  // 3. Load voice profile if not provided in config
+  // 3a. Build deterministic intelligence context from signals (PRINCIPLES.md Layer 2)
+  const accountTeam = getAccountTeam(customer)
+  const productFilter = config?.valueProps
+    ?.map(vp => vp.id) // valueProps id may be product slug
+    .filter((id): id is string => typeof id === 'string')
+  const templateResult = await templateAll(registrySignals, accountTeam, {
+    format: 'campaign',
+    productFilter: productFilter && productFilter.length > 0 ? productFilter : undefined,
+    customerSlug: slug,
+  })
+
+  // 3b. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
   if (!voiceInstruction && customer.ae) {
     const voice = await getVoiceProfile(customer.ae)
@@ -508,6 +523,7 @@ export async function generateCampaign(
     customerName: customer.name,
     customerSignals: signals,
     registrySignals,
+    deterministicContext: templateResult.deterministic,
     voiceInstruction,
     personas: config?.personas,
     emailTemplateContext,
@@ -524,6 +540,7 @@ export async function generateCampaign(
         customerName: customer.name,
         customerSignals: signals,
         registrySignals,
+        deterministicContext: templateResult.deterministic,
         voiceInstruction,
         personas: config?.personas,
         emailTemplateContext,
@@ -544,9 +561,6 @@ export async function generateCampaign(
     hour: '2-digit',
     minute: '2-digit',
   })
-
-  // Get account team
-  const accountTeam = getAccountTeam(customer)
 
   // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
   const templateSignals: any = { ...signals }

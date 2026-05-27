@@ -429,8 +429,7 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
     // avoid importing individual template functions. Without this, a consumer
     // can bypass the template layer entirely and pass silently.
     // Excluded: meeting-prep-service.ts — #429 migration pending
-    // Excluded: campaign-service.ts — templateAll migration tracked separately
-    const EXCLUDED = ['meeting-prep-service.ts', 'campaign-service.ts']
+    const EXCLUDED = ['meeting-prep-service.ts']
     const violations: string[] = []
     for (const file of CONSUMER_SRC_FILES) {
       if (EXCLUDED.includes(file)) continue

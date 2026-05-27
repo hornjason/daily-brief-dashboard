@@ -905,7 +905,7 @@ FORMAT RULES:
 - Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
 - Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
 - Discussion Questions must name specific attendees and include a PURPOSE for each question
-- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely.
+- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely. Reference renewals by PRODUCT NAME and DOLLAR AMOUNT — never show bare opportunity IDs like "00567293".
 - Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates`
 
     const derivedUserPrompt = `Generate a 7-section meeting prep for this specific meeting using the existing customer playbook:
@@ -1022,11 +1022,6 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
 ### 4. Value Play
 [ONE paragraph, Command of the Message style. A teaching point tailored to THIS meeting's attendees and agenda. Reference specific playbook data — products, quantities, renewal dates, case numbers. This should be the thing the AE says in the first 2 minutes to establish credibility and frame the conversation.]
 
-After the Value Play paragraph, add a blockquote callout showing which Red Hat sales methodology this aligns to. Format:
-> **Aligned to:** [TDP Name] TDP → [Tactic Name] tactic | [Sales Play Name] play
-
-Use the Solution Plays and Tactical Recommendations from the context above. If multiple plays apply, list the most relevant one. This shows management the conversation aligns with Red Hat's sales methodology.
-
 ### 5. Discussion Questions
 [5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally.]
 
@@ -1102,7 +1097,7 @@ FORMAT RULES:
 - Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
 - Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
 - Discussion Questions must name specific attendees and include a PURPOSE for each question
-- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely.
+- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely. Reference renewals by PRODUCT NAME and DOLLAR AMOUNT — never show bare opportunity IDs like "00567293".
 - Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates
 - Every claim MUST cite specific customer data (goals, infrastructure, case numbers, renewal dates, subscription quantities)
 - NO generic value statements. "Improves efficiency" is forbidden. Be specific.

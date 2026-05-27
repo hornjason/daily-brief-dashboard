@@ -534,8 +534,8 @@ describe('buildRSSIntelligenceTable', () => {
 // ── buildSalesAlignmentBlock ───────────────────────────────────────────────
 
 describe('buildSalesAlignmentBlock', () => {
-  test('returns empty string when no solution plays match', () => {
-    const result = buildSalesAlignmentBlock(['satellite'], 'acme-corp', {
+  test('returns empty string when no solution plays AND no product-TDP mapping', () => {
+    const result = buildSalesAlignmentBlock(['unknown-product'], 'acme-corp', {
       getSolutionContextFn: () => ({
         activeSolutionPlays: [],
         marketplaceOpportunities: [],
@@ -543,6 +543,7 @@ describe('buildSalesAlignmentBlock', () => {
         crossSellSignals: [],
       }),
       getTacticsByTdpFn: () => [],
+      getTdpByNameFn: () => undefined,
     })
     expect(result).toBe('')
   })

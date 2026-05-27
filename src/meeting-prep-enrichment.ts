@@ -676,6 +676,53 @@ export interface SalesAlignmentOpts {
  *
  * Returns empty string if no matched solution plays exist.
  */
+function buildAlignmentEntry(
+  tdpName: string,
+  playName: string | undefined,
+  getTacticsFn: (name: string) => TacticNode[],
+  getTdpFn: (name: string) => TdpNode | undefined,
+): string {
+  const lines: string[] = []
+  const tactics = getTacticsFn(tdpName)
+  const tacticName = tactics[0]?.name ?? ''
+
+  // Header
+  const playLabel = playName ? ` | ${playName}` : ''
+  const aligned = tacticName
+    ? `**${tdpName}** TDP → ${tacticName}${playLabel}`
+    : `**${tdpName}** TDP${playLabel}`
+  lines.push(`> **Aligned to:** ${aligned}`)
+
+  // Assets from ALL tactics for this TDP (items with URLs only)
+  const allAssets: Array<{ name: string; url: string }> = []
+  for (const tactic of tactics.slice(0, 3)) {
+    for (const share of tactic.whatToShare ?? []) {
+      if (share.url && share.url.startsWith('http') && !allAssets.some(a => a.url === share.url)) {
+        allAssets.push({ name: share.name, url: share.url })
+      }
+    }
+  }
+
+  if (allAssets.length > 0) {
+    lines.push('> **Assets to share:**')
+    for (const asset of allAssets.slice(0, 5)) {
+      lines.push(`> - [${asset.name.slice(0, 80)}](${asset.url})`)
+    }
+  }
+
+  // Services from TDP
+  const tdpNode = getTdpFn(tdpName)
+  const services = (tdpNode?.services ?? []).filter(s =>
+    s.name.length > 15 && !s.name.includes('0 item') && !s.name.includes('No files')
+  )
+  if (services.length > 0) {
+    const serviceNames = services.slice(0, 4).map(s => s.name.slice(0, 60)).join(' | ')
+    lines.push(`> **Services to propose:** ${serviceNames}`)
+  }
+
+  return lines.join('\n')
+}
+
 export function buildSalesAlignmentBlock(
   productSlugs: string[],
   customerSlug: string,
@@ -701,47 +748,36 @@ export function buildSalesAlignmentBlock(
 
   const context = getSolutionContextFn!(customerSlug)
   const plays = context.activeSolutionPlays
-  if (plays.length === 0) return ''
+
+  // Product slug → TDP name mapping for subscription-based fallback
+  const PRODUCT_TDP_MAP: Record<string, string> = {
+    aap: 'Automation', ansible: 'Automation',
+    ocp: 'App Platform', openshift: 'App Platform',
+    rhel: 'Server/Cloud OS',
+    rhoai: 'AI Platform',
+    acm: 'Container Mgmt', acs: 'Container Mgmt',
+    satellite: 'Server/Cloud OS',
+    quay: 'Container Mgmt',
+    rhdh: 'App Platform',
+  }
 
   const blocks: string[] = []
 
-  for (const play of plays) {
-    const lines: string[] = []
-
-    // Header: TDP -> Tactic -> Play
-    const tactics = getTacticsFn!(play.tdp)
-    const tacticName = tactics[0]?.name ?? ''
-    const aligned = tacticName
-      ? `[TDP] ${play.tdp} → [Tactic] ${tacticName} | ${play.playName}`
-      : `[TDP] ${play.tdp} | ${play.playName}`
-    lines.push(`> **Aligned to:** ${aligned}`)
-
-    // Assets from tactic whatToShare (items with URLs only)
-    const allAssets: Array<{ name: string; url: string }> = []
-    for (const tactic of tactics) {
-      for (const share of tactic.whatToShare ?? []) {
-        if (share.url && !allAssets.some(a => a.url === share.url)) {
-          allAssets.push({ name: share.name, url: share.url })
-        }
+  if (plays.length > 0) {
+    // Path 1: Solution plays matched from tech stack
+    for (const play of plays) {
+      blocks.push(buildAlignmentEntry(play.tdp, play.playName, getTacticsFn!, getTdpFn!))
+    }
+  } else {
+    // Path 2: No solution plays matched — fall back to product subscriptions → TDP
+    const matchedTdps = new Set<string>()
+    for (const slug of productSlugs) {
+      const tdpName = PRODUCT_TDP_MAP[slug.toLowerCase()]
+      if (tdpName && !matchedTdps.has(tdpName)) {
+        matchedTdps.add(tdpName)
+        blocks.push(buildAlignmentEntry(tdpName, undefined, getTacticsFn!, getTdpFn!))
       }
     }
-
-    if (allAssets.length > 0) {
-      lines.push('> **Assets to share:**')
-      for (const asset of allAssets) {
-        lines.push(`> - [${asset.name}](${asset.url})`)
-      }
-    }
-
-    // Services from TDP
-    const tdpNode = getTdpFn!(play.tdp)
-    const services = tdpNode?.services ?? []
-    if (services.length > 0) {
-      const serviceNames = services.map(s => s.name).join(', ')
-      lines.push(`> **Services to propose:** ${serviceNames}`)
-    }
-
-    blocks.push(lines.join('\n'))
   }
 
   return blocks.join('\n\n')
