@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-24
+updated: 2026-05-27
 ---
 
 # DailyBriefDashboard — Project State
@@ -11,7 +11,7 @@ updated: 2026-05-24
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-27 — Ecosystem Catalog module (#438, Phase 1: types + cache + signals + seed data), Meeting Prep templateAll() migration (#429: enrichMeetingSignals + templateAll wired in, quality gate passed). Ecosystem Catalog scraper (#443) created for Phase 2 (Mac Mini).
+Last updated: 2026-05-27 — Ecosystem Catalog module (#438), Meeting Prep templateAll() migration (#429), Campaign templateAll() migration (#439), SalesHub TDP extraction fix (#436), SalesHub L3 sync path (#442), Meeting prep pipeline opps (#444), Meeting prep SalesHub linkbacks (#445). All consumers now use templateAll(). 10 open issues remain.
 
 ---
 
@@ -273,7 +273,7 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 - `make seed` — reset `data-test/` from seed fixtures
 - `make test-up` / `make test-down` — start/stop test container
 
-**Unit tests (2026-05-24):** `test/unit/` — 1609 tests across 165 files covering modules, signals, scrapers, bootstrap, cache, API routes. Run: `bun test --isolate test/unit/` (requires Bun 1.3.13+; `--isolate` gives each file a fresh global scope)
+**Unit tests (2026-05-27):** `test/unit/` — 2054 tests across 197 files covering modules, signals, scrapers, bootstrap, cache, API routes. Run: `bun test --isolate test/unit/` (requires Bun 1.3.13+; `--isolate` gives each file a fresh global scope)
 
 **CI gate (2026-04-10):** `make lint` runs `scripts/check-empty-catches.sh` — fails build if any `.catch(() => {})` exists in `dashboard/src/`
 

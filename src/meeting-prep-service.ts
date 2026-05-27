@@ -635,8 +635,9 @@ export async function generateMeetingPrep(
     ? meeting.context.productFocus
     : getCustomerProductSlugs(customer)
 
-  // If still empty, infer from meeting objective/title/notes
-  if (productSlugs.length === 0) {
+  // ALWAYS check meeting context for additional product mentions (#446)
+  // Even when subscriptions provide slugs, the meeting may be about a product not yet subscribed
+  {
     const contextText = [meeting.meetingTitle, meeting.context?.objective, meeting.context?.notes].filter(Boolean).join(' ').toLowerCase()
     const keywordToSlug: Record<string, string> = {
       'openshift': 'ocp', 'ocp': 'ocp', 'kubernetes': 'ocp', 'k8s': 'ocp', 'container': 'ocp',
@@ -648,13 +649,15 @@ export async function generateMeetingPrep(
       'acs': 'acs', 'advanced cluster security': 'acs',
       'acm': 'acm', 'advanced cluster management': 'acm',
     }
+    const added: string[] = []
     for (const [keyword, slug] of Object.entries(keywordToSlug)) {
       if (contextText.includes(keyword) && !productSlugs.includes(slug)) {
         productSlugs.push(slug)
+        added.push(slug)
       }
     }
-    if (productSlugs.length > 0) {
-      console.log(`[meeting-prep] Inferred products from context: ${productSlugs.join(', ')}`)
+    if (added.length > 0) {
+      console.log(`[meeting-prep] Added products from meeting context: ${added.join(', ')} (total: ${productSlugs.join(', ')})`)
     }
   }
 
@@ -1226,6 +1229,58 @@ Use the Product & Market Intelligence context above to identify the most relevan
         prepContent += '\n\n' + salesAlignmentBlock
         console.log(`[meeting-prep] Sales alignment block appended for ${customer.name} (no section 5 marker found)`)
       }
+    }
+  }
+
+  // ── Step 4c: Deterministic pipeline section (#446) ────────────────────
+  // Replace Gemini's pipeline section with real data from pipeline signals.
+  // Gemini invents fake opp names with "undisclosed" amounts.
+  const pipelineSignals = (signalData.registrySignals ?? []).filter((s: any) => s.source === 'pipeline')
+  if (pipelineSignals.length > 0) {
+    const openPipeline = pipelineSignals.filter((s: any) => {
+      const stage = (s.metadata?.stage ?? '').toLowerCase()
+      return !stage.includes('closed')
+    })
+    if (openPipeline.length > 0) {
+      const pipelineLines = openPipeline.map((s: any) => {
+        const m = s.metadata ?? {}
+        const name = m.opportunityName ?? s.headline ?? 'Unknown'
+        const amount = m.amount ? `$${Number(m.amount).toLocaleString()}` : ''
+        const close = m.closeDate ?? ''
+        const stage = m.stage ?? ''
+        return `- **${name}:** ${amount}${close ? `, closing ${close}` : ''}${stage ? ` [${stage}]` : ''}`
+      })
+      const deterministicPipeline = `### 7. Pipeline Opportunities\n${pipelineLines.join('\n')}`
+      const p7Start = prepContent.indexOf('### 7.')
+      const p8Start = prepContent.indexOf('### 8.')
+      if (p7Start !== -1 && p8Start !== -1) {
+        prepContent = prepContent.slice(0, p7Start) + deterministicPipeline + '\n\n' + prepContent.slice(p8Start)
+        console.log(`[meeting-prep] Deterministic pipeline section injected (${openPipeline.length} opps)`)
+      }
+    }
+  }
+
+  // ── Step 4d: Deterministic attendee list (#446) ───────────────────────
+  // Replace Gemini's "Who's in the Room" with a clean list from calendar data.
+  // Gemini ignores "ONLY list calendar attendees" and dumps the full account team.
+  const calendarAttendees = (meeting.attendees ?? []).filter(Boolean)
+  if (calendarAttendees.length > 0) {
+    const attendeeLines = calendarAttendees.map(email => {
+      const name = getAttendeeDisplayName(meeting, email)
+      const isInternal = email.endsWith('@redhat.com')
+      if (isInternal) {
+        const teamMember = accountTeam.find(m =>
+          m.name.toLowerCase().includes(name.split(' ')[0].toLowerCase())
+        )
+        return `- **${name}**${teamMember ? `, ${teamMember.role.toUpperCase()}` : ''}`
+      }
+      return `- **${name}** (${email.split('@')[1]?.replace(/\.\w+$/, '') ?? 'external'})`
+    })
+    const deterministicSection2 = `### 2. Who's in the Room\n${attendeeLines.join('\n')}`
+    const s2Start = prepContent.indexOf('### 2.')
+    const s3Start = prepContent.indexOf('### 3.')
+    if (s2Start !== -1 && s3Start !== -1) {
+      prepContent = prepContent.slice(0, s2Start) + deterministicSection2 + '\n\n' + prepContent.slice(s3Start)
     }
   }
 
