@@ -10241,3 +10241,7 @@ BKL-UX-03 → #387 — Events: show description/context for each event on accoun
 BKL-SYNC-COOKIE-01 → #435 — L4 daemon: persistSessionState writes empty cookies on storageState timeout (DONE 2026-05-27)
 BKL-SYNC-COOKIE-02 → #437 — storageState() hangs >30s — removed redundant calls, rely on Chrome native persistence (DONE 2026-05-27)
 BKL-SYNC-TABLEAU-RENDER-01 — Tableau viz fails to render (Raw Data tab) independently of SSO auth — needs separate investigation
+BKL-ECO-01 → #438 — Ecosystem Catalog module Phase 1: types, cache, signals, seed data (DONE 2026-05-27)
+BKL-ECO-02 → #443 — Ecosystem Catalog scraper Phase 2: Playwright on Mac Mini (open, ready-for-agent)
+BKL-MTGPREP-01 → #429 — Meeting prep templateAll() migration: enrichMeetingSignals + templateAll wired in (DONE 2026-05-27)
+BKL-MTGPREP-02 — Meeting prep enrichment consolidation: meeting-prep-enrichment.ts overlaps with templateAll saleshubContext/strategicOpportunities sections — consolidate or deprecate (deferred from #429 AC-6)

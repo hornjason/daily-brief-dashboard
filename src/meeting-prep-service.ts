@@ -36,6 +36,8 @@ import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
 import { buildEnrichmentPromptContext, buildSalesAlignmentBlock } from './meeting-prep-enrichment.ts'
+import { templateAll } from './lib/signal-templates.ts'
+import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
@@ -656,12 +658,6 @@ export async function generateMeetingPrep(
     }
   }
 
-  // CCSP cloud spend data
-  const ccspContext = buildCCSPContext(customer)
-  if (ccspContext) {
-    console.log(`[meeting-prep] CCSP data found for ${customer.name}`)
-  }
-
   const lifecycleCache = readProductLifecycleCache()
   const productSummaries = getAllProductSummaries()
   const rssItems = loadRSSFeedItems()
@@ -796,6 +792,37 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
     }
   }
 
+  // ── Step 2c: Build templateAll() context (PRINCIPLES.md Layer 3) ──────
+  const meetingSignals = enrichMeetingSignals({
+    customer,
+    meeting: {
+      meetingTitle: meeting.meetingTitle,
+      meetingStart: meeting.meetingStart,
+      attendees: meeting.attendees,
+      attendeeDetails: meeting.attendeeDetails,
+      recurringEventId: meeting.recurringEventId,
+      objective: meeting.context?.objective,
+      productFocus: meeting.context?.productFocus,
+      notes: meeting.context?.notes,
+    },
+    attendeeResearch,
+    partnerContext: partnerResearch,
+    otherPartnersTable,
+    detectedPartnerNames: detectedPartners.map(p => p.name),
+    carryForwardContext,
+    driveDocsContext,
+  })
+
+  // Merge meeting-specific signals with registry signals
+  const allSignals = [...(signalData.registrySignals ?? []), ...meetingSignals]
+
+  // Call templateAll — PRINCIPLES.md Layer 3 compliance
+  const templateResult = await templateAll(allSignals, accountTeam, {
+    format: 'meeting-prep',
+    productFilter: productSlugs.length > 0 ? productSlugs : undefined,
+    customerSlug: slug,
+  })
+
   // ── Step 3: Filter cases to this customer ──────────────────────────────
 
   const customerCases = casesData.filter((sc) =>
@@ -873,7 +900,7 @@ FOCUS RULE (CRITICAL):
 - Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
 
 FORMAT RULES:
-- EXACTLY 7 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Action Items
+- EXACTLY 8 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Pipeline Opportunities, Action Items
 - NO markdown tables in ANY section — all sections use bullets and narrative
 - Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
 - Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
@@ -970,7 +997,7 @@ ${attendeeResearch || 'No attendee research available'}
 ### Open Support Cases
 ${caseSummary}
 
-${ccspContext ? `### Cloud Consumption & Spend (CCSP)\n${ccspContext}` : ''}
+${templateResult.deterministic ? `### Signal Intelligence (from registry — includes ecosystem catalog, tech stack, cloud marketplace)\n${templateResult.deterministic}` : ''}
 
 ${enrichmentContext ? `### Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
 
@@ -995,18 +1022,26 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
 ### 4. Value Play
 [ONE paragraph, Command of the Message style. A teaching point tailored to THIS meeting's attendees and agenda. Reference specific playbook data — products, quantities, renewal dates, case numbers. This should be the thing the AE says in the first 2 minutes to establish credibility and frame the conversation.]
 
+After the Value Play paragraph, add a blockquote callout showing which Red Hat sales methodology this aligns to. Format:
+> **Aligned to:** [TDP Name] TDP → [Tactic Name] tactic | [Sales Play Name] play
+
+Use the Solution Plays and Tactical Recommendations from the context above. If multiple plays apply, list the most relevant one. This shows management the conversation aligns with Red Hat's sales methodology.
+
 ### 5. Discussion Questions
 [5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally.]
 
 ### 6. Open Items
 [CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
 
-### 7. Action Items
+### 7. Pipeline Opportunities
+[List ALL active pipeline opportunities for this customer. Each bullet: opportunity name, dollar amount, close date, and stage. Highlight which opportunities are most relevant to THIS meeting's topic and attendees. Format: "- **Opp Name:** $amount, closing [date] — [one line on how this meeting can advance it]". Never show bare opportunity IDs.]
+
+### 8. Action Items
 [Bullet points with phase markers and specific names:]
 - **Pre-meeting:** [Name] — [action] (by [date])
 - **During meeting:** [Name/Team] — [action]
 - **Post-meeting (within N days/weeks):** [Name] — [action]
-[Minimum 3 items with specific team member names and dates.]`
+[Minimum 3 items with specific team member names and dates. Reference specific pipeline opportunities by name where relevant.]`
 
     // Shorter Gemini call — playbook is primary context
     const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
@@ -1062,7 +1097,7 @@ FOCUS RULE (CRITICAL):
 - Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
 
 FORMAT RULES:
-- EXACTLY 7 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Action Items
+- EXACTLY 8 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Pipeline Opportunities, Action Items
 - NO markdown tables in ANY section — all sections use bullets and narrative
 - Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
 - Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
@@ -1085,18 +1120,11 @@ ${meeting.context?.objective ? `\n## MEETING OBJECTIVE (from account team — TH
 ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT (from account team)\n${meeting.context.notes}\n` : ''}
 ${meeting.context?.productFocus?.length ? `\n## PRODUCT FOCUS (account team specified)\nFocus ALL content on these products: ${meeting.context.productFocus.join(', ')}.\n` : ''}
 
-## Customer Subscriptions
-${(() => {
-  const { readSheetCache } = require('./cache-layer.ts')
-  const sc = readSheetCache(customer.name)
-  if (!sc?.rows?.length) return 'No subscription data available'
-  return sc.rows.map((r: any) => `- ${r.productDescription ?? 'Unknown'}: ${r.quantity ?? '?'} units (expires ${r.endDate ?? '?'})`).join('\n')
-})()}
+## Deterministic Customer Intelligence (from signal registry)
+${templateResult.deterministic || 'No signal data available'}
 
-## Customer Intelligence
-${intelligenceContext || 'Data not available — generate intelligence for this customer'}
-
-${ccspContext ? `## Cloud Consumption & Spend (CCSP)\n${ccspContext}\nWeave this data into Discussion Questions to recommend cloud-specific Red Hat services.` : ''}
+## Strategic Context (top signals for narrative synthesis)
+${templateResult.narrativeContext || 'No signals available'}
 
 ${accountPlanContext ? `## Account Plan & Notes\n${accountPlanContext}` : ''}
 
@@ -1105,10 +1133,6 @@ ${attendeeResearch || 'No attendee research available'}
 
 ## Open Support Cases
 ${caseSummary}
-
-## Health Signals
-- Open Cases: ${meetingPrepData?.healthSignals?.cases || 'Unknown'}
-- Renewals: ${meetingPrepData?.healthSignals?.renewals || 'Unknown'}
 
 ${enrichmentContext ? `## Product & Market Intelligence (use contextually in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
 
@@ -1135,18 +1159,26 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
 ### 4. Value Play
 [ONE paragraph, Command of the Message style. Cross-reference value maps and product intelligence against the customer's stated goals. A teaching point that establishes credibility and frames the conversation. Reference specific data — products, quantities, renewal dates.]
 
+After the Value Play paragraph, add a blockquote callout showing which Red Hat sales methodology this aligns to. Format:
+> **Aligned to:** [TDP Name] TDP → [Tactic Name] tactic | [Sales Play Name] play
+
+Use the Product & Market Intelligence context above to identify the most relevant TDP and play. This shows management the conversation aligns with Red Hat's sales methodology.
+
 ### 5. Discussion Questions
 [5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally. Questions should ADVANCE THE SALE — discover budget, timeline, decision criteria, competitive alternatives.]
 
 ### 6. Open Items
 [CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
 
-### 7. Action Items
+### 7. Pipeline Opportunities
+[List ALL active pipeline opportunities for this customer. Each bullet: opportunity name, dollar amount, close date, and stage. Highlight which opportunities are most relevant to THIS meeting's topic and attendees. Format: "- **Opp Name:** $amount, closing [date] — [one line on how this meeting can advance it]". Never show bare opportunity IDs.]
+
+### 8. Action Items
 [Bullet points with phase markers and specific names:]
 - **Pre-meeting:** [Name] — [action] (by [date])
 - **During meeting:** [Name/Team] — [action]
 - **Post-meeting (within N days/weeks):** [Name] — [action]
-[Minimum 3 items with specific team member names and dates. Include "share X blog post with Y" items from product intelligence.]`
+[Minimum 3 items with specific team member names and dates. Include "share X blog post with Y" items from product intelligence. Reference specific pipeline opportunities by name where relevant.]`
 
     const geminiResult = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-synthesis',

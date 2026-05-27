@@ -43,7 +43,12 @@ Taylor Fresh Foods is investing $12M in digital transformation through 2027, wit
 - RHEL Premium renewal (2,400 nodes, $320K) due August 2026 — 90-day window opening, begin renewal discussion
 - SR-2024-01203 (AAP inventory sync) — resolved April 2, confirm David is satisfied with fix
 
-### 7. Action Items
+### 7. Pipeline Opportunities
+- **OpenShift Expansion:** $150,000, closing Aug 15, 2026 — this meeting can advance by confirming Maria Chen's container platform requirements
+- **Ansible Managed Service:** $80,000, closing Sep 30, 2026 — ask David Park about automation service needs during POC review
+- **RHEL Premium Renewal:** $320,000, closing Aug 2026 — renewal discussion should start at this meeting given 90-day window
+
+### 8. Action Items
 - **Pre-meeting:** Jason Horn — share OpenShift 4.16 release notes and MicroShift edge computing brief with Maria Chen (by June 10)
 - **Pre-meeting:** Jason Horn — prepare Forrester TEI one-pager showing 667% ROI for Tom Richards
 - **During meeting:** Account Team — confirm David Park's RHEL 9 POC status and connect to August renewal timeline
@@ -63,7 +68,10 @@ Brief meeting.
 ### 5. Discussion Questions
 - What do you want?
 
-### 7. Action Items
+### 7. Pipeline Opportunities
+- Some opp
+
+### 8. Action Items
 - Do something
 `
 
@@ -158,7 +166,7 @@ describe('meetingPrepValidator', () => {
          'value-play', 'discussion-questions', 'action-items'].includes(c.name)
       )
       const passed = sectionChecks.filter(c => c.passed)
-      expect(passed.length).toBe(6) // 6 required sections (Open Items is optional)
+      expect(passed.length).toBe(6) // 6 required sections (Open Items is optional, Pipeline is recommended)
     })
 
     it('detects specific names in discussion questions', () => {

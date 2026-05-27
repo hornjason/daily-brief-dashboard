@@ -11,7 +11,7 @@ updated: 2026-05-24
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-20 — Full architecture overhaul: Signal Template Engine (#326), Pre-flight Signal Refresh (#328), Compliance Gate (#329), Scheduler Registry (#330, ADR-028), 5 route-to-service extractions (#334), Unified Paths (#335), Gemini migration (#337), Domain unit tests (#338), Admin Page Redesign (#339, 1660→58 lines + 4 focused panels). See ARCHITECTURE.md §24-§28.
+Last updated: 2026-05-27 — Ecosystem Catalog module (#438, Phase 1: types + cache + signals + seed data), Meeting Prep templateAll() migration (#429: enrichMeetingSignals + templateAll wired in, quality gate passed). Ecosystem Catalog scraper (#443) created for Phase 2 (Mac Mini).
 
 ---
 
@@ -110,9 +110,16 @@ Last updated: 2026-05-20 — Full architecture overhaul: Signal Template Engine 
 - `GET /api/customer/:name/tools/artifacts` — List uploaded artifacts
 
 ### Feature Modules
-- `GET /api/modules/status` — Registry status for all modules (21 modules, auto-discovered)
+- `GET /api/modules/status` — Registry status for all modules (22 modules, auto-discovered)
 - `POST /api/customer/:name/modules/:moduleName/sync` — Trigger module sync
 - `GET /api/customer/:name/signals/debug` — Signal debug: every signal with score, tier, rawRelevance, metadata, specificity (ADR-027)
+
+### Ecosystem Catalog (#438)
+- `POST /api/refresh/ecosystem-catalog` — Re-read cached ecosystem partner solution files
+- Cache: `data/cache/ecosystem-catalog/{partner-slug}.json` — per-partner solutions from catalog.redhat.com
+- Seed data: `config-templates/ecosystem-catalog/cisco.json` (9 solutions), `vmware.json` (3 solutions)
+- Signals: partner solutions with platform routing → Product Alignment section via templateAll()
+- Scraper: Phase 2 (#443) — Playwright on Mac Mini, not yet implemented
 
 ### Cloud Marketplace (#306)
 - `POST /api/refresh/cloud-marketplace` — Fetch latest newsletter from Gmail, extract slide decks, Gemini extraction

@@ -1738,3 +1738,68 @@ Consumers (playbook, brief, campaign, meeting-prep) — zero changes
 - No new data dependencies — reads existing caches only
 - Registry scores unchanged — ADR-027 scoring applies automatically
 - Consumers unchanged — new signals route through existing templateAll()
+
+---
+
+## §29. Ecosystem Catalog Module (#438, 2026-05-27)
+
+New signal source that surfaces Red Hat + technology partner joint solutions from catalog.redhat.com. Separate from `partner-catalog-module` (which handles channel partners like CDW, WWT).
+
+### Data flow
+
+```
+catalog.redhat.com (Phase 2 scraper, Mac Mini)
+  → data/cache/ecosystem-catalog/{partner-slug}.json
+    → ecosystem-catalog-module.ts (signals with platform + partnerName metadata)
+      → Template Engine → Product Alignment section (via `product` metadata key)
+        → All consumers via templateAll()
+```
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/ecosystem-catalog.ts` | Types (EcosystemSolution, EcosystemResource, AnsibleCollection) + cache loader |
+| `src/modules/ecosystem-catalog-module.ts` | FeatureModule registration, signal emission, ensureFresh (30-day TTL) |
+| `src/refresh-engine.ts` | `POST /api/refresh/ecosystem-catalog` endpoint |
+| `config-templates/ecosystem-catalog/` | Seed data: cisco.json (9 solutions), vmware.json (3 solutions) |
+| `test/unit/ecosystem-catalog.test.ts` | 9 library tests |
+| `test/unit/ecosystem-catalog-module.test.ts` | 11 module tests |
+
+### Phase 1 (shipped): Consumption layer — types, module, cache loader, seed data, signals, tests
+### Phase 2 (#443): Playwright scraper on Mac Mini — extracts solutions, resources, Ansible collections from catalog.redhat.com
+
+### Top 10 partners: Cisco, VMware, Dell, HPE, ServiceNow, Palo Alto, Splunk, AWS, Microsoft, Google
+
+---
+
+## §30. Meeting Prep templateAll() Migration (#429, 2026-05-27)
+
+Meeting prep migrated from manual data assembly to PRINCIPLES.md Layer 3 consumer contract. Council audit (4 members, 3 rounds) approved with quality gate.
+
+### Architecture
+
+```
+Meeting-specific data (attendees, partners, carry-forward, Drive docs, objective)
+  → enrichMeetingSignals() (src/lib/meeting-prep-signals.ts)
+    → merged with registry signals
+      → templateAll(allSignals, team, { format: 'meeting-prep' })
+        → templateResult.deterministic + narrativeContext
+          → Gemini prompt (system prompt + quality gate unchanged)
+```
+
+### What changed
+- `generateMeetingPrep()` calls `enrichMeetingSignals()` + `templateAll()` instead of hand-assembling CCSP, subscriptions, cases, health signals, pipeline context
+- Standard path: 5 manual data sections replaced with `templateResult.deterministic` + `templateResult.narrativeContext`
+- Playbook path: `templateResult.deterministic` added as supplementary signal intelligence
+- Dead code removed: manual `buildCCSPContext()` call, inline `readSheetCache()`, health signals assembly
+
+### What stayed the same
+- System prompts (both paths) — format rules, 7-section structure unchanged
+- Quality gate (`validateAndRetry` + `meetingPrepValidator`) — unchanged
+- Meeting-specific logic: attendee research (Gemini grounding), partner detection, recurring carry-forward, Drive doc scanning
+- Output format: 7 sections from #426 — Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items, Action Items
+
+### Key file: `src/lib/meeting-prep-signals.ts`
+- `enrichMeetingSignals(input)` produces 5 signal types: objective (0.95), carry-forward (0.90), attendees (0.85), partner (0.75), drive docs (0.60)
+- Signals only produced when corresponding input data is present and non-empty

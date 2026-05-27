@@ -130,7 +130,8 @@ FeatureModuleRegistry.register({
           rawRelevance: 0.5, // Medium — customer-level boosting when partner matches tech stack
           metadata: {
             partnerName: solution.partnerName,
-            platform: solution.platform,
+            platform: solution.platform, // backward compat
+            product: solution.platform, // signal routing to Product Alignment section
             categories: solution.categories,
             coSell: solution.coSell ?? false,
             resourceTypes,

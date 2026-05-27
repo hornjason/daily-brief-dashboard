@@ -1,10 +1,10 @@
 /**
  * Meeting Prep Quality Validator — ADR-024
  *
- * Validates meeting prep output against the 7-section slim format (#426):
+ * Validates meeting prep output against the 8-section format (#426, #444):
  * 1. Meeting Objective, 2. Who's in the Room, 3. Recent Interactions,
  * 4. Value Play, 5. Discussion Questions, 6. Open Items (conditional),
- * 7. Action Items
+ * 7. Pipeline Opportunities, 8. Action Items
  *
  * Threshold: 75
  */
@@ -117,42 +117,55 @@ function validate(output: string): QualityScorecard {
     })
   }
 
-  // 7. Action Items — present with >= 3 items, names and dates
+  // 7. Pipeline Opportunities — present with >= 1 item
   const section7 = extractNumberedSection(output, 7)
   const section7Bullets = (section7.match(/^[\s]*[-*]\s|^[\s]*\d+\.\s/gm) ?? []).length
-  const section7TableRows = countTableRows(section7)
-  const section7ItemCount = Math.max(section7Bullets, section7TableRows)
+  checks.push({
+    name: 'pipeline-opportunities',
+    passed: section7.length > 0 && section7Bullets >= 1,
+    expected: 'Section 7 (Pipeline Opportunities) present with >= 1 item',
+    actual: section7.length > 0
+      ? `${section7Bullets} items`
+      : 'section not found',
+    severity: 'recommended',
+  })
+
+  // 8. Action Items — present with >= 3 items, names and dates
+  const section8 = extractNumberedSection(output, 8)
+  const section8Bullets = (section8.match(/^[\s]*[-*]\s|^[\s]*\d+\.\s/gm) ?? []).length
+  const section8TableRows = countTableRows(section8)
+  const section8ItemCount = Math.max(section8Bullets, section8TableRows)
   checks.push({
     name: 'action-items',
-    passed: section7.length > 0 && section7ItemCount >= 3,
-    expected: 'Section 7 (Action Items) present with >= 3 items',
-    actual: section7.length > 0
-      ? `${section7ItemCount} items`
+    passed: section8.length > 0 && section8ItemCount >= 3,
+    expected: 'Section 8 (Action Items) present with >= 3 items',
+    actual: section8.length > 0
+      ? `${section8ItemCount} items`
       : 'section not found',
     severity: 'required',
   })
 
-  // 7b. Action Items — contain specific names
-  const section7HasNames = section7.length > 0 && (
-    hasSpecificNames(section7, 0) || // table format
-    /\b[A-Z][a-z]+\s[A-Z][a-z]+\b/.test(section7) // inline names
+  // 8b. Action Items — contain specific names
+  const section8HasNames = section8.length > 0 && (
+    hasSpecificNames(section8, 0) || // table format
+    /\b[A-Z][a-z]+\s[A-Z][a-z]+\b/.test(section8) // inline names
   )
   checks.push({
     name: 'action-items-named',
-    passed: section7HasNames,
+    passed: section8HasNames,
     expected: 'Action Items have specific team member names',
-    actual: section7HasNames ? 'specific names found' : 'generic references only',
+    actual: section8HasNames ? 'specific names found' : 'generic references only',
     severity: 'recommended',
   })
 
-  // 7c. Action Items — contain dates or timeframes
+  // 8c. Action Items — contain dates or timeframes
   const hasDatePattern = /\b(\d{1,2}[\/-]\d{1,2}|\d{4}|week|month|day|before|after|during|pre-meeting|post-meeting|Q[1-4]|immediately|ASAP)\b/i
   checks.push({
     name: 'action-items-dated',
-    passed: section7.length > 0 && hasDatePattern.test(section7),
+    passed: section8.length > 0 && hasDatePattern.test(section8),
     expected: 'Action Items have dates or timeframes',
-    actual: section7.length > 0
-      ? (hasDatePattern.test(section7) ? 'dates/timeframes found' : 'no dates or timeframes')
+    actual: section8.length > 0
+      ? (hasDatePattern.test(section8) ? 'dates/timeframes found' : 'no dates or timeframes')
       : 'section not found',
     severity: 'recommended',
   })
