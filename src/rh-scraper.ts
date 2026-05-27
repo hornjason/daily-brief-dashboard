@@ -22,12 +22,12 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
+import { readFile, unlink } from 'node:fs/promises'
 import { writeJsonAtomicAsync } from './lib/atomic-write.ts'
-import { resolve, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { SupportCase } from './types.ts'
-import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
-import { notify, sanitizeErr } from './utils.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { notify } from './utils.ts'
 import { assertLiveScrapeAllowed } from './scraper-utils.ts'
 import { assertPrimary } from './lib/node-role.ts'
 
@@ -178,7 +178,6 @@ export async function isLivePageHealthy(): Promise<boolean> {
 }
 
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
-const SESSION_STATE_FILE = 'session-state.json'
 
 /** Remove Chromium's SingletonLock/Socket/Cookie files left by a previous (crashed or killed) container. */
 async function clearProfileLocks(profileDir: string): Promise<void> {
@@ -213,8 +212,6 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
     ],
     ignoreDefaultArgs: ['--enable-automation'],
   })
-  // Restore session cookies persisted from a previous run
-  await restoreSessionCookies()
 
   // BKL-M50c: Attach browser disconnected handler for auto-recovery
   _attachDisconnectedHandler(_context, profileDir)
@@ -292,9 +289,6 @@ async function _autoRecover(profileDir: string): Promise<void> {
   _recoveryInProgress = true
 
   try {
-    // Save storage state before closing if context is still accessible
-    await persistSessionState().catch(() => {})
-
     // BKL-SYNC-CHROME-LEAK Layer 1: Close the old browser properly before clearing refs.
     // Without this, browser.close() never fires and Chrome processes accumulate.
     if (_context) {
@@ -337,9 +331,6 @@ async function _autoRecover(profileDir: string): Promise<void> {
 
         _context = ctx
         _profileDir = profileDir
-
-        // Restore cookies from persisted state
-        await restoreSessionCookies()
 
         // Re-attach disconnect handler
         _attachDisconnectedHandler(ctx, profileDir)
@@ -477,36 +468,19 @@ export async function closeScrapeContext(): Promise<void> {
 
 // ── Session state persistence ─────────────────────────────────────────────────
 
+/**
+ * No-op — persistent browser context (launchPersistentContext + --user-data-dir)
+ * handles cookie persistence natively via Chrome's SQLitePersistentCookieStore.
+ * The previous storageState() call was redundant and caused >30s hangs enumerating
+ * localStorage across 50-100+ iframes. Removed per #437.
+ */
 async function persistSessionState(): Promise<void> {
-  if (!_context || !_profileDir) return
-  try {
-    const state = await safeCookieOp(_context, 'rh-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
-    if (!state.cookies.length) { console.warn('[rh-scraper] persistSessionState: skipped — storageState returned empty (timeout fallback)'); return }
-    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
-  } catch (e: any) {
-    console.warn(`[rh-scraper] persistSessionState failed: ${sanitizeErr(e)}`)
-  }
+  // intentional no-op — Chrome persistent context handles cookie persistence
 }
 
-/**
- * Restore session cookies from the persisted state file into the active context.
- * Called on startup so container restarts can resume an existing authenticated session
- * without requiring a fresh login.
- */
-async function restoreSessionCookies(): Promise<void> {
-  if (!_context || !_profileDir) return
-  const statePath = resolve(_profileDir, SESSION_STATE_FILE)
-  try {
-    const raw = await readFile(statePath, 'utf-8')
-    const state = JSON.parse(raw)
-    if (Array.isArray(state?.cookies) && state.cookies.length > 0) {
-      await _context.addCookies(state.cookies)
-      console.log(`[rh-scraper] restored ${state.cookies.length} session cookies from disk`)
-    }
-  } catch {
-    // No state file yet (first run) or parse error — non-fatal, proceed without cookies
-  }
-}
+// restoreSessionCookies removed — Chrome persistent context restores cookies
+// natively from the profile directory on startup. Manual JSON restore was
+// redundant and is now dead code since persistSessionState is a no-op. (#437)
 
 // ── Keep-alive loop ───────────────────────────────────────────────────────────
 //
@@ -1135,7 +1109,6 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           ],
           ignoreDefaultArgs: ['--enable-automation'],
         })
-        await restoreSessionCookies()
         _attachDisconnectedHandler(_context, _profileDir)
         _keepAliveTimer = setInterval(
           () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),

@@ -51,8 +51,10 @@ const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 async function saveTableauSession(ctx: BrowserContext): Promise<void> {
   try {
     await closeTableauTabs(ctx, 'saveTableauSession')
-    const state = await safeCookieOp(ctx, 'saveTableauSession storageState', c => c.storageState(), { cookies: [], origins: [] })
-    const tableauCookies = state.cookies.filter(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
+    // #437: Use ctx.cookies() instead of ctx.storageState() — we only need cookies,
+    // not localStorage. storageState() hangs >30s enumerating localStorage across iframes.
+    const cookies = await safeCookieOp(ctx, 'saveTableauSession cookies', c => c.cookies(), [])
+    const tableauCookies = cookies.filter(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
     if (tableauCookies.length === 0) return
     writeFileSync(TABLEAU_SESSION_PATH, JSON.stringify({ cookies: tableauCookies, savedAt: new Date().toISOString() }), { mode: 0o600 })
     console.log(`[ccsp] saved ${tableauCookies.length} Tableau cookies to disk`)

@@ -128,7 +128,11 @@ describe('Chromium launch options', () => {
   })
 })
 
-describe('Cookie restoration on startup', () => {
+describe('Cookie persistence removed (#437)', () => {
+  // #437: storageState() persistence removed — Chrome persistent context handles
+  // cookie persistence natively via SQLitePersistentCookieStore. The manual
+  // session-state.json read/write was redundant and caused >30s keepalive hangs.
+
   let tmpDir: string
 
   beforeEach(async () => {
@@ -140,7 +144,7 @@ describe('Cookie restoration on startup', () => {
     await cleanupTempDir(tmpDir)
   })
 
-  test('restores cookies from session-state.json when file exists', async () => {
+  test('does NOT call addCookies even when session-state.json exists', async () => {
     const cookies = [
       { name: 'rh_sso_session', value: 'abc123', domain: '.redhat.com', path: '/' },
       { name: 'TAsessionID', value: 'xyz789', domain: 'access.redhat.com', path: '/' },
@@ -160,37 +164,13 @@ describe('Cookie restoration on startup', () => {
     const { initScrapeContext: init2 } = await import('./rh-scraper.ts')
     await init2(tmpDir)
 
-    expect(addCookiesSpy).toHaveBeenCalledTimes(1)
-    const calledWith = (addCookiesSpy.mock.calls[0] as any[])[0]
-    expect(calledWith).toHaveLength(2)
-    expect(calledWith[0].name).toBe('rh_sso_session')
-    expect(calledWith[1].name).toBe('TAsessionID')
+    // #437: persistent context handles cookies natively — no manual restore
+    expect(addCookiesSpy).not.toHaveBeenCalled()
   })
 
   test('proceeds without error when session-state.json does not exist', async () => {
     // No session-state.json written — should not throw
     await expect(initScrapeContext(tmpDir)).resolves.toBeUndefined()
-  })
-
-  test('proceeds without error when session-state.json is corrupt JSON', async () => {
-    await writeFile(resolve(tmpDir, 'session-state.json'), 'not-valid-json{{{')
-    await expect(initScrapeContext(tmpDir)).resolves.toBeUndefined()
-  })
-
-  test('skips addCookies when cookies array is empty', async () => {
-    await writeFile(
-      resolve(tmpDir, 'session-state.json'),
-      JSON.stringify({ cookies: [], origins: [] }),
-    )
-    const addCookiesSpy = mock(() => Promise.resolve())
-    mock.module('@playwright/test', () => ({
-      chromium: {
-        launchPersistentContext: mock(() => Promise.resolve(createMockContext(addCookiesSpy))),
-      },
-    }))
-    const { initScrapeContext: init3 } = await import('./rh-scraper.ts')
-    await init3(tmpDir)
-    expect(addCookiesSpy).not.toHaveBeenCalled()
   })
 })
 

@@ -17,12 +17,12 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page, Frame, Download } from '@playwright/test'
-import { writeFile, readFile, unlink } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { unlink } from 'node:fs/promises'
+import { join } from 'node:path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { sanitizeCell } from './utils.ts'
-import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { getScrapeContext } from './rh-scraper.ts'
 import { assertPrimary } from './lib/node-role.ts'
@@ -41,7 +41,6 @@ const SF_BASE_URL       = 'https://redhatcrm.lightning.force.com'
 const REPORT_VIEW_URL   = (reportId: string) => `${SF_BASE_URL}/lightning/r/Report/${reportId}/view?queryScope=userFolders`
 const KEEPALIVE_URL     = `${SF_BASE_URL}/lightning/n/Home`
 const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive to prevent session drops
-const SESSION_STATE_FILE = 'sf-session-state.json'
 
 // ── BKL-ARCH-SCRAPER-04 Wave 3: Per-report inner mutex (owned by this module) ─
 // Mirrors the CCSP pattern (ccsp-scraper.ts:549-561). Distinct from
@@ -370,8 +369,6 @@ export async function initSfContext(profileDir: string): Promise<void> {
     args: ['--headless=new', '--disable-blink-features=AutomationControlled', ...BASE_CHROMIUM_ARGS],
     ignoreDefaultArgs: ['--enable-automation'],
   })
-  // Restore session cookies persisted from a previous run (BKL-ARCH-SCRAPER-08)
-  await restoreSfSession()
   _keepAliveTimer = setInterval(
     () => keepAlive().catch(e => console.warn('[sf-scraper] keep-alive error:', e)),
     KEEP_ALIVE_INTERVAL_MS,
@@ -413,29 +410,17 @@ export async function closeSfContext(): Promise<void> {
 }
 
 // ── Session persistence ───────────────────────────────────────────────────────
+// restoreSfSession removed — Chrome persistent context restores cookies
+// natively from the profile directory on startup. (#437)
 
-async function restoreSfSession(): Promise<void> {
-  if (!_context || !_profileDir) return
-  const statePath = resolve(_profileDir, SESSION_STATE_FILE)
-  try {
-    const raw = await readFile(statePath, 'utf-8')
-    const state = JSON.parse(raw)
-    if (Array.isArray(state?.cookies) && state.cookies.length > 0) {
-      await _context.addCookies(state.cookies)
-      console.log(`[sf-scraper] restored ${state.cookies.length} session cookies from disk`)
-    }
-  } catch {
-    // No state file yet (first run) or parse error — non-fatal
-  }
-}
-
+/**
+ * No-op — persistent browser context (launchPersistentContext + --user-data-dir)
+ * handles cookie persistence natively via Chrome's SQLitePersistentCookieStore.
+ * The previous storageState() call was redundant and caused >30s hangs enumerating
+ * localStorage across 50-100+ iframes. Removed per #437.
+ */
 async function persistSessionState(): Promise<void> {
-  if (!_context || !_profileDir) return
-  try {
-    const state = await safeCookieOp(_context, 'sf-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
-    if (!state.cookies.length) { console.warn('[sf-scraper] persistSessionState: skipped — storageState returned empty (timeout fallback)'); return }
-    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
-  } catch { /* non-fatal */ }
+  // intentional no-op — Chrome persistent context handles cookie persistence
 }
 
 // ── Keep-alive ────────────────────────────────────────────────────────────────
