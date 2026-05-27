@@ -878,13 +878,108 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
 // Direct execution
 if (import.meta.main) {
-  scrapeSalesHub()
-    .then(result => {
-      console.log(`\nSalesHub scrape completed successfully.`)
-      console.log(`Knowledge base: ${result.knowledge.products.length} products, ${result.knowledge.tdps.length} TDPs, ${result.knowledge.tactics.length} tactics, ${result.knowledge.salesPlays.length} plays`)
-    })
-    .catch(err => {
-      console.error('[scrape-saleshub] Fatal:', err)
+  const args = new Set(process.argv.slice(2))
+
+  if (args.has('--help')) {
+    console.log(`Usage: bun scripts/scrape-saleshub.ts [flags]
+  --tdp-only        Run discovery + TDP page extraction only (skip products, plays, tactics)
+  --discovery-only  Run discovery only — show what URLs would be scraped, then exit
+  --help            Show this help`)
+    process.exit(0)
+  }
+
+  if (args.has('--discovery-only')) {
+    // Quick discovery check — no page scraping
+    ;(async () => {
+      const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
+      const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
+      const browser = await chromium.launch({ headless: true, executablePath: CHROMIUM_PATH, args: [...BASE_CHROMIUM_ARGS, '--headless=new'] })
+      const context = await browser.newContext({ storageState: sessionState, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36' })
+      const page = await context.newPage()
+      const discovered = await discoverAllPages(page)
+      console.log(`\nDiscovered:`)
+      console.log(`  TDPs: ${discovered.tdps.length}`)
+      for (const t of discovered.tdps) console.log(`    - ${t.name}: ${t.url.slice(0, 80)}`)
+      console.log(`  Tactics: ${discovered.tactics.length}`)
+      for (const t of discovered.tactics) console.log(`    - ${t.name}`)
+      console.log(`  Plays: ${discovered.plays.length}`)
+      for (const p of discovered.plays) console.log(`    - ${p.name}`)
+      await context.close()
+      await browser.close()
+    })().catch(e => { console.error('Discovery failed:', e.message); process.exit(1) })
+  } else if (args.has('--tdp-only')) {
+    // TDP-only mode — discovery + TDP extraction, merge into existing knowledge
+    ;(async () => {
+      const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
+      const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
+      console.log(`[scrape-saleshub] TDP-only mode — ${sessionState.cookies?.length ?? 0} cookies loaded`)
+      const browser = await chromium.launch({ headless: true, executablePath: CHROMIUM_PATH, args: [...BASE_CHROMIUM_ARGS, '--disable-blink-features=AutomationControlled', '--headless=new'] })
+      const context = await browser.newContext({ storageState: sessionState, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' })
+
+      // Discovery
+      const discoveryPage = await context.newPage()
+      const discovered = await discoverAllPages(discoveryPage)
+      await discoveryPage.close()
+      console.log(`[scrape-saleshub] Discovered ${discovered.tdps.length} TDPs`)
+
+      if (discovered.tdps.length === 0) {
+        console.error('[scrape-saleshub] ZERO TDPs discovered — check discoverAllPages() against current SalesHub DOM')
+        await context.close(); await browser.close()
+        process.exit(1)
+      }
+
+      // Extract TDP pages only
+      const tdpPages: ScrapedTdpPage[] = []
+      const page = await context.newPage()
+      for (let i = 0; i < discovered.tdps.length; i++) {
+        const tdp = discovered.tdps[i]
+        console.log(`[scrape-saleshub] (${i + 1}/${discovered.tdps.length}) TDP: ${tdp.name}`)
+        const tdpPage = await extractTdpPage(page, tdp.name, tdp.url)
+        if (tdpPage) {
+          console.log(`  → ${tdpPage.customerWins.length} wins, ${tdpPage.whatToSay.length} say, ${tdpPage.whatToShare.length} share, ${tdpPage.whatToShow.length} show, ${tdpPage.services.length} services`)
+          tdpPages.push(tdpPage)
+        } else {
+          console.log(`  → FAILED — null returned`)
+        }
+        await page.waitForTimeout(1_000)
+      }
+      await page.close()
+      await context.close()
+      await browser.close()
+
+      // Load existing knowledge and merge TDP data
+      const knowledgePath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
+      if (existsSync(knowledgePath)) {
+        const existing = JSON.parse(readFileSync(knowledgePath, 'utf-8')) as SalesHubKnowledge
+        // Re-build with existing products/plays/tactics + new TDP pages
+        const merged = buildSalesHubKnowledge([], existing.salesPlays as any, existing.tactics as any, tdpPages)
+        // Preserve existing TDP descriptions and tactics from products pass
+        for (const existingTdp of existing.tdps) {
+          const mergedTdp = merged.tdps.find(t => t.name === existingTdp.name)
+          if (mergedTdp) {
+            if (!mergedTdp.description && existingTdp.description) mergedTdp.description = existingTdp.description
+            if (mergedTdp.tactics.length === 0 && existingTdp.tactics.length > 0) mergedTdp.tactics = existingTdp.tactics
+            if (mergedTdp.products.length === 0 && existingTdp.products.length > 0) mergedTdp.products = existingTdp.products
+          }
+        }
+        writeJsonAtomic(knowledgePath, merged)
+        console.log(`\n[done] Merged TDP data into ${knowledgePath}`)
+        for (const t of merged.tdps) {
+          console.log(`  ${t.name}: ${t.whatToShare?.length ?? 0} share, ${t.services?.length ?? 0} services, ${t.whatToShow?.length ?? 0} show`)
+        }
+      } else {
+        console.error(`[scrape-saleshub] No existing knowledge at ${knowledgePath} — run full scrape first`)
+      }
+    })().catch(e => { console.error('TDP-only scrape failed:', e.message); process.exit(1) })
+  } else {
+    // Full scrape (default)
+    scrapeSalesHub()
+      .then(result => {
+        console.log(`\nSalesHub scrape completed successfully.`)
+        console.log(`Knowledge base: ${result.knowledge.products.length} products, ${result.knowledge.tdps.length} TDPs, ${result.knowledge.tactics.length} tactics, ${result.knowledge.salesPlays.length} plays`)
+      })
+      .catch(err => {
+        console.error('[scrape-saleshub] Fatal:', err)
       process.exit(1)
     })
 }
