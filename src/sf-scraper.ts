@@ -433,6 +433,7 @@ async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
     const state = await safeCookieOp(_context, 'sf-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
+    if (!state.cookies.length) { console.warn('[sf-scraper] persistSessionState: skipped — storageState returned empty (timeout fallback)'); return }
     await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }

@@ -92,6 +92,7 @@ let _cachedToken: string | null = null   // captured Bearer JWT from intercepted
 let _livePageBusy = false  // set true while external flows (e.g. Tableau login) use the live page
 let _livePageBusyAt = 0    // timestamp when busy flag was set — auto-clears after 3 minutes
 let _intentionalClose = false  // set before deliberate closeScrapeContext() calls to suppress auto-recovery
+let _consecutiveMfaFailures = 0  // circuit breaker: suspends keepalive after 2+ consecutive SSO/MFA failures
 let _discoverPage: Page | null = null  // reused across discoverAccountNumberByName() calls — avoids per-customer navigation
 
 /** Register a callback to invoke when the keep-alive detects session expiry. */
@@ -103,6 +104,19 @@ export function setSessionExpiredCallback(cb: () => void): void {
  *  Used by rh-auth.ts to re-adopt sister scrapers that hold stale context references. */
 export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir: string) => void): void {
   _onContextRecovered = cb
+}
+
+/** Reset the keep-alive circuit breaker and restart the timer.
+ *  Call after manual re-authentication via VNC to resume keepalive polling. */
+export function resetKeepAliveCircuitBreaker(): void {
+  _consecutiveMfaFailures = 0
+  if (!_keepAliveTimer && _context) {
+    _keepAliveTimer = setInterval(
+      () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
+      KEEP_ALIVE_INTERVAL_MS,
+    )
+    console.log('[rh-scraper] keep-alive: circuit breaker reset — keepalive resumed')
+  }
 }
 
 /**
@@ -467,6 +481,7 @@ async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
     const state = await safeCookieOp(_context, 'rh-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
+    if (!state.cookies.length) { console.warn('[rh-scraper] persistSessionState: skipped — storageState returned empty (timeout fallback)'); return }
     await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch (e: any) {
     console.warn(`[rh-scraper] persistSessionState failed: ${sanitizeErr(e)}`)
@@ -544,6 +559,7 @@ async function keepAlive(): Promise<void> {
         }, _cachedToken).catch(() => false)
 
         if (alive) {
+          _consecutiveMfaFailures = 0
           console.log('[rh-scraper] keep-alive: token refreshed via Keycloak adapter')
           await persistSessionState()
           return
@@ -565,6 +581,7 @@ async function keepAlive(): Promise<void> {
       await page.waitForURL('**/access.redhat.com/support/**', { timeout: 20_000 }).catch(() => {})
     }
     if (page.url().includes('access.redhat.com/support')) {
+      _consecutiveMfaFailures = 0
       console.log('[rh-scraper] keep-alive: session active (page nav)')
       await persistSessionState()
     } else if (page.url().includes('sso.redhat.com')) {
@@ -582,22 +599,43 @@ async function keepAlive(): Promise<void> {
           // Wait for SSO to process — if session cookie is still valid, it redirects straight through
           await page.waitForURL('**/access.redhat.com/**', { timeout: 15_000 }).catch(() => {})
           if (page.url().includes('access.redhat.com/support')) {
+            _consecutiveMfaFailures = 0
             console.log('[rh-scraper] keep-alive: SSO auto-login succeeded')
             await persistSessionState()
           } else {
             console.warn(`[rh-scraper] keep-alive: SSO needs password/MFA — URL: ${page.url()}`)
+            _consecutiveMfaFailures++
+            if (_consecutiveMfaFailures >= 2) {
+              if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+              console.warn('[rh-scraper] keep-alive: circuit breaker — SSO session expired, keepalive suspended (needs manual re-auth via VNC)')
+            }
             _onSessionExpired?.()
           }
         } else {
           console.warn('[rh-scraper] keep-alive: SSO login page but no username input found')
+          _consecutiveMfaFailures++
+          if (_consecutiveMfaFailures >= 2) {
+            if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+            console.warn('[rh-scraper] keep-alive: circuit breaker — SSO session expired, keepalive suspended (needs manual re-auth via VNC)')
+          }
           _onSessionExpired?.()
         }
       } catch (e: any) {
         console.warn(`[rh-scraper] keep-alive: SSO auto-fill failed — ${e.message}`)
+        _consecutiveMfaFailures++
+        if (_consecutiveMfaFailures >= 2) {
+          if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+          console.warn('[rh-scraper] keep-alive: circuit breaker — SSO session expired, keepalive suspended (needs manual re-auth via VNC)')
+        }
         _onSessionExpired?.()
       }
     } else {
       console.warn('[rh-scraper] keep-alive: session expired — reconnect via dashboard')
+      _consecutiveMfaFailures++
+      if (_consecutiveMfaFailures >= 2) {
+        if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+        console.warn('[rh-scraper] keep-alive: circuit breaker — SSO session expired, keepalive suspended (needs manual re-auth via VNC)')
+      }
       _onSessionExpired?.()
     }
   } catch (e: any) {

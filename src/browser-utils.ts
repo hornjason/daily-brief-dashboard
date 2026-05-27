@@ -65,7 +65,7 @@ export async function safeCookieOp<T>(
   label: string,
   op: (ctx: BrowserContext) => Promise<T>,
   fallback: T,
-  timeoutMs = 10_000,
+  timeoutMs = 30_000,
 ): Promise<T> {
   return Promise.race([
     op(ctx),
