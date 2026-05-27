@@ -15,6 +15,8 @@ import type { Customer, ProductSubscription } from './types.ts'
 import type { ProductSummary } from './product-release-radar.ts'
 import type { ProductLifecycleCache } from './product-lifecycle.ts'
 import type { CustomerProductIntel } from './customer-product-intel.ts'
+import type { CustomerSolutionContext, ActiveSolutionPlay } from './lib/customer-solution-context.ts'
+import type { TacticNode, TdpNode } from '../scripts/saleshub-knowledge-extraction.ts'
 
 /** Compatible with both RSSItem from rh-rss-fetcher.ts and the narrower type in meeting-prep-routes.ts */
 export interface RSSItemLike {
@@ -653,4 +655,94 @@ export function buildEnrichmentPromptContext(
   }
 
   return parts.join('\n\n')
+}
+
+// ── Builder 5: Sales Alignment Block (#445) ────────────────────────────────
+
+/**
+ * Injectable options for testing — each dependency can be overridden.
+ * When not provided, defaults to real implementations.
+ */
+export interface SalesAlignmentOpts {
+  getSolutionContextFn?: (slug: string) => CustomerSolutionContext
+  getTacticsByTdpFn?: (tdpName: string) => TacticNode[]
+  getTdpByNameFn?: (tdpName: string) => TdpNode | undefined
+}
+
+/**
+ * Build a deterministic "Aligned to:" blockquote block from SalesHub
+ * knowledge data. Injected AFTER the Value Play section in meeting prep
+ * output — never depends on Gemini citing assets.
+ *
+ * Returns empty string if no matched solution plays exist.
+ */
+export function buildSalesAlignmentBlock(
+  productSlugs: string[],
+  customerSlug: string,
+  opts?: SalesAlignmentOpts,
+): string {
+  // Load dependencies — use injected fns for testing, real implementations otherwise
+  let getSolutionContextFn = opts?.getSolutionContextFn
+  let getTacticsFn = opts?.getTacticsByTdpFn
+  let getTdpFn = opts?.getTdpByNameFn
+
+  if (!getSolutionContextFn) {
+    const mod = require('./lib/customer-solution-context.ts')
+    getSolutionContextFn = mod.getCustomerSolutionContext
+  }
+  if (!getTacticsFn) {
+    const mod = require('./lib/saleshub-knowledge-loader.ts')
+    getTacticsFn = mod.getTacticsByTdp
+  }
+  if (!getTdpFn) {
+    const mod = require('./lib/saleshub-knowledge-loader.ts')
+    getTdpFn = mod.getTdpByName
+  }
+
+  const context = getSolutionContextFn!(customerSlug)
+  const plays = context.activeSolutionPlays
+  if (plays.length === 0) return ''
+
+  const blocks: string[] = []
+
+  for (const play of plays) {
+    const lines: string[] = []
+
+    // Header: TDP -> Tactic -> Play
+    const tactics = getTacticsFn!(play.tdp)
+    const tacticName = tactics[0]?.name ?? ''
+    const aligned = tacticName
+      ? `[TDP] ${play.tdp} → [Tactic] ${tacticName} | ${play.playName}`
+      : `[TDP] ${play.tdp} | ${play.playName}`
+    lines.push(`> **Aligned to:** ${aligned}`)
+
+    // Assets from tactic whatToShare (items with URLs only)
+    const allAssets: Array<{ name: string; url: string }> = []
+    for (const tactic of tactics) {
+      for (const share of tactic.whatToShare ?? []) {
+        if (share.url && !allAssets.some(a => a.url === share.url)) {
+          allAssets.push({ name: share.name, url: share.url })
+        }
+      }
+    }
+
+    if (allAssets.length > 0) {
+      lines.push('> **Assets to share:**')
+      for (const asset of allAssets) {
+        lines.push(`> - [${asset.name}](${asset.url})`)
+      }
+    }
+
+    // Services from TDP
+    const tdpNode = getTdpFn!(play.tdp)
+    const services = tdpNode?.services ?? []
+    if (services.length > 0) {
+      const serviceNames = services.map(s => s.name).join(', ')
+      lines.push(`> **Services to propose:** ${serviceNames}`)
+    }
+
+    blocks.push(lines.join('\n'))
+  }
+
+  return blocks.join('\n\n')
 }

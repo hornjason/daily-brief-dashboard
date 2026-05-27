@@ -35,7 +35,7 @@ import { getTdpByName, getSalesPlayByName } from './lib/saleshub-knowledge-loade
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
-import { buildEnrichmentPromptContext } from './meeting-prep-enrichment.ts'
+import { buildEnrichmentPromptContext, buildSalesAlignmentBlock } from './meeting-prep-enrichment.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
@@ -1176,6 +1176,30 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     )
     prepContent = gateResult.output
     qualityScorecard = gateResult.scorecard
+  }
+
+  // ── Step 4b: Inject deterministic Sales Alignment block (#445) ─────────
+  const salesAlignmentBlock = buildSalesAlignmentBlock(productSlugs, slug)
+  if (salesAlignmentBlock) {
+    // Insert after "### 4. Value Play" section, before "### 5. Discussion Questions"
+    const section5Marker = '### 5.'
+    const idx = prepContent.indexOf(section5Marker)
+    if (idx !== -1) {
+      prepContent = prepContent.slice(0, idx) + '\n' + salesAlignmentBlock + '\n\n' + prepContent.slice(idx)
+      console.log(`[meeting-prep] Sales alignment block injected for ${customer.name}`)
+    } else {
+      // Fallback: append after the Value Play section by finding ### 5 pattern
+      const altMarker = '### 5 '
+      const altIdx = prepContent.indexOf(altMarker)
+      if (altIdx !== -1) {
+        prepContent = prepContent.slice(0, altIdx) + '\n' + salesAlignmentBlock + '\n\n' + prepContent.slice(altIdx)
+        console.log(`[meeting-prep] Sales alignment block injected (alt marker) for ${customer.name}`)
+      } else {
+        // Last resort: append to end
+        prepContent += '\n\n' + salesAlignmentBlock
+        console.log(`[meeting-prep] Sales alignment block appended for ${customer.name} (no section 5 marker found)`)
+      }
+    }
   }
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────

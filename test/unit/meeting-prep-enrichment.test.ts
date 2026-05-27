@@ -9,6 +9,7 @@ import {
   buildEnhancedLifecycleTable,
   buildRSSIntelligenceTable,
   extractProofPoints,
+  buildSalesAlignmentBlock,
 } from '../../src/meeting-prep-enrichment.ts'
 import type { Customer } from '../../src/types.ts'
 import type { ProductSummary } from '../../src/product-release-radar.ts'
@@ -527,5 +528,237 @@ describe('buildRSSIntelligenceTable', () => {
   test('assigns migration relevance for migration items', () => {
     const result = buildRSSIntelligenceTable(['ocp'], mockRSSItems, 'Acme Corp')
     expect(result).toContain('Migration') // migration guide title
+  })
+})
+
+// ── buildSalesAlignmentBlock ───────────────────────────────────────────────
+
+describe('buildSalesAlignmentBlock', () => {
+  test('returns empty string when no solution plays match', () => {
+    const result = buildSalesAlignmentBlock(['satellite'], 'acme-corp', {
+      getSolutionContextFn: () => ({
+        activeSolutionPlays: [],
+        marketplaceOpportunities: [],
+        versionCorrelations: [],
+        crossSellSignals: [],
+      }),
+      getTacticsByTdpFn: () => [],
+    })
+    expect(result).toBe('')
+  })
+
+  test('produces blockquote with TDP, tactic, and play name', () => {
+    const result = buildSalesAlignmentBlock(['ocp'], 'acme-corp', {
+      getSolutionContextFn: () => ({
+        activeSolutionPlays: [
+          {
+            playId: 'vm-migration',
+            playName: 'VM Migration & Modernization',
+            tdp: 'Optimize and Modernize IT Ops',
+            matchedTechnologies: ['VMware'],
+            confidence: 'HIGH' as const,
+            redHatProducts: ['ocp'],
+            valueProps: ['Consolidate infrastructure'],
+            category: 'modernization',
+            matchReasoning: 'Detected VMware',
+          },
+        ],
+        marketplaceOpportunities: [],
+        versionCorrelations: [],
+        crossSellSignals: [],
+      }),
+      getTacticsByTdpFn: (tdpName: string) => [{
+        name: 'VM migration & modernization',
+        talkTrack: 'Talk about modernization',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [
+          { name: 'Customer deck - Optimize and modernize operations CY26', url: 'https://example.com/deck', type: 'seismic' },
+          { name: 'ROI estimator', url: 'https://red.ht/virttcoestimator', type: 'seismic' },
+        ],
+        parentTdp: 'Optimize and Modernize IT Ops',
+        extractedContent: '',
+        metrics: [],
+      }],
+      getTdpByNameFn: () => ({
+        name: 'Optimize and Modernize IT Ops',
+        description: '',
+        tactics: [],
+        products: [],
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        whatToShow: [],
+        services: [
+          { name: 'Navigate engagement', description: 'Consulting' },
+          { name: 'Skills Assessment', description: 'Training' },
+        ],
+        cheatsheetUrl: '',
+        customerDeckUrl: '',
+        extractedContent: '',
+        metrics: [],
+      }),
+    })
+
+    // AC-1: Aligned to callout with TDP, tactic, play
+    expect(result).toContain('**Aligned to:**')
+    expect(result).toContain('Optimize and Modernize IT Ops')
+    expect(result).toContain('VM Migration & Modernization')
+
+    // AC-2: whatToShare assets as markdown links
+    expect(result).toContain('[Customer deck - Optimize and modernize operations CY26](https://example.com/deck)')
+    expect(result).toContain('[ROI estimator](https://red.ht/virttcoestimator)')
+
+    // AC-3: Services listed
+    expect(result).toContain('Navigate engagement')
+    expect(result).toContain('Skills Assessment')
+
+    // AC-5: Blockquote format (deterministic, not Gemini)
+    expect(result).toContain('> ')
+  })
+
+  test('only includes whatToShare items that have URLs', () => {
+    const result = buildSalesAlignmentBlock(['ocp'], 'acme-corp', {
+      getSolutionContextFn: () => ({
+        activeSolutionPlays: [
+          {
+            playId: 'vm-migration',
+            playName: 'VM Migration',
+            tdp: 'Optimize IT Ops',
+            matchedTechnologies: ['VMware'],
+            confidence: 'HIGH' as const,
+            redHatProducts: ['ocp'],
+            valueProps: [],
+            category: 'modernization',
+            matchReasoning: '',
+          },
+        ],
+        marketplaceOpportunities: [],
+        versionCorrelations: [],
+        crossSellSignals: [],
+      }),
+      getTacticsByTdpFn: () => [{
+        name: 'VM migration',
+        talkTrack: '',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [
+          { name: 'Has URL', url: 'https://example.com/doc', type: 'seismic' },
+          { name: 'No URL', url: '', type: 'seismic' },
+        ],
+        parentTdp: 'Optimize IT Ops',
+        extractedContent: '',
+        metrics: [],
+      }],
+      getTdpByNameFn: () => undefined,
+    })
+
+    expect(result).toContain('[Has URL](https://example.com/doc)')
+    expect(result).not.toContain('No URL')
+  })
+
+  test('omits services line when TDP has no services', () => {
+    const result = buildSalesAlignmentBlock(['ocp'], 'acme-corp', {
+      getSolutionContextFn: () => ({
+        activeSolutionPlays: [
+          {
+            playId: 'test',
+            playName: 'Test Play',
+            tdp: 'Some TDP',
+            matchedTechnologies: ['Docker'],
+            confidence: 'MEDIUM' as const,
+            redHatProducts: ['ocp'],
+            valueProps: [],
+            category: 'test',
+            matchReasoning: '',
+          },
+        ],
+        marketplaceOpportunities: [],
+        versionCorrelations: [],
+        crossSellSignals: [],
+      }),
+      getTacticsByTdpFn: () => [{
+        name: 'Some tactic',
+        talkTrack: '',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [
+          { name: 'Deck', url: 'https://example.com/deck', type: 'seismic' },
+        ],
+        parentTdp: 'Some TDP',
+        extractedContent: '',
+        metrics: [],
+      }],
+      getTdpByNameFn: () => ({
+        name: 'Some TDP',
+        description: '',
+        tactics: [],
+        products: [],
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [],
+        whatToShow: [],
+        services: [],
+        cheatsheetUrl: '',
+        customerDeckUrl: '',
+        extractedContent: '',
+        metrics: [],
+      }),
+    })
+
+    expect(result).not.toContain('Services to propose')
+  })
+
+  test('handles multiple solution plays', () => {
+    const result = buildSalesAlignmentBlock(['ocp', 'aap'], 'acme-corp', {
+      getSolutionContextFn: () => ({
+        activeSolutionPlays: [
+          {
+            playId: 'play1',
+            playName: 'Play One',
+            tdp: 'TDP Alpha',
+            matchedTechnologies: ['VMware'],
+            confidence: 'HIGH' as const,
+            redHatProducts: ['ocp'],
+            valueProps: [],
+            category: 'cat1',
+            matchReasoning: '',
+          },
+          {
+            playId: 'play2',
+            playName: 'Play Two',
+            tdp: 'TDP Beta',
+            matchedTechnologies: ['Ansible'],
+            confidence: 'MEDIUM' as const,
+            redHatProducts: ['aap'],
+            valueProps: [],
+            category: 'cat2',
+            matchReasoning: '',
+          },
+        ],
+        marketplaceOpportunities: [],
+        versionCorrelations: [],
+        crossSellSignals: [],
+      }),
+      getTacticsByTdpFn: (tdpName: string) => [{
+        name: `Tactic for ${tdpName}`,
+        talkTrack: '',
+        customerWins: [],
+        whatToSay: [],
+        whatToShare: [
+          { name: `Deck for ${tdpName}`, url: `https://example.com/${tdpName}`, type: 'seismic' },
+        ],
+        parentTdp: tdpName,
+        extractedContent: '',
+        metrics: [],
+      }],
+      getTdpByNameFn: () => undefined,
+    })
+
+    // Both plays should appear
+    expect(result).toContain('Play One')
+    expect(result).toContain('Play Two')
+    expect(result).toContain('TDP Alpha')
+    expect(result).toContain('TDP Beta')
   })
 })
