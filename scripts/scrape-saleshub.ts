@@ -980,6 +980,7 @@ if (import.meta.main) {
       })
       .catch(err => {
         console.error('[scrape-saleshub] Fatal:', err)
-      process.exit(1)
-    })
+        process.exit(1)
+      })
+  }
 }
