@@ -10238,3 +10238,6 @@ BKL-UX-01 → #384 — Campaign: LinkedIn URL persona override for targeted outr
 BKL-UX-02 → #385 — Meeting prep: LinkedIn profile URLs for customer attendees
 BKL-TECH-01 → #386 — Tech Stack: Industry Tools too generic — need specific tool names
 BKL-UX-03 → #387 — Events: show description/context for each event on account detail
+BKL-SYNC-COOKIE-01 → #435 — L4 daemon: persistSessionState writes empty cookies on storageState timeout (DONE 2026-05-27)
+BKL-SYNC-COOKIE-02 → #437 — storageState() hangs >30s — removed redundant calls, rely on Chrome native persistence (DONE 2026-05-27)
+BKL-SYNC-TABLEAU-RENDER-01 — Tableau viz fails to render (Raw Data tab) independently of SSO auth — needs separate investigation
