@@ -423,6 +423,26 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
     }
     expect(violations).toEqual([])
   })
+
+  test('every consumer calls templateAll()', () => {
+    // #441: Positive check — consumers MUST use templateAll(), not just
+    // avoid importing individual template functions. Without this, a consumer
+    // can bypass the template layer entirely and pass silently.
+    // Excluded: meeting-prep-service.ts — #429 migration pending
+    // Excluded: campaign-service.ts — templateAll migration tracked separately
+    const EXCLUDED = ['meeting-prep-service.ts', 'campaign-service.ts']
+    const violations: string[] = []
+    for (const file of CONSUMER_SRC_FILES) {
+      if (EXCLUDED.includes(file)) continue
+      const path = resolve(SRC_DIR, file)
+      if (!existsSync(path)) continue
+      const content = readFileSync(path, 'utf-8')
+      if (!content.includes('templateAll')) {
+        violations.push(`${file} does not call templateAll() — PRINCIPLES.md Layer 3 requires all consumers to use the template engine`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -451,13 +471,16 @@ describe('Config propagation — entrypoint covers all templates', () => {
 // 10. EXPORT PARITY — Google Docs renders what Dashboard renders
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('Export parity — Google Docs HTML covers Dashboard sections', () => {
-  test('playbook-routes.ts HTML renderer covers key PlaybookTab sections', () => {
-    const routesPath = resolve(SRC_DIR, 'playbook-routes.ts')
+describe('Export parity — Google Docs export covers Dashboard sections', () => {
+  test('playbook-to-markdown.ts export covers key PlaybookTab sections', () => {
+    // #440: Export path moved from generatePlaybookHTML (deleted) to
+    // playbookToMarkdown in playbook-to-markdown.ts (#314). Check the
+    // actual export renderer, not the routes file.
+    const exportPath = resolve(SRC_DIR, 'playbook-to-markdown.ts')
     const tabPath = resolve(DASHBOARD_DIR, 'components/tabs/PlaybookTab.tsx')
-    if (!existsSync(routesPath) || !existsSync(tabPath)) return
+    if (!existsSync(exportPath) || !existsSync(tabPath)) return
 
-    const routes = readFileSync(routesPath, 'utf-8')
+    const exportSrc = readFileSync(exportPath, 'utf-8')
     const tab = readFileSync(tabPath, 'utf-8')
 
     const REQUIRED_SECTIONS = [
@@ -470,8 +493,8 @@ describe('Export parity — Google Docs HTML covers Dashboard sections', () => {
 
     const missing: string[] = []
     for (const section of REQUIRED_SECTIONS) {
-      if (tab.includes(section.check) && !routes.includes(section.check)) {
-        missing.push(`PlaybookTab renders ${section.name} but generatePlaybookHTML does not`)
+      if (tab.includes(section.check) && !exportSrc.includes(section.check)) {
+        missing.push(`PlaybookTab renders ${section.name} but playbookToMarkdown does not`)
       }
     }
     expect(missing).toEqual([])

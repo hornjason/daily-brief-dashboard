@@ -46,7 +46,7 @@ export function detectRecurringSeries(
 export function extractActionItems(prepContent: string): string[] {
   const items: string[] = []
 
-  // Find the Action Items section (### 10. Action Items or ## 10. Action Items)
+  // Find the Action Items section (any numbered section header)
   const sectionRegex = /#{2,3}\s+\d+\.\s+Action Items\b/i
   const match = sectionRegex.exec(prepContent)
   if (!match) return items
@@ -58,28 +58,34 @@ export function extractActionItems(prepContent: string): string[] {
     ? afterHeader.slice(0, nextSection)
     : afterHeader
 
-  // Parse table rows: | Who | Action | When |
-  const tableRowRegex = /^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|$/gm
-  let rowMatch
-  while ((rowMatch = tableRowRegex.exec(sectionContent)) !== null) {
-    const who = rowMatch[1].trim()
-    const action = rowMatch[2].trim()
-    const when = rowMatch[3].trim()
-
-    // Skip header/separator rows
-    if (who === 'Who' || /^[-:]+$/.test(who)) continue
-    if (/^[-:|\s]+$/.test(rowMatch[0])) continue
-
-    items.push(`${who}: ${action} (${when})`)
-  }
-
-  // Also parse bullet-style items: - Name: Action (when)
+  // Parse bullet-style items first (primary format for 7-section slim format):
+  // - **Pre-meeting:** Jason Horn — share docs (by June 10)
+  // - Jason Horn: Action text (when)
   const bulletRegex = /^[-*]\s+(.+)$/gm
   let bulletMatch
   while ((bulletMatch = bulletRegex.exec(sectionContent)) !== null) {
-    const text = bulletMatch[1].trim()
-    if (text && !items.some(i => i.includes(text.split(':')[0]))) {
+    let text = bulletMatch[1].trim()
+    // Strip leading bold phase markers: **Pre-meeting:** or **Post-meeting:**
+    text = text.replace(/^\*\*[^*]+\*\*:?\s*/, '')
+    if (text) {
       items.push(text)
+    }
+  }
+
+  // Also parse table rows: | Who | Action | When | (backward compat with old format)
+  if (items.length === 0) {
+    const tableRowRegex = /^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|$/gm
+    let rowMatch
+    while ((rowMatch = tableRowRegex.exec(sectionContent)) !== null) {
+      const who = rowMatch[1].trim()
+      const action = rowMatch[2].trim()
+      const when = rowMatch[3].trim()
+
+      // Skip header/separator rows
+      if (who === 'Who' || /^[-:]+$/.test(who)) continue
+      if (/^[-:|\s]+$/.test(rowMatch[0])) continue
+
+      items.push(`${who}: ${action} (${when})`)
     }
   }
 

@@ -216,6 +216,15 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           .split(/\s+/)
           .filter(w => w.length > 2 && !TITLE_STOPWORDS.has(w))
 
+      // Match a customer keyword against title text — exact word boundary OR prefix match (≥4 chars).
+      // "hutch" in title matches "hutchinson" in customer name. Minimum 4 chars prevents
+      // false positives from short prefixes like "red" matching "redmond".
+      const kwMatchesTitle = (kw: string, titleText: string) => {
+        if (new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleText)) return true
+        const titleWords = titleText.toLowerCase().split(/\s+/)
+        return titleWords.some(tw => tw.length >= 4 && kw.length >= 4 && kw.startsWith(tw))
+      }
+
       const matchedCustomers = customers
         .filter((c) => {
           // BKL-CAL-06: domain-only matches require corroboration to prevent false positives.
@@ -228,7 +237,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           // corroborated "Northwest Natural". Single common words are not meaningful corroboration.
           const titleCorroboration = (name: string) => {
             const kws = custKeywords(name)
-            const matchingKws = kws.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(title))
+            const matchingKws = kws.filter(kw => kwMatchesTitle(kw, title))
             return kws.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1
           }
 
@@ -260,13 +269,13 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           // Single-keyword matches cause too many false positives ("Dental" → "Delta Dental of California")
           const keywords = custKeywords(c.name)
           const titleNorm = title.toLowerCase()
-          const matchingKws = keywords.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm))
+          const matchingKws = keywords.filter(kw => kwMatchesTitle(kw, titleNorm))
           if (keywords.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1) return true
 
           // 4. Aliases: check title against aliases with same ≥2-keyword threshold
           if (c.aliases?.some(alias => {
             const aliasKws = custKeywords(alias)
-            const aliasMatching = aliasKws.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm))
+            const aliasMatching = aliasKws.filter(kw => kwMatchesTitle(kw, titleNorm))
             return aliasKws.length >= 2 ? aliasMatching.length >= 2 : aliasMatching.length >= 1
           })) return true
 

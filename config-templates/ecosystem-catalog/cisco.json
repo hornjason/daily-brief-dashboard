@@ -1,0 +1,261 @@
+{
+  "partnerName": "Cisco",
+  "partnerSlug": "cisco",
+  "scrapedAt": "2026-05-15T00:00:00.000Z",
+  "solutionCount": 9,
+  "solutions": [
+    {
+      "name": "Cisco ACI and Red Hat Ansible Automation Platform",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Automate Cisco ACI fabric provisioning, policy management, and day-2 operations using Ansible Automation Platform. Enables network teams to manage data center network infrastructure as code with certified Ansible Content Collections.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Networking"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444401",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "Cisco ACI + Ansible Interactive Lab",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible/cisco-aci",
+          "type": "lab"
+        },
+        {
+          "title": "Automating Cisco ACI with Red Hat Ansible",
+          "url": "https://catalog.redhat.com/en/solutions/brief/cisco-aci-ansible",
+          "type": "solution-brief"
+        },
+        {
+          "title": "Cisco ACI Automation Demo",
+          "url": "https://www.youtube.com/watch?v=example-cisco-aci",
+          "type": "video"
+        }
+      ],
+      "collections": [
+        {
+          "name": "cisco.aci",
+          "namespace": "cisco",
+          "category": "Networking",
+          "url": "https://console.redhat.com/ansible/automation-hub/repo/published/cisco/aci"
+        }
+      ],
+      "publishedAt": "2025-11-01T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco IOS Network Automation with Ansible",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Manage Cisco IOS, IOS-XE, and IOS-XR network devices at scale using Ansible Automation Platform. Standardize configuration management, compliance checking, and rolling updates across enterprise campus and WAN infrastructure.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Networking"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444402",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "Cisco IOS Automation Solution Brief",
+          "url": "https://catalog.redhat.com/en/solutions/brief/cisco-ios-ansible",
+          "type": "solution-brief"
+        },
+        {
+          "title": "Ansible Network Automation Documentation",
+          "url": "https://docs.ansible.com/ansible/latest/network/index.html",
+          "type": "documentation"
+        }
+      ],
+      "collections": [
+        {
+          "name": "cisco.ios",
+          "namespace": "cisco",
+          "category": "Networking",
+          "url": "https://console.redhat.com/ansible/automation-hub/repo/published/cisco/ios"
+        },
+        {
+          "name": "cisco.iosxr",
+          "namespace": "cisco",
+          "category": "Networking",
+          "url": "https://console.redhat.com/ansible/automation-hub/repo/published/cisco/iosxr"
+        }
+      ],
+      "publishedAt": "2025-09-15T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco Nexus Data Center Automation with Ansible",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Automate Cisco Nexus 9000/7000/5000 series switches for data center fabric management. Supports NX-OS configuration, VXLAN provisioning, and multi-site orchestration through certified Ansible Content Collections.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Networking", "Data Center"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444403",
+      "coSell": true,
+      "resources": [
+        {
+          "title": "Cisco Nexus + Ansible Design Guide",
+          "url": "https://catalog.redhat.com/en/solutions/design-guide/cisco-nexus-ansible",
+          "type": "design-guide"
+        },
+        {
+          "title": "Data Center Automation with Cisco and Red Hat",
+          "url": "https://www.youtube.com/watch?v=example-cisco-nexus",
+          "type": "video"
+        }
+      ],
+      "collections": [
+        {
+          "name": "cisco.nxos",
+          "namespace": "cisco",
+          "category": "Networking",
+          "url": "https://console.redhat.com/ansible/automation-hub/repo/published/cisco/nxos"
+        }
+      ],
+      "publishedAt": "2025-10-01T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco Intersight and Red Hat OpenShift",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Deploy and manage Red Hat OpenShift Container Platform on Cisco UCS infrastructure using Cisco Intersight. Provides unified infrastructure management for hybrid cloud Kubernetes workloads with automated lifecycle management.",
+      "platform": "OpenShift Container Platform",
+      "categories": ["Cloud", "Infrastructure", "Kubernetes"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444404",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "OpenShift on Cisco UCS Reference Architecture",
+          "url": "https://catalog.redhat.com/en/solutions/brief/openshift-cisco-ucs",
+          "type": "solution-brief"
+        },
+        {
+          "title": "Cisco Intersight + OpenShift Case Study",
+          "url": "https://catalog.redhat.com/en/solutions/case-study/cisco-intersight-ocp",
+          "type": "case-study"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2025-12-01T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco ThousandEyes Network Observability with Ansible",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Integrate Cisco ThousandEyes network monitoring with Ansible Automation Platform for automated remediation workflows. Trigger playbooks based on network performance alerts to enable closed-loop network operations.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Observability", "Networking"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444405",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "ThousandEyes + Ansible Event-Driven Automation",
+          "url": "https://catalog.redhat.com/en/solutions/brief/thousandeyes-eda",
+          "type": "solution-brief"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2026-01-15T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco Firepower Security Automation with Ansible",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Automate Cisco Firepower Threat Defense and Firepower Management Center using Ansible. Manage security policies, access rules, and threat response across distributed firewall deployments.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Security"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444406",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "Security Automation with Cisco and Red Hat",
+          "url": "https://www.redhat.com/en/resources/security-automation-cisco-whitepaper",
+          "type": "white-paper"
+        },
+        {
+          "title": "Cisco Security Automation Lab",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible/cisco-security",
+          "type": "lab"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2025-08-01T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco Catalyst Center with Ansible Network Automation",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Integrate Cisco Catalyst Center (formerly DNA Center) with Ansible Automation Platform for campus network automation. Combine intent-based networking with infrastructure-as-code for unified network provisioning.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Networking"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444407",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "Catalyst Center Integration Documentation",
+          "url": "https://docs.ansible.com/ansible/latest/collections/cisco/dnac/index.html",
+          "type": "documentation"
+        }
+      ],
+      "collections": [
+        {
+          "name": "cisco.dnac",
+          "namespace": "cisco",
+          "category": "Networking"
+        }
+      ],
+      "publishedAt": "2026-02-01T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco AppDynamics and Red Hat OpenShift Observability",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Monitor and optimize applications running on OpenShift Container Platform with Cisco AppDynamics. Provides full-stack observability from infrastructure to application performance for containerized workloads.",
+      "platform": "OpenShift Container Platform",
+      "categories": ["Observability", "Cloud", "Kubernetes"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444408",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "AppDynamics on OpenShift Trial",
+          "url": "https://www.appdynamics.com/free-trial",
+          "type": "trial"
+        },
+        {
+          "title": "Monitoring OpenShift with AppDynamics",
+          "url": "https://catalog.redhat.com/en/solutions/brief/appdynamics-openshift",
+          "type": "solution-brief"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2025-07-15T00:00:00.000Z"
+    },
+    {
+      "name": "Cisco HyperFlex and Red Hat OpenShift Hybrid Cloud",
+      "partnerName": "Cisco",
+      "partnerSlug": "cisco",
+      "description": "Run Red Hat OpenShift on Cisco HyperFlex hyperconverged infrastructure for simplified hybrid cloud deployment. Combines compute, storage, and networking in a unified platform for Kubernetes workloads.",
+      "platform": "OpenShift Container Platform",
+      "categories": ["Infrastructure", "Cloud", "Kubernetes"],
+      "geoRegion": "NA",
+      "url": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444409",
+      "coSell": true,
+      "resources": [
+        {
+          "title": "OpenShift on HyperFlex Reference Architecture",
+          "url": "https://catalog.redhat.com/en/solutions/design-guide/openshift-hyperflex",
+          "type": "design-guide"
+        },
+        {
+          "title": "HyperFlex + OpenShift Deployment Video",
+          "url": "https://www.youtube.com/watch?v=example-hyperflex-ocp",
+          "type": "video"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2025-06-01T00:00:00.000Z"
+    }
+  ]
+}

@@ -74,10 +74,26 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 |----------|-------------------------------|----------------|
 | Playbook | ✅ Yes | ✅ Implemented |
 | Campaign | ✅ Yes | ❌ **MISSING** — uses stale signals |
-| Meeting Prep | ✅ Yes | ❌ **MISSING** — uses stale signals |
+| Meeting Prep | ✅ Yes | ✅ Implemented (#426) |
 | Email Outreach | ✅ Yes | ❌ **MISSING** — uses stale signals |
 | Account Brief | ✅ Yes (on-demand generation) | ✅ Implemented (on first view) |
 | Account Plan | ✅ Yes | ❌ **MISSING** |
+
+## Consumer Output Quality Rule — Business Objective Tie-back (MANDATORY)
+
+Every consumer output (meeting prep, playbook, campaign, email outreach, account brief) that references a Red Hat product, partner solution, or ecosystem resource MUST tie it to a specific customer business objective. Generic product pitches damage trust. The pattern is:
+
+**Solution → Business Objective → Specific Ask → Linkback**
+
+Example (bad): "Ask about expanding Ansible Automation Platform usage."
+Example (good): "Fred Hutch's Overlake expansion requires rapid infrastructure provisioning. The [Cisco + Red Hat network automation solution](catalog-link) with [free interactive labs](lab-link) lets Fred Hutch evaluate automated provisioning without procurement. Ask Mike Thompson: has the network team evaluated this for the Overlake timeline?"
+
+This is enforced by requiring Gemini prompts for all consumers to:
+1. Receive customer business objectives as context (from intelligence module)
+2. Instruct Gemini to cite a specific business objective for every product/solution reference
+3. Include linkback URLs for every referenced asset (solution brief, lab, trial, design guide, case study)
+
+If no business objective is known for the customer, the consumer should flag this as a data gap — not fall back to generic positioning.
 
 ## Anti-patterns
 

@@ -97,6 +97,14 @@ function MeetingCard({
   const [objective, setObjective] = useState('')
   const [notes, setNotes] = useState('')
   const [linkedinUrls, setLinkedinUrls] = useState<Record<string, string>>({})
+  // Initialize attendee names from calendar displayName if available
+  const [attendeeNames, setAttendeeNames] = useState<Record<string, string>>(() => {
+    const names: Record<string, string> = {}
+    for (const detail of meeting.attendeeDetails ?? []) {
+      if (detail.displayName) names[detail.email] = detail.displayName
+    }
+    return names
+  })
   const customerMatch = manualCustomer ?? autoCustomer
 
   const handleGenerate = () => {
@@ -104,16 +112,18 @@ function MeetingCard({
       objective: objective || undefined,
       notes: notes || undefined,
     } : undefined
-    // Merge LinkedIn URLs into attendeeDetails for this meeting
+    // Merge attendee names and LinkedIn URLs into attendeeDetails for this meeting
     const enrichedMeeting = { ...meeting }
-    if (Object.keys(linkedinUrls).length > 0) {
+    const hasNames = Object.values(attendeeNames).some(v => v.trim())
+    const hasUrls = Object.values(linkedinUrls).some(v => v.trim())
+    if (hasNames || hasUrls) {
       const existingDetails = meeting.attendeeDetails ?? []
       const externalAttendees = (meeting.attendees ?? []).filter(e => !e.endsWith('@redhat.com'))
       enrichedMeeting.attendeeDetails = externalAttendees.map(email => {
         const existing = existingDetails.find(d => d.email === email)
         return {
           email,
-          displayName: existing?.displayName,
+          displayName: attendeeNames[email]?.trim() || existing?.displayName,
           ...(linkedinUrls[email] ? { linkedinUrl: linkedinUrls[email] } : {}),
         }
       })
@@ -260,35 +270,52 @@ function MeetingCard({
           </div>
           <div>
             <label className="text-xs text-text-secondary block mb-1">Additional context (optional)</label>
+            <p className="text-xs text-text-secondary/70 mb-1">
+              e.g., Insight is the preferred partner. Customer evaluating 3 clusters for edge deployment...
+            </p>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="e.g., Insight is the preferred partner for delivery. Customer is evaluating 3 clusters for edge deployment..."
+              placeholder="Add any relevant background, partner relationships, or recent developments..."
               rows={2}
               className="w-full text-xs px-3 py-2 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent resize-none"
             />
           </div>
-          {/* LinkedIn URL inputs for external attendees (#385) */}
+          {/* Attendee details — name + LinkedIn URL inputs for external attendees (#385, #430) */}
           {attendeeList.filter(e => !e.endsWith('@redhat.com')).length > 0 && (
             <div>
-              <label className="text-xs text-text-secondary block mb-1">Attendee LinkedIn URLs (optional)</label>
-              <div className="space-y-1.5">
-                {attendeeList.filter(e => !e.endsWith('@redhat.com')).map(email => {
-                  const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
-                  const label = detail?.displayName ?? email
-                  return (
-                    <div key={email} className="flex items-center gap-2">
-                      <span className="text-xs text-text-secondary w-36 truncate shrink-0" title={email}>{label}</span>
-                      <input
-                        type="url"
-                        value={linkedinUrls[email] ?? ''}
-                        onChange={e => setLinkedinUrls(prev => ({ ...prev, [email]: e.target.value }))}
-                        placeholder="https://linkedin.com/in/..."
-                        className="flex-1 text-xs px-2 py-1 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent"
-                      />
+              <label className="text-xs text-text-secondary block mb-1">Attendee Details (optional)</label>
+              <p className="text-xs text-text-secondary/70 mb-2">
+                Add names for attendees the system couldn't identify from the calendar invite
+              </p>
+              <div className="space-y-3">
+                {attendeeList.filter(e => !e.endsWith('@redhat.com')).map(email => (
+                  <div key={email} className="space-y-1">
+                    <span className="text-xs text-text-secondary font-medium" title={email}>{email}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center gap-1">
+                        <span className="text-xs text-text-secondary/60 shrink-0">Name:</span>
+                        <input
+                          type="text"
+                          value={attendeeNames[email] ?? ''}
+                          onChange={e => setAttendeeNames(prev => ({ ...prev, [email]: e.target.value }))}
+                          placeholder="e.g., Sarah Kim, IT Director"
+                          className="flex-1 text-xs px-2 py-1 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div className="flex-1 flex items-center gap-1">
+                        <span className="text-xs text-text-secondary/60 shrink-0">LinkedIn:</span>
+                        <input
+                          type="url"
+                          value={linkedinUrls[email] ?? ''}
+                          onChange={e => setLinkedinUrls(prev => ({ ...prev, [email]: e.target.value }))}
+                          placeholder="https://linkedin.com/in/..."
+                          className="flex-1 text-xs px-2 py-1 rounded-md bg-surface-hover border border-border/50 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent"
+                        />
+                      </div>
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           )}

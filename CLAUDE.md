@@ -49,10 +49,10 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - If building a feature that generates content for a customer, ask: "Does this need account team context?" — the answer is almost always yes
 
 **L3 vs L4 — test prerequisites (never confuse these):**
-- **L4** = browser-based scrapers (RH Portal cases via `POST /api/scrape/rh`, Tableau CCSP, SF pipeline browser). Requires RH offline token, active Salesforce session, Tableau login.
-- **L3** = Drive-read-only (reads sheets/CSVs already written by L4). Requires Google Drive auth only. No RH Portal, no Salesforce session, no Tableau.
-- **bootstrap-e2e runs on the hero image (L3-only)**. The ONLY pre-flight requirement is Google Drive auth (`/api/auth/google/status`). Never add RH Portal, Salesforce, or Tableau as pre-flight gates to bootstrap-e2e — those are L4 dependencies the hero image does not have.
-- **RH offline token** (`REDHAT_OFFLINE_TOKEN` in `.env`) is for RH support case scraping only — not for bootstrap, not for Drive, not for E2E pre-flight checks.
+- **L4** = browser-based scrapers (Tableau CCSP, SF pipeline browser). Requires active Salesforce session, Tableau login. NOT cases — cases are L3.
+- **L3** = Drive-read-only (reads sheets/CSVs already written by L4) + RH cases via Bearer token (pure HTTP, no browser). Requires Google Drive auth + `REDHAT_OFFLINE_TOKEN` for cases. The hero image is L3.
+- **RH cases are L3, NOT L4.** Cases use Bearer token auth via `REDHAT_OFFLINE_TOKEN` → Hydra SOLR API (pure HTTP). No Playwright browser required. `RH_CASES_TRANSPORT` defaults to `'bearer'`. Browser path exists only as disaster recovery (`RH_CASES_TRANSPORT=browser`). Every instance — laptop, Mac Mini, hero — can fetch cases.
+- **bootstrap-e2e runs on the hero image (L3)**. Pre-flight requirements: Google Drive auth (`/api/auth/google/status`) + `REDHAT_OFFLINE_TOKEN` for cases. Never add Salesforce or Tableau as pre-flight gates.
 - **Mac Mini spec drift warning**: The Mac Mini repo at `/Users/jasonhorn/DailyBriefDashboard/` can drift from the laptop repo. When the bootstrap-e2e spec references L4 connections as pre-flight, it is outdated — sync the spec from the laptop repo before running.
 
 **Supportable is permanently disabled — zero exceptions:**
@@ -143,6 +143,8 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 - BACKLOG.md is for quick BKL-ID → issue-number lookup only
 
 **Code verification still mandatory:** Before reporting any item as done or in-progress, verify against actual source code, not GitHub state. Code is ground truth; GitHub tracks intent.
+
+**SalesHub scraper runs ONLY on the Mac Mini** — the laptop has no SalesHub auth (EmployeeIDP SSO). All SalesHub scraper debugging, testing, and fixes must target the Mac Mini. The laptop reads cached `saleshub-knowledge.json` from Google Drive — it cannot run the scraper. Never suggest running `bun scripts/scrape-saleshub.ts` from the laptop.
 
 **Scrapers are stable — don't touch without explicit instruction.** The scraper layer (rh-scraper.ts, ccsp-scraper.ts, supportable-scraper.ts, sf-scraper.ts, scraper-manager.ts) took significant effort to stabilize. Any change requires reading SCRAPER-RULES.md first and explicit confirmation from Jason before modifying.
 

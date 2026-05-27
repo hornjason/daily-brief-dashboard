@@ -88,7 +88,7 @@ describe('Email Classification → Signal Scoring (REG-347)', () => {
 
     // Write to cache
     if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true })
-    writeFileSync(CACHE_PATH, JSON.stringify(mockEmails, null, 2))
+    writeFileSync(CACHE_PATH, JSON.stringify({ data: mockEmails, cachedAt: new Date().toISOString(), ttlMs: 7200000 }))
 
     // Get signals from module
     const emailsModule = FeatureModuleRegistry.get('emails')

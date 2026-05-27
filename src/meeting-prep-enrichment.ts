@@ -1,11 +1,13 @@
 /**
  * Meeting Prep Enrichment — ADR-025
  *
- * Four pure sync builder functions that produce deterministic markdown tables
- * for injection after Gemini-generated sections 4-7 of meeting prep docs.
- * No Gemini calls. No async. No side effects.
+ * Pure sync builder functions that produce deterministic data from product
+ * alignment, lifecycle, RSS, and proof point sources.
  *
- * Pattern: same insertAfterNumberedSection() used for section 2 partners table.
+ * #426 update: Table builders are preserved for backward compat (enrichment
+ * tests, other consumers). New entry point: `buildEnrichmentPromptContext()`
+ * produces structured text for injection INTO the Gemini prompt (not post-hoc
+ * table injection).
  */
 
 import { readFileSync, existsSync } from 'fs'
@@ -542,4 +544,113 @@ function getCustomerRelevance(item: RSSItemLike, productSlugs: string[]): string
   }
 
   return 'General Red Hat news — share if relevant'
+}
+
+// ── Enrichment Prompt Context (#426) ───────────────────────────────────────
+
+interface EnrichmentPromptOpts extends AlignmentOpts {
+  lifecycleCache?: ProductLifecycleCache | null
+  roadmapData?: RoadmapEntry[]
+}
+
+/**
+ * Build structured text context from enrichment data for injection INTO
+ * the Gemini prompt. Replaces the old post-Gemini table injection pattern.
+ *
+ * Returns a string that Gemini can use to craft Value Play and Discussion
+ * Questions with real product data, proof points, and lifecycle info.
+ */
+export function buildEnrichmentPromptContext(
+  customer: Customer,
+  productSlugs: string[],
+  opts: EnrichmentPromptOpts,
+): string {
+  if (productSlugs.length === 0) return ''
+
+  const {
+    productSummaries,
+    rssItems,
+    customerSlug,
+    getValueMapFn,
+    getIntelFn,
+    getSheetCacheFn,
+    lifecycleCache,
+    roadmapData,
+  } = opts
+
+  const now = new Date()
+  const sheetCache = getSheetCacheFn ? getSheetCacheFn(customer.name) : null
+  const parts: string[] = []
+
+  // ── Product alignment context ──────────────────────────────────────
+  for (const slug of productSlugs) {
+    const valueMapText = getValueMapFn ? getValueMapFn(slug) : null
+    const intel = getIntelFn ? getIntelFn(slug, customerSlug) : null
+    const sub = sheetCache ? findSubscription(sheetCache.rows, slug) : undefined
+    const proofPoints = extractProductProofPoints(slug, valueMapText)
+
+    const lines: string[] = [`**${slug.toUpperCase()}**`]
+
+    if (sub) {
+      const qty = sub.quantity ? `${sub.quantity} units` : ''
+      const endDate = sub.endDate ? `, expires ${sub.endDate}` : ''
+      lines.push(`  Subscription: ${sub.productDescription ?? slug}${qty ? ` (${qty}${endDate})` : ''}`)
+    }
+
+    if (intel && intel.relevanceScore !== 'NONE') {
+      lines.push(`  Priority action: ${intel.priorityAction}`)
+      if (intel.featureTalkingPoints?.length) {
+        for (const f of intel.featureTalkingPoints.slice(0, 3)) {
+          lines.push(`  - ${f.feature} (${f.status}): ${f.reason}`)
+        }
+      }
+    }
+
+    if (proofPoints.length > 0) {
+      lines.push(`  Proof points: ${proofPoints.join('; ')}`)
+    }
+
+    // Product summary / recent announcements
+    const summary = productSummaries.find(p => p.slug === slug)
+    if (summary?.summaryBullets?.length) {
+      const recentDate = summary.gaDate ?? summary.refreshedAt
+      const isRecent = recentDate && isWithinDays(recentDate, 30, now)
+      if (isRecent) {
+        lines.push(`  Recent release: ${summary.displayName} ${summary.currentVersion ?? ''} — ${summary.summaryBullets[0]}`)
+      }
+    }
+
+    // Lifecycle
+    if (lifecycleCache?.products?.length) {
+      const lc = lifecycleCache.products.find(p => p.slug === slug)
+      if (lc) {
+        const rd = roadmapData?.find(r => r.product === slug)
+        const nextVer = rd?.nextVersion ?? lc.nextVersion ?? ''
+        const nextDate = rd?.expectedDate ?? (lc.nextExpected ? new Date(lc.nextExpected).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '')
+        const eolDate = lc.eolDate ? new Date(lc.eolDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''
+        lines.push(`  Lifecycle: current ${lc.currentVersion}${nextVer ? `, next ${nextVer} (${nextDate})` : ''}${eolDate ? `, EOL ${eolDate}` : ''}`)
+      }
+    }
+
+    parts.push(lines.join('\n'))
+  }
+
+  // ── Recent news (last 30 days, product-filtered) ───────────────────
+  const recentNews = rssItems
+    .filter(item => {
+      if (!item.pubDate || !isWithinDays(item.pubDate, 30, now)) return false
+      const tags = (item.productTags ?? []).map(t => t.toLowerCase())
+      return tags.some(t => productSlugs.includes(t))
+    })
+    .slice(0, 5)
+
+  if (recentNews.length > 0) {
+    const newsLines = recentNews.map(item => {
+      const date = new Date(item.pubDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return `  - [${date}] [${item.title}](${item.link}) (${item.source})`
+    })
+    parts.push(`**Recent Red Hat News**\n${newsLines.join('\n')}`)
+  }
+
+  return parts.join('\n\n')
 }

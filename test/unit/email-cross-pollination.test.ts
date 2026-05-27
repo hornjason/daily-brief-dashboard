@@ -29,7 +29,7 @@ afterAll(() => {
 function writeEmailCache(slug: string, emails: any[]) {
   writeFileSync(
     resolve(TEST_CACHE, `${slug}-emails.json`),
-    JSON.stringify({ emails, cachedAt: new Date().toISOString() }),
+    JSON.stringify({ data: emails, cachedAt: new Date().toISOString(), ttlMs: 7200000 }),
   )
 }
 

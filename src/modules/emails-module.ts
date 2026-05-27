@@ -114,7 +114,7 @@ FeatureModuleRegistry.register({
     let emails: any[]
     try {
       const raw = JSON.parse(readFileSync(path, 'utf-8'))
-      emails = Array.isArray(raw) ? raw : raw.emails ?? []
+      emails = Array.isArray(raw) ? raw : raw.data ?? raw.emails ?? []
     } catch { return [] }
 
     if (emails.length === 0) return []

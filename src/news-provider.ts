@@ -21,15 +21,15 @@ export interface NewsItem {
 }
 
 export interface NewsProvider {
-  searchNews(customerName: string): Promise<NewsItem[]>
+  searchNews(customerName: string, domain?: string): Promise<NewsItem[]>
 }
 
 // ── Implementation ───────────────────────────────────────────────────────────
 
 class GeminiGroundedNewsProvider implements NewsProvider {
-  async searchNews(customerName: string): Promise<NewsItem[]> {
+  async searchNews(customerName: string, domain?: string): Promise<NewsItem[]> {
     // Call 1: Search for recent news with Google Search grounding
-    const articles = await this.searchAndExtract(customerName)
+    const articles = await this.searchAndExtract(customerName, domain)
 
     if (articles.length === 0) {
       return []
@@ -47,22 +47,26 @@ class GeminiGroundedNewsProvider implements NewsProvider {
   /**
    * First Gemini call: Search for news with Google Search grounding and extract structured data
    */
-  private async searchAndExtract(customerName: string): Promise<Omit<NewsItem, 'significanceScore'>[]> {
+  private async searchAndExtract(customerName: string, domain?: string): Promise<Omit<NewsItem, 'significanceScore'>[]> {
     const config = loadNewsConfig()
 
-    const userPrompt = `Search for recent news articles (last ${config.searchDepthDays * 24} hours) about ${customerName}.
-Find articles about: ${config.signalTypes.join(', ')}.
+    const domainLine = domain
+      ? `\nIMPORTANT: Search site:${domain} specifically for recent blog posts, press releases, and company announcements. Include results from ${domain}/blog, ${domain}/news, ${domain}/press, and ${domain}/resources if they exist.`
+      : ''
+
+    const userPrompt = `Search for recent news, blog posts, press releases, thought leadership, and company announcements (last ${config.searchDepthDays * 24} hours) about ${customerName}.${domainLine}
+Find content about: ${config.signalTypes.join(', ')}.
 
 Return JSON array: [{ headline, summary, sourceUrl, sourceName, publishedDate, signalType }]
-Return empty array if no significant news found. Do not fabricate articles.
+Return empty array if no significant content found. Do not fabricate articles.
 
-For each article:
-- headline: exact article title
-- summary: 2-3 sentence summary of the article
-- sourceUrl: direct link to the article
-- sourceName: publication name (e.g., "Reuters", "TechCrunch", "Bloomberg")
+For each item:
+- headline: exact article or post title
+- summary: 2-3 sentence summary of the content
+- sourceUrl: direct link to the article or blog post
+- sourceName: publication or website name (e.g., "Reuters", "TechCrunch", "${customerName} Blog")
 - publishedDate: ISO 8601 date string
-- signalType: one of "leadership", "acquisition", "partnership", "earnings", "technology", "regulatory", "financial", "product", "other"
+- signalType: one of "leadership", "acquisition", "partnership", "earnings", "technology", "regulatory", "financial", "product", "thought leadership", "blog post", "company news", "other"
 
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 

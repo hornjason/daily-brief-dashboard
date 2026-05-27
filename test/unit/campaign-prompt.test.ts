@@ -181,6 +181,6 @@ describe('callGeminiForCampaign emailTemplateContext (#372)', () => {
     // The emailTemplateContext defaults to empty string when no template is found
     expect(funcSource).toContain("let emailTemplateContext = ''")
     // It's wrapped in try/catch for graceful fallback
-    expect(funcSource).toContain('Solution context unavailable')
+    expect(funcSource).toContain('Solution signals unavailable')
   })
 })

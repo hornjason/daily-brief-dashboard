@@ -13,7 +13,7 @@ import { resolve } from 'path'
 import { Readable } from 'stream'
 import { google } from 'googleapis'
 import { callGemini } from './gemini-call.ts'
-import { validateAndRetry, formatFailureFeedback, insertAfterNumberedSection, type QualityScorecard } from './gemini-quality-gate.ts'
+import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
 import { meetingPrepValidator } from './quality-validators/meeting-prep-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
@@ -31,11 +31,11 @@ import { readProductLifecycleCache } from './product-lifecycle.ts'
 import { getAllProductSummaries } from './product-release-radar.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { getTdpByName, getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
-import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
+// expansion-opportunities removed from meeting prep (#426) — data feeds into enrichment context
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
-import { buildProductAlignmentTable, buildSummitAnnouncementsTable, buildEnhancedLifecycleTable, buildRSSIntelligenceTable } from './meeting-prep-enrichment.ts'
+import { buildEnrichmentPromptContext } from './meeting-prep-enrichment.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
@@ -349,6 +349,53 @@ export function buildIntelligenceContext(slug: string): string {
   }
 }
 
+// ── Recent Interactions Context Builder (#426) ──────────────────────────────
+
+/**
+ * Synthesize recent interactions from:
+ * 1. ALL prep history for the customer (not just recurring series)
+ * 2. Drive docs context (passed in as string)
+ * 3. Recurring carry-forward (if applicable — prepended as first bullet)
+ *
+ * Returns structured text for injection into Gemini prompt.
+ */
+export function buildRecentInteractionsContext(
+  slug: string,
+  carryForwardContext: string,
+  driveDocsContext: string,
+): string {
+  const history = readHistory(slug)
+  const parts: string[] = []
+
+  // 1. Carry-forward from recurring meetings — becomes first bullet
+  if (carryForwardContext) {
+    parts.push(carryForwardContext)
+  }
+
+  // 2. Past prep history — ALL meetings for this customer, last 5
+  if (history.length > 0) {
+    const recentHistory = history.slice(0, 5)
+    const historyLines = recentHistory.map(h => {
+      const date = new Date(h.meetingStart).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+      })
+      const actions = (h.actionItems ?? []).slice(0, 3)
+      const actionSummary = actions.length > 0
+        ? ` — Key items: ${actions.join('; ')}`
+        : ''
+      return `- ${date}: "${h.meetingTitle}"${actionSummary}${h.docUrl ? ` [doc](${h.docUrl})` : ''}`
+    })
+    parts.push(`## Past Meeting Prep History (last ${recentHistory.length})\n${historyLines.join('\n')}`)
+  }
+
+  // 3. Drive docs context
+  if (driveDocsContext) {
+    parts.push(driveDocsContext)
+  }
+
+  return parts.join('\n\n')
+}
+
 // ── Fallback Attendee Table ───────────────────────────────────────────────────
 
 export function buildFallbackAttendeeTable(
@@ -467,9 +514,6 @@ export async function generateMeetingPrep(
   // Account team
   const accountTeam = getAccountTeam(customer)
   const teamContext = toPromptContext(accountTeam)
-
-  // Value map for products customer uses
-  const valueMapSections = buildValueMapContext(customer)
 
   // Account plan from signal loader (existing cached data from Drive)
   const accountPlanContext = (signalData.signals as any)?.accountPlan
@@ -621,60 +665,14 @@ export async function generateMeetingPrep(
   const lifecycleCache = readProductLifecycleCache()
   const productSummaries = getAllProductSummaries()
   const rssItems = loadRSSFeedItems()
-  const expansionOpps = getCachedExpansionOpportunities(slug)
 
   // Internal roadmap data (manually maintained release dates)
   const roadmapData = loadProductRoadmap()
 
-  // Customer-product intel (per product)
-  const customerProductIntel: string[] = []
-  for (const ps of productSlugs) {
-    const intel = getCachedCustomerProductIntel(ps, slug)
-    if (intel && intel.relevanceScore !== 'NONE') {
-      customerProductIntel.push(
-        `**${ps.toUpperCase()}** (${intel.relevanceScore}): ${intel.priorityAction}` +
-        (intel.featureTalkingPoints?.length
-          ? '\n' + intel.featureTalkingPoints.slice(0, 3).map(f => `  - ${f.feature} (${f.status}): ${f.reason}`).join('\n')
-          : '')
-      )
-    }
-  }
-
-  // Build context strings
-  const lifecycleContext = lifecycleCache?.products?.length
-    ? lifecycleCache.products
-        .filter(p => productSlugs.length === 0 || productSlugs.includes(p.slug))
-        .map(p => {
-          // Merge roadmap data — current version override + next version
-          const roadmap = roadmapData.find(r => r.product === p.slug)
-          const currentVer = (roadmap as any)?.currentVersionOverride ?? p.currentVersion
-          const nextVer = roadmap?.nextVersion ?? p.nextVersion
-          const nextDate = roadmap?.expectedDate ?? p.nextExpected?.slice(0, 10)
-          const highlights = roadmap?.highlights?.length ? ` — ${roadmap.highlights.slice(0, 3).join(', ')}` : ''
-          return `${p.displayName}: v${currentVer} (GA: ${p.gaDate?.slice(0, 10) ?? '?'}, EOL: ${p.eolDate?.slice(0, 10) ?? '?'})${nextVer ? ` → Next: v${nextVer} (expected ${nextDate ?? 'TBD'})${highlights}` : ''}`
-        })
-        .join('\n')
-    : ''
-
-  const releaseRadarContext = productSummaries
-    .filter(p => productSlugs.length === 0 || productSlugs.includes(p.slug))
-    .map(p => `**${p.displayName}** (${p.currentVersion ?? 'unknown'}):\n${(p.summaryBullets ?? []).slice(0, 3).map(b => `  - ${b}`).join('\n')}`)
-    .join('\n\n')
-
+  // Filter RSS to relevant products
   const relevantRSS = rssItems
     .filter(item => productSlugs.length === 0 || (item.productTags ?? []).some(tag => productSlugs.includes(tag.toLowerCase())))
     .slice(0, 10)
-  const rssContext = relevantRSS.length
-    ? relevantRSS.map(item => `- [${item.source}] ${item.title} (${new Date(item.pubDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})\n  ${item.link}`).join('\n')
-    : ''
-
-  const productIntelContext = customerProductIntel.length
-    ? customerProductIntel.join('\n\n')
-    : ''
-
-  const expansionContext = expansionOpps?.recommendations?.length
-    ? expansionOpps.recommendations.map(r => `- **${r.product}** (${r.confidence}): ${r.why}`).join('\n')
-    : ''
 
   // ── Step 2: Research attendees via Gemini with grounding ─────────────────
 
@@ -719,13 +717,10 @@ ${attendeeLines}
 
 For each attendee, provide:
 1. **Full Name & Title** — current title at ${customer.name}
-2. **Background** — career history, key skills, certifications
-3. **Key Signals** — buyer intent indicators, conference talks, Red Hat experience
-4. **Engagement Angle** — specific talking points for this meeting
+Return ONE bullet line per person in this exact format:
+- **Full Name**, Current Title at Company — one key insight (career highlight, certification, or recent signal)
 
-Format as a markdown table:
-| Name & Title | Background | Key Signals | Engagement Angle |
-|---|---|---|---|`,
+Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
         {
           callType: 'meeting-prep-attendee-research',
           customerName: customer.name,
@@ -856,24 +851,44 @@ Format as a markdown table:
       .map(item => `- ${item.text} (Owner: ${item.owner})`)
       .join('\n')
 
+    // ── Build enrichment context for prompt injection (#426) ──────────
+    const enrichmentContext = buildEnrichmentPromptContext(customer, productSlugs, {
+      productSummaries, rssItems: relevantRSS, customerSlug: slug,
+      getValueMapFn: getValueMap,
+      getIntelFn: getCachedCustomerProductIntel,
+      getSheetCacheFn: (name: string) => {
+        try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+      },
+      lifecycleCache, roadmapData,
+    })
+
+    // ── Build recent interactions context (#426) ──────────────────────
+    const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
+
     // Build shorter, focused Gemini prompt using playbook intelligence
-    const derivedSystemPrompt = `You are generating a focused Red Hat sales meeting prep document using existing playbook intelligence. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
+    const derivedSystemPrompt = `You are generating a focused Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
 
-RULES:
-- Use the playbook's strategic position and priorities as foundation — don't reinvent them
-- Focus discussion questions and talking points on the specific attendees in this meeting
-- Cross-reference product alignment from the playbook against meeting objectives
-- Keep each section to 3-5 lines of meeting-specific guidance
-- Cite specific data from the playbook (case numbers, renewal dates, product versions)
-- ALL data sections use markdown tables with | delimiters and |---| separator rows`
+FOCUS RULE (CRITICAL):
+- The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
+- Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
 
-    const derivedUserPrompt = `Generate a focused meeting prep for this specific meeting using the existing customer playbook:
+FORMAT RULES:
+- EXACTLY 7 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Action Items
+- NO markdown tables in ANY section — all sections use bullets and narrative
+- Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
+- Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
+- Discussion Questions must name specific attendees and include a PURPOSE for each question
+- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely.
+- Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates`
+
+    const derivedUserPrompt = `Generate a 7-section meeting prep for this specific meeting using the existing customer playbook:
 
 ## Meeting Details
 - Customer: ${customer.name}
 - Meeting: ${meeting.meetingTitle}
 - Date: ${dateStr}
 - Attendees: ${attendeeNames.join(', ') || 'Not specified'}
+${teamContext ? `\n${teamContext}` : ''}
 ${meeting.context?.objective ? `\n## MEETING OBJECTIVE\n${meeting.context.objective}\n` : ''}
 ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n` : ''}
 
@@ -949,76 +964,49 @@ ${renewalsRisk}
 
 ## Additional Context for This Meeting
 
-${carryForwardContext ? `### Previous Meeting Follow-up\n${carryForwardContext}\n` : ''}
-${driveDocsContext ? `### Account Documents\n${driveDocsContext}\n` : ''}
 ### Meeting Attendees (full research)
 ${attendeeResearch || 'No attendee research available'}
 
 ### Open Support Cases
 ${caseSummary}
 
-### Recent Product News
-${rssContext || 'No recent news available'}
+${ccspContext ? `### Cloud Consumption & Spend (CCSP)\n${ccspContext}` : ''}
+
+${enrichmentContext ? `### Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
+
+${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
 ---
 
-${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). If outstanding items from the last meeting are provided above, start with those — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 10 sections, drawing from the playbook context above:
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items from the last meeting are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
 
 # Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — see Outstanding Items below*` : ''}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — outstanding items carried forward in Recent Interactions*` : ''}
 
 ### 1. Meeting Objective
-[Restate the meeting purpose in context of the playbook's strategic position. 2-3 lines max.]
+[2-3 lines: restate the meeting purpose in context of the playbook's strategic position. Be specific about what needs to happen in THIS meeting.]
 
-### 2. ${detectedPartners.length > 0 ? 'Partner Context' : 'Meeting Attendees'}
-${detectedPartners.length > 0
-  ? `[For the partner(s) in this meeting, show:
-| Partner | Specialization | Role with ${customer.name} | Recommended Focus |
-|---|---|---|---|
-Also note other certified partners that could help. Skip individual attendee profiles.]`
-  : `[Customer attendees table:
-| Name & Title | Background | Key Signals | Engagement Angle |
-|---|---|---|---|]`}
+### 2. Who's in the Room
+[One bullet per person. NO table. Format: "- **Full Name**, Title — one key insight from LinkedIn research or prior interactions". ONLY list people on the calendar invite — do NOT list the full account team. The account team context is for YOUR reference when crafting questions and action items, not for this section.]
 
-### 3. Customer Snapshot
-[Pull 3-5 key points from the playbook's strategic position and current priorities. Be specific.]
+### 3. Recent Interactions
+[3-5 bullets synthesized from the Recent Interactions & History context above. If this is a recurring meeting, the FIRST bullet must be carry-forward items marked OUTSTANDING. Each bullet: date, what was discussed and decided (not just "meeting happened"), one-line summary. When referencing news or press releases, include the source URL as a markdown link.]
 
-### 4. Why Red Hat
-[Use product alignment from playbook. Cross-reference against customer goals:]
-| Customer Goal | Red Hat Solution | Business Impact | Proof Point |
-|---|---|---|---|
-[Minimum 3 rows, maximum 6. Every row cites playbook data.]
+### 4. Value Play
+[ONE paragraph, Command of the Message style. A teaching point tailored to THIS meeting's attendees and agenda. Reference specific playbook data — products, quantities, renewal dates, case numbers. This should be the thing the AE says in the first 2 minutes to establish credibility and frame the conversation.]
 
-### 5. What's New
-[From playbook product alignment "What's New" + recent product news. ONLY subscribed products.]
-| Product | Announcement | Why It Matters for ${customer.name} |
-|---|---|---|
+### 5. Discussion Questions
+[5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally.]
 
-### 6. Product Lifecycle
-[From playbook product alignment lifecycle data]
-| Product | Current | Next Version | Next Expected | EOL Date |
-|---|---|---|---|---|
+### 6. Open Items
+[CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
 
-### 7. Expansion Opportunities
-[From playbook expansion section. Only include if playbook has real signals.]
-| Product | Signal | Business Case | Next Step |
-|---|---|---|
-
-### 8. Discussion Questions
-[Generate 7-10 meeting-specific questions based on attendees + playbook priorities]
-| For | Question | Purpose |
-|---|---|---|
-["For" = specific attendee name. "Purpose" = cite playbook signal or priority. Advance the sale.]
-
-### 9. Open Cases & Renewals
-[From support cases + playbook renewals section]
-| Type | Detail | Status | Action |
-|---|---|---|---|
-
-### 10. Action Items
-[Pre-meeting prep items for the account team, plus any open actions from playbook]
-| Who | Action | When |
-|---|---|---|`
+### 7. Action Items
+[Bullet points with phase markers and specific names:]
+- **Pre-meeting:** [Name] — [action] (by [date])
+- **During meeting:** [Name/Team] — [action]
+- **Post-meeting (within N days/weeks):** [Name] — [action]
+[Minimum 3 items with specific team member names and dates.]`
 
     // Shorter Gemini call — playbook is primary context
     const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
@@ -1050,21 +1038,42 @@ Also note other certified partners that could help. Skip individual attendee pro
     prepContent = gateResult.output
     qualityScorecard = gateResult.scorecard
   } else {
-    // ── No playbook: existing flow (unchanged) ──────────────────────────────
+    // ── No playbook: standard generation flow ──────────────────────────────
     console.log(`[meeting-prep] No playbook for ${customer.name} — using standard generation flow`)
 
-    const systemPrompt = `You are generating a Red Hat sales positioning document for a customer meeting. This is NOT an information dump — every line must help the account team sell.
+    // ── Build enrichment context for prompt injection (#426) ──────────
+    const enrichmentContext = buildEnrichmentPromptContext(customer, productSlugs, {
+      productSummaries, rssItems: relevantRSS, customerSlug: slug,
+      getValueMapFn: getValueMap,
+      getIntelFn: getCachedCustomerProductIntel,
+      getSheetCacheFn: (name: string) => {
+        try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+      },
+      lifecycleCache, roadmapData,
+    })
 
-RULES:
-- Every claim MUST cite specific customer data (their goals, infrastructure, case numbers, renewal dates, subscription quantities)
-- NO generic value statements. "Improves efficiency" is forbidden. "Reduces Taylor Fresh Foods' playbook creation time by 60% across their 10 AAP managed nodes (Forrester TEI)" is required.
-- Cross-reference the business value map data against the customer's stated goals — match each value prop to a SPECIFIC customer objective
-- ALL data sections use markdown tables with | delimiters and |---| separator rows
-- Keep each section to 3-8 lines max (not counting table rows)
-- If data is missing: ONE line: "Data not available — generate intelligence for this customer"
-- Only include products the customer subscribes to. Do NOT add products they don't have unless specifically listed under Expansion Opportunities.`
+    // ── Build recent interactions context (#426) ──────────────────────
+    const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
-    const userPrompt = `Generate a sales positioning meeting prep for:
+    const systemPrompt = `You are generating a Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. Every line must help the account team sell.
+
+FOCUS RULE (CRITICAL):
+- The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
+- Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
+
+FORMAT RULES:
+- EXACTLY 7 numbered sections in this order: Meeting Objective, Who's in the Room, Recent Interactions, Value Play, Discussion Questions, Open Items (conditional), Action Items
+- NO markdown tables in ANY section — all sections use bullets and narrative
+- Commercial data (subscriptions, renewals, pipeline, CCSP) must appear WITHIN discussion questions — no dedicated commercial section
+- Value Play is ONE paragraph using Command of the Message style — a teaching point focused on the meeting's stated objective
+- Discussion Questions must name specific attendees and include a PURPOSE for each question
+- Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely.
+- Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates
+- Every claim MUST cite specific customer data (goals, infrastructure, case numbers, renewal dates, subscription quantities)
+- NO generic value statements. "Improves efficiency" is forbidden. Be specific.
+- Only include products the customer subscribes to in the Value Play.`
+
+    const userPrompt = `Generate a 7-section meeting prep for:
 
 ## Meeting Details
 - Customer: ${customer.name}
@@ -1074,9 +1083,9 @@ RULES:
 ${teamContext ? `\n${teamContext}` : ''}
 ${meeting.context?.objective ? `\n## MEETING OBJECTIVE (from account team — THIS IS THE #1 PRIORITY)\n${meeting.context.objective}\n` : ''}
 ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT (from account team)\n${meeting.context.notes}\n` : ''}
-${meeting.context?.productFocus?.length ? `\n## PRODUCT FOCUS (account team specified)\nFocus ALL content on these products: ${meeting.context.productFocus.join(', ')}. Other products should only appear in Expansion Opportunities if relevant.\n` : ''}
+${meeting.context?.productFocus?.length ? `\n## PRODUCT FOCUS (account team specified)\nFocus ALL content on these products: ${meeting.context.productFocus.join(', ')}.\n` : ''}
 
-## Customer Subscriptions (ONLY show these products)
+## Customer Subscriptions
 ${(() => {
   const { readSheetCache } = require('./cache-layer.ts')
   const sc = readSheetCache(customer.name)
@@ -1087,100 +1096,57 @@ ${(() => {
 ## Customer Intelligence
 ${intelligenceContext || 'Data not available — generate intelligence for this customer'}
 
-${ccspContext ? `## Cloud Consumption & Spend (CCSP)\n${ccspContext}\nUse this data to recommend cloud-specific Red Hat services (ROSA for AWS, ARO for Azure, OSD for GCP) and position cross-cloud consistency with OpenShift.` : ''}
+${ccspContext ? `## Cloud Consumption & Spend (CCSP)\n${ccspContext}\nWeave this data into Discussion Questions to recommend cloud-specific Red Hat services.` : ''}
 
 ${accountPlanContext ? `## Account Plan & Notes\n${accountPlanContext}` : ''}
 
-## Business Value Maps (for subscribed products)
-${valueMapSections || 'No value map data available'}
-
-## Product Announcements (subscribed products only)
-${releaseRadarContext || 'No release data available'}
-
-## Product Lifecycle
-${lifecycleContext || 'No lifecycle data available'}
-
-## Recent Red Hat News
-${rssContext || 'No recent news available'}
-
-## Expansion Opportunities
-${expansionContext || 'No expansion analysis available'}
-
-## Partner Context
-${partnerResearch || 'No partner information'}
-
 ## Attendee Research
 ${attendeeResearch || 'No attendee research available'}
+
+## Open Support Cases
+${caseSummary}
 
 ## Health Signals
 - Open Cases: ${meetingPrepData?.healthSignals?.cases || 'Unknown'}
 - Renewals: ${meetingPrepData?.healthSignals?.renewals || 'Unknown'}
 
-## Open Support Cases
-${caseSummary}
+${enrichmentContext ? `## Product & Market Intelligence (use contextually in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
 
-${carryForwardContext ? `## Previous Meeting Follow-up\n${carryForwardContext}\n` : ''}
-${driveDocsContext || ''}
+${recentInteractionsContext ? `## Recent Interactions & History (synthesize into Section 3)\n${recentInteractionsContext}` : ''}
+
+${partnerResearch ? `## Partner Context\n${partnerResearch}` : ''}
+
 ---
 
-${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). If outstanding items from the last meeting are provided above, start with those — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 10 sections:
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
 
 # Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — see Outstanding Items below*` : ''}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — outstanding items carried forward in Recent Interactions*` : ''}
 
 ### 1. Meeting Objective
-[State the meeting purpose. If attendees are from a partner/integrator, focus on the partnership objective for ${customer.name}. 2-3 lines max.]
+[2-3 lines: state the meeting purpose. If attendees are from a partner/integrator, focus on the partnership objective for ${customer.name}.]
 
-### 2. ${detectedPartners.length > 0 ? 'Partner Context' : 'Meeting Attendees'}
-${detectedPartners.length > 0
-  ? `[For the partner(s) in this meeting, show:
-| Partner | Specialization | Role with ${customer.name} | Recommended Focus |
-|---|---|---|---|
-Also note other certified partners that could help. Skip individual attendee profiles.]`
-  : `[Customer attendees table:
-| Name & Title | Background | Key Signals | Engagement Angle |
-|---|---|---|---|]`}
+### 2. Who's in the Room
+[One bullet per person. NO table. Format: "- **Full Name**, Title — one key insight from LinkedIn research or prior interactions". ONLY list people on the calendar invite — do NOT list the full account team. The account team context is for YOUR reference when crafting questions and action items, not for this section.]
 
-### 3. Customer Snapshot
-[3-5 bullet points from intelligence: infrastructure, strategic direction, key initiatives. Be specific.]
+### 3. Recent Interactions
+[3-5 bullets synthesized from the Recent Interactions & History context above. If this is a recurring meeting, the FIRST bullet must be carry-forward items marked OUTSTANDING. Each bullet: date, what was discussed and decided (not just "meeting happened"), one-line summary. When referencing news or press releases, include the source URL as a markdown link.]
 
-### 4. Why Red Hat
-[THIS IS THE MOST IMPORTANT SECTION. Cross-reference value maps against customer goals:]
-| Customer Goal | Red Hat Solution | Business Impact | Proof Point |
-|---|---|---|---|
-[Every row must cite a specific customer goal from the intelligence data AND a specific metric from the value map. Minimum 3 rows, maximum 6.]
+### 4. Value Play
+[ONE paragraph, Command of the Message style. Cross-reference value maps and product intelligence against the customer's stated goals. A teaching point that establishes credibility and frames the conversation. Reference specific data — products, quantities, renewal dates.]
 
-### 5. What's New
-[ONLY products the customer subscribes to. No other products.]
-| Product | Announcement | Why It Matters for ${customer.name} |
-|---|---|---|
-[Each "Why It Matters" must reference specific customer data — their infrastructure, goals, or pain points.]
+### 5. Discussion Questions
+[5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally. Questions should ADVANCE THE SALE — discover budget, timeline, decision criteria, competitive alternatives.]
 
-### 6. Product Lifecycle
-| Product | Current | Next Version | Next Expected | EOL Date |
-|---|---|---|---|---|
-[ONLY subscribed products. Flag EOL within 12 months.]
+### 6. Open Items
+[CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
 
-### 7. Expansion Opportunities
-[Products the customer DOESN'T have but SHOULD based on real signals:]
-| Product | Signal | Business Case | Next Step |
-|---|---|---|
-[Only include if there's a real signal. If no expansion signals, state "No expansion signals identified."]
-
-### 8. Discussion Questions
-| For | Question | Purpose |
-|---|---|---|
-[7-10 questions. "For" = specific attendee name. "Purpose" = cite the specific signal. Questions should ADVANCE THE SALE — discover budget, timeline, decision criteria, competitive alternatives.]
-
-### 9. Open Cases & Renewals
-| Type | Detail | Status | Action |
-|---|---|---|---|
-[Cases and renewals with specific recommended actions. Renewals within 90 days = URGENT.]
-
-### 10. Action Items
-| Who | Action | When |
-|---|---|---|
-[Specific team member names. Pre/during/post meeting. Include "share X blog post with Y" items from news section.]`
+### 7. Action Items
+[Bullet points with phase markers and specific names:]
+- **Pre-meeting:** [Name] — [action] (by [date])
+- **During meeting:** [Name/Team] — [action]
+- **Post-meeting (within N days/weeks):** [Name] — [action]
+[Minimum 3 items with specific team member names and dates. Include "share X blog post with Y" items from product intelligence.]`
 
     const geminiResult = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-synthesis',
@@ -1210,44 +1176,6 @@ Also note other certified partners that could help. Skip individual attendee pro
     )
     prepContent = gateResult.output
     qualityScorecard = gateResult.scorecard
-  }
-
-  // Insert deterministic "Other Certified Partners" table after section 2
-  // (kept out of Gemini to preserve links and formatting — ADR council hybrid inline)
-  if (otherPartnersTable) {
-    prepContent = insertAfterNumberedSection(prepContent, 2, otherPartnersTable)
-  }
-
-  // ── ADR-025: Enrichment tables for sections 4-7 ─────────────────────────
-  const alignmentTable = buildProductAlignmentTable(customer, productSlugs, {
-    productSummaries, rssItems: relevantRSS, customerSlug: slug,
-    getValueMapFn: getValueMap,
-    getIntelFn: getCachedCustomerProductIntel,
-    getSheetCacheFn: (name: string) => {
-      try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
-    },
-  })
-  if (alignmentTable) {
-    prepContent = insertAfterNumberedSection(prepContent, 4, alignmentTable)
-  }
-
-  const summitTable = buildSummitAnnouncementsTable(productSlugs, relevantRSS, productSummaries, roadmapData)
-  if (summitTable) {
-    prepContent = insertAfterNumberedSection(prepContent, 5, summitTable)
-  }
-
-  const lifecycleTable = buildEnhancedLifecycleTable(customer, productSlugs, lifecycleCache, roadmapData, productSummaries, {
-    getSheetCacheFn: (name: string) => {
-      try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
-    },
-  })
-  if (lifecycleTable) {
-    prepContent = insertAfterNumberedSection(prepContent, 6, lifecycleTable)
-  }
-
-  const rssTable = buildRSSIntelligenceTable(productSlugs, relevantRSS, customer.name)
-  if (rssTable) {
-    prepContent = insertAfterNumberedSection(prepContent, 7, rssTable)
   }
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────

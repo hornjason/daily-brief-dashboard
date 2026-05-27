@@ -98,7 +98,8 @@ export function createNewsRouter(): Hono {
 
     try {
       console.log(`[news-routes] Refreshing news for ${customerName}`)
-      const articles = await newsProvider.searchNews(customerName)
+      const customer = customers.find(c => c.name.toLowerCase() === customerName.toLowerCase())
+      const articles = await newsProvider.searchNews(customerName, customer?.domain)
 
       writeCache(customerName, articles)
 

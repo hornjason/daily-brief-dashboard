@@ -1,0 +1,95 @@
+{
+  "partnerName": "VMware",
+  "partnerSlug": "vmware",
+  "scrapedAt": "2026-05-15T00:00:00.000Z",
+  "solutionCount": 3,
+  "solutions": [
+    {
+      "name": "VMware to Red Hat OpenShift Virtualization Migration",
+      "partnerName": "VMware",
+      "partnerSlug": "vmware",
+      "description": "Migrate VMware vSphere virtual machines to Red Hat OpenShift Virtualization using the Migration Toolkit for Virtualization (MTV). Provides a structured path from VMware-dependent infrastructure to a unified Kubernetes platform for both VMs and containers.",
+      "platform": "OpenShift Container Platform",
+      "categories": ["Virtualization", "Migration", "Cloud"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444501",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "VMware Migration Assessment Tool",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization-trial",
+          "type": "trial"
+        },
+        {
+          "title": "Migrating from VMware to OpenShift Virtualization",
+          "url": "https://catalog.redhat.com/en/solutions/brief/vmware-migration-openshift",
+          "type": "solution-brief"
+        },
+        {
+          "title": "VMware to OpenShift Migration Case Study: Financial Services",
+          "url": "https://catalog.redhat.com/en/solutions/case-study/vmware-ocp-financial",
+          "type": "case-study"
+        },
+        {
+          "title": "Migration Toolkit for Virtualization Documentation",
+          "url": "https://docs.openshift.com/container-platform/latest/migration_toolkit_for_containers/about-mtv.html",
+          "type": "documentation"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "VMware NSX Network Automation with Ansible",
+      "partnerName": "VMware",
+      "partnerSlug": "vmware",
+      "description": "Automate VMware NSX-T network and security policy management using Ansible Automation Platform. Manage micro-segmentation, load balancing, and network virtualization across hybrid cloud environments.",
+      "platform": "Ansible Automation Platform",
+      "categories": ["Automation", "Networking", "Security", "Virtualization"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444502",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "VMware NSX-T Ansible Automation White Paper",
+          "url": "https://www.redhat.com/en/resources/vmware-nsx-ansible-whitepaper",
+          "type": "white-paper"
+        },
+        {
+          "title": "NSX-T Automation Demo",
+          "url": "https://www.youtube.com/watch?v=example-nsx-ansible",
+          "type": "video"
+        }
+      ],
+      "collections": [
+        {
+          "name": "vmware.vmware",
+          "namespace": "vmware",
+          "category": "Virtualization",
+          "url": "https://console.redhat.com/ansible/automation-hub/repo/published/vmware/vmware"
+        }
+      ],
+      "publishedAt": "2025-10-15T00:00:00.000Z"
+    },
+    {
+      "name": "Red Hat Enterprise Linux on VMware vSphere",
+      "partnerName": "VMware",
+      "partnerSlug": "vmware",
+      "description": "Certified Red Hat Enterprise Linux images for VMware vSphere environments. Includes optimized kernel configurations, VMware Tools integration, and joint support agreements for running RHEL workloads on vSphere.",
+      "platform": "Red Hat Enterprise Linux",
+      "categories": ["Infrastructure", "Virtualization"],
+      "geoRegion": "Global",
+      "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444503",
+      "coSell": false,
+      "resources": [
+        {
+          "title": "RHEL on vSphere Best Practices",
+          "url": "https://catalog.redhat.com/en/solutions/design-guide/rhel-vsphere",
+          "type": "design-guide"
+        }
+      ],
+      "collections": [],
+      "publishedAt": "2025-05-01T00:00:00.000Z"
+    }
+  ]
+}

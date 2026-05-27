@@ -475,28 +475,30 @@ export async function generateCampaign(
     }
   }
 
-  // 4a. Check for SalesHub email template base (#372)
+  // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
+  // Uses solution-intelligence signals from loadCustomerSignals() instead of
+  // direct module import (PRINCIPLES.md Layer 3 compliance).
   let emailTemplateContext = ''
   try {
-    const { getCustomerSolutionContext } = await import('./lib/customer-solution-context.ts')
-    const solutionCtx = getCustomerSolutionContext(slug)
-    for (const play of solutionCtx.activeSolutionPlays) {
-      const salesPlay = getSalesPlayByName(play.playName)
+    const solutionSignals = registrySignals.filter(s => s.source === 'solution-intelligence' && s.metadata?.solutionPlayName)
+    for (const sig of solutionSignals) {
+      const playName = sig.metadata!.solutionPlayName as string
+      const salesPlay = getSalesPlayByName(playName)
       if (salesPlay?.emailTemplateUrl) {
         try {
           const resp = await fetch(salesPlay.emailTemplateUrl, { signal: AbortSignal.timeout(10000) })
           if (resp.ok) {
             const templateText = await resp.text()
             const cleanTemplate = templateText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 3000)
-            emailTemplateContext = `\n## SalesHub Email Template Base (${play.playName})\nUse this template as the base structure and language. Personalize with customer signals but preserve the template's positioning language:\n\n${cleanTemplate}\n`
-            console.log(`[campaigns] Using SalesHub email template from ${play.playName}`)
+            emailTemplateContext = `\n## SalesHub Email Template Base (${playName})\nUse this template as the base structure and language. Personalize with customer signals but preserve the template's positioning language:\n\n${cleanTemplate}\n`
+            console.log(`[campaigns] Using SalesHub email template from ${playName}`)
           }
         } catch { /* skip on template fetch failure */ }
         break // Use first template found
       }
     }
   } catch {
-    // Solution context unavailable — proceed without template
+    // Solution signals unavailable — proceed without template
   }
 
   // 4. Generate campaign via Gemini + quality gate (ADR-024)

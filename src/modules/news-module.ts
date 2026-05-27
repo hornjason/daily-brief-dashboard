@@ -68,11 +68,13 @@ FeatureModuleRegistry.register({
       return
     }
 
-    await newsProvider.searchNews(customer.name)
+    await newsProvider.searchNews(customer.name, customer.domain)
   },
 
   async fetch(customerName: string): Promise<void> {
-    const articles = await newsProvider.searchNews(customerName)
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find((c: any) => c.name === customerName)
+    const articles = await newsProvider.searchNews(customerName, customer?.domain)
     const slug = toSlug(customerName)
     const cachePath = resolve(CACHE_DIR, `${slug}.json`)
 

@@ -1,20 +1,38 @@
 {
   "signalTypes": [
-    "updated-signal"
+    "leadership",
+    "acquisition",
+    "partnership",
+    "earnings",
+    "layoffs",
+    "product launches",
+    "regulatory issues",
+    "major business developments",
+    "thought leadership",
+    "product announcement",
+    "blog post",
+    "company news",
+    "security advisory",
+    "competitive positioning"
   ],
   "criticalKeywords": [
     "bankruptcy",
     "major acquisition",
     "C-suite departure",
     "acquisition",
-    "earnings surprise"
+    "earnings surprise",
+    "cybersecurity",
+    "AI",
+    "digital transformation",
+    "cloud migration",
+    "infrastructure modernization"
   ],
   "excludeKeywords": [
     "routine press release",
     "minor mention"
   ],
-  "defaultThreshold": 8,
-  "searchDepthDays": 2,
+  "defaultThreshold": 5,
+  "searchDepthDays": 14,
   "significanceGuidelines": {
     "9-10": "Critical (bankruptcy, major acquisition, C-suite departure)",
     "7-8": "Important (new tech initiative, major partnership, earnings surprise)",
