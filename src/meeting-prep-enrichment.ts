@@ -784,21 +784,25 @@ export function buildSalesAlignmentBlock(
   }
 
   const blocks: string[] = []
+  const shownTdps = new Set<string>()
 
-  if (plays.length > 0) {
-    // Path 1: Solution plays matched from tech stack
-    for (const play of plays) {
-      blocks.push(buildAlignmentEntry(play.tdp, play.playName, getTacticsFn!, getTdpFn!))
+  // Always start with product subscription TDPs — these are the most relevant
+  // because they reflect what the customer actually owns + what the meeting is about
+  for (const slug of productSlugs) {
+    const tdpName = PRODUCT_TDP_MAP[slug.toLowerCase()]
+    if (tdpName && !shownTdps.has(tdpName)) {
+      shownTdps.add(tdpName)
+      // Check if a solution play matches this TDP — if so, use it for the play name
+      const matchingPlay = plays.find(p => p.tdp === tdpName)
+      blocks.push(buildAlignmentEntry(tdpName, matchingPlay?.playName, getTacticsFn!, getTdpFn!))
     }
-  } else {
-    // Path 2: No solution plays matched — fall back to product subscriptions → TDP
-    const matchedTdps = new Set<string>()
-    for (const slug of productSlugs) {
-      const tdpName = PRODUCT_TDP_MAP[slug.toLowerCase()]
-      if (tdpName && !matchedTdps.has(tdpName)) {
-        matchedTdps.add(tdpName)
-        blocks.push(buildAlignmentEntry(tdpName, undefined, getTacticsFn!, getTdpFn!))
-      }
+  }
+
+  // Then add any solution plays for TDPs not already shown
+  for (const play of plays) {
+    if (!shownTdps.has(play.tdp)) {
+      shownTdps.add(play.tdp)
+      blocks.push(buildAlignmentEntry(play.tdp, play.playName, getTacticsFn!, getTdpFn!))
     }
   }
 
