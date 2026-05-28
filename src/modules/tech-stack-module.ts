@@ -266,7 +266,6 @@ Return ONLY the JSON array, no markdown fences.`
 
     const candidate = json.candidates?.[0]
     const parts: any[] = candidate?.content?.parts ?? []
-    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
 
     // Extract grounding sources from groundingMetadata (Google Search grounding)
     const groundingMetadata = candidate?.groundingMetadata
@@ -277,8 +276,15 @@ Return ONLY the JSON array, no markdown fences.`
       }
     }
 
-    // Parse JSON — handle markdown fences
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\[[\s\S]*\])/)
+    // Grounded search may return multiple text parts with duplicate content.
+    // Parse the first part that contains a valid JSON array.
+    let jsonMatch: RegExpMatchArray | null = null
+    for (const p of parts) {
+      const t = (p.text ?? '').trim()
+      if (!t) continue
+      jsonMatch = t.match(/```json\s*([\s\S]*?)\s*```/) ?? t.match(/(\[[\s\S]*\])/)
+      if (jsonMatch) break
+    }
 
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0])
