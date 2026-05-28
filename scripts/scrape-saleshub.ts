@@ -319,13 +319,11 @@ async function bulkDownloadFiltered(
   const download = await downloadPromise
 
   // 7. Save ZIP to local temp directory
-  const safeValue = filterValue.replace(/[/\\?%*:|"<>]/g, '_')
   const zipPath = resolve(outputDir, `${filterCategory}_${safeValue}.zip`)
   await download.saveAs(zipPath)
   console.log(`[scrape-saleshub] ZIP saved: ${zipPath} (${download.suggestedFilename()})`)
 
   // 8. Unzip into a subdirectory
-  const unzipDir = resolve(outputDir, `${filterCategory}_${safeValue}`)
   mkdirSync(unzipDir, { recursive: true })
   const proc = Bun.spawnSync(['unzip', '-o', '-q', zipPath, '-d', unzipDir])
   if (proc.exitCode !== 0) {
