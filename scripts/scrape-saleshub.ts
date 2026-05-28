@@ -156,7 +156,108 @@ function isEnglishDocument(fileName: string): boolean {
   return !NON_ENGLISH_PREFIXES.some(prefix => lower.includes(prefix))
 }
 
-// ── Bulk ZIP Download ─────────────────────────────────────────────────────────
+// ── API-based Document Download (#448) ────────────────────────────────────────
+
+/**
+ * Download a single document via the Seismic API using the Bearer token.
+ * Tries the content download endpoint, then falls back to the version endpoint.
+ * Returns the local file path on success, or null on failure.
+ */
+async function apiDownloadDocument(
+  doc: DocCenterDocument,
+  authCtx: { auth: string; headers: Record<string, string> },
+  outputDir: string,
+): Promise<string | null> {
+  const contentId = (doc as any).contentId ?? ''
+  const versionId = doc.versionId ?? ''
+  const format = ((doc as any).format ?? '').toLowerCase() || 'pptx'
+  const safeName = doc.name.replace(/[/\\?%*:|"<>]/g, '_')
+  const fileName = `${safeName}.${format}`
+  const localPath = resolve(outputDir, fileName)
+
+  if (existsSync(localPath) && isRealDocument(localPath)) {
+    return localPath
+  }
+
+  const downloadUrls = [
+    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v2/versions/${versionId}/download`,
+    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v1/versions/${versionId}/download`,
+    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v2/contents/${contentId}/versions/${versionId}/download`,
+  ]
+
+  for (const url of downloadUrls) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: authCtx.auth,
+          profileversionid: '1d1918e9-b5b0-4428-b8fc-87e02ad44156',
+          teamsiteid: authCtx.headers.teamsiteid ?? '1',
+          'x-seismic-route': authCtx.headers['x-seismic-route'] ?? '',
+          seismicclientname: authCtx.headers.seismicclientname ?? '',
+        },
+      })
+
+      if (!res.ok) continue
+
+      const contentType = res.headers.get('content-type') ?? ''
+      if (contentType.includes('text/html')) continue
+
+      const buffer = Buffer.from(await res.arrayBuffer())
+      if (buffer.length < 1000) continue
+
+      const { writeFileSync } = await import('fs')
+      mkdirSync(outputDir, { recursive: true })
+      writeFileSync(localPath, buffer)
+
+      if (!isRealDocument(localPath)) {
+        try { unlinkSync(localPath) } catch {}
+        continue
+      }
+
+      return localPath
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+/**
+ * Download all documents for a category (TDP or Sales Play) via the API.
+ * Returns array of local file paths for successfully downloaded documents.
+ */
+async function apiDownloadCategory(
+  docs: DocCenterDocument[],
+  authCtx: { auth: string; headers: Record<string, string> },
+  categoryName: string,
+  outputDir: string,
+): Promise<{ downloaded: string[]; failed: string[] }> {
+  const downloaded: string[] = []
+  const failed: string[] = []
+
+  for (const doc of docs) {
+    if (!isEnglishDocument(doc.name)) {
+      console.log(`[scrape-saleshub] Skipping ${doc.name} — non-English translation`)
+      continue
+    }
+
+    const localPath = await apiDownloadDocument(doc, authCtx, outputDir)
+    if (localPath) {
+      downloaded.push(localPath)
+      console.log(`[scrape-saleshub] + ${doc.name} (${doc.contentType})`)
+    } else {
+      failed.push(doc.name)
+      console.warn(`[scrape-saleshub] ✗ ${doc.name} — download failed`)
+    }
+
+    await new Promise(r => setTimeout(r, 500))
+  }
+
+  return { downloaded, failed }
+}
+
+// ── Bulk ZIP Download (fallback) ──────────────────────────────────────────────
 
 /**
  * Navigate to the DocCenter filtered view, select all documents,
@@ -514,121 +615,87 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
     let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
 
-    // Bulk download per TDP — select all + Download produces multi_selected.Zip
+    // API-based download per TDP — download each document individually via HTTP
     for (const tdp of facets.tdps) {
-      console.log(`[scrape-saleshub] Bulk downloading TDP "${tdp}" content...`)
-      try {
-        const localFiles = await bulkDownloadFiltered(page, 'TDP', tdp, HIGH_VALUE_TYPES, contentDir, {
-          newestVersionCreated: newestByTdp[tdp],
-          lastContentScrape,
+      const tdpDocs = uniqueDocs.filter(d => d.tdp?.toLowerCase() === tdp.toLowerCase())
+      if (tdpDocs.length === 0) { console.log(`[scrape-saleshub] TDP "${tdp}": 0 documents — skipping`); continue }
+      console.log(`[scrape-saleshub] Downloading TDP "${tdp}": ${tdpDocs.length} documents via API...`)
+
+      const tdpDir = resolve(contentDir, `TDP_${tdp.replace(/[/\\?%*:|"<>]/g, '_')}`)
+      const result = await apiDownloadCategory(tdpDocs, authCtx, tdp, tdpDir)
+
+      const folderId = tdpFolderIds[tdp.toLowerCase()]
+      for (const filePath of result.downloaded) {
+        const fileName = filePath.split('/').pop()!
+        totalDownloaded++
+
+        const fileNameLower = fileName.toLowerCase()
+        const matchedDoc = uniqueDocs.find(d => {
+          const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
+          return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
         })
-        console.log(`[scrape-saleshub] TDP "${tdp}": ${localFiles.length} files extracted from ZIP`)
 
-        const folderId = tdpFolderIds[tdp.toLowerCase()]
-        for (const filePath of localFiles) {
-          const fileName = filePath.split('/').pop()!
-          if (!isRealDocument(filePath)) {
-            console.warn(`[scrape-saleshub] Skipping ${fileName} — HTML error page`)
-            try { unlinkSync(filePath) } catch {}
-            totalSkipped++
-            continue
-          }
-          if (!isEnglishDocument(fileName)) {
-            console.log(`[scrape-saleshub] Skipping ${fileName} — non-English translation`)
-            try { unlinkSync(filePath) } catch {}
-            totalSkipped++
-            continue
-          }
-          totalDownloaded++
-
-          // Match back to uniqueDocs by filename similarity for metadata recording
-          const fileNameLower = fileName.toLowerCase()
-          const matchedDoc = uniqueDocs.find(d => {
-            const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
-            return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
-          })
-
-          if (driveEnabled && drive && folderId) {
-            try {
-              const result = await uploadFileToDrive(drive, folderId, filePath, fileName)
-              console.log(`[scrape-saleshub] + ${fileName} -> Drive (${result.id})`)
-              if (matchedDoc) {
-                ;(matchedDoc as any).driveFileId = result.id
-                ;(matchedDoc as any).driveUrl = result.webViewLink
-              }
-              totalUploaded++
-            } catch (e: any) {
-              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
-              totalFailed++
+        if (driveEnabled && drive && folderId) {
+          try {
+            const uploadResult = await uploadFileToDrive(drive, folderId, filePath, fileName)
+            console.log(`[scrape-saleshub]   → Drive (${uploadResult.id})`)
+            if (matchedDoc) {
+              ;(matchedDoc as any).driveFileId = uploadResult.id
+              ;(matchedDoc as any).driveUrl = uploadResult.webViewLink
             }
+            totalUploaded++
+          } catch (e: any) {
+            console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+            totalFailed++
           }
-          // Clean up local file after upload
-          try { unlinkSync(filePath) } catch {}
         }
-      } catch (e: any) {
-        console.warn(`[scrape-saleshub] Bulk download failed for TDP "${tdp}": ${e.message?.slice(0, 100)}`)
-        totalFailed++
+        try { unlinkSync(filePath) } catch {}
       }
-      await page.waitForTimeout(3_000) // respectful pause between bulk downloads
+      totalFailed += result.failed.length
+      console.log(`[scrape-saleshub] TDP "${tdp}": ${result.downloaded.length} downloaded, ${result.failed.length} failed`)
     }
 
-    // Bulk download per Sales Play — same pattern
+    // API-based download per Sales Play
     for (const play of facets.salesPlays) {
-      console.log(`[scrape-saleshub] Bulk downloading Sales Play "${play}" content...`)
-      try {
-        const localFiles = await bulkDownloadFiltered(page, 'Sales Play', play, HIGH_VALUE_TYPES, contentDir, {
-          newestVersionCreated: newestByPlay[play],
-          lastContentScrape,
+      const playDocs = uniqueDocs.filter(d => d.salesPlay?.toLowerCase() === play.toLowerCase())
+      if (playDocs.length === 0) { console.log(`[scrape-saleshub] Play "${play}": 0 documents — skipping`); continue }
+      console.log(`[scrape-saleshub] Downloading Play "${play}": ${playDocs.length} documents via API...`)
+
+      const playDir = resolve(contentDir, `Play_${play.replace(/[/\\?%*:|"<>]/g, '_')}`)
+      const result = await apiDownloadCategory(playDocs, authCtx, play, playDir)
+
+      const folderId = playFolderIds[play.toLowerCase()]
+      for (const filePath of result.downloaded) {
+        const fileName = filePath.split('/').pop()!
+        totalDownloaded++
+
+        const fileNameLower = fileName.toLowerCase()
+        const matchedDoc = uniqueDocs.find(d => {
+          const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
+          return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
         })
-        console.log(`[scrape-saleshub] Play "${play}": ${localFiles.length} files extracted from ZIP`)
 
-        const folderId = playFolderIds[play.toLowerCase()]
-        for (const filePath of localFiles) {
-          const fileName = filePath.split('/').pop()!
-          if (!isRealDocument(filePath)) {
-            console.warn(`[scrape-saleshub] Skipping ${fileName} — HTML error page`)
-            try { unlinkSync(filePath) } catch {}
-            totalSkipped++
-            continue
-          }
-          if (!isEnglishDocument(fileName)) {
-            console.log(`[scrape-saleshub] Skipping ${fileName} — non-English translation`)
-            try { unlinkSync(filePath) } catch {}
-            totalSkipped++
-            continue
-          }
-          totalDownloaded++
-
-          const fileNameLower = fileName.toLowerCase()
-          const matchedDoc = uniqueDocs.find(d => {
-            const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
-            return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
-          })
-
-          if (driveEnabled && drive && folderId) {
-            try {
-              const result = await uploadFileToDrive(drive, folderId, filePath, fileName)
-              console.log(`[scrape-saleshub] + ${fileName} -> Drive (${result.id})`)
-              if (matchedDoc) {
-                ;(matchedDoc as any).driveFileId = result.id
-                ;(matchedDoc as any).driveUrl = result.webViewLink
-              }
-              totalUploaded++
-            } catch (e: any) {
-              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
-              totalFailed++
+        if (driveEnabled && drive && folderId) {
+          try {
+            const uploadResult = await uploadFileToDrive(drive, folderId, filePath, fileName)
+            console.log(`[scrape-saleshub]   → Drive (${uploadResult.id})`)
+            if (matchedDoc) {
+              ;(matchedDoc as any).driveFileId = uploadResult.id
+              ;(matchedDoc as any).driveUrl = uploadResult.webViewLink
             }
+            totalUploaded++
+          } catch (e: any) {
+            console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+            totalFailed++
           }
-          try { unlinkSync(filePath) } catch {}
         }
-      } catch (e: any) {
-        console.warn(`[scrape-saleshub] Bulk download failed for Play "${play}": ${e.message?.slice(0, 100)}`)
-        totalFailed++
+        try { unlinkSync(filePath) } catch {}
       }
-      await page.waitForTimeout(3_000)
+      totalFailed += result.failed.length
+      console.log(`[scrape-saleshub] Play "${play}": ${result.downloaded.length} downloaded, ${result.failed.length} failed`)
     }
 
-    console.log(`[scrape-saleshub] Bulk downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
+    console.log(`[scrape-saleshub] API downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
 
     await page.close()
 
