@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-24
+updated: 2026-05-28
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -1741,35 +1741,73 @@ Consumers (playbook, brief, campaign, meeting-prep) — zero changes
 
 ---
 
-## §29. Ecosystem Catalog Module (#438, 2026-05-27)
+## §29. Ecosystem Catalog Module (#438, #443, 2026-05-28)
 
 New signal source that surfaces Red Hat + technology partner joint solutions from catalog.redhat.com. Separate from `partner-catalog-module` (which handles channel partners like CDW, WWT).
 
-### Data flow
+### Data flow (L3 — pure HTTP, zero auth, runs on any instance)
 
 ```
-catalog.redhat.com (Phase 2 scraper, Mac Mini)
-  → data/cache/ecosystem-catalog/{partner-slug}.json
-    → ecosystem-catalog-module.ts (signals with platform + partnerName metadata)
-      → Template Engine → Product Alignment section (via `product` metadata key)
-        → All consumers via templateAll()
+Two public Hydra APIs (no auth required):
+  API 1: SOLR search → all 189 solutions + metadata (1 HTTP call)
+    access.redhat.com/hydra/rest/search/kcs?redhat_client=ecosystem-catalog&fq=documentKind:EcoSolution
+  API 2: Resources per solution → typed resources (190 HTTP calls, concurrency 5)
+    connect.redhat.com/hydra/prm/v1/solutions/{solutionId}/resources
+  → syncEcosystemCatalog() merges + writes per-partner cache files
+    → data/cache/ecosystem-catalog/{partner-slug}.json
+      → ecosystem-catalog-module.ts (signals with platform + partnerName metadata)
+        → Template Engine → Product Alignment section (via `product` metadata key)
+          → All consumers via templateAll()
 ```
+
+**No Playwright. No browser. No Mac Mini dependency.** Council decision (2026-05-28, 4 members, 3 rounds, unanimous): both APIs are fully public, L3-compatible. Original #443 plan assumed Playwright scraping — replaced entirely with pure HTTP.
+
+### SOLR fields mapped
+
+| SOLR field | → Our field |
+|---|---|
+| `allTitle` | `name` |
+| `partnerName` | `partnerName` |
+| `partner_catalog_url_id` | `partnerSlug` |
+| `short_description` | `description` |
+| `target_platforms[0]` | `platform` |
+| `subcategories` | `categories` |
+| `supported_regions[0]` | `geoRegion` |
+| `view_uri` | `url` (linkback) |
+| `lastModifiedDate` | `publishedAt` |
+
+### Resource type mapping
+
+| API code | → Our type |
+|---|---|
+| `solution_brief` | `solution-brief` |
+| `customer_case_study` | `case-study` |
+| `reference_architecture` | `design-guide` |
+| `demo` | `lab` |
+| `learning_course` | `lab` |
+| `video` | `video` |
+| `overview` | `documentation` |
+| everything else | `other` |
+
+### Collections
+
+Deferred. The Collections tab on catalog.redhat.com only appears for partners with Ansible Automation Platform solutions (Ansible Content Collections like cisco.aci, cisco.ios). The API does not expose Collections data — the detail page flight data shows `"hidden":true,"collections":[]` for most solutions. Collections can be inferred from platform metadata but the tab data itself is not available without page scraping.
 
 ### Key files
 
 | File | Purpose |
 |------|---------|
-| `src/lib/ecosystem-catalog.ts` | Types (EcosystemSolution, EcosystemResource, AnsibleCollection) + cache loader |
+| `src/lib/ecosystem-catalog.ts` | Types, cache loader, `syncEcosystemCatalog()`, `mapResourceType()` |
 | `src/modules/ecosystem-catalog-module.ts` | FeatureModule registration, signal emission, ensureFresh (30-day TTL) |
 | `src/refresh-engine.ts` | `POST /api/refresh/ecosystem-catalog` endpoint |
+| `server.ts:L84` | Side-effect import (required for module registration) |
 | `config-templates/ecosystem-catalog/` | Seed data: cisco.json (9 solutions), vmware.json (3 solutions) |
-| `test/unit/ecosystem-catalog.test.ts` | 9 library tests |
+| `test/unit/ecosystem-catalog.test.ts` | 22 library tests (cache loading + sync pipeline) |
 | `test/unit/ecosystem-catalog-module.test.ts` | 11 module tests |
 
-### Phase 1 (shipped): Consumption layer — types, module, cache loader, seed data, signals, tests
-### Phase 2 (#443): Playwright scraper on Mac Mini — extracts solutions, resources, Ansible collections from catalog.redhat.com
+### Stats (as of 2026-05-28)
 
-### Top 10 partners: Cisco, VMware, Dell, HPE, ServiceNow, Palo Alto, Splunk, AWS, Microsoft, Google
+129 partners, 189 solutions, 3-7 resources per solution. Monthly refresh cycle (solutions change infrequently).
 
 ---
 
@@ -1803,3 +1841,44 @@ Meeting-specific data (attendees, partners, carry-forward, Drive docs, objective
 ### Key file: `src/lib/meeting-prep-signals.ts`
 - `enrichMeetingSignals(input)` produces 5 signal types: objective (0.95), carry-forward (0.90), attendees (0.85), partner (0.75), drive docs (0.60)
 - Signals only produced when corresponding input data is present and non-empty
+
+---
+
+## §31. SalesHub DocCenter Content Discovery (#448, 2026-05-28)
+
+Replaces broken Pass 1.9 (home page iframe tile scraping) and supersedes #364 (PPTX URL-encoding workaround) with a clean Seismic search API approach using faceted filters.
+
+### Architecture
+
+```
+Seismic DocCenter Search API (same Bearer token as page-discovery)
+  → Step 1: Capture Bearer token by navigating to DocCenter
+  → Step 2: Query with WithAggregation:true → discover all TDP/Play/Tactic names from facets
+  → Step 3: For each TDP + Play:
+       Query with CustomProperties filters → get document metadata
+  → Step 4: Bulk ZIP download per TDP/Play via DocCenter UI
+       → Upload to Google Drive (organized folders)
+  → Step 5: Build knowledge JSON with documents[] per TDP/Play
+       → driveUrl + metadata, no extractedContent in JSON
+  → Step 6: Signal module reads knowledge JSON → emits signals to consumers
+```
+
+### Key design decisions
+- **Self-discovering taxonomy:** TDP/Play/Tactic names come from API facet response, not hardcoded lists. The scraper adapts as SalesHub content changes.
+- **3 content types only:** Business presentation, Cheatsheet, Competitive review. These are the high-value customer-shareable assets. Other types (video, FAQ, training, etc.) are noise.
+- **Bulk ZIP + Drive upload (not per-document download):** Pivoted from per-document download (~40 min) to DocCenter's native "select all + Download" producing a single ZIP (~6 min per batch). Files upload to organized Drive folders, intelligence engine reads from Drive.
+- **Distribution terms captured:** "General Distribution" vs "Confidential - Channel NDA Required" — consumers can flag NDA-restricted content.
+- **Freshness check:** API `versionCreated` dates compared against `lastContentScrape` — unchanged TDPs skip the bulk download entirely.
+- **ZIP caching:** Deterministic directory names (`{category}_{name}`) allow incremental runs without re-downloading unchanged content.
+- **Signal module (saleshub-content):** Portfolio-scope module reads knowledge JSON, emits document-level signals with metadata (documentName, contentType, tdp, salesPlay, product, distributionTerms, driveUrl). Consumers see documents via `templateAll()`.
+
+### Key files
+| File | Purpose |
+|------|---------|
+| `scripts/saleshub-content-discovery.ts` | DocCenter API queries, facet parsing, PPTX/PDF text extraction (pure functions) |
+| `scripts/scrape-saleshub.ts` | Orchestrator: auth → facets → API queries → bulk ZIP download → Drive upload → knowledge JSON |
+| `src/lib/saleshub-content.ts` | Library: reads knowledge JSON, extracts document metadata for signal emission |
+| `src/modules/saleshub-content-module.ts` | Signal module: portfolio-scope, weekly cache TTL, emits per-document signals |
+
+### Data volumes
+~100-150 high-value documents across 6 TDPs + 5 Sales Plays. Each TDP has ~18-30 items; each Sales Play has ~4-22 items when filtered to 3 content types.

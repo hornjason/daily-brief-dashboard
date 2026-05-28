@@ -9,6 +9,19 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/** Lightweight document reference stored in knowledge nodes (#448) */
+export interface DocCenterDocumentRef {
+  name: string
+  contentType: string
+  size: number
+  versionId: string
+  versionCreated: string
+  distributionTerms: string
+  product: string
+  salesStage: string
+  extractedContent?: string
+}
+
 export interface TacticSummary {
   name: string
   talkTrack: string
@@ -53,6 +66,7 @@ export interface SalesPlayNode {
   }
   tdpAlignment: string[]
   regionalCampaigns: Array<{ name: string; url: string }>
+  documents?: DocCenterDocumentRef[]
 }
 
 export interface TdpNode {
@@ -69,6 +83,7 @@ export interface TdpNode {
   customerDeckUrl: string
   extractedContent: string
   metrics: Array<{ value: string; context: string; source: string }>
+  documents?: DocCenterDocumentRef[]
 }
 
 export interface TacticNode {
@@ -137,6 +152,7 @@ export interface ScrapedTdpPage {
   services: Array<{ name: string; description: string }>
   cheatsheetUrl: string
   customerDeckUrl: string
+  documents?: DocCenterDocumentRef[]
 }
 
 export interface ScrapedSalesTactic {

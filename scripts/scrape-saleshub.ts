@@ -1,17 +1,21 @@
 /**
- * scripts/scrape-saleshub.ts — SalesHub full content scraper (#358)
+ * scripts/scrape-saleshub.ts — SalesHub DocCenter API content indexer (#448)
  *
- * Three-pass scraper for Red Hat SalesHub (Seismic platform):
- *   Pass 1: Product pages (21+) — click accordion expanders, extract TDP content
- *   Pass 2: Sales Play pages — discover from DocCenter homepage, extract description + linked TDPs
- *   Pass 3: Sales Tactic pages — discover from DocCenter homepage, extract structured sections
+ * API-based content discovery for Red Hat SalesHub (Seismic platform):
+ *   1. Navigate to DocCenter once -> capture Bearer token (10s)
+ *   2. Query API with WithAggregation -> discover TDPs, Plays, Tactics from facets
+ *   3. For each TDP + Play: query with content type filter -> get document metadata
+ *   4. Download high-value documents -> upload to Google Drive -> record Drive file IDs
+ *   5. Build knowledge JSON with documents[] per TDP/Play (driveFileId + driveUrl, no extractedContent)
+ *   6. Write knowledge JSON to cache + config-templates
+ *
+ * Replaces the previous multi-pass page scraper (Passes 1-3, ~15 min).
+ * Total runtime: ~2 minutes (API calls + downloads).
  *
  * Uses session-state.json cookies from the daemon's browser profile to
  * authenticate via a separate Chromium instance (avoids profile lock).
  *
  * Output:
- *   /data/cache/saleshub/{product-slug}.json per product
- *   /data/cache/saleshub/saleshub-products.json index
  *   /data/cache/saleshub/saleshub-knowledge.json full knowledge base
  *   config-templates/saleshub-knowledge.json (for container distribution)
  *
@@ -19,617 +23,337 @@
  */
 
 import { chromium } from '@playwright/test'
-import type { Browser, BrowserContext, Page } from '@playwright/test'
-import { readFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
+import type { Page } from '@playwright/test'
+import { readFileSync, mkdirSync, existsSync, unlinkSync, readdirSync } from 'fs'
 import { resolve } from 'path'
-import { toSlug } from '../src/cache-layer.ts'
+import { Readable } from 'stream'
+import { google } from 'googleapis'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/google.ts'
+import type { SalesHubKnowledge } from './saleshub-knowledge-extraction.ts'
 import {
-  parseTdpSectionsFromText,
-  parseSalesTacticSections,
-  parseTdpPageSections,
-  parseSalesPlayPageSections,
-  buildSalesHubKnowledge,
-  type SalesHubKnowledge,
-  type ScrapedSalesPlay,
-  type ScrapedSalesTactic,
-  type ScrapedTdpPage,
-} from './saleshub-knowledge-extraction.ts'
-import { discoverAllPages } from './saleshub-page-discovery.ts'
+  captureSeismicAuth,
+  discoverFacets as discoverContentFacets,
+  queryDocuments as queryContentDocuments,
+  type DocCenterDocument,
+} from './saleshub-content-discovery.ts'
+import { findOrCreateFolder } from './sync-saleshub-drive.ts'
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
+const CONFIG_DIR = process.env.CONFIG_DIR ?? '/data/config'
 const OUTPUT_DIR = resolve(CACHE_DIR, 'saleshub')
-const SALESHUB_URL = 'https://saleshub.redhat.com'
 const DOCCENTER_PROFILE = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const CHROMIUM_PATH = '/ms-playwright/chromium-1208/chrome-linux/chrome'
 
-// Wait times for SPA rendering
-const INITIAL_SPA_WAIT_MS = 12_000
-const POST_EXPAND_WAIT_MS = 3_000
+// High-value content types to query and download
+const HIGH_VALUE_TYPES = [
+  'Business presentation',
+  'Cheatsheet',
+  'Competitive review',
+  'Battlecard',
+  'Reference architecture',
+  'Campaign guide',
+  'Email',
+  'Template',
+]
 
-export interface SalesHubProduct {
-  slug: string
-  name: string
-  description: string
-  url: string
-  tdpSections: TdpSection[]
-  salesTactics: SalesTacticSection[]
-  googleDocsUrls: string[]
-  keyResources: ResourceLink[]
-  decks: ResourceLink[]
-  scrapedAt: string
+// Drive folder structure for organized SalesHub content
+const TDP_SUBFOLDER = 'TDPs'
+const SALES_PLAY_SUBFOLDER = 'Sales Plays'
+const SALESHUB_CONTENT_FOLDER = 'SalesHub Content'
+
+// ── Drive Upload Helper ───────────────────────────────────────────────────────
+
+/**
+ * Upload a local file to Google Drive, creating or updating by name match.
+ * Returns the Drive file ID and web view link.
+ */
+export async function uploadFileToDrive(
+  drive: any,
+  folderId: string,
+  filePath: string,
+  fileName: string,
+): Promise<{ id: string; webViewLink: string }> {
+  const buffer = readFileSync(filePath)
+  const mimeType = fileName.endsWith('.pdf') ? 'application/pdf'
+    : fileName.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    : fileName.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    : 'application/octet-stream'
+
+  // Check if file already exists (by name) -- update instead of create
+  const existing = await withQuotaRetry(
+    () => drive.files.list({
+      q: `name = '${fileName.replace(/'/g, "\\'")}' and '${folderId}' in parents and trashed = false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    }),
+    `check existing ${fileName}`,
+  )
+
+  if (existing.data.files?.length > 0) {
+    // Update existing file
+    const fileId = existing.data.files[0].id
+    await withQuotaRetry(
+      () => drive.files.update({
+        fileId,
+        media: { mimeType, body: Readable.from(buffer) },
+        supportsAllDrives: true,
+      }),
+      `update ${fileName}`,
+    )
+    const meta = await withQuotaRetry(
+      () => drive.files.get({ fileId, fields: 'webViewLink', supportsAllDrives: true }),
+      `get link ${fileName}`,
+    )
+    return { id: fileId, webViewLink: meta.data.webViewLink ?? '' }
+  }
+
+  // Create new file
+  const res = await withQuotaRetry(
+    () => drive.files.create({
+      requestBody: { name: fileName, parents: [folderId] },
+      media: { mimeType, body: Readable.from(buffer) },
+      fields: 'id,webViewLink',
+      supportsAllDrives: true,
+    }),
+    `upload ${fileName}`,
+  )
+  return { id: res.data.id, webViewLink: res.data.webViewLink ?? '' }
 }
 
-interface TdpSection {
-  name: string
-  description: string
-}
+/**
+ * Check if a downloaded file is a real document (not an HTML error page).
+ * Returns true if the file appears to be a valid document.
+ */
+const NON_ENGLISH_PREFIXES = [
+  'spanish translation',
+  'portuguese translation',
+  'korean translation',
+  'japanese translation',
+  'chinese translation',
+  'french translation',
+  'german translation',
+  'italian translation',
+]
 
-interface SalesTacticSection {
-  name: string
-  description: string
-}
-
-interface ResourceLink {
-  text: string
-  url: string
-  type: 'google-docs' | 'google-slides' | 'pdf' | 'external' | 'seismic'
-}
-
-function classifyUrl(url: string): ResourceLink['type'] {
-  if (url.includes('docs.google.com/document')) return 'google-docs'
-  if (url.includes('docs.google.com/presentation')) return 'google-slides'
-  if (url.includes('drive.google.com')) return 'google-docs'
-  if (url.endsWith('.pdf') || url.includes('/pdf/')) return 'pdf'
-  if (url.includes('saleshub.redhat.com') || url.includes('seismic.com')) return 'seismic'
-  return 'external'
-}
-
-// ── Pass 1: Product Page Extraction (with accordion expansion) ───────────────
-
-async function clickAccordionExpanders(page: Page): Promise<number> {
-  // Click all elements matching text="arrow down" to expand accordion sections
-  let clickedCount = 0
+function isRealDocument(filePath: string): boolean {
   try {
-    const arrowElements = await page.getByText('arrow down').all()
-    console.log(`[scrape-saleshub] Found ${arrowElements.length} accordion expanders`)
-    for (const el of arrowElements) {
-      try {
-        await el.click({ timeout: 2_000 })
-        clickedCount++
-      } catch {
-        // Element may not be clickable or visible — skip
-      }
+    const header = readFileSync(filePath).slice(0, 15).toString('utf-8')
+    if (header.startsWith('<!DOCTYPE') || header.startsWith('<html') || header.startsWith('<HTML')) {
+      return false
     }
-    if (clickedCount > 0) {
-      console.log(`[scrape-saleshub] Clicked ${clickedCount} expanders, waiting for content…`)
-      await page.waitForTimeout(POST_EXPAND_WAIT_MS)
-    }
-  } catch (e: any) {
-    console.warn(`[scrape-saleshub] Accordion expansion warning: ${e.message}`)
-  }
-  return clickedCount
-}
-
-async function extractProductPage(page: Page, productName: string, productUrl: string): Promise<SalesHubProduct | null> {
-  try {
-    console.log(`[scrape-saleshub] Scraping product: ${productName}`)
-    await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-
-    // Wait for initial SPA render (Seismic needs time)
-    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
-
-    // Click accordion expanders to reveal TDP/tactic content
-    const expandedCount = await clickAccordionExpanders(page)
-    if (expandedCount > 0) {
-      console.log(`[scrape-saleshub] Expanded ${expandedCount} accordion sections on ${productName}`)
-    }
-
-    const data = await page.evaluate(() => {
-      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
-      const mainText = mainEl?.innerText ?? ''
-
-      // Extract headings with their parent text
-      const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(h => ({
-        level: h.tagName,
-        text: h.textContent?.trim() ?? '',
-        nextText: h.nextElementSibling?.textContent?.trim()?.slice(0, 500) ?? '',
-      }))
-
-      // Extract all links
-      const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
-        text: a.textContent?.trim() ?? '',
-        href: a.getAttribute('href') ?? '',
-      })).filter(l => l.text && l.href && !l.href.startsWith('#') && !l.href.startsWith('javascript'))
-
-      // Find the main description (text after the first H1 product name)
-      let description = ''
-      const h1 = document.querySelector('h1')
-      if (h1) {
-        let el = h1.nextElementSibling
-        const descParts: string[] = []
-        while (el && el.tagName !== 'H1' && el.tagName !== 'H2') {
-          const text = el.textContent?.trim()
-          if (text && text.length > 10 && !text.includes('Rating') && !text.includes('Add Review')) {
-            descParts.push(text)
-          }
-          el = el.nextElementSibling
-        }
-        description = descParts.join('\n').slice(0, 2000)
-      }
-
-      return { headings, links, description, mainText: mainText.slice(0, 30000) }
-    })
-
-    // Parse TDP sections from headings (original approach)
-    const tdpSections: TdpSection[] = []
-    const salesTactics: SalesTacticSection[] = []
-
-    let inTdpSection = false
-    let inTacticSection = false
-
-    for (let i = 0; i < data.headings.length; i++) {
-      const h = data.headings[i]
-      const text = h.text.toLowerCase()
-
-      if (text.includes('tdp') && !text.includes('cheatsheet')) {
-        inTdpSection = true
-        inTacticSection = false
-        if (h.nextText && h.nextText.length > 20) {
-          tdpSections.push({ name: h.text, description: h.nextText })
-        }
-        continue
-      }
-
-      if (text.includes('tactic') || text.includes('sales tactic')) {
-        inTacticSection = true
-        inTdpSection = false
-        continue
-      }
-
-      if (inTdpSection && h.level !== 'H1' && h.text.length > 5 && h.nextText.length > 20) {
-        tdpSections.push({ name: h.text, description: h.nextText })
-      }
-
-      if (inTacticSection && h.level !== 'H1' && h.text.length > 5 && h.nextText.length > 20) {
-        salesTactics.push({ name: h.text, description: h.nextText })
-      }
-
-      // Reset section tracking on major headings
-      if (h.level === 'H1' || h.level === 'H2') {
-        if (!text.includes('tdp') && !text.includes('tactic') && !text.includes('sales')) {
-          inTdpSection = false
-          inTacticSection = false
-        }
-      }
-    }
-
-    // Also parse TDP/tactic sections from the expanded main text using extraction module
-    const mainText = data.mainText
-    const tdpSectionNames = new Set(tdpSections.map(t => t.name))
-
-    const textParsedTdps = parseTdpSectionsFromText(mainText)
-    for (const tdp of textParsedTdps) {
-      if (!tdpSectionNames.has(tdp.name)) {
-        tdpSections.push(tdp)
-        tdpSectionNames.add(tdp.name)
-      }
-    }
-
-    // Extract Google Docs/Slides URLs
-    const googleDocsUrls = data.links
-      .filter(l => l.href.includes('docs.google.com') || l.href.includes('drive.google.com'))
-      .map(l => l.href)
-
-    // Extract key resources
-    const keyResources: ResourceLink[] = data.links
-      .filter(l => {
-        const t = l.text.toLowerCase()
-        return (t.includes('resource') || t.includes('guide') || t.includes('whitepaper') ||
-                t.includes('webinar') || t.includes('lab') || t.includes('success') ||
-                t.includes('competitive') || t.includes('website') || t.includes('release')) &&
-               l.href.length > 10
-      })
-      .map(l => ({ text: l.text, url: l.href, type: classifyUrl(l.href) }))
-
-    // Extract decks
-    const decks: ResourceLink[] = data.links
-      .filter(l => {
-        const t = l.text.toLowerCase()
-        return (t.includes('deck') || t.includes('presentation') || t.includes('overview') ||
-                t.includes('customer deck') || t.includes('cheatsheet')) &&
-               l.href.length > 10
-      })
-      .map(l => ({ text: l.text, url: l.href, type: classifyUrl(l.href) }))
-
-    const slug = toSlug(productName)
-
-    const product: SalesHubProduct = {
-      slug,
-      name: productName,
-      description: data.description,
-      url: productUrl,
-      tdpSections,
-      salesTactics,
-      googleDocsUrls,
-      keyResources,
-      decks,
-      scrapedAt: new Date().toISOString(),
-    }
-
-    console.log(`[scrape-saleshub] ${productName}: ${tdpSections.length} TDPs, ${salesTactics.length} tactics, ${googleDocsUrls.length} docs`)
-    return product
-  } catch (e: any) {
-    console.error(`[scrape-saleshub] Failed to scrape ${productName}: ${e.message}`)
-    return null
+    return true
+  } catch {
+    return false
   }
 }
 
-// ── Pass 1.5: TDP Page Structured Extraction (#366) ────────────────────────
-
-async function extractTdpPage(page: Page, tdpName: string, tdpUrl: string): Promise<ScrapedTdpPage | null> {
-  try {
-    console.log(`[scrape-saleshub] Scraping TDP page: ${tdpName}`)
-    await page.goto(tdpUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
-
-    // Expand accordions to reveal all sections
-    await clickAccordionExpanders(page)
-
-    const data = await page.evaluate(() => {
-      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
-      const mainText = mainEl?.innerText ?? ''
-
-      const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
-        text: a.textContent?.trim() ?? '',
-        href: a.getAttribute('href') ?? '',
-      })).filter(l => l.text && l.href && !l.href.startsWith('#') && !l.href.startsWith('javascript'))
-
-      return { mainText: mainText.slice(0, 30000), links }
-    })
-
-    const sections = parseTdpPageSections(data.mainText, data.links)
-    sections.name = tdpName
-
-    console.log(`[scrape-saleshub] TDP ${tdpName}: ${sections.customerWins.length} wins, ${sections.whatToSay.length} say, ${sections.whatToShare.length} share, ${sections.whatToShow.length} show`)
-    return sections
-  } catch (e: any) {
-    console.error(`[scrape-saleshub] Failed to scrape TDP page ${tdpName}: ${e.message}`)
-    return null
-  }
+function isEnglishDocument(fileName: string): boolean {
+  const lower = fileName.toLowerCase()
+  return !NON_ENGLISH_PREFIXES.some(prefix => lower.includes(prefix))
 }
 
-// ── Pass 2: Sales Play Page Extraction ───────────────────────────────────────
+// ── Bulk ZIP Download ─────────────────────────────────────────────────────────
 
-async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
-  console.log('[scrape-saleshub] Discovering Sales Play pages from DocCenter…')
+/**
+ * Navigate to the DocCenter filtered view, select all documents,
+ * download as a bulk ZIP (multi_selected.Zip), unzip locally,
+ * and return an array of extracted file paths.
+ *
+ * This is ~10x faster than downloading documents one-at-a-time since it
+ * uses the DocCenter's native "select all + Download" feature which
+ * produces a single ZIP containing all filtered documents.
+ */
+async function bulkDownloadFiltered(
+  page: Page,
+  filterCategory: string,   // 'TDP' or 'Sales Play'
+  filterValue: string,       // 'Automation', 'AI-Ready Enterprise', etc.
+  contentTypes: string[],    // ['Business presentation', 'Cheatsheet', 'Competitive review']
+  outputDir: string,
+  opts?: { newestVersionCreated?: string; lastContentScrape?: string },
+): Promise<string[]> {
+  const safeValue = filterValue.replace(/[/\\?%*:|"<>]/g, '_')
+  const unzipDir = resolve(outputDir, `${filterCategory}_${safeValue}`)
 
-  // Navigate to DocCenter and use the "Sales Play" filter sidebar to find tagged content
-  // The DocCenter page text shows filter categories including "Sales Play" with named plays
-  const doccenterUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}/main///`
-  await page.goto(doccenterUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
-
-  // Known Sales Play names from SalesHub (from DocCenter filter sidebar)
-  const knownPlays = [
-    'Build and Run Applications',
-    'Modernize Infrastructure',
-    'The AI-Ready Enterprise',
-    'Sovereignty',
-    'IT Operations Efficiency',
-  ]
-
-  // Find links to pages tagged as Sales Plays
-  const links = await page.evaluate((plays) => {
-    const items: { name: string; url: string }[] = []
-    const allLinks = document.querySelectorAll('a[href]')
-    allLinks.forEach(a => {
-      const text = a.textContent?.trim() ?? ''
-      const href = a.getAttribute('href') ?? ''
-      if (!href.includes('doccenter') || !href.includes('lf')) return
-      for (const play of plays) {
-        if (text.toLowerCase().includes(play.toLowerCase())) {
-          items.push({
-            name: play,
-            url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
-          })
-          break
-        }
+  // Skip-if-exists: cached files from previous run
+  if (existsSync(unzipDir)) {
+    try {
+      const cached = readdirSync(unzipDir).filter(f => !f.startsWith('.') && !f.startsWith('__'))
+      if (cached.length > 0) {
+        console.log(`[scrape-saleshub] Skipping bulk download for "${filterCategory}=${filterValue}" — cached (${cached.length} files)`)
+        return cached.map(f => resolve(unzipDir, f))
       }
-    })
-    const seen = new Set<string>()
-    return items.filter(i => {
-      if (seen.has(i.name)) return false
-      seen.add(i.name)
-      return true
-    })
-  }, knownPlays)
-
-  console.log(`[scrape-saleshub] Found ${links.length} Sales Play pages`)
-
-  // If no links found on DocCenter, create placeholder entries from known plays
-  if (links.length === 0) {
-    console.log('[scrape-saleshub] No Sales Play links found — using known play names as placeholders')
-    return knownPlays.map(name => ({ name, url: '' }))
+    } catch { /* proceed with download */ }
   }
 
-  return links
-}
-
-async function extractSalesPlayPage(browser: Browser, sessionState: object, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
-  // If no URL (placeholder entry), return the play with just the name
-  if (!playUrl) {
-    console.log(`[scrape-saleshub] Sales Play placeholder: ${playName}`)
-    return { name: playName, description: '', linkedTdps: [], url: '' }
+  // Freshness check: skip if no documents newer than last scrape
+  if (opts?.newestVersionCreated && opts?.lastContentScrape) {
+    const newest = new Date(opts.newestVersionCreated).getTime()
+    const lastScrape = new Date(opts.lastContentScrape).getTime()
+    if (newest <= lastScrape) {
+      console.log(`[scrape-saleshub] Skipping bulk download for "${filterCategory}=${filterValue}" — no documents newer than last scrape`)
+      return []
+    }
   }
 
-  // Fresh context per Sales Play — shared context accumulates Seismic SPA state
-  // from 21+ prior product/TDP navigations that prevents sidebar cards from rendering
-  const freshContext = await browser.newContext({
-    storageState: sessionState as any,
-    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  })
-  const page = await freshContext.newPage()
-  try {
-    console.log(`[scrape-saleshub] Scraping Sales Play: ${playName}`)
-    await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+  // 1. Navigate to DocCenter main page (fresh start clears previous filters)
+  await page.goto(
+    `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/main///`,
+    { waitUntil: 'domcontentloaded', timeout: 60_000 },
+  )
+  await page.waitForTimeout(8_000)
 
-    // Extract sidebar TDP alignment BEFORE accordion expansion (#381)
-    // Must use Link/Content URL (not DocCenter URL) for sidebar to render correctly
-    // Try to find a redirect to Link/Content format, or extract from current page
+  // 2. Apply the CATEGORY filter FIRST (TDP or Sales Play)
+  const categoryCheckbox = page.getByText(filterValue).first()
+  if (await categoryCheckbox.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await categoryCheckbox.click()
+    await page.waitForTimeout(5_000)
+    // Scroll sidebar to trigger lazy loading of all filter sections
+    await page.evaluate(() => {
+      const sidebar = document.querySelector('[class*="filter"], [class*="sidebar"], [class*="facet"]')
+      if (sidebar) {
+        sidebar.scrollTop = sidebar.scrollHeight
+        setTimeout(() => { sidebar.scrollTop = 0 }, 500)
+      }
+      const panels = document.querySelectorAll('[class*="panel"], [class*="aside"], aside')
+      panels.forEach(p => { p.scrollTop = p.scrollHeight; setTimeout(() => { p.scrollTop = 0 }, 500) })
+    })
     await page.waitForTimeout(3_000)
-    const sidebarTdpNames = await page.evaluate(() => {
-      const names: string[] = []
-      // Look for aria-labels that match TDP names (sidebar cards)
-      const KNOWN_TDP_PARTS = ['AI Platform', 'Server', 'Container', 'Automation', 'App Platform', 'Virtualization', 'Operating System']
-      const cardItems = document.querySelectorAll('li[aria-label]')
-      for (const li of cardItems) {
-        const label = li.getAttribute('aria-label') ?? ''
-        if (label.startsWith('Open ')) {
-          const name = label.replace('Open ', '')
-          if (name.length > 2 && KNOWN_TDP_PARTS.some(k => name.includes(k)) && !names.includes(name)) {
-            names.push(name)
-          }
-        }
-      }
-      return { names, totalAriaItems: cardItems.length }
-    })
-    if (sidebarTdpNames.names.length > 0) {
-      console.log(`[scrape-saleshub] ${playName}: pre-accordion sidebar TDPs: ${sidebarTdpNames.names.join(', ')}`)
-    } else {
-      console.log(`[scrape-saleshub] ${playName}: no sidebar TDPs found (${sidebarTdpNames.totalAriaItems} aria-label items)`)
-    }
-
-    // Expand accordions (this destroys sidebar DOM)
-    await clickAccordionExpanders(page)
-
-    const data = await page.evaluate(() => {
-      // Use document.body to include sidebar content (#381)
-      const mainText = document.body?.innerText ?? ''
-
-      // Extract description — first meaningful paragraph
-      let description = ''
-      const paragraphs = document.querySelectorAll('p, div > span')
-      for (const p of paragraphs) {
-        const text = p.textContent?.trim() ?? ''
-        if (text.length > 50 && !text.includes('Rating') && !text.includes('Review')) {
-          description = text.slice(0, 2000)
-          break
-        }
-      }
-
-      // Extract all links for TDP/product cross-references
-      const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
-        text: a.textContent?.trim() ?? '',
-        href: a.getAttribute('href') ?? '',
-      }))
-
-      return { description, mainText: mainText.slice(0, 20000), links }
-    })
-
-    // Identify linked TDPs from page text and links
-    const knownTdps = ['AI Platform', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Container Mgmt']
-    const linkedTdps: string[] = []
-    for (const tdp of knownTdps) {
-      if (data.mainText.toLowerCase().includes(tdp.toLowerCase())) {
-        linkedTdps.push(tdp)
-      }
-    }
-
-    // Extract structured sections (#367)
-    const sections = parseSalesPlayPageSections(data.mainText, data.links)
-
-    // Use pre-accordion sidebar extraction (most reliable), fall back to text parsing
-    const tdpAlignment = sidebarTdpNames.names.length > 0
-      ? sidebarTdpNames.names
-      : sections.tdpAlignment
-    if (tdpAlignment.length > 0) {
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${tdpAlignment.join(', ')}`)
-    } else {
-      console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty`)
-    }
-
-    return {
-      name: playName,
-      description: data.description,
-      linkedTdps,
-      url: playUrl,
-      customerLens: sections.customerLens,
-      realWorldExamples: sections.realWorldExamples,
-      emailTemplateUrl: sections.emailTemplateUrl,
-      discoveryQuestionsUrl: sections.discoveryQuestionsUrl,
-      introPitchDeckUrl: sections.introPitchDeckUrl,
-      personaSection: sections.personaSection,
-      tdpAlignment,
-      regionalCampaigns: sections.regionalCampaigns,
-    }
-  } catch (e: any) {
-    console.error(`[scrape-saleshub] Failed to scrape Sales Play ${playName}: ${e.message}`)
-    return null
-  } finally {
-    await freshContext.close()
+  } else {
+    console.warn(`[scrape-saleshub] Category filter not found: "${filterCategory}=${filterValue}"`)
+    return []
   }
-}
+  console.log(`[scrape-saleshub] Applied category filter: ${filterCategory}="${filterValue}"`)
 
-// ── Pass 3: Sales Tactic Page Extraction ─────────────────────────────────────
-
-async function discoverSalesTacticLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
-  console.log('[scrape-saleshub] Discovering Sales Tactic pages…')
-
-  // Navigate to SalesHub homepage where Sales Tactics section has links
-  await page.goto(`${SALESHUB_URL}/apps/home`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
-
-  // Known tactic names from DocCenter filter sidebar
-  const knownTactics = [
-    'Agentic AI', 'Inference at Scale', 'Production AI', 'Sovereign (Private) AI',
-    'AIOps', 'Optimize and Modernize IT Ops', 'Automate at Scale', 'Network Automation',
-    'VMware Migration', 'Cloud-Native Adoption', 'Application Modernization',
-    'Platform Engineering', 'Developer Productivity', 'Edge Computing',
-    'Digital Sovereignty', 'Supply Chain Security', 'Security Automation',
-    'Observability', 'Database Modernization', 'Infrastructure as Code',
-  ]
-
-  const links = await page.evaluate((tactics) => {
-    const items: { name: string; url: string }[] = []
-    const allLinks = document.querySelectorAll('a[href]')
-    allLinks.forEach(a => {
-      const text = a.textContent?.trim() ?? ''
-      const href = a.getAttribute('href') ?? ''
-      if (!href.includes('doccenter') || !href.includes('lf')) return
-      for (const tactic of tactics) {
-        if (text.toLowerCase().includes(tactic.toLowerCase())) {
-          items.push({
-            name: tactic,
-            url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
-          })
-          break
-        }
-      }
-    })
-    const seen = new Set<string>()
-    return items.filter(i => {
-      if (seen.has(i.name)) return false
-      seen.add(i.name)
-      return true
-    })
-  }, knownTactics)
-
-  console.log(`[scrape-saleshub] Found ${links.length} Sales Tactic pages from homepage`)
-
-  // Also check "frequently used" section which has tactic pages we visited
-  if (links.length < 5) {
-    console.log('[scrape-saleshub] Few tactic links found — tactic pages extracted from product TDP sections instead')
-  }
-
-  return links
-}
-
-async function extractSalesTacticPage(page: Page, tacticName: string, tacticUrl: string): Promise<ScrapedSalesTactic | null> {
+  // 2b. Click "Show more" to reveal all content type checkboxes
   try {
-    console.log(`[scrape-saleshub] Scraping Sales Tactic: ${tacticName}`)
-    await page.goto(tacticUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
-
-    // Expand accordions
-    await clickAccordionExpanders(page)
-
-    const mainText = await page.evaluate(() => {
-      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
-      return mainEl?.innerText ?? ''
-    })
-
-    // Extract structured sections
-    const sections = parseSalesTacticSections(mainText)
-
-    // Extract links for whatToShare
-    const pageLinks = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('a[href]')).map(a => ({
-        text: a.textContent?.trim() ?? '',
-        href: a.getAttribute('href') ?? '',
-      })).filter(l => l.text && l.href && l.text.length > 3 && !l.href.startsWith('#') && !l.href.startsWith('javascript'))
-    })
-
-    // Enrich whatToShare with actual URLs from page links
-    const enrichedShares: Array<{ name: string; url: string; type: string }> = []
-    for (const share of sections.whatToShare) {
-      // Try to find a matching link
-      const matchingLink = pageLinks.find(l =>
-        l.text.toLowerCase().includes(share.name.toLowerCase().slice(0, 20)) ||
-        share.name.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
-      )
-      enrichedShares.push({
-        name: share.name,
-        url: matchingLink?.href ?? '',
-        type: matchingLink ? classifyUrl(matchingLink.href) : 'seismic',
-      })
-    }
-
-    // Also find shareable assets from links that look like decks/docs
-    for (const link of pageLinks) {
-      const lower = link.text.toLowerCase()
-      if ((lower.includes('deck') || lower.includes('presentation') ||
-           lower.includes('guide') || lower.includes('whitepaper') ||
-           lower.includes('infographic') || lower.includes('cheat sheet')) &&
-          !enrichedShares.some(s => s.url === link.href)) {
-        enrichedShares.push({
-          name: link.text,
-          url: link.href,
-          type: classifyUrl(link.href),
-        })
-      }
-    }
-
-    // Determine parent TDP from page content
-    const knownTdps = ['AI Platform', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Container Mgmt']
-    let parentTdp = ''
-    const mainTextLower = mainText.toLowerCase()
-
-    // Try to find "Supporting TDPs" section
-    const tdpSectionMatch = mainText.match(/Supporting TDPs[\s\S]*?(?=\n\n|\n[A-Z]|$)/i)
-    if (tdpSectionMatch) {
-      for (const tdp of knownTdps) {
-        if (tdpSectionMatch[0].toLowerCase().includes(tdp.toLowerCase())) {
-          parentTdp = tdp
-          break
-        }
-      }
-    }
-
-    // Fallback: infer from content keywords
-    if (!parentTdp) {
-      if (mainTextLower.includes('ansible') || mainTextLower.includes('automation platform')) parentTdp = 'Automation'
-      else if (mainTextLower.includes('openshift') || mainTextLower.includes('kubernetes')) parentTdp = 'App Platform'
-      else if (mainTextLower.includes('rhel') || mainTextLower.includes('enterprise linux')) parentTdp = 'Server/Cloud OS'
-      else if (mainTextLower.includes('virtualization') || mainTextLower.includes('vmware')) parentTdp = 'Virtualization'
-      else if (mainTextLower.includes('edge') || mainTextLower.includes('microshift')) parentTdp = 'Edge'
-      else if (mainTextLower.includes('ai') || mainTextLower.includes('machine learning')) parentTdp = 'AI'
-    }
-
-    return {
-      name: tacticName,
-      talkTrack: sections.talkTrack,
-      customerWins: sections.customerWins,
-      whatToSay: sections.whatToSay,
-      whatToShare: enrichedShares,
-      parentTdp,
-      url: tacticUrl,
+    const showMoreLink = page.getByText(/Show \d+ more/i).first()
+    const showMoreFallback = page.getByText('Show more').first()
+    if (await showMoreLink.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await showMoreLink.click()
+      console.log(`[scrape-saleshub] Clicked "Show more" to expand content type options`)
+      await page.waitForTimeout(3_000)
+    } else if (await showMoreFallback.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await showMoreFallback.click()
+      console.log(`[scrape-saleshub] Clicked "Show more" (fallback)`)
+      await page.waitForTimeout(3_000)
     }
   } catch (e: any) {
-    console.error(`[scrape-saleshub] Failed to scrape Sales Tactic ${tacticName}: ${e.message}`)
-    return null
+    console.warn(`[scrape-saleshub] "Show more" click failed: ${e.message} — proceeding`)
   }
+
+  // 3. Apply content type filters (multi-select checkboxes)
+  let typesSelected = 0
+  for (const ct of contentTypes) {
+    const ctLabel = page.getByText(ct).first()
+    if (await ctLabel.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await ctLabel.click()
+      await page.waitForTimeout(2_000)
+      typesSelected++
+      console.log(`[scrape-saleshub] Applied content type filter: "${ct}"`)
+    } else {
+      console.warn(`[scrape-saleshub] Content type not found after category filter: "${ct}"`)
+    }
+  }
+  if (typesSelected === 0) {
+    console.warn(`[scrape-saleshub] No content types selected for ${filterCategory}=${filterValue}`)
+    return []
+  }
+
+  // 4. Select all items — click the master checkbox in the header row
+  // The DocCenter uses various checkbox implementations — try multiple approaches
+  // From the screenshot: the checkbox is in the column header row, first column
+  const masterSelectors = [
+    'th input[type="checkbox"]',
+    'th [role="checkbox"]',
+    'thead input[type="checkbox"]',
+    'thead [role="checkbox"]',
+    '[class*="header"] input[type="checkbox"]',
+    '[class*="header"] [role="checkbox"]',
+    '[class*="select-all"]',
+    'input[type="checkbox"]',  // first checkbox on page (usually the master)
+  ]
+  let masterClicked = false
+  for (const sel of masterSelectors) {
+    const el = page.locator(sel).first()
+    if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await el.click()
+      await page.waitForTimeout(1_000)
+      // Check if "items selected" text appeared
+      const selectedText = await page.getByText('items selected').isVisible({ timeout: 2_000 }).catch(() => false)
+      if (selectedText) {
+        masterClicked = true
+        console.log(`[scrape-saleshub] Master checkbox clicked via "${sel}"`)
+        break
+      }
+    }
+  }
+
+  if (!masterClicked) {
+    // Last resort: try clicking the very first checkbox-like element in the results area
+    const fallbackCheckbox = page.locator('[class*="result"] input[type="checkbox"], [class*="list"] input[type="checkbox"]').first()
+    if (await fallbackCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await fallbackCheckbox.click()
+      await page.waitForTimeout(1_000)
+    } else {
+      console.warn(`[scrape-saleshub] Master checkbox not found — cannot select all for ${filterCategory}=${filterValue}`)
+      return []
+    }
+  }
+
+  // 5. Click the Download button (appears after selecting items)
+  const downloadBtn = page.locator(
+    'button:has-text("Download"), [aria-label="Download"], [title="Download"]',
+  ).first()
+  if (!await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    console.warn(`[scrape-saleshub] Download button not visible for ${filterCategory}=${filterValue}`)
+    return []
+  }
+
+  // 6. Wait for the ZIP download event
+  const downloadPromise = page.waitForEvent('download', { timeout: 300_000 }) // 5 min for large ZIPs
+  await downloadBtn.click()
+  const download = await downloadPromise
+
+  // 7. Save ZIP to local temp directory
+  const safeValue = filterValue.replace(/[/\\?%*:|"<>]/g, '_')
+  const zipPath = resolve(outputDir, `${filterCategory}_${safeValue}.zip`)
+  await download.saveAs(zipPath)
+  console.log(`[scrape-saleshub] ZIP saved: ${zipPath} (${download.suggestedFilename()})`)
+
+  // 8. Unzip into a subdirectory
+  const unzipDir = resolve(outputDir, `${filterCategory}_${safeValue}`)
+  mkdirSync(unzipDir, { recursive: true })
+  const proc = Bun.spawnSync(['unzip', '-o', '-q', zipPath, '-d', unzipDir])
+  if (proc.exitCode !== 0) {
+    const stderr = proc.stderr?.toString()?.slice(0, 200) ?? ''
+    console.warn(`[scrape-saleshub] unzip failed for ${zipPath}: ${stderr}`)
+    try { unlinkSync(zipPath) } catch {}
+    return []
+  }
+
+  // 9. List extracted files (skip hidden files and __MACOSX)
+  const files = readdirSync(unzipDir).filter(
+    f => !f.startsWith('.') && !f.startsWith('__'),
+  )
+  console.log(`[scrape-saleshub] Extracted ${files.length} files from ZIP`)
+
+  // 10. Clean up ZIP file
+  try { unlinkSync(zipPath) } catch {}
+
+  return files.map(f => resolve(unzipDir, f))
 }
 
-// ── Main Scrape Function ─────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface SalesHubScrapeResult {
-  products: SalesHubProduct[]
   knowledge: SalesHubKnowledge
 }
+
+// ── Main Scrape Function ───────────────────────────────────────────────────────
 
 export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
@@ -638,7 +362,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   }
 
   const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
-  console.log(`[scrape-saleshub] Starting — ${sessionState.cookies?.length ?? 0} cookies loaded`)
+  console.log(`[scrape-saleshub] Starting API-based content indexer — ${sessionState.cookies?.length ?? 0} cookies loaded`)
 
   mkdirSync(OUTPUT_DIR, { recursive: true })
 
@@ -657,171 +381,403 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
     userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   })
 
-  const products: SalesHubProduct[] = []
-  const salesPlays: ScrapedSalesPlay[] = []
-  const tactics: ScrapedSalesTactic[] = []
-  const tdpPages: ScrapedTdpPage[] = []
-
   try {
-    // ── API-based Page Discovery (run FIRST while session is fresh) ────────
-    console.log('[scrape-saleshub] === DISCOVERING PAGES VIA SEISMIC API ===')
-    const discoveryPage = await context.newPage()
-    const discovered = await discoverAllPages(discoveryPage)
-    await discoveryPage.close()
-    console.log(`[scrape-saleshub] Discovered: ${discovered.tactics.length} tactics, ${discovered.plays.length} plays, ${discovered.tdps.length} TDPs`)
+    const page = await context.newPage()
 
-    // ── Pass 1: Product Pages ──────────────────────────────────────────────
-    console.log('[scrape-saleshub] === PASS 1: Product Pages ===')
-    const listingPage = await context.newPage()
-    const productsUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf3e41b707-4f29-4a23-9ee9-27736d70c8eb//`
+    // ── Step 1: Capture Seismic auth token ────────────────────────────────
+    console.log('[scrape-saleshub] === Step 1: Capturing Seismic auth ===')
+    const authCtx = await captureSeismicAuth(page)
+    if (!authCtx) {
+      throw new Error('Failed to capture Seismic auth token — SalesHub session may be expired')
+    }
+    console.log(`[scrape-saleshub] Auth captured (${authCtx.auth.length} chars)`)
 
-    await listingPage.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await listingPage.waitForTimeout(8_000)
+    // Respectful wait before API queries
+    await page.waitForTimeout(2_000)
 
-    const productLinks = await listingPage.evaluate(() => {
-      const items: { name: string; url: string }[] = []
-      const links = document.querySelectorAll('a[href]')
-      links.forEach(a => {
-        const text = a.textContent?.trim() ?? ''
-        const href = a.getAttribute('href') ?? ''
-        if (text.length > 5 && href.includes('doccenter') && href.includes('lf') &&
-            !text.includes('All Sales Content') && !text.includes('Products') &&
-            !text.includes('Search') && !text.includes('Home') && !text.includes('DocCenter') &&
-            !text.includes('Help') && !text.includes('back') && !text.includes('Engagement') &&
-            !text.includes('Insight') && !text.includes('Learning') && !text.includes('Skills') &&
-            !text.includes('WorkSpace') && !text.includes('HomePage') &&
-            !text.includes('Rating') && !text.includes('Review') && !text.includes('Share') &&
-            !text.includes('Content Details') && !text.includes('Content Properties') &&
-            !text.includes('Collapsed')) {
-          items.push({ name: text, url: href.startsWith('http') ? href : `${window.location.origin}${href}` })
-        }
-      })
-      const seen = new Set<string>()
-      return items.filter(i => {
-        if (seen.has(i.name)) return false
-        seen.add(i.name)
-        return true
-      })
+    // ── Step 2: Discover taxonomy from API facets ──────────────────────────
+    console.log('[scrape-saleshub] === Step 2: Discovering taxonomy from API facets ===')
+    const facets = await discoverContentFacets(page, authCtx)
+    console.log(`[scrape-saleshub] Facets discovered:`)
+    console.log(`  TDPs: ${facets.tdps.join(', ')}`)
+    console.log(`  Sales Plays: ${facets.salesPlays.join(', ')}`)
+    console.log(`  Sales Tactics: ${facets.salesTactics.join(', ')}`)
+    console.log(`  Content Types: ${facets.contentTypes.length} types available`)
+
+    // ── Step 3: Query high-value documents per TDP ────────────────────────
+    console.log(`[scrape-saleshub] === Step 3: Querying documents (${HIGH_VALUE_TYPES.join(', ')}) ===`)
+
+    const allDocuments: DocCenterDocument[] = []
+
+    for (const tdp of facets.tdps) {
+      const docs = await queryContentDocuments(page, authCtx, { tdp }, HIGH_VALUE_TYPES)
+      allDocuments.push(...docs)
+      console.log(`[scrape-saleshub] TDP "${tdp}": ${docs.length} documents`)
+      await page.waitForTimeout(2_000)
+    }
+
+    // ── Step 3b: Query high-value documents per Sales Play ────────────────
+    for (const play of facets.salesPlays) {
+      const docs = await queryContentDocuments(page, authCtx, { salesPlay: play }, HIGH_VALUE_TYPES)
+      allDocuments.push(...docs)
+      console.log(`[scrape-saleshub] Play "${play}": ${docs.length} documents`)
+      await page.waitForTimeout(2_000)
+    }
+
+    // Deduplicate by versionId
+    const seen = new Set<string>()
+    const uniqueDocs = allDocuments.filter(d => {
+      if (seen.has(d.versionId)) return false
+      seen.add(d.versionId)
+      return true
     })
+    console.log(`[scrape-saleshub] Total: ${allDocuments.length} raw, ${uniqueDocs.length} unique documents`)
 
-    console.log(`[scrape-saleshub] Found ${productLinks.length} product pages`)
-    for (const pl of productLinks) {
-      console.log(`  - ${pl.name}`)
+    // Read lastContentScrape for freshness checks
+    let lastContentScrape = ''
+    const existingKbPath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
+    if (existsSync(existingKbPath)) {
+      try {
+        const existing = JSON.parse(readFileSync(existingKbPath, 'utf-8'))
+        lastContentScrape = existing.lastContentScrape ?? ''
+      } catch { /* proceed without freshness check */ }
     }
 
-    await listingPage.close()
-
-    // Scrape each product page with accordion expansion
-    const scrapePage = await context.newPage()
-
-    for (let i = 0; i < productLinks.length; i++) {
-      const pl = productLinks[i]
-      console.log(`[scrape-saleshub] (${i + 1}/${productLinks.length}) ${pl.name}`)
-
-      const product = await extractProductPage(scrapePage, pl.name, pl.url)
-      if (product) {
-        products.push(product)
-        writeJsonAtomic(resolve(OUTPUT_DIR, `${product.slug}.json`), product)
+    // Compute newestVersionCreated per TDP and Play from API results
+    const newestByTdp: Record<string, string> = {}
+    const newestByPlay: Record<string, string> = {}
+    for (const doc of uniqueDocs) {
+      if (doc.tdp && doc.versionCreated) {
+        if (!newestByTdp[doc.tdp] || doc.versionCreated > newestByTdp[doc.tdp]) {
+          newestByTdp[doc.tdp] = doc.versionCreated
+        }
       }
-
-      // Brief pause between pages
-      await scrapePage.waitForTimeout(1_000)
-    }
-
-    // ── Pass 1.5: TDP Pages (#366) ────────────────────────────────────────────
-    console.log(`[scrape-saleshub] === PASS 1.5: TDP Pages (${discovered.tdps.length} discovered) ===`)
-    for (let i = 0; i < discovered.tdps.length; i++) {
-      const tdp = discovered.tdps[i]
-      console.log(`[scrape-saleshub] (${i + 1}/${discovered.tdps.length}) TDP: ${tdp.name}`)
-
-      const tdpPage = await extractTdpPage(scrapePage, tdp.name, tdp.url)
-      if (tdpPage) {
-        tdpPages.push(tdpPage)
+      if (doc.salesPlay && doc.versionCreated) {
+        if (!newestByPlay[doc.salesPlay] || doc.versionCreated > newestByPlay[doc.salesPlay]) {
+          newestByPlay[doc.salesPlay] = doc.versionCreated
+        }
       }
-
-      await scrapePage.waitForTimeout(1_000)
     }
 
-    // ── Pass 1.9: Home page tile URLs (#381) ──────────────────────────────
-    // DocCenter URLs from page discovery load wrong pages for Sales Plays.
-    // The home page iframes have correct /Link/Content/ URLs that render sidebar cards.
-    console.log(`[scrape-saleshub] === PASS 1.9: Home Page Tile URLs ===`)
-    const homePlayUrls = new Map<string, string>()
+    // ── Step 4: Bulk ZIP download + upload to Google Drive ─────────────
+    console.log(`[scrape-saleshub] === Step 4: Bulk ZIP download + Drive upload ===`)
+    const contentDir = resolve(OUTPUT_DIR, 'content')
+    mkdirSync(contentDir, { recursive: true })
+
+    // Set up Google Drive auth + folder structure
+    let driveEnabled = false
+    let drive: any = null
+    let tdpFolderIds: Record<string, string> = {}
+    let playFolderIds: Record<string, string> = {}
+
+    // Use podBookingsFolderId from settings.json — shared folder, same as existing SalesHub sync
+    const settingsPath = resolve(CONFIG_DIR, 'settings.json')
+    let sharedFolderId = ''
     try {
-      await scrapePage.goto('https://saleshub.redhat.com/apps/home?anchorId=350c3ac4-2f1b-4541-b3df-a65d0e1f70fd', {
-        waitUntil: 'domcontentloaded', timeout: 60_000,
-      })
-      await scrapePage.waitForTimeout(8_000)
-      for (let s = 0; s < 10; s++) {
-        await scrapePage.evaluate(() => window.scrollBy(0, 800))
-        await scrapePage.waitForTimeout(1_500)
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      const regions = settings.regions ?? []
+      for (const r of regions) {
+        if (r.podBookingsFolderId) { sharedFolderId = r.podBookingsFolderId; break }
       }
-      // Sales Plays are in Frame 2 (index 2)
-      const frames = scrapePage.frames()
-      if (frames.length > 2) {
-        const tileData = await frames[2].evaluate(() => {
-          const results: Array<{ linkText: string; href: string }> = []
-          for (const a of document.querySelectorAll('a')) {
-            if (a.textContent?.trim() === 'Sales Play Page') {
-              results.push({ linkText: 'Sales Play Page', href: a.getAttribute('href') ?? '' })
+    } catch {}
+
+    if (sharedFolderId) {
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        if (auth) {
+          drive = google.drive({ version: 'v3', auth })
+
+          // Use existing SalesHub folder, add Content subfolders
+          const saleshubRootId = await findOrCreateFolder(drive, sharedFolderId, 'SalesHub')
+          const contentRootId = await findOrCreateFolder(drive, saleshubRootId, SALESHUB_CONTENT_FOLDER)
+          const tdpRootId = await findOrCreateFolder(drive, contentRootId, TDP_SUBFOLDER)
+          const playRootId = await findOrCreateFolder(drive, contentRootId, SALES_PLAY_SUBFOLDER)
+
+          // Create per-TDP subfolders
+          for (const tdp of facets.tdps) {
+            tdpFolderIds[tdp.toLowerCase()] = await findOrCreateFolder(drive, tdpRootId, tdp)
+          }
+          // Create per-Play subfolders
+          for (const play of facets.salesPlays) {
+            playFolderIds[play.toLowerCase()] = await findOrCreateFolder(drive, playRootId, play)
+          }
+
+          driveEnabled = true
+          console.log(`[scrape-saleshub] Drive folder structure ready under SalesHub/ (${Object.keys(tdpFolderIds).length} TDP folders, ${Object.keys(playFolderIds).length} Play folders)`)
+        } else {
+          console.warn('[scrape-saleshub] No Google auth available — will download without Drive upload')
+        }
+      } catch (e: any) {
+        console.warn(`[scrape-saleshub] Drive setup failed: ${e.message?.slice(0, 100)} — will download without Drive upload`)
+      }
+    } else {
+      console.warn('[scrape-saleshub] No podBookingsFolderId in settings.json — will download without Drive upload')
+    }
+
+    let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
+
+    // Bulk download per TDP — select all + Download produces multi_selected.Zip
+    for (const tdp of facets.tdps) {
+      console.log(`[scrape-saleshub] Bulk downloading TDP "${tdp}" content...`)
+      try {
+        const localFiles = await bulkDownloadFiltered(page, 'TDP', tdp, HIGH_VALUE_TYPES, contentDir, {
+          newestVersionCreated: newestByTdp[tdp],
+          lastContentScrape,
+        })
+        console.log(`[scrape-saleshub] TDP "${tdp}": ${localFiles.length} files extracted from ZIP`)
+
+        const folderId = tdpFolderIds[tdp.toLowerCase()]
+        for (const filePath of localFiles) {
+          const fileName = filePath.split('/').pop()!
+          if (!isRealDocument(filePath)) {
+            console.warn(`[scrape-saleshub] Skipping ${fileName} — HTML error page`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          if (!isEnglishDocument(fileName)) {
+            console.log(`[scrape-saleshub] Skipping ${fileName} — non-English translation`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          totalDownloaded++
+
+          // Match back to uniqueDocs by filename similarity for metadata recording
+          const fileNameLower = fileName.toLowerCase()
+          const matchedDoc = uniqueDocs.find(d => {
+            const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
+            return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
+          })
+
+          if (driveEnabled && drive && folderId) {
+            try {
+              const result = await uploadFileToDrive(drive, folderId, filePath, fileName)
+              console.log(`[scrape-saleshub] + ${fileName} -> Drive (${result.id})`)
+              if (matchedDoc) {
+                ;(matchedDoc as any).driveFileId = result.id
+                ;(matchedDoc as any).driveUrl = result.webViewLink
+              }
+              totalUploaded++
+            } catch (e: any) {
+              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+              totalFailed++
             }
           }
-          return results
+          // Clean up local file after upload
+          try { unlinkSync(filePath) } catch {}
+        }
+      } catch (e: any) {
+        console.warn(`[scrape-saleshub] Bulk download failed for TDP "${tdp}": ${e.message?.slice(0, 100)}`)
+        totalFailed++
+      }
+      await page.waitForTimeout(3_000) // respectful pause between bulk downloads
+    }
+
+    // Bulk download per Sales Play — same pattern
+    for (const play of facets.salesPlays) {
+      console.log(`[scrape-saleshub] Bulk downloading Sales Play "${play}" content...`)
+      try {
+        const localFiles = await bulkDownloadFiltered(page, 'Sales Play', play, HIGH_VALUE_TYPES, contentDir, {
+          newestVersionCreated: newestByPlay[play],
+          lastContentScrape,
         })
-        // Map discovered play names to Link/Content URLs by order
-        const knownPlays = discovered.plays.map(p => p.name)
-        for (let j = 0; j < Math.min(knownPlays.length, tileData.length); j++) {
-          if (tileData[j].href) {
-            homePlayUrls.set(knownPlays[j], tileData[j].href)
-            console.log(`[scrape-saleshub] ${knownPlays[j]} → ${tileData[j].href.slice(0, 80)}`)
+        console.log(`[scrape-saleshub] Play "${play}": ${localFiles.length} files extracted from ZIP`)
+
+        const folderId = playFolderIds[play.toLowerCase()]
+        for (const filePath of localFiles) {
+          const fileName = filePath.split('/').pop()!
+          if (!isRealDocument(filePath)) {
+            console.warn(`[scrape-saleshub] Skipping ${fileName} — HTML error page`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          if (!isEnglishDocument(fileName)) {
+            console.log(`[scrape-saleshub] Skipping ${fileName} — non-English translation`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          totalDownloaded++
+
+          const fileNameLower = fileName.toLowerCase()
+          const matchedDoc = uniqueDocs.find(d => {
+            const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
+            return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
+          })
+
+          if (driveEnabled && drive && folderId) {
+            try {
+              const result = await uploadFileToDrive(drive, folderId, filePath, fileName)
+              console.log(`[scrape-saleshub] + ${fileName} -> Drive (${result.id})`)
+              if (matchedDoc) {
+                ;(matchedDoc as any).driveFileId = result.id
+                ;(matchedDoc as any).driveUrl = result.webViewLink
+              }
+              totalUploaded++
+            } catch (e: any) {
+              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+              totalFailed++
+            }
+          }
+          try { unlinkSync(filePath) } catch {}
+        }
+      } catch (e: any) {
+        console.warn(`[scrape-saleshub] Bulk download failed for Play "${play}": ${e.message?.slice(0, 100)}`)
+        totalFailed++
+      }
+      await page.waitForTimeout(3_000)
+    }
+
+    console.log(`[scrape-saleshub] Bulk downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
+
+    await page.close()
+
+    // ── Step 5: Build knowledge base from facets + documents ──────────────
+    console.log('[scrape-saleshub] === Step 5: Building knowledge base ===')
+
+    // Build TDP nodes from facet names + documents
+    const tdpNodes = facets.tdps.map(name => ({
+      name,
+      tactics: [] as string[],
+      customerWins: [] as Array<{ name: string; description: string }>,
+      whatToSay: [] as Array<{ name: string; url: string; type: string }>,
+      whatToShare: [] as Array<{ name: string; url: string }>,
+      whatToShow: [] as Array<{ name: string; url: string; type: string }>,
+      services: [] as Array<{ name: string; description: string }>,
+      cheatsheetUrl: '',
+      customerDeckUrl: '',
+      description: '',
+      products: [] as string[],
+      extractedContent: '',
+      metrics: [] as Array<{ value: string; context: string; source: string }>,
+      documents: uniqueDocs.filter(d => d.tdp?.toLowerCase() === name.toLowerCase()).map(d => ({
+        name: d.name,
+        contentType: d.contentType,
+        size: d.size,
+        versionId: d.versionId,
+        versionCreated: d.versionCreated,
+        distributionTerms: d.distributionTerms,
+        product: d.product,
+        salesStage: d.salesStage,
+        driveFileId: (d as any).driveFileId ?? '',
+        driveUrl: (d as any).driveUrl ?? '',
+      })),
+    }))
+
+    // Set cheatsheet + customer deck URLs from documents
+    for (const tdp of tdpNodes) {
+      const cheatsheet = (tdp.documents ?? []).find(d => d.contentType?.toLowerCase().includes('cheatsheet'))
+      if (cheatsheet?.versionId) tdp.cheatsheetUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${cheatsheet.versionId}`
+      const deck = (tdp.documents ?? []).find(d => d.contentType?.toLowerCase().includes('business presentation') && d.name.toLowerCase().includes('customer'))
+      if (deck?.versionId) tdp.customerDeckUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${deck.versionId}`
+    }
+
+    // Build Sales Play nodes from facet names + documents
+    const salesPlayNodes = facets.salesPlays.map(name => ({
+      name,
+      description: '',
+      linkedTdps: [] as string[],
+      tdpAlignment: [] as string[],
+      customerLens: { pain: [] as string[], outcomes: [] as string[], impact: [] as string[] },
+      realWorldExamples: [] as Array<{ customer: string; outcome: string }>,
+      emailTemplateUrl: '',
+      discoveryQuestionsUrl: '',
+      introPitchDeckUrl: '',
+      personaSection: {
+        roles: [] as string[],
+        painPoints: [] as string[],
+        discoveryQuestions: [] as string[],
+        valueProps: [] as string[],
+        whatWinsThemOver: [] as string[],
+      },
+      regionalCampaigns: [] as Array<{ name: string; url: string }>,
+      documents: uniqueDocs.filter(d => d.salesPlay?.toLowerCase() === name.toLowerCase()).map(d => ({
+        name: d.name,
+        contentType: d.contentType,
+        size: d.size,
+        versionId: d.versionId,
+        versionCreated: d.versionCreated,
+        distributionTerms: d.distributionTerms,
+        product: d.product,
+        salesStage: d.salesStage,
+        driveFileId: (d as any).driveFileId ?? '',
+        driveUrl: (d as any).driveUrl ?? '',
+      })),
+    }))
+
+    // Build Tactic nodes from facet names
+    const tacticNodes = facets.salesTactics.map(name => ({
+      name,
+      parentTdp: '',
+      talkTrack: '',
+      customerWins: [] as string[],
+      whatToSay: [] as string[],
+      whatToShare: [] as Array<{ name: string; url: string; type: string }>,
+      extractedContent: '',
+      metrics: [] as Array<{ value: string; context: string; source: string }>,
+    }))
+
+    // Assemble knowledge object
+    const knowledge: SalesHubKnowledge = {
+      version: 1,
+      tdps: tdpNodes,
+      salesPlays: salesPlayNodes,
+      tactics: tacticNodes,
+      products: [],
+      scrapedAt: new Date().toISOString(),
+      lastContentScrape: new Date().toISOString(),
+    } as any
+
+    // Merge with existing knowledge for page content (talk tracks, etc.)
+    const existingPath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
+    if (existsSync(existingPath)) {
+      try {
+        const existing: SalesHubKnowledge = JSON.parse(readFileSync(existingPath, 'utf-8'))
+        // Merge page content from existing into new TDP nodes
+        for (const tdp of knowledge.tdps) {
+          const existingTdp = existing.tdps.find(t => t.name.toLowerCase() === tdp.name.toLowerCase())
+          if (existingTdp) {
+            if (existingTdp.whatToSay?.length) tdp.whatToSay = existingTdp.whatToSay
+            if (existingTdp.whatToShare?.length) tdp.whatToShare = existingTdp.whatToShare
+            if (existingTdp.whatToShow?.length) tdp.whatToShow = existingTdp.whatToShow
+            if (existingTdp.services?.length) tdp.services = existingTdp.services
+            if (existingTdp.customerWins?.length) tdp.customerWins = existingTdp.customerWins
+            if (existingTdp.description) tdp.description = existingTdp.description
+            if (existingTdp.tactics?.length) tdp.tactics = existingTdp.tactics as any
           }
         }
+        // Merge page content from existing into new Play nodes
+        for (const play of knowledge.salesPlays) {
+          const existingPlay = existing.salesPlays.find(p => p.name.toLowerCase() === play.name.toLowerCase())
+          if (existingPlay) {
+            if (existingPlay.description) play.description = existingPlay.description
+            if (existingPlay.tdpAlignment?.length) play.tdpAlignment = existingPlay.tdpAlignment
+            if (existingPlay.customerLens) play.customerLens = existingPlay.customerLens
+            if (existingPlay.realWorldExamples?.length) play.realWorldExamples = existingPlay.realWorldExamples
+            if (existingPlay.personaSection?.roles?.length) play.personaSection = existingPlay.personaSection
+          }
+        }
+        // Merge tactic page content
+        for (const tactic of knowledge.tactics) {
+          const existingTactic = existing.tactics.find(t => t.name.toLowerCase() === tactic.name.toLowerCase())
+          if (existingTactic) {
+            if (existingTactic.talkTrack) tactic.talkTrack = existingTactic.talkTrack
+            if (existingTactic.whatToShare?.length) tactic.whatToShare = existingTactic.whatToShare
+            if (existingTactic.extractedContent) tactic.extractedContent = existingTactic.extractedContent
+            if (existingTactic.parentTdp) tactic.parentTdp = existingTactic.parentTdp
+          }
+        }
+        console.log(`[scrape-saleshub] Merged page content from existing knowledge (${existing.tdps.length} TDPs, ${existing.salesPlays.length} plays, ${existing.tactics.length} tactics)`)
+      } catch {
+        console.warn('[scrape-saleshub] Could not merge existing knowledge — starting fresh')
       }
-    } catch (e: any) {
-      console.log(`[scrape-saleshub] Home page tile scan failed: ${e.message} — falling back to DocCenter URLs`)
     }
 
-    // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
-    console.log(`[scrape-saleshub] === PASS 2: Sales Play Pages (${discovered.plays.length} discovered) ===`)
-    const playLinks = discovered.plays
+    // ── Step 6: Write knowledge base ───────────────────────────────────────
+    console.log('[scrape-saleshub] === Step 6: Writing knowledge base ===')
 
-    for (let i = 0; i < playLinks.length; i++) {
-      const pl = playLinks[i]
-      // Prefer Link/Content URL from home page tiles (renders sidebar correctly)
-      const playUrl = homePlayUrls.get(pl.name) || pl.url
-      console.log(`[scrape-saleshub] (${i + 1}/${playLinks.length}) Sales Play: ${pl.name}`)
-
-      const play = await extractSalesPlayPage(browser, sessionState, pl.name, playUrl)
-      if (play) {
-        salesPlays.push(play)
-      }
-
-      await scrapePage.waitForTimeout(1_000)
-    }
-
-    // ── Pass 3: Sales Tactic Pages ───────────────────────────────────────────
-    console.log(`[scrape-saleshub] === PASS 3: Sales Tactic Pages (${discovered.tactics.length} discovered) ===`)
-    const tacticLinks = discovered.tactics
-
-    for (let i = 0; i < tacticLinks.length; i++) {
-      const tl = tacticLinks[i]
-      console.log(`[scrape-saleshub] (${i + 1}/${tacticLinks.length}) Sales Tactic: ${tl.name}`)
-
-      const tactic = await extractSalesTacticPage(scrapePage, tl.name, tl.url)
-      if (tactic) {
-        tactics.push(tactic)
-      }
-
-      await scrapePage.waitForTimeout(1_000)
-    }
-
-    await scrapePage.close()
-
-    // ── Build Knowledge Base ─────────────────────────────────────────────────
-    console.log('[scrape-saleshub] Building knowledge base…')
-    const knowledge = buildSalesHubKnowledge(products, salesPlays, tactics, tdpPages)
-
-    // Write knowledge file to cache
     const knowledgePath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
     writeJsonAtomic(knowledgePath, knowledge)
 
@@ -833,42 +789,14 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       console.log(`[scrape-saleshub] Knowledge file also written to ${templatePath}`)
     }
 
-    // Write combined product index (backward compatible)
-    const index = {
-      scrapedAt: new Date().toISOString(),
-      productCount: products.length,
-      salesPlayCount: salesPlays.length,
-      tacticCount: tactics.length,
-      tdpCount: knowledge.tdps.length,
-      products: products.map(p => ({
-        slug: p.slug,
-        name: p.name,
-        tdpCount: p.tdpSections.length,
-        tacticCount: p.salesTactics.length,
-        googleDocsCount: p.googleDocsUrls.length,
-        deckCount: p.decks.length,
-      })),
-    }
-
-    writeJsonAtomic(resolve(OUTPUT_DIR, 'saleshub-products.json'), index)
-
-    console.log(`[scrape-saleshub] === SCRAPE COMPLETE ===`)
-    console.log(`  Products: ${products.length}`)
-    console.log(`  Sales Plays: ${salesPlays.length}`)
-    console.log(`  Sales Tactics: ${tactics.length}`)
-    console.log(`  TDPs (aggregated): ${knowledge.tdps.length}`)
+    console.log(`[scrape-saleshub] === INDEXER COMPLETE ===`)
+    console.log(`  TDPs: ${knowledge.tdps.length}`)
+    console.log(`  Sales Plays: ${knowledge.salesPlays.length}`)
+    console.log(`  Tactics: ${knowledge.tactics.length}`)
+    console.log(`  Documents: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
     console.log(`  Knowledge file: ${knowledgePath}`)
 
-    // Log products with 0 TDP sections for troubleshooting
-    const noTdpProducts = products.filter(p => p.tdpSections.length === 0)
-    if (noTdpProducts.length > 0) {
-      console.log(`[scrape-saleshub] Products with 0 TDP sections:`)
-      for (const p of noTdpProducts) {
-        console.log(`  - ${p.name}`)
-      }
-    }
-
-    return { products, knowledge }
+    return { knowledge }
 
   } finally {
     await context.close()
@@ -876,111 +804,26 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   }
 }
 
-// Direct execution
+// ── CLI ────────────────────────────────────────────────────────────────────────
+
 if (import.meta.main) {
   const args = new Set(process.argv.slice(2))
 
   if (args.has('--help')) {
     console.log(`Usage: bun scripts/scrape-saleshub.ts [flags]
-  --tdp-only        Run discovery + TDP page extraction only (skip products, plays, tactics)
-  --discovery-only  Run discovery only — show what URLs would be scraped, then exit
+  --facets-only     Show discovered facets (TDPs, Plays, Tactics) and exit
+  --no-download     Discover documents but skip downloading/extracting content
   --help            Show this help`)
     process.exit(0)
   }
 
-  if (args.has('--discovery-only')) {
-    // Quick discovery check — no page scraping
-    ;(async () => {
-      const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
-      const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
-      const browser = await chromium.launch({ headless: true, executablePath: CHROMIUM_PATH, args: [...BASE_CHROMIUM_ARGS, '--headless=new'] })
-      const context = await browser.newContext({ storageState: sessionState, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36' })
-      const page = await context.newPage()
-      const discovered = await discoverAllPages(page)
-      console.log(`\nDiscovered:`)
-      console.log(`  TDPs: ${discovered.tdps.length}`)
-      for (const t of discovered.tdps) console.log(`    - ${t.name}: ${t.url.slice(0, 80)}`)
-      console.log(`  Tactics: ${discovered.tactics.length}`)
-      for (const t of discovered.tactics) console.log(`    - ${t.name}`)
-      console.log(`  Plays: ${discovered.plays.length}`)
-      for (const p of discovered.plays) console.log(`    - ${p.name}`)
-      await context.close()
-      await browser.close()
-    })().catch(e => { console.error('Discovery failed:', e.message); process.exit(1) })
-  } else if (args.has('--tdp-only')) {
-    // TDP-only mode — discovery + TDP extraction, merge into existing knowledge
-    ;(async () => {
-      const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
-      const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
-      console.log(`[scrape-saleshub] TDP-only mode — ${sessionState.cookies?.length ?? 0} cookies loaded`)
-      const browser = await chromium.launch({ headless: true, executablePath: CHROMIUM_PATH, args: [...BASE_CHROMIUM_ARGS, '--disable-blink-features=AutomationControlled', '--headless=new'] })
-      const context = await browser.newContext({ storageState: sessionState, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' })
-
-      // Discovery
-      const discoveryPage = await context.newPage()
-      const discovered = await discoverAllPages(discoveryPage)
-      await discoveryPage.close()
-      console.log(`[scrape-saleshub] Discovered ${discovered.tdps.length} TDPs`)
-
-      if (discovered.tdps.length === 0) {
-        console.error('[scrape-saleshub] ZERO TDPs discovered — check discoverAllPages() against current SalesHub DOM')
-        await context.close(); await browser.close()
-        process.exit(1)
-      }
-
-      // Extract TDP pages only
-      const tdpPages: ScrapedTdpPage[] = []
-      const page = await context.newPage()
-      for (let i = 0; i < discovered.tdps.length; i++) {
-        const tdp = discovered.tdps[i]
-        console.log(`[scrape-saleshub] (${i + 1}/${discovered.tdps.length}) TDP: ${tdp.name}`)
-        const tdpPage = await extractTdpPage(page, tdp.name, tdp.url)
-        if (tdpPage) {
-          console.log(`  → ${tdpPage.customerWins.length} wins, ${tdpPage.whatToSay.length} say, ${tdpPage.whatToShare.length} share, ${tdpPage.whatToShow.length} show, ${tdpPage.services.length} services`)
-          tdpPages.push(tdpPage)
-        } else {
-          console.log(`  → FAILED — null returned`)
-        }
-        await page.waitForTimeout(1_000)
-      }
-      await page.close()
-      await context.close()
-      await browser.close()
-
-      // Load existing knowledge and merge TDP data
-      const knowledgePath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
-      if (existsSync(knowledgePath)) {
-        const existing = JSON.parse(readFileSync(knowledgePath, 'utf-8')) as SalesHubKnowledge
-        // Re-build with existing products/plays/tactics + new TDP pages
-        const merged = buildSalesHubKnowledge([], existing.salesPlays as any, existing.tactics as any, tdpPages)
-        // Preserve existing TDP descriptions and tactics from products pass
-        for (const existingTdp of existing.tdps) {
-          const mergedTdp = merged.tdps.find(t => t.name === existingTdp.name)
-          if (mergedTdp) {
-            if (!mergedTdp.description && existingTdp.description) mergedTdp.description = existingTdp.description
-            if (mergedTdp.tactics.length === 0 && existingTdp.tactics.length > 0) mergedTdp.tactics = existingTdp.tactics
-            if (mergedTdp.products.length === 0 && existingTdp.products.length > 0) mergedTdp.products = existingTdp.products
-          }
-        }
-        writeJsonAtomic(knowledgePath, merged)
-        console.log(`\n[done] Merged TDP data into ${knowledgePath}`)
-        for (const t of merged.tdps) {
-          console.log(`  ${t.name}: ${t.whatToShare?.length ?? 0} share, ${t.services?.length ?? 0} services, ${t.whatToShow?.length ?? 0} show`)
-        }
-      } else {
-        console.error(`[scrape-saleshub] No existing knowledge at ${knowledgePath} — run full scrape first`)
-      }
-    })().catch(e => { console.error('TDP-only scrape failed:', e.message); process.exit(1) })
-  } else {
-    // Full scrape (default)
-    scrapeSalesHub()
-      .then(result => {
-        console.log(`\nSalesHub scrape completed successfully.`)
-        console.log(`Knowledge base: ${result.knowledge.products.length} products, ${result.knowledge.tdps.length} TDPs, ${result.knowledge.tactics.length} tactics, ${result.knowledge.salesPlays.length} plays`)
-      })
-      .catch(err => {
-        console.error('[scrape-saleshub] Fatal:', err)
-        process.exit(1)
-      })
-  }
+  scrapeSalesHub()
+    .then(result => {
+      console.log(`\nSalesHub content indexer completed.`)
+      console.log(`Knowledge: ${result.knowledge.tdps.length} TDPs, ${result.knowledge.salesPlays.length} plays, ${result.knowledge.tactics.length} tactics`)
+    })
+    .catch(err => {
+      console.error('[scrape-saleshub] Fatal:', err)
+      process.exit(1)
+    })
 }

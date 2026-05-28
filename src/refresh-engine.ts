@@ -424,5 +424,16 @@ export function createRefreshRouter(): Hono {
       return c.json({ ok: false, error: e.message }, 500)
     }
   })
+  router.post('/api/refresh/saleshub-content', async (c) => {
+    const mod = FeatureModuleRegistry.get('saleshub-content')
+    if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
+    try {
+      await mod.syncNow('')
+      return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: e.message })
+      return c.json({ ok: false, error: e.message }, 500)
+    }
+  })
   return router
 }
