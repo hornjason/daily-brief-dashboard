@@ -140,6 +140,85 @@ describe('BKL-SYNC-L3-01: sync-pod-l3.ts exports syncAllPods', () => {
   })
 })
 
+// ── #447: Recycle mutex — cross-timer coordination ──────────────────────────
+//
+// Verifies that proactiveRecycle() has a mutex guard, keepalive checks it before
+// recovery, sync pre-check waits for it, Timer 5 calls proactiveRecycle() (guarded),
+// and there's a 90s timeout.
+
+describe('#447: recycleRunning mutex guards proactiveRecycle()', () => {
+  test('AC-1: recycleRunning flag declared at module level', () => {
+    expect(DAEMON_SRC).toContain('let recycleRunning = false')
+  })
+
+  test('AC-1: proactiveRecycle checks recycleRunning and skips if true', () => {
+    const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
+    expect(fnIdx).toBeGreaterThan(-1)
+    const slice = DAEMON_SRC.slice(fnIdx, fnIdx + 400)
+    expect(slice).toContain('if (recycleRunning)')
+    expect(slice).toContain('SKIPPED — another recycle is already in progress')
+    expect(slice).toContain('recycleRunning = true')
+  })
+
+  test('AC-1: proactiveRecycle releases mutex in finally block', () => {
+    const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 4500)
+    expect(fnBody).toContain('finally')
+    expect(fnBody).toContain('recycleRunning = false')
+  })
+
+  test('AC-2: keepalive checks recycleRunning before calling recoverScrapeContext', () => {
+    // Find the keepalive health check section
+    const healthIdx = DAEMON_SRC.indexOf('isContextHealthy(ctx')
+    expect(healthIdx).toBeGreaterThan(-1)
+    const slice = DAEMON_SRC.slice(healthIdx, healthIdx + 500)
+    expect(slice).toContain('recycleRunning')
+    expect(slice).toContain('keepalive: recycle in progress — skipping RH recovery')
+  })
+
+  test('AC-3: runSyncCycle checks recycleRunning and waits up to 60s', () => {
+    const syncIdx = DAEMON_SRC.indexOf('async function runSyncCycle()')
+    expect(syncIdx).toBeGreaterThan(-1)
+    const slice = DAEMON_SRC.slice(syncIdx, syncIdx + 2000)
+    expect(slice).toContain('recycleRunning')
+    expect(slice).toContain('recycle already in progress — waiting up to 60s')
+    expect(slice).toContain('60_000')
+  })
+
+  test('AC-4: Timer 5 calls proactiveRecycle (mutex guard is inside the function)', () => {
+    // Timer 5 is the 12h recycle interval — it calls proactiveRecycle() which has the guard
+    expect(DAEMON_SRC).toContain('RECYCLE_INTERVAL_MS')
+    const timer5Idx = DAEMON_SRC.indexOf('scheduled 12h browser recycle')
+    expect(timer5Idx).toBeGreaterThan(-1)
+    const slice = DAEMON_SRC.slice(timer5Idx, timer5Idx + 300)
+    expect(slice).toContain('proactiveRecycle()')
+  })
+
+  test('AC-5: proactiveRecycle has a 90s hard timeout with Promise.race', () => {
+    const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 3500)
+    expect(fnBody).toContain('Promise.race')
+    expect(fnBody).toContain('RECYCLE_TIMEOUT_MS')
+    expect(fnBody).toContain("'timeout'")
+  })
+
+  test('AC-5: 90s timeout constant defined', () => {
+    expect(DAEMON_SRC).toContain('const RECYCLE_TIMEOUT_MS = 90_000')
+  })
+
+  test('AC-5: timeout sends alert email recommending container restart', () => {
+    const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 3500)
+    expect(fnBody).toContain('TIMED OUT')
+    expect(fnBody).toContain('sendBriefEmail')
+    expect(fnBody).toContain('podman restart pai-sync-l3')
+  })
+
+  test('AC-7: _getRecycleRunning test helper exported', () => {
+    expect(DAEMON_SRC).toContain('export function _getRecycleRunning()')
+  })
+})
+
 // ── getMsUntil530amET: inline implementation test ────────────────────────────
 //
 // The daemon module calls process.exit(1) at top-level when NODE_ROLE !== 'primary',

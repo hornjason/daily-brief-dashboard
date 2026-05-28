@@ -45,6 +45,16 @@ const ALERT_EMAIL = 'jhorn@redhat.com'
 const RECYCLE_INTERVAL_MS = 12 * 60 * 60 * 1000  // 12 hours
 // BKL-SYNC-CHROME-LEAK Bonus: Memory threshold for proactive recycle
 const RSS_THRESHOLD_BYTES = 3 * 1024 * 1024 * 1024  // 3 GB
+// #447: Recycle mutex timeout — if proactiveRecycle() doesn't finish within this window,
+// the mutex is released and a container restart is recommended via alert email.
+const RECYCLE_TIMEOUT_MS = 90_000  // 90 seconds
+
+// ── #447: Cross-timer recycle mutex ──────────────────────────────────────────
+// Prevents concurrent proactiveRecycle() / recoverScrapeContext() calls from
+// Timer 1 (keepalive), Timer 5 (12h recycle), and scheduled sync (pre-sync check).
+let recycleRunning = false
+/** Exported for testing only */
+export function _getRecycleRunning(): boolean { return recycleRunning }
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
@@ -239,6 +249,12 @@ async function doKeepalive(): Promise<void> {
     console.log('[sync-daemon] keepalive: probing RH context health…')
     const rhHealthy = await isContextHealthy(ctx, 5000)
     if (!rhHealthy) {
+      // #447 AC-2: Check recycleRunning before calling recoverScrapeContext().
+      // If a recycle is in progress, skip recovery (don't throw — let finally release keepaliveRunning).
+      if (recycleRunning) {
+        console.log('[sync-daemon] keepalive: recycle in progress — skipping RH recovery')
+        return
+      }
       console.warn('[sync-daemon] keepalive: RH context dead — attempting auto-recovery')
       try {
         await recoverScrapeContext()
@@ -322,11 +338,25 @@ async function doKeepalive(): Promise<void> {
  * Prevents Chrome memory bloat from accumulating over 48h+ uptime.
  */
 async function proactiveRecycle(): Promise<void> {
-  console.log('[sync-daemon] proactiveRecycle: starting browser recycle…')
-  const { closeScrapeContext, initScrapeContext: reinitCtx, getScrapeContext: getCtx } = await import('../src/rh-scraper.ts')
-  const { closeSfContext } = await import('../src/sf-scraper.ts')
+  // #447 AC-1: Mutex guard — only one recycle runs at a time.
+  // Second concurrent callers skip immediately with a log message.
+  if (recycleRunning) {
+    console.log('[sync-daemon] proactiveRecycle: SKIPPED — another recycle is already in progress')
+    return
+  }
+  recycleRunning = true
 
-  try {
+  // #447 AC-5: Hard timeout — if recycle doesn't complete within 90s,
+  // release the mutex and recommend container restart via alert email.
+  const timeoutPromise = new Promise<'timeout'>(resolve =>
+    setTimeout(() => resolve('timeout'), RECYCLE_TIMEOUT_MS)
+  )
+
+  const recycleWork = async (): Promise<'done'> => {
+    console.log('[sync-daemon] proactiveRecycle: starting browser recycle…')
+    const { closeScrapeContext, initScrapeContext: reinitCtx, getScrapeContext: getCtx } = await import('../src/rh-scraper.ts')
+    const { closeSfContext } = await import('../src/sf-scraper.ts')
+
     // 1. Persist session state (cookies) to disk before closing
     const ctx = getCtx()
     if (ctx) {
@@ -366,9 +396,30 @@ async function proactiveRecycle(): Promise<void> {
     adoptSfContext(newCtx, PROFILE_DIR)
 
     console.log('[sync-daemon] proactiveRecycle: browser recycled successfully')
+    return 'done'
+  }
+
+  try {
+    const result = await Promise.race([recycleWork(), timeoutPromise])
+    if (result === 'timeout') {
+      console.error(`[sync-daemon] proactiveRecycle: TIMED OUT after ${RECYCLE_TIMEOUT_MS / 1000}s — releasing mutex`)
+      await sendBriefEmail(
+        ALERT_EMAIL,
+        `ALERT: Sync Daemon Recycle Timeout — ${new Date().toISOString().slice(0, 10)}`,
+        `<html><body>
+          <h2>Browser Recycle Timed Out</h2>
+          <p>proactiveRecycle() did not complete within ${RECYCLE_TIMEOUT_MS / 1000}s.</p>
+          <p>The recycle mutex has been released but the browser state may be inconsistent.</p>
+          <p><strong>Recommended action:</strong> restart the pai-sync-l3 container.</p>
+          <pre>podman restart pai-sync-l3</pre>
+        </body></html>`,
+      ).catch(emailErr => console.error('[sync-daemon] recycle timeout alert email failed:', emailErr))
+    }
   } catch (e: any) {
     console.error(`[sync-daemon] proactiveRecycle: failed: ${e?.message ?? e}`)
     throw e
+  } finally {
+    recycleRunning = false
   }
 }
 
@@ -385,12 +436,42 @@ async function runSyncCycle(): Promise<void> {
   if (ctx) {
     const canRender = await canContextRender(ctx)
     if (!canRender) {
-      console.warn('[sync-daemon] pre-sync render check FAILED — recycling browser before sync')
-      try {
-        await proactiveRecycle()
-      } catch (recycleErr: any) {
-        console.error('[sync-daemon] pre-sync recycle FAILED — skipping sync cycle, will retry next cycle:', recycleErr?.message ?? recycleErr)
-        return
+      // #447 AC-3: If a recycle is already in progress, wait up to 60s for it to finish,
+      // then retry the render check. Only call proactiveRecycle() if no recycle is running.
+      if (recycleRunning) {
+        console.log('[sync-daemon] pre-sync render check FAILED but recycle already in progress — waiting up to 60s')
+        const waitStart = Date.now()
+        while (recycleRunning && Date.now() - waitStart < 60_000) {
+          await new Promise(r => setTimeout(r, 2_000))
+        }
+        if (recycleRunning) {
+          console.error('[sync-daemon] pre-sync: recycle still running after 60s — skipping sync cycle')
+          return
+        }
+        // Retry render check after recycle completed
+        const retryCtx = getScrapeContext()
+        if (retryCtx) {
+          const canRenderRetry = await canContextRender(retryCtx)
+          if (!canRenderRetry) {
+            console.error('[sync-daemon] pre-sync render check still FAILED after recycle — calling proactiveRecycle()')
+            try {
+              await proactiveRecycle()
+            } catch (recycleErr: any) {
+              console.error('[sync-daemon] pre-sync recycle FAILED — skipping sync cycle:', recycleErr?.message ?? recycleErr)
+              return
+            }
+          } else {
+            console.log('[sync-daemon] pre-sync render check passed after waiting for recycle')
+          }
+        }
+      } else {
+        console.warn('[sync-daemon] pre-sync render check FAILED — recycling browser before sync')
+        try {
+          await proactiveRecycle()
+        } catch (recycleErr: any) {
+          console.error('[sync-daemon] pre-sync recycle FAILED — skipping sync cycle, will retry next cycle:', recycleErr?.message ?? recycleErr)
+          return
+        }
       }
     } else {
       console.log('[sync-daemon] pre-sync render check passed')
