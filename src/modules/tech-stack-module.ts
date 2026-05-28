@@ -38,6 +38,7 @@ interface TechEntry {
   redHatProducts: string[]
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
   redHatPositioning?: string
+  source?: string
   lastResearched: string
 }
 
@@ -183,15 +184,23 @@ async function extractTechnologies(customerName: string, context: string): Promi
   const token = await getGeminiToken()
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
 
-  const systemPrompt = `You are a technology detection system for enterprise customer analysis. Given information about a company, identify all technologies, platforms, tools, and proprietary systems mentioned or implied.
+  const systemPrompt = `You are a technology detection system for enterprise customer analysis. You actively research companies using Google Search to discover their real technology stack from public sources.
+
+Research strategy:
+- Search for job postings on the company's careers page and job boards — these reveal internal tools, frameworks, and platforms
+- Find case studies, press releases, and partner announcements that name specific technologies
+- Check engineering blog posts and tech talks by company employees for tooling details
+- Look for partner ecosystem announcements (e.g., cloud provider partnerships, ISV integrations)
+- Find specific tool names and versions, not generic categories (e.g., "Terraform 1.5" not "IaC tool")
 
 Rules:
-- Be specific — only include technologies explicitly mentioned or strongly implied
+- Be specific — only include technologies with evidence from search results or the provided context
 - Classify each as "proprietary" (customer-built/specific) or "industry-tool" (widely used)
 - Context should reflect the customer's relationship: "using", "evaluating", "migrating_from", or "developing"
 - For infrastructure, list underlying platforms (e.g., ["Kubernetes", "AWS"])
 - For redHatProducts, suggest Red Hat product slugs that complement this tech: ocp, rhel, aap, acs, acm, satellite, rhdh, quay
-- Confidence: HIGH = explicitly mentioned, MEDIUM = strongly implied, LOW = inferred from context
+- Confidence: HIGH = explicitly mentioned in search results, MEDIUM = strongly implied, LOW = inferred from context
+- Include the source URL where you found evidence for each technology
 - Output valid JSON array only`
 
   const userPrompt = `CUSTOMER: ${customerName}
@@ -199,7 +208,7 @@ Rules:
 --- Context ---
 ${context.slice(0, 12000)}
 
-Extract all technologies for this customer. Return a JSON array:
+Research this customer's technology stack using Google Search. Look for job postings, case studies, partner announcements, and engineering blog posts. Extract all technologies with evidence. Return a JSON array:
 [
   {
     "name": "Technology Name",
@@ -208,9 +217,12 @@ Extract all technologies for this customer. Return a JSON array:
     "description": "1-2 sentence description of what it is and how the customer uses it",
     "infrastructure": ["underlying platforms"],
     "redHatProducts": ["ocp", "rhel", "aap"],
-    "confidence": "HIGH" | "MEDIUM" | "LOW"
+    "confidence": "HIGH" | "MEDIUM" | "LOW",
+    "source": "URL or source where you found evidence of this technology usage"
   }
 ]
+
+For each tool, include the URL or source where you found evidence of usage. If a technology comes from the provided context rather than search results, set source to "provided-context".
 
 Return ONLY the JSON array, no markdown fences.`
 
@@ -218,10 +230,11 @@ Return ONLY the JSON array, no markdown fences.`
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(60_000),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        tools: [{ googleSearch: {} }],
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 4096,
@@ -251,8 +264,18 @@ Return ONLY the JSON array, no markdown fences.`
       })
     }
 
-    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
+    const candidate = json.candidates?.[0]
+    const parts: any[] = candidate?.content?.parts ?? []
     const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+
+    // Extract grounding sources from groundingMetadata (Google Search grounding)
+    const groundingMetadata = candidate?.groundingMetadata
+    const groundingSources: string[] = []
+    if (groundingMetadata?.groundingChunks) {
+      for (const chunk of groundingMetadata.groundingChunks) {
+        if (chunk?.web?.uri) groundingSources.push(chunk.web.uri)
+      }
+    }
 
     // Parse JSON — handle markdown fences
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\[[\s\S]*\])/)
@@ -262,7 +285,7 @@ Return ONLY the JSON array, no markdown fences.`
       if (!Array.isArray(parsed)) return []
 
       const now = new Date().toISOString()
-      return parsed.map((t: any) => ({
+      return parsed.map((t: any, idx: number) => ({
         name: String(t.name ?? ''),
         category: t.category === 'proprietary' ? 'proprietary' : 'industry-tool',
         context: ['using', 'evaluating', 'migrating_from', 'developing'].includes(t.context) ? t.context : 'using',
@@ -270,6 +293,7 @@ Return ONLY the JSON array, no markdown fences.`
         infrastructure: Array.isArray(t.infrastructure) ? t.infrastructure.map(String) : [],
         redHatProducts: Array.isArray(t.redHatProducts) ? t.redHatProducts.map(String) : [],
         confidence: ['HIGH', 'MEDIUM', 'LOW'].includes(t.confidence) ? t.confidence : 'LOW',
+        source: String(t.source ?? groundingSources[idx] ?? ''),
         lastResearched: now,
       })) as TechEntry[]
     }
@@ -435,6 +459,7 @@ FeatureModuleRegistry.register({
           infrastructure: tech.infrastructure,
           redHatProducts: tech.redHatProducts,
           confidence: tech.confidence,
+          source: tech.source,
           ...(matchedPlay ? {
             solutionPlayId: matchedPlay.playId,
             solutionPlayName: matchedPlay.playName,
