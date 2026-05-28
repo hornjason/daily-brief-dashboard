@@ -706,18 +706,40 @@ function buildAlignmentEntry(
   if (allAssets.length > 0) {
     lines.push('> **Assets to share:**')
     for (const asset of allAssets.slice(0, 5)) {
-      lines.push(`> - [${asset.name.slice(0, 80)}](${asset.url})`)
+      // Clean up asset names — remove "What to show →", "Customer pitch →", trailing descriptions
+      let cleanName = asset.name
+        .replace(/^(What to show|What to share|Customer pitch|Technical content|Sales Pitch)\s*[→\-:]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (cleanName.length > 60) cleanName = cleanName.slice(0, 57) + '...'
+      if (cleanName.length < 5) cleanName = asset.name.slice(0, 57)
+      lines.push(`> - [${cleanName}](${asset.url})`)
     }
   }
 
-  // Services from TDP
+  // Services from TDP — extract actionable service types, not full sentences
   const tdpNode = getTdpFn(tdpName)
   const services = (tdpNode?.services ?? []).filter(s =>
     s.name.length > 15 && !s.name.includes('0 item') && !s.name.includes('No files')
+      && !s.name.includes('don\'t have access')
   )
   if (services.length > 0) {
-    const serviceNames = services.slice(0, 4).map(s => s.name.slice(0, 60)).join(' | ')
-    lines.push(`> **Services to propose:** ${serviceNames}`)
+    // Extract service type keywords from the full text
+    const serviceTypes: string[] = []
+    for (const s of services) {
+      const name = s.name.toLowerCase()
+      if (name.includes('navigate')) serviceTypes.push('Navigate engagement')
+      else if (name.includes('health check')) serviceTypes.push('Health Check')
+      else if (name.includes('skills assessment')) serviceTypes.push('Skills Assessment')
+      else if (name.includes('community of practice')) serviceTypes.push('Automation Community of Practice')
+      else if (name.includes('consulting')) serviceTypes.push('Red Hat Consulting')
+      else if (name.includes('training') || name.includes('certification')) serviceTypes.push('Training & Certification')
+      else if (name.includes('technical account')) serviceTypes.push('Technical Account Management')
+    }
+    const unique = [...new Set(serviceTypes)]
+    if (unique.length > 0) {
+      lines.push(`> **Services to propose:** ${unique.join(', ')}`)
+    }
   }
 
   return lines.join('\n')
