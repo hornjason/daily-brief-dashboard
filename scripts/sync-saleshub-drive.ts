@@ -29,7 +29,7 @@ function getL4FolderId(): string | null {
   return null
 }
 
-async function findOrCreateFolder(
+export async function findOrCreateFolder(
   drive: any,
   parentId: string,
   folderName: string,
