@@ -294,7 +294,29 @@ Return ONLY the JSON array, no markdown fences.`
     }
 
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0])
+      let jsonText = jsonMatch[1] ?? jsonMatch[0]
+      // Grounded search URLs may contain unescaped characters that break JSON.
+      // Try parse as-is first; on failure, attempt to sanitize truncated entries.
+      let parsed: any[]
+      try {
+        parsed = JSON.parse(jsonText)
+      } catch {
+        // Truncated response: find the last complete object and close the array
+        const lastComplete = jsonText.lastIndexOf('},')
+        if (lastComplete > 0) {
+          jsonText = jsonText.slice(0, lastComplete + 1) + ']'
+          try {
+            parsed = JSON.parse(jsonText)
+            console.log(`[tech-stack] recovered ${parsed.length} entries from truncated response for ${customerName}`)
+          } catch {
+            console.error(`[tech-stack] unrecoverable JSON for ${customerName}, text length=${jsonText.length}`)
+            return []
+          }
+        } else {
+          console.error(`[tech-stack] unrecoverable JSON for ${customerName}, text length=${jsonText.length}`)
+          return []
+        }
+      }
       if (!Array.isArray(parsed)) return []
 
       const now = new Date().toISOString()
