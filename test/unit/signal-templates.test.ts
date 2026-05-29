@@ -103,8 +103,10 @@ const mockTechSignal: Signal = {
   timestamp: new Date().toISOString(),
   metadata: {
     confidence: 'MEDIUM',
-    context: 'Migration from Docker Swarm',
+    context: 'using',
+    why: 'Managing container orchestration for production workloads',
     infrastructure: ['containers', 'orchestration'],
+    redHatProducts: ['ocp', 'rhel'],
   },
 }
 
@@ -254,10 +256,150 @@ describe('templateTechStack', () => {
     expect(result).toBeNull()
   })
 
-  test('renders tech stack table', () => {
+  test('renders tech stack table with new format', () => {
     const result = templateTechStack([mockTechSignal])
-    expect(result).toContain('| Technology | Red Hat Positioning | Confidence |')
-    expect(result).toContain('| Evaluating Kubernetes migration | Migration from Docker Swarm | MEDIUM |')
+    expect(result).toContain('| Technology | Status | Why | Red Hat Products |')
+    expect(result).toContain('| Evaluating Kubernetes migration | Using | Managing container orchestration for production workloads | OCP, RHEL |')
+  })
+
+  test('groups signals by context priority', () => {
+    const signals: Signal[] = [
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'AWS',
+        detail: 'Cloud platform',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'using', redHatProducts: ['ocp'], infrastructure: ['cloud'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'VMware vSphere',
+        detail: 'Legacy virtualization',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'migrating_from', why: 'Moving to cloud', redHatProducts: ['ocp', 'rhel'], confidence: 'HIGH', infrastructure: ['virtualization'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'ServiceNow',
+        detail: 'ITSM evaluation',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'evaluating', why: 'IT service management', redHatProducts: ['aap'], confidence: 'MEDIUM', infrastructure: ['itsm'] },
+      },
+    ]
+
+    const result = templateTechStack(signals)
+    expect(result).toBeTruthy()
+
+    // migrating_from should come first
+    const lines = result!.split('\n')
+    const vmwareIdx = lines.findIndex(l => l.includes('VMware vSphere'))
+    const snowIdx = lines.findIndex(l => l.includes('ServiceNow'))
+    const awsIdx = lines.findIndex(l => l.includes('AWS'))
+
+    expect(vmwareIdx).toBeLessThan(snowIdx)
+    expect(snowIdx).toBeLessThan(awsIdx)
+  })
+
+  test('shows visual markers for context types', () => {
+    const signals: Signal[] = [
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'VMware',
+        detail: 'Migrating away',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'migrating_from', redHatProducts: ['ocp'], confidence: 'HIGH', infrastructure: ['virtualization'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'Kubernetes',
+        detail: 'Evaluating',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'evaluating', redHatProducts: ['ocp'], confidence: 'MEDIUM', infrastructure: ['containers'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'Python',
+        detail: 'Developing',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'developing', redHatProducts: ['rhel'], infrastructure: ['language'] },
+      },
+    ]
+
+    const result = templateTechStack(signals)
+    expect(result).toContain('⚠️ MIGRATING FROM')
+    expect(result).toContain('🔍 EVALUATING')
+    expect(result).toContain('🔧 Developing')
+  })
+
+  test('falls back to detail when no why metadata', () => {
+    const signal: Signal = {
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'PostgreSQL',
+      detail: 'This is a long description that should be truncated to 60 characters maximum for display',
+      timestamp: new Date().toISOString(),
+      metadata: { context: 'using', redHatProducts: ['rhel'], infrastructure: ['database'] },
+    }
+
+    const result = templateTechStack([signal])
+    expect(result).toContain('This is a long description that should be truncated to 60 ch')
+    expect(result).not.toContain('truncated to 60 characters maximum')
+  })
+
+  test('includes summary line for actionable signals', () => {
+    const signals: Signal[] = [
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'VMware',
+        detail: 'Migrating',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'migrating_from', redHatProducts: ['ocp'], confidence: 'HIGH', infrastructure: ['virtualization'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'ServiceNow',
+        detail: 'Evaluating',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'evaluating', redHatProducts: ['aap'], confidence: 'MEDIUM', infrastructure: ['itsm'] },
+      },
+      {
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'AWS',
+        detail: 'Using',
+        timestamp: new Date().toISOString(),
+        metadata: { context: 'using', redHatProducts: ['ocp'], infrastructure: ['cloud'] },
+      },
+    ]
+
+    const result = templateTechStack(signals)
+    expect(result).toContain('_1 migration opportunities, 1 evaluating')
+  })
+
+  test('renders all tech signals without slice cap', () => {
+    const signals: Signal[] = Array.from({ length: 12 }, (_, i) => ({
+      source: 'tech-stack',
+      type: 'technology' as const,
+      headline: `Tech ${i + 1}`,
+      detail: `Description ${i + 1}`,
+      timestamp: new Date().toISOString(),
+      metadata: { context: 'using', redHatProducts: ['rhel'], infrastructure: ['general'] },
+    }))
+
+    const result = templateTechStack(signals)
+    // Should include all 12 signals, not just 8
+    expect(result).toContain('Tech 9')
+    expect(result).toContain('Tech 10')
+    expect(result).toContain('Tech 11')
+    expect(result).toContain('Tech 12')
   })
 })
 
