@@ -262,6 +262,20 @@ export function getKnowledgeCoverage(): KnowledgeCoverage {
     return { name: play.name, sections, sectionCount }
   })
 
+  // Count extracted content from documents[] in TDPs and Plays (#448)
+  for (const tdp of kb.tdps) {
+    for (const doc of (tdp as any).documents ?? []) {
+      if (doc.driveUrl) allUrls.add(doc.driveUrl)
+      if ((doc.extractedContent ?? '').length > 0) docsWithExtractedContent++
+    }
+  }
+  for (const play of kb.salesPlays) {
+    for (const doc of (play as any).documents ?? []) {
+      if (doc.driveUrl) allUrls.add(doc.driveUrl)
+      if ((doc.extractedContent ?? '').length > 0) docsWithExtractedContent++
+    }
+  }
+
   // Collect URLs from tactics and count extracted content
   for (const tactic of kb.tactics) {
     for (const item of tactic.whatToShare ?? []) { if (item.url) allUrls.add(item.url) }
