@@ -36,6 +36,7 @@ import {
   captureSeismicAuth,
   discoverFacets as discoverContentFacets,
   queryDocuments as queryContentDocuments,
+  probeContentSearchApi,
   type DocCenterDocument,
 } from './saleshub-content-discovery.ts'
 import { findOrCreateFolder } from './sync-saleshub-drive.ts'
@@ -653,6 +654,15 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       throw new Error('Failed to capture Seismic auth token — SalesHub session may be expired')
     }
     console.log(`[scrape-saleshub] Auth captured (${authCtx.auth.length} chars)`)
+
+    // Probe newer Content Search API for direct downloadUrl support
+    console.log('[scrape-saleshub] === Probing Content Search API for downloadUrl support ===')
+    const contentSearchUrl = await probeContentSearchApi(page, authCtx)
+    if (contentSearchUrl) {
+      console.log(`[scrape-saleshub] ✓ Content Search API with downloadUrl available at: ${contentSearchUrl}`)
+    } else {
+      console.log(`[scrape-saleshub] Content Search API not available — will use browser download fallback`)
+    }
 
     // Respectful wait before API queries
     await page.waitForTimeout(2_000)

@@ -341,6 +341,7 @@ export function mergeDocumentsIntoKnowledge(
 export async function captureSeismicAuth(page: Page): Promise<{
   auth: string
   searchUrl: string
+  contentSearchUrls: string[]
   headers: Record<string, string>
 } | null> {
   console.log('[content-discovery] Navigating to DocCenter to capture auth...')
@@ -370,10 +371,16 @@ export async function captureSeismicAuth(page: Page): Promise<{
   const userId = hdrs['x-seismic-userid'] ?? ''
   const searchUrl = `https://saleshub.redhat.com/gateway/services/search/tenants/redhat/api/services/search/v1/results?userId=${userId}&languages=en-us`
 
+  // Also build the newer Content Search API URL (returns downloadUrl per doc)
+  const contentSearchUrls = [
+    `https://saleshub.redhat.com/gateway/services/search/tenants/redhat/api/search/v1/content/query`,
+    `https://saleshub.redhat.com/gateway/services/search/tenants/redhat/api/v1/content/query`,
+  ]
+
   const headerKeys = Object.keys(hdrs).filter(k => k.includes('seismic') || k.includes('teamsite') || k.includes('tenant') || k.includes('profile'))
   console.log(`[content-discovery] Auth captured (${auth.length} chars), relevant headers: ${headerKeys.map(k => `${k}=${hdrs[k]?.slice(0, 30)}`).join(', ')}`)
   console.log(`[content-discovery] All header keys: ${Object.keys(hdrs).join(', ')}`)
-  return { auth, searchUrl, headers: hdrs }
+  return { auth, searchUrl, contentSearchUrls, headers: hdrs }
 }
 
 /**
@@ -528,6 +535,77 @@ export async function queryDocuments(
   })
 
   return parseDocumentsFromApiResponse(response)
+}
+
+/**
+ * Probe the newer Seismic Content Search API which returns downloadUrl per document.
+ * If this works, we can download files directly without browser automation.
+ */
+export async function probeContentSearchApi(
+  page: Page,
+  authCtx: { auth: string; contentSearchUrls: string[]; headers: Record<string, string> },
+): Promise<string | null> {
+  const body = {
+    term: '',
+    filter: {
+      operator: 'and',
+      conditions: [
+        { attribute: 'repository', operator: 'equal', value: 'library' },
+      ],
+    },
+    options: {
+      returnFields: ['name', 'id', 'versionId', 'format', 'downloadUrl', 'applicationUrls', 'properties'],
+      pageSize: 2,
+    },
+  }
+
+  for (const url of authCtx.contentSearchUrls) {
+    try {
+      const result = await page.evaluate(async (args) => {
+        try {
+          const res = await fetch(args.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: args.auth,
+              profileversionid: args.pvid,
+              teamsiteid: args.tsid ?? '1',
+            },
+            body: JSON.stringify(args.body),
+          })
+          const ct = res.headers.get('content-type') ?? ''
+          if (!res.ok) return { ok: false, status: res.status, ct }
+          const json = await res.json()
+          return { ok: true, status: res.status, ct, data: json }
+        } catch (e: any) { return { ok: false, status: -1, ct: '', error: e.message } }
+      }, {
+        url,
+        auth: authCtx.auth,
+        pvid: PROFILE_VERSION_ID,
+        tsid: authCtx.headers.teamsiteid,
+        body,
+      })
+
+      console.log(`[content-discovery] Content Search probe ${url.replace('https://saleshub.redhat.com', '')} → ${result.status} (${result.ct})`)
+
+      if (result.ok && result.data) {
+        const results = result.data.results ?? result.data.searchResults ?? []
+        if (results.length > 0) {
+          const sample = results[0]
+          console.log(`[content-discovery] Content Search API works! Sample: name=${sample.name}, downloadUrl=${sample.downloadUrl ?? 'MISSING'}, format=${sample.format}`)
+          if (sample.applicationUrls) {
+            console.log(`[content-discovery] applicationUrls: ${JSON.stringify(sample.applicationUrls).slice(0, 200)}`)
+          }
+          if (sample.downloadUrl) {
+            console.log(`[content-discovery] ✓ downloadUrl available — API download path confirmed!`)
+            return url
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return null
 }
 
 /**
