@@ -34,6 +34,7 @@ interface TechEntry {
   category: 'proprietary' | 'industry-tool'
   context: 'using' | 'evaluating' | 'migrating_from' | 'developing'
   description: string
+  why?: string
   infrastructure: string[]
   redHatProducts: string[]
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
@@ -196,11 +197,16 @@ Research strategy:
 Rules:
 - Be specific — only include technologies with evidence from search results or the provided context
 - Classify each as "proprietary" (customer-built/specific) or "industry-tool" (widely used)
-- Context should reflect the customer's relationship: "using", "evaluating", "migrating_from", or "developing"
+- Context classification — be precise about the customer's relationship with each technology:
+  - "using" = confirmed in production, currently deployed and actively used
+  - "evaluating" = mentioned in job posting as desired/preferred skill, POC, or trial
+  - "migrating_from" = moving away from this tool, replacing with alternative
+  - "developing" = building on/with this platform, custom development
+- For each technology, include a "why" field: a single sentence explaining WHY the customer uses this tool (e.g., "Workflow automation for security operations"). Do NOT repeat the full description — summarize the business purpose in one sentence.
 - For infrastructure, list underlying platforms (e.g., ["Kubernetes", "AWS"])
 - For redHatProducts, suggest Red Hat product slugs that complement this tech: ocp, rhel, aap, acs, acm, satellite, rhdh, quay
 - Confidence: HIGH = explicitly mentioned in search results, MEDIUM = strongly implied, LOW = inferred from context
-- Include the source URL where you found evidence for each technology
+- For the source field, include the FULL URL where you found evidence — not a citation number. If the evidence comes from the provided context, set source to "provided-context".
 - Output valid JSON array only`
 
   const userPrompt = `CUSTOMER: ${customerName}
@@ -215,14 +221,15 @@ Research this customer's technology stack using Google Search. Look for job post
     "category": "proprietary" | "industry-tool",
     "context": "using" | "evaluating" | "migrating_from" | "developing",
     "description": "1-2 sentence description of what it is and how the customer uses it",
+    "why": "One sentence summarizing the business purpose (e.g., 'Container orchestration for microservices deployment')",
     "infrastructure": ["underlying platforms"],
     "redHatProducts": ["ocp", "rhel", "aap"],
     "confidence": "HIGH" | "MEDIUM" | "LOW",
-    "source": "URL or source where you found evidence of this technology usage"
+    "source": "Full URL where you found evidence (e.g., https://example.com/careers/posting-123). NOT a citation number."
   }
 ]
 
-For each tool, include the URL or source where you found evidence of usage. If a technology comes from the provided context rather than search results, set source to "provided-context".
+IMPORTANT for the source field: Include the FULL URL where you found evidence of usage. Do NOT use citation numbers like "cite: 1" — use the actual URL. If a technology comes from the provided context rather than search results, set source to "provided-context".
 
 Return ONLY the JSON array, no markdown fences.`
 
@@ -291,17 +298,37 @@ Return ONLY the JSON array, no markdown fences.`
       if (!Array.isArray(parsed)) return []
 
       const now = new Date().toISOString()
-      return parsed.map((t: any, idx: number) => ({
-        name: String(t.name ?? ''),
-        category: t.category === 'proprietary' ? 'proprietary' : 'industry-tool',
-        context: ['using', 'evaluating', 'migrating_from', 'developing'].includes(t.context) ? t.context : 'using',
-        description: String(t.description ?? ''),
-        infrastructure: Array.isArray(t.infrastructure) ? t.infrastructure.map(String) : [],
-        redHatProducts: Array.isArray(t.redHatProducts) ? t.redHatProducts.map(String) : [],
-        confidence: ['HIGH', 'MEDIUM', 'LOW'].includes(t.confidence) ? t.confidence : 'LOW',
-        source: String(t.source ?? groundingSources[idx] ?? ''),
-        lastResearched: now,
-      })) as TechEntry[]
+
+      // Build a sequential assignment index for grounding chunk URLs.
+      // Entries with "cite: N" or empty sources get the next available grounding URL.
+      let groundingIdx = 0
+
+      return parsed.map((t: any) => {
+        let source = String(t.source ?? '')
+
+        // If source is a "cite: N" pattern or empty, try to assign a grounding chunk URL
+        if (!source || /^cite:\s*\d+/i.test(source)) {
+          if (groundingIdx < groundingSources.length) {
+            source = groundingSources[groundingIdx++]
+          } else {
+            // No more grounding URLs — clean out the useless "cite: N" text
+            source = ''
+          }
+        }
+
+        return {
+          name: String(t.name ?? ''),
+          category: t.category === 'proprietary' ? 'proprietary' : 'industry-tool',
+          context: ['using', 'evaluating', 'migrating_from', 'developing'].includes(t.context) ? t.context : 'using',
+          description: String(t.description ?? ''),
+          why: t.why ? String(t.why) : undefined,
+          infrastructure: Array.isArray(t.infrastructure) ? t.infrastructure.map(String) : [],
+          redHatProducts: Array.isArray(t.redHatProducts) ? t.redHatProducts.map(String) : [],
+          confidence: ['HIGH', 'MEDIUM', 'LOW'].includes(t.confidence) ? t.confidence : 'LOW',
+          source,
+          lastResearched: now,
+        }
+      }) as TechEntry[]
     }
   } catch (e: any) {
     console.error(`[tech-stack] Gemini extraction failed for ${customerName}: ${e?.message}`)
@@ -462,6 +489,7 @@ FeatureModuleRegistry.register({
           customerSlug,
           category: tech.category,
           context: tech.context,
+          why: tech.why,
           infrastructure: tech.infrastructure,
           redHatProducts: tech.redHatProducts,
           confidence: tech.confidence,
