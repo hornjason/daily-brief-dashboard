@@ -280,10 +280,10 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
   try {
     const result = await callGemini(EXTRACTION_PROMPT, userPrompt, {
       callType: 'cloud-marketplace-extraction',
-      model: 'full',
+      model: 'lite',
       responseSchema,
       deltaKey: 'cloud-marketplace-latest',
-      timeoutMs: 180_000,
+      timeoutMs: 60_000,
       temperature: 0.2,
     })
     const parsed = JSON.parse(result.text)
