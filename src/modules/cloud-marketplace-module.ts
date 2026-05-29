@@ -478,6 +478,10 @@ async function syncFromDrive(): Promise<boolean> {
   }
 }
 
+// ── Sync mutex ─────────────────────────────────────────────────────────────────
+
+let _syncRunning = false
+
 // ── Module registration ────────────────────────────────────────────────────────
 
 FeatureModuleRegistry.register({
@@ -491,19 +495,20 @@ FeatureModuleRegistry.register({
   cacheTtlMs: CLOUD_MARKETPLACE_TTL_MS,
 
   async ensureFresh(_customerSlug: string): Promise<void> {
-    const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
-    try {
-      const stat = statSync(cachePath)
-      if (Date.now() - stat.mtimeMs < CLOUD_MARKETPLACE_TTL_MS) return
-    } catch { /* file doesn't exist */ }
+    // Check if cache has fresh content (both file age AND non-empty clouds)
+    const existing = readCloudMarketplaceCache()
+    if (existing?.clouds?.length && existing.cachedAt) {
+      if (Date.now() - new Date(existing.cachedAt).getTime() < CLOUD_MARKETPLACE_TTL_MS) return
+    }
+
+    // Don't stack concurrent sync attempts
+    if (_syncRunning) return
 
     // Try L3 Drive read first (hero install path)
     const driveOk = await syncFromDrive()
     if (driveOk) {
-      try {
-        const stat = statSync(cachePath)
-        if (Date.now() - stat.mtimeMs < CLOUD_MARKETPLACE_TTL_MS) return
-      } catch { /* fall through to Gmail */ }
+      const refreshed = readCloudMarketplaceCache()
+      if (refreshed?.clouds?.length) return
     }
     await this.syncNow('')
   },
@@ -512,6 +517,11 @@ FeatureModuleRegistry.register({
   async cleanup(): Promise<void> {},
 
   async syncNow(): Promise<void> {
+    if (_syncRunning) {
+      console.log('[cloud-marketplace] sync already in progress — skipping')
+      return
+    }
+    _syncRunning = true
     console.log('[cloud-marketplace] fetching latest newsletter...')
     try {
       const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
@@ -577,6 +587,8 @@ FeatureModuleRegistry.register({
       console.error(`[cloud-marketplace] sync failed: ${sanitizeErr(e.message)}`)
       FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: e.message })
       throw e
+    } finally {
+      _syncRunning = false
     }
   },
 
