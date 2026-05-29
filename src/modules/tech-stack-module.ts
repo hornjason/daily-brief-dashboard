@@ -274,14 +274,16 @@ Return ONLY the JSON array, no markdown fences.`
     const candidate = json.candidates?.[0]
     const parts: any[] = candidate?.content?.parts ?? []
 
-    // Extract grounding sources from groundingMetadata (Google Search grounding)
+    // Extract and IMMEDIATELY resolve grounding sources — redirect URLs expire quickly
     const groundingMetadata = candidate?.groundingMetadata
-    const groundingSources: string[] = []
+    const rawGroundingUrls: string[] = []
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
-        if (chunk?.web?.uri) groundingSources.push(chunk.web.uri)
+        if (chunk?.web?.uri) rawGroundingUrls.push(chunk.web.uri)
       }
     }
+    // Resolve all redirect URLs in parallel while they're still fresh
+    const groundingSources = await resolveGroundingRedirects(rawGroundingUrls)
 
     // Grounded search may return multiple text parts with duplicate content.
     // Parse the first part that contains a valid JSON array.
@@ -328,18 +330,25 @@ Return ONLY the JSON array, no markdown fences.`
       const entries = parsed.map((t: any) => {
         let source = String(t.source ?? '')
 
-        // If source is a "cite: N" pattern or empty, try to assign a grounding chunk URL
-        if (!source || /^cite:\s*\d+/i.test(source)) {
-          if (groundingIdx < groundingSources.length) {
+        // If source is a "cite: N" pattern, empty, or still a redirect URL, assign from resolved grounding pool
+        if (!source || /^cite:\s*\d+/i.test(source) || source.includes('grounding-api-redirect')) {
+          if (groundingIdx < groundingSources.length && groundingSources[groundingIdx]) {
             source = groundingSources[groundingIdx++]
           } else {
-            // No more grounding URLs — clean out the useless "cite: N" text
+            groundingIdx++
             source = ''
           }
         }
 
+        const name = String(t.name ?? '')
+
+        // If still no valid source, generate a search fallback
+        if (!source || source.includes('grounding-api-redirect')) {
+          source = buildSourceFallback(customerName, name)
+        }
+
         return {
-          name: String(t.name ?? ''),
+          name,
           category: t.category === 'proprietary' ? 'proprietary' : 'industry-tool',
           context: ['using', 'evaluating', 'migrating_from', 'developing'].includes(t.context) ? t.context : 'using',
           description: String(t.description ?? ''),
@@ -352,7 +361,7 @@ Return ONLY the JSON array, no markdown fences.`
         }
       }) as TechEntry[]
 
-      return resolveGroundingUrls(entries, customerName)
+      return entries
     }
   } catch (e: any) {
     console.error(`[tech-stack] Gemini extraction failed for ${customerName}: ${e?.message}`)
@@ -361,24 +370,32 @@ Return ONLY the JSON array, no markdown fences.`
   return []
 }
 
-async function resolveGroundingUrls(entries: TechEntry[], customerName: string): Promise<TechEntry[]> {
-  return Promise.all(entries.map(async (entry) => {
-    if (!entry.source || !entry.source.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
-      return entry
-    }
+async function resolveGroundingRedirects(urls: string[]): Promise<string[]> {
+  if (urls.length === 0) return []
 
+  const resolved = await Promise.all(urls.map(async (url) => {
+    if (!url.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
+      return url
+    }
     try {
-      const res = await fetch(entry.source, { redirect: 'manual', signal: AbortSignal.timeout(5000) })
+      const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5000) })
       const location = res.headers.get('location')
       if (location && location.startsWith('http') && !location.includes('grounding-api-redirect')) {
-        return { ...entry, source: location }
+        return location
       }
-    } catch { /* timeout or network error — use fallback */ }
-
-    // Fallback: Google search for the tool + company
-    const fallback = `https://www.google.com/search?q=${encodeURIComponent(`${customerName} ${entry.name}`)}`
-    return { ...entry, source: fallback }
+    } catch { /* timeout — URL expired */ }
+    return ''
   }))
+
+  const valid = resolved.filter(Boolean)
+  if (valid.length > 0) {
+    console.log(`[tech-stack] resolved ${valid.length}/${urls.length} grounding URLs`)
+  }
+  return resolved
+}
+
+function buildSourceFallback(customerName: string, toolName: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(`${customerName} ${toolName}`)}`
 }
 
 async function enrichProprietaryTech(customerName: string, tech: TechEntry): Promise<TechEntry> {
