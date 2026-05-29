@@ -587,6 +587,10 @@ async function main(): Promise<void> {
   // Timer 1: SSO keepalive every 2h
   const KEEPALIVE_STATUS_FILE = `${CACHE_DIR}/keepalive-status.json`
   let keepaliveRunning = false
+  // AC-1/AC-5: Track keepalive state for sync-on-auth trigger.
+  // Initialized to true so the first successful keepalive after daemon start
+  // does NOT falsely trigger a sync (only recovery from failure triggers sync).
+  let lastKeepaliveOk = true
   setInterval(async () => {
     if (keepaliveRunning) {
       console.log('[sync-daemon] keepalive skipped — previous keepalive still running')
@@ -595,6 +599,14 @@ async function main(): Promise<void> {
     keepaliveRunning = true
     try {
       await doKeepalive()
+      // AC-2/AC-3: If previous keepalive failed, auth was restored (likely via VNC re-auth).
+      // Write the sync trigger file to kick off an immediate sync.
+      if (!lastKeepaliveOk) {
+        console.log("[sync-daemon] auth restored — triggering immediate sync")
+        writeFileSync(TRIGGER_FILE, new Date().toISOString())
+      }
+      // AC-4: Mark keepalive as healthy
+      lastKeepaliveOk = true
       console.log('[sync-daemon] keepalive OK')
       writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
         lastRun: new Date().toISOString(),
@@ -603,6 +615,8 @@ async function main(): Promise<void> {
         nextExpected: new Date(Date.now() + KEEPALIVE_INTERVAL_MS).toISOString(),
       }))
     } catch (e: any) {
+      // AC-4: Mark keepalive as failed so next success triggers sync
+      lastKeepaliveOk = false
       console.error('[sync-daemon] keepalive FAILED:', e.message)
       writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
         lastRun: new Date().toISOString(),
