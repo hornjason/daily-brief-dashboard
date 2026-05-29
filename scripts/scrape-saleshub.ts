@@ -157,389 +157,78 @@ function isEnglishDocument(fileName: string): boolean {
   return !NON_ENGLISH_PREFIXES.some(prefix => lower.includes(prefix))
 }
 
-// ── API-based Document Download (#448) ────────────────────────────────────────
-// Seismic download API endpoints (from developer.seismic.com documentation):
-//   GET /integration/v2/teamsites/{teamsiteId}/files/{contentId}/content  (current version)
-//   GET /integration/v2/teamsites/{teamsiteId}/files/{contentId}/versions/{versionId}/content  (specific version)
-// Gateway mapping at saleshub.redhat.com unknown — probe multiple paths.
+// ── Content-Type-Only Bulk Download (#448) ────────────────────────────────────
+// Strategy: download by content type only (no TDP/Play filter). One ZIP per
+// content type. Simpler and more reliable than filtering by TDP + content type.
+// The API metadata already maps each document to its TDP/Play — we match after download.
+//
+// Council + Context7 research confirmed: Seismic uses signed blob URLs for downloads.
+// The Red Hat gateway doesn't proxy the download API. Bulk ZIP via DocCenter UI is
+// the only reliable download path. Download URLs use /gateway/services/bss/tenants/redhat/api/download/v1/blob
+// with per-request signatures that can't be forged.
 
 const SALESHUB_BASE = 'https://saleshub.redhat.com'
 
 /**
- * Build candidate download URLs from documented Seismic API + gateway variants.
- */
-function buildDownloadUrls(teamsiteId: string, contentId: string, versionId: string): string[] {
-  return [
-    // Pattern matching the working search API: /gateway/services/{service}/tenants/redhat/api/services/{service}/v1/...
-    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/services/library/v1/files/${contentId}/versions/${versionId}/download`,
-    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/services/library/v2/files/${contentId}/versions/${versionId}/download`,
-    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/services/content/v1/files/${contentId}/versions/${versionId}/download`,
-    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/services/content/v2/files/${contentId}/versions/${versionId}/download`,
-    // Documented Seismic API paths through gateway
-    `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
-    `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/content`,
-    // DocCenter-specific paths
-    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/services/doccenter/v1/files/${contentId}/download`,
-    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/v1/contents/${contentId}/download`,
-  ]
-}
-
-/**
- * Discover the working download URL pattern by probing a sample document.
- * First tries documented Seismic API paths. If all fail, intercepts browser
- * download to capture the actual URL pattern used by the DocCenter SPA.
- */
-async function discoverDownloadUrlPattern(
-  page: Page,
-  sampleDoc: DocCenterDocument,
-  authCtx: { auth: string; headers: Record<string, string> },
-): Promise<string | null> {
-  const contentId = (sampleDoc as any).contentId ?? ''
-  const versionId = sampleDoc.versionId ?? ''
-  const teamsiteId = authCtx.headers.teamsiteid ?? '1'
-
-  console.log(`[scrape-saleshub] Probing download URLs for "${sampleDoc.name}" (content=${contentId}, version=${versionId}, teamsite=${teamsiteId})...`)
-
-  // Phase 1: Try documented API endpoints via page.evaluate (in-browser fetch)
-  const candidates = buildDownloadUrls(teamsiteId, contentId, versionId)
-  for (const url of candidates) {
-    try {
-      const result = await page.evaluate(async (args) => {
-        try {
-          const res = await fetch(args.url, {
-            headers: {
-              Authorization: args.auth,
-              profileversionid: args.pvid,
-              teamsiteid: args.tsid,
-            },
-          })
-          const ct = res.headers.get('content-type') ?? ''
-          if (!res.ok) return { ok: false, status: res.status, ct }
-          if (ct.includes('text/html') || ct.includes('application/json')) return { ok: false, status: res.status, ct }
-          const size = parseInt(res.headers.get('content-length') ?? '0') || 0
-          return { ok: true, status: res.status, ct, size }
-        } catch (e: any) { return { ok: false, status: -1, ct: '', error: e.message } }
-      }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE, tsid: teamsiteId })
-
-      console.log(`[scrape-saleshub]   ${url.replace(SALESHUB_BASE, '')} → ${result.status} (${result.ct || 'no-ct'})`)
-
-      if (result.ok) {
-        const pattern = url
-          .replace(contentId, '{contentId}')
-          .replace(versionId, '{versionId}')
-          .replace(teamsiteId, '{teamsiteId}')
-        console.log(`[scrape-saleshub] ✓ Working download pattern found!`)
-        return pattern
-      }
-    } catch {}
-  }
-
-  // Phase 2: Use Locations.FullPath to navigate to correct doc page, intercept ALL
-  // requests and responses during Download click to find the signed blob URL
-  console.log(`[scrape-saleshub] API probe failed — intercepting browser download via Locations path...`)
-
-  // Get Locations.FullPath from the search response for proper URL construction
-  const locationPath = (sampleDoc as any).locationPath ?? ''
-  let docUrl = ''
-  if (locationPath) {
-    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${encodeURIComponent(locationPath)}`
-  } else {
-    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
-  }
-
-  let discoveredUrl: string | null = null
-  const capturedUrls: string[] = []
-
-  // Intercept ALL requests — look for download/blob/content URLs
-  const requestHandler = (req: any) => {
-    const url = req.url()
-    if (url.includes('download') || url.includes('blob') || url.includes('sig=')) {
-      capturedUrls.push(`REQ: ${url.slice(0, 200)}`)
-      if (url.includes('sig=') || url.includes('download/v1/blob')) {
-        discoveredUrl = url
-        console.log(`[scrape-saleshub] ✓ Intercepted signed download URL: ${url.slice(0, 150)}`)
-      }
-    }
-  }
-
-  // Intercept ALL responses — look for JSON responses containing downloadUrl
-  const responseHandler = async (res: any) => {
-    const url = res.url()
-    const ct = res.headers()['content-type'] ?? ''
-    if (ct.includes('application/json') && (url.includes('content') || url.includes('download') || url.includes('version'))) {
-      try {
-        const body = await res.json().catch(() => null)
-        if (body?.downloadUrl) {
-          discoveredUrl = body.downloadUrl
-          console.log(`[scrape-saleshub] ✓ Found downloadUrl in JSON response: ${body.downloadUrl.slice(0, 150)}`)
-        }
-      } catch {}
-    }
-    // Also capture binary responses (actual file downloads from CDN)
-    if (ct.includes('octet-stream') || ct.includes('pdf') || ct.includes('presentation') || ct.includes('msword')) {
-      capturedUrls.push(`BINARY: ${url.slice(0, 200)} (${ct})`)
-      if (!discoveredUrl) {
-        discoveredUrl = url
-        console.log(`[scrape-saleshub] ✓ Intercepted binary download: ${url.slice(0, 150)}`)
-      }
-    }
-  }
-
-  page.on('request', requestHandler)
-  page.on('response', responseHandler)
-
-  try {
-    console.log(`[scrape-saleshub] Navigating to doc page: ${docUrl.slice(0, 120)}...`)
-    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.waitForTimeout(8_000)
-
-    // Try clicking Download
-    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
-    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      console.log(`[scrape-saleshub] Download button visible — clicking...`)
-      const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
-      await dlBtn.click()
-      const download = await downloadPromise
-      if (download) {
-        console.log(`[scrape-saleshub] Download event triggered: ${download.suggestedFilename()}`)
-        discoveredUrl = download.url()
-        console.log(`[scrape-saleshub] ✓ Download URL from event: ${discoveredUrl?.slice(0, 150)}`)
-        await download.cancel().catch(() => {})
-      }
-      await page.waitForTimeout(3_000)
-    } else {
-      console.warn(`[scrape-saleshub] Download button not visible on doc page`)
-    }
-  } catch (e: any) {
-    console.warn(`[scrape-saleshub] Browser probe failed: ${e.message?.slice(0, 100)}`)
-  }
-
-  page.removeListener('request', requestHandler)
-  page.removeListener('response', responseHandler)
-
-  // Log all captured URLs for debugging
-  if (capturedUrls.length > 0) {
-    console.log(`[scrape-saleshub] Captured URLs during download: ${capturedUrls.join(' | ')}`)
-  }
-
-  if (discoveredUrl) {
-    // If it's a direct signed URL, return it as-is (can't templatize signed URLs)
-    // Instead, return a marker that tells the downloader to use per-doc browser downloads
-    console.log(`[scrape-saleshub] ✓ Download URL discovered: ${discoveredUrl.slice(0, 150)}`)
-    return '__BROWSER_DOWNLOAD__'
-  }
-
-  console.warn(`[scrape-saleshub] ✗ No download URL discovered`)
-  console.warn(`[scrape-saleshub] Captured ${capturedUrls.length} URLs during probe but none matched download patterns`)
-  return null
-}
-
-/**
- * Download a single document via the discovered download URL pattern.
- * Uses page.evaluate to fetch within the browser's authenticated context.
- */
-async function apiDownloadDocument(
-  page: Page,
-  doc: DocCenterDocument,
-  authCtx: { auth: string; headers: Record<string, string> },
-  outputDir: string,
-  urlPattern: string,
-): Promise<string | null> {
-  const versionId = doc.versionId ?? ''
-  const format = ((doc as any).format ?? '').toLowerCase() || 'pptx'
-  const safeName = doc.name.replace(/[/\\?%*:|"<>]/g, '_')
-  const fileName = `${safeName}.${format}`
-  const localPath = resolve(outputDir, fileName)
-
-  if (existsSync(localPath) && isRealDocument(localPath)) {
-    return localPath
-  }
-
-  mkdirSync(outputDir, { recursive: true })
-
-  // Browser-based download: navigate to doc page, click Download, capture file
-  const locationPath = (doc as any).locationPath ?? ''
-  let docUrl = ''
-  if (locationPath) {
-    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${encodeURIComponent(locationPath)}`
-  } else {
-    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
-  }
-
-  try {
-    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.waitForTimeout(5_000)
-
-    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
-    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
-      await dlBtn.click()
-      const download = await downloadPromise
-      const savePath = resolve(outputDir, download.suggestedFilename() || fileName)
-      await download.saveAs(savePath)
-      if (isRealDocument(savePath)) return savePath
-      try { unlinkSync(savePath) } catch {}
-    }
-  } catch {}
-
-  return null
-}
-
-/**
- * Download all documents for a category (TDP or Sales Play) via the API.
- * Returns array of local file paths for successfully downloaded documents.
- */
-async function apiDownloadCategory(
-  page: Page,
-  docs: DocCenterDocument[],
-  authCtx: { auth: string; headers: Record<string, string> },
-  categoryName: string,
-  outputDir: string,
-  urlPattern: string,
-): Promise<{ downloaded: string[]; failed: string[] }> {
-  const downloaded: string[] = []
-  const failed: string[] = []
-
-  for (const doc of docs) {
-    if (!isEnglishDocument(doc.name)) {
-      console.log(`[scrape-saleshub] Skipping ${doc.name} — non-English translation`)
-      continue
-    }
-
-    const localPath = await apiDownloadDocument(page, doc, authCtx, outputDir, urlPattern)
-    if (localPath) {
-      downloaded.push(localPath)
-      console.log(`[scrape-saleshub] + ${doc.name} (${doc.contentType})`)
-    } else {
-      failed.push(doc.name)
-      console.warn(`[scrape-saleshub] ✗ ${doc.name} — download failed`)
-    }
-
-    await new Promise(r => setTimeout(r, 500))
-  }
-
-  return { downloaded, failed }
-}
-
-// ── Bulk ZIP Download (fallback) ──────────────────────────────────────────────
-
-/**
- * Navigate to the DocCenter filtered view, select all documents,
- * download as a bulk ZIP (multi_selected.Zip), unzip locally,
- * and return an array of extracted file paths.
+ * Download all documents of a single content type via DocCenter bulk ZIP.
+ * No TDP/Play filter — downloads ALL items of that content type, then
+ * matches to TDPs/Plays via the API metadata after download.
  *
- * This is ~10x faster than downloading documents one-at-a-time since it
- * uses the DocCenter's native "select all + Download" feature which
- * produces a single ZIP containing all filtered documents.
+ * Returns array of local file paths to extracted files.
  */
-async function bulkDownloadFiltered(
+async function bulkDownloadByContentType(
   page: Page,
-  filterCategory: string,   // 'TDP' or 'Sales Play'
-  filterValue: string,       // 'Automation', 'AI-Ready Enterprise', etc.
-  contentTypes: string[],    // ['Business presentation', 'Cheatsheet', 'Competitive review']
+  contentType: string,
   outputDir: string,
-  opts?: { newestVersionCreated?: string; lastContentScrape?: string },
 ): Promise<string[]> {
-  const safeValue = filterValue.replace(/[/\\?%*:|"<>]/g, '_')
-  const unzipDir = resolve(outputDir, `${filterCategory}_${safeValue}`)
+  const safeName = contentType.replace(/[/\\?%*:|"<>\s]+/g, '_')
+  const unzipDir = resolve(outputDir, `ContentType_${safeName}`)
 
-  // Skip-if-exists: cached files from previous run
+  // Skip if already downloaded
   if (existsSync(unzipDir)) {
     try {
       const cached = readdirSync(unzipDir).filter(f => !f.startsWith('.') && !f.startsWith('__'))
       if (cached.length > 0) {
-        console.log(`[scrape-saleshub] Skipping bulk download for "${filterCategory}=${filterValue}" — cached (${cached.length} files)`)
+        console.log(`[scrape-saleshub] Skipping "${contentType}" — cached (${cached.length} files)`)
         return cached.map(f => resolve(unzipDir, f))
       }
-    } catch { /* proceed with download */ }
+    } catch {}
   }
 
-  // Freshness check: skip if no documents newer than last scrape
-  if (opts?.newestVersionCreated && opts?.lastContentScrape) {
-    const newest = new Date(opts.newestVersionCreated).getTime()
-    const lastScrape = new Date(opts.lastContentScrape).getTime()
-    if (newest <= lastScrape) {
-      console.log(`[scrape-saleshub] Skipping bulk download for "${filterCategory}=${filterValue}" — no documents newer than last scrape`)
-      return []
-    }
-  }
-
-  // 1. Navigate to DocCenter main page (fresh start clears previous filters)
+  // Navigate to DocCenter fresh (clears previous filters)
   await page.goto(
-    `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/main///`,
+    `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/main///`,
     { waitUntil: 'domcontentloaded', timeout: 60_000 },
   )
   await page.waitForTimeout(8_000)
 
-  // 2. Apply the CATEGORY filter FIRST (TDP or Sales Play)
-  const categoryCheckbox = page.getByText(filterValue).first()
-  if (await categoryCheckbox.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await categoryCheckbox.click()
-    await page.waitForTimeout(5_000)
-    // Scroll sidebar to trigger lazy loading of all filter sections
+  // Click the content type checkbox in the sidebar (visible without any other filter)
+  const ctCheckbox = page.getByText(contentType, { exact: true }).first()
+  if (!await ctCheckbox.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    // Try scrolling sidebar to find it
     await page.evaluate(() => {
-      const sidebar = document.querySelector('[class*="filter"], [class*="sidebar"], [class*="facet"]')
-      if (sidebar) {
-        sidebar.scrollTop = sidebar.scrollHeight
-        setTimeout(() => { sidebar.scrollTop = 0 }, 500)
-      }
-      const panels = document.querySelectorAll('[class*="panel"], [class*="aside"], aside')
-      panels.forEach(p => { p.scrollTop = p.scrollHeight; setTimeout(() => { p.scrollTop = 0 }, 500) })
+      const panels = document.querySelectorAll('[class*="filter"], [class*="sidebar"], [class*="facet"]')
+      panels.forEach(p => { p.scrollTop = p.scrollHeight })
     })
-    await page.waitForTimeout(3_000)
-  } else {
-    console.warn(`[scrape-saleshub] Category filter not found: "${filterCategory}=${filterValue}"`)
-    return []
-  }
-  console.log(`[scrape-saleshub] Applied category filter: ${filterCategory}="${filterValue}"`)
-
-  // 2b. Click "Show more" to reveal all content type checkboxes
-  try {
-    const showMoreLink = page.getByText(/Show \d+ more/i).first()
-    const showMoreFallback = page.getByText('Show more').first()
-    if (await showMoreLink.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await showMoreLink.click()
-      console.log(`[scrape-saleshub] Clicked "Show more" to expand content type options`)
-      await page.waitForTimeout(3_000)
-    } else if (await showMoreFallback.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await showMoreFallback.click()
-      console.log(`[scrape-saleshub] Clicked "Show more" (fallback)`)
-      await page.waitForTimeout(3_000)
-    }
-  } catch (e: any) {
-    console.warn(`[scrape-saleshub] "Show more" click failed: ${e.message} — proceeding`)
+    await page.waitForTimeout(2_000)
   }
 
-  // 3. Apply content type filters (multi-select checkboxes)
-  let typesSelected = 0
-  for (const ct of contentTypes) {
-    const ctLabel = page.getByText(ct).first()
-    if (await ctLabel.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await ctLabel.click()
-      await page.waitForTimeout(2_000)
-      typesSelected++
-      console.log(`[scrape-saleshub] Applied content type filter: "${ct}"`)
-    } else {
-      console.warn(`[scrape-saleshub] Content type not found after category filter: "${ct}"`)
-    }
-  }
-  if (typesSelected === 0) {
-    console.warn(`[scrape-saleshub] No content types selected for ${filterCategory}=${filterValue}`)
+  if (!await ctCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    console.warn(`[scrape-saleshub] Content type "${contentType}" not visible in sidebar — skipping`)
     return []
   }
 
-  // 4. Select all items — click the master checkbox in the header row
-  // The DocCenter uses various checkbox implementations — try multiple approaches
-  // From the screenshot: the checkbox is in the column header row, first column
+  await ctCheckbox.click()
+  await page.waitForTimeout(5_000)
+  console.log(`[scrape-saleshub] Applied content type filter: "${contentType}"`)
+
+  // Select all items
   const masterSelectors = [
     'th input[type="checkbox"]',
     'th [role="checkbox"]',
     'thead input[type="checkbox"]',
-    'thead [role="checkbox"]',
     '[class*="header"] input[type="checkbox"]',
-    '[class*="header"] [role="checkbox"]',
-    '[class*="select-all"]',
-    'input[type="checkbox"]',  // first checkbox on page (usually the master)
+    'input[type="checkbox"]',
   ]
   let masterClicked = false
   for (const sel of masterSelectors) {
@@ -547,68 +236,52 @@ async function bulkDownloadFiltered(
     if (await el.isVisible({ timeout: 2_000 }).catch(() => false)) {
       await el.click()
       await page.waitForTimeout(1_000)
-      // Check if "items selected" text appeared
-      const selectedText = await page.getByText('items selected').isVisible({ timeout: 2_000 }).catch(() => false)
-      if (selectedText) {
+      const selected = await page.getByText('items selected').isVisible({ timeout: 2_000 }).catch(() => false)
+      if (selected) {
         masterClicked = true
-        console.log(`[scrape-saleshub] Master checkbox clicked via "${sel}"`)
+        console.log(`[scrape-saleshub] Select-all clicked via "${sel}"`)
         break
       }
     }
   }
 
   if (!masterClicked) {
-    // Last resort: try clicking the very first checkbox-like element in the results area
-    const fallbackCheckbox = page.locator('[class*="result"] input[type="checkbox"], [class*="list"] input[type="checkbox"]').first()
-    if (await fallbackCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await fallbackCheckbox.click()
-      await page.waitForTimeout(1_000)
-    } else {
-      console.warn(`[scrape-saleshub] Master checkbox not found — cannot select all for ${filterCategory}=${filterValue}`)
-      return []
-    }
-  }
-
-  // 5. Click the Download button (appears after selecting items)
-  const downloadBtn = page.locator(
-    'button:has-text("Download"), [aria-label="Download"], [title="Download"]',
-  ).first()
-  if (!await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    console.warn(`[scrape-saleshub] Download button not visible for ${filterCategory}=${filterValue}`)
+    console.warn(`[scrape-saleshub] Could not select all for "${contentType}" — skipping`)
     return []
   }
 
-  // 6. Wait for the ZIP download event
-  const downloadPromise = page.waitForEvent('download', { timeout: 300_000 }) // 5 min for large ZIPs
+  // Click Download
+  const downloadBtn = page.locator('button:has-text("Download"), [aria-label="Download"], [title="Download"]').first()
+  if (!await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    console.warn(`[scrape-saleshub] Download button not visible for "${contentType}" — skipping`)
+    return []
+  }
+
+  const downloadPromise = page.waitForEvent('download', { timeout: 300_000 })
   await downloadBtn.click()
   const download = await downloadPromise
 
-  // 7. Save ZIP to local temp directory
-  const zipPath = resolve(outputDir, `${filterCategory}_${safeValue}.zip`)
+  // Save ZIP
+  mkdirSync(unzipDir, { recursive: true })
+  const zipPath = resolve(outputDir, `${safeName}.zip`)
   await download.saveAs(zipPath)
   console.log(`[scrape-saleshub] ZIP saved: ${zipPath} (${download.suggestedFilename()})`)
 
-  // 8. Unzip into a subdirectory
-  mkdirSync(unzipDir, { recursive: true })
+  // Unzip
   const proc = Bun.spawnSync(['unzip', '-o', '-q', zipPath, '-d', unzipDir])
   if (proc.exitCode !== 0) {
-    const stderr = proc.stderr?.toString()?.slice(0, 200) ?? ''
-    console.warn(`[scrape-saleshub] unzip failed for ${zipPath}: ${stderr}`)
+    console.warn(`[scrape-saleshub] unzip failed for ${zipPath}: ${proc.stderr?.toString()?.slice(0, 100)}`)
     try { unlinkSync(zipPath) } catch {}
     return []
   }
 
-  // 9. List extracted files (skip hidden files and __MACOSX)
-  const files = readdirSync(unzipDir).filter(
-    f => !f.startsWith('.') && !f.startsWith('__'),
-  )
-  console.log(`[scrape-saleshub] Extracted ${files.length} files from ZIP`)
+  const files = readdirSync(unzipDir).filter(f => !f.startsWith('.') && !f.startsWith('__'))
+  console.log(`[scrape-saleshub] "${contentType}": ${files.length} files extracted`)
 
-  // 10. Clean up ZIP file
   try { unlinkSync(zipPath) } catch {}
-
   return files.map(f => resolve(unzipDir, f))
 }
+
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -654,15 +327,6 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       throw new Error('Failed to capture Seismic auth token — SalesHub session may be expired')
     }
     console.log(`[scrape-saleshub] Auth captured (${authCtx.auth.length} chars)`)
-
-    // Probe newer Content Search API for direct downloadUrl support
-    console.log('[scrape-saleshub] === Probing Content Search API for downloadUrl support ===')
-    const contentSearchUrl = await probeContentSearchApi(page, authCtx)
-    if (contentSearchUrl) {
-      console.log(`[scrape-saleshub] ✓ Content Search API with downloadUrl available at: ${contentSearchUrl}`)
-    } else {
-      console.log(`[scrape-saleshub] Content Search API not available — will use browser download fallback`)
-    }
 
     // Respectful wait before API queries
     await page.waitForTimeout(2_000)
@@ -788,98 +452,82 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
     let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
 
-    // Discover the download URL pattern by probing documented Seismic API paths + browser interception
-    let downloadPattern: string | null = null
-    if (uniqueDocs.length > 0) {
-      downloadPattern = await discoverDownloadUrlPattern(page, uniqueDocs[0], authCtx)
-    }
-    if (!downloadPattern) {
-      console.warn('[scrape-saleshub] No download pattern found — skipping file downloads (metadata still recorded)')
-    }
+    // Content-type-only bulk download: one ZIP per content type, no TDP/Play filter.
+    // This is more reliable than filtering by TDP + content type (avoids sidebar issues).
+    // Files are matched to TDPs/Plays from the API metadata after download.
+    for (const ct of HIGH_VALUE_TYPES) {
+      console.log(`[scrape-saleshub] Bulk downloading content type "${ct}"...`)
+      try {
+        const localFiles = await bulkDownloadByContentType(page, ct, contentDir)
+        console.log(`[scrape-saleshub] "${ct}": ${localFiles.length} files`)
 
-    // API-based download per TDP — download each document individually via HTTP
-    if (downloadPattern) {
-    for (const tdp of facets.tdps) {
-      const tdpDocs = uniqueDocs.filter(d => d.tdp?.toLowerCase() === tdp.toLowerCase())
-      if (tdpDocs.length === 0) { console.log(`[scrape-saleshub] TDP "${tdp}": 0 documents — skipping`); continue }
-      console.log(`[scrape-saleshub] Downloading TDP "${tdp}": ${tdpDocs.length} documents via API...`)
+        for (const filePath of localFiles) {
+          const fileName = filePath.split('/').pop()!
+          if (!isRealDocument(filePath)) {
+            console.warn(`[scrape-saleshub] Skipping ${fileName} — HTML error page`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          if (!isEnglishDocument(fileName)) {
+            console.log(`[scrape-saleshub] Skipping ${fileName} — non-English translation`)
+            try { unlinkSync(filePath) } catch {}
+            totalSkipped++
+            continue
+          }
+          totalDownloaded++
 
-      const tdpDir = resolve(contentDir, `TDP_${tdp.replace(/[/\\?%*:|"<>]/g, '_')}`)
-      const result = await apiDownloadCategory(page, tdpDocs, authCtx, tdp, tdpDir, downloadPattern)
+          // Match file to a document from API metadata (by name similarity)
+          const fileNameLower = fileName.toLowerCase().replace(/\.[^.]+$/, '')
+          const matchedDoc = uniqueDocs.find(d => {
+            const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
+            return fileNameLower.includes(safeName) || safeName.includes(fileNameLower)
+          })
 
-      const folderId = tdpFolderIds[tdp.toLowerCase()]
-      for (const filePath of result.downloaded) {
-        const fileName = filePath.split('/').pop()!
-        totalDownloaded++
+          // Determine Drive folder from matched doc's TDP or Play
+          let folderId = ''
+          if (matchedDoc?.tdp) {
+            folderId = tdpFolderIds[matchedDoc.tdp.toLowerCase()] ?? ''
+          } else if (matchedDoc?.salesPlay) {
+            folderId = playFolderIds[matchedDoc.salesPlay.toLowerCase()] ?? ''
+          }
 
-        const fileNameLower = fileName.toLowerCase()
-        const matchedDoc = uniqueDocs.find(d => {
-          const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
-          return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
-        })
-
-        if (driveEnabled && drive && folderId) {
-          try {
-            const uploadResult = await uploadFileToDrive(drive, folderId, filePath, fileName)
-            console.log(`[scrape-saleshub]   → Drive (${uploadResult.id})`)
-            if (matchedDoc) {
-              ;(matchedDoc as any).driveFileId = uploadResult.id
-              ;(matchedDoc as any).driveUrl = uploadResult.webViewLink
+          if (driveEnabled && drive && folderId) {
+            try {
+              const uploadResult = await uploadFileToDrive(drive, folderId, filePath, fileName)
+              console.log(`[scrape-saleshub]   + ${fileName} → Drive`)
+              if (matchedDoc) {
+                ;(matchedDoc as any).driveFileId = uploadResult.id
+                ;(matchedDoc as any).driveUrl = uploadResult.webViewLink
+              }
+              totalUploaded++
+            } catch (e: any) {
+              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+              totalFailed++
             }
-            totalUploaded++
-          } catch (e: any) {
-            console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
-            totalFailed++
+          } else if (driveEnabled && drive && !folderId) {
+            // No TDP/Play match — upload to SalesHub Content root folder
+            try {
+              const saleshubRootId = await findOrCreateFolder(drive, sharedFolderId, 'SalesHub')
+              const contentRootId = await findOrCreateFolder(drive, saleshubRootId, SALESHUB_CONTENT_FOLDER)
+              const unfiledId = await findOrCreateFolder(drive, contentRootId, 'Unmatched')
+              const uploadResult = await uploadFileToDrive(drive, unfiledId, filePath, fileName)
+              console.log(`[scrape-saleshub]   + ${fileName} → Drive (Unmatched)`)
+              totalUploaded++
+            } catch (e: any) {
+              console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
+              totalFailed++
+            }
           }
         }
-        try { unlinkSync(filePath) } catch {}
+      } catch (e: any) {
+        console.warn(`[scrape-saleshub] Bulk download failed for "${ct}": ${e.message?.slice(0, 100)}`)
+        totalFailed++
       }
-      totalFailed += result.failed.length
-      console.log(`[scrape-saleshub] TDP "${tdp}": ${result.downloaded.length} downloaded, ${result.failed.length} failed`)
+      await page.waitForTimeout(3_000)
     }
 
-    // API-based download per Sales Play
-    for (const play of facets.salesPlays) {
-      const playDocs = uniqueDocs.filter(d => d.salesPlay?.toLowerCase() === play.toLowerCase())
-      if (playDocs.length === 0) { console.log(`[scrape-saleshub] Play "${play}": 0 documents — skipping`); continue }
-      console.log(`[scrape-saleshub] Downloading Play "${play}": ${playDocs.length} documents via API...`)
-
-      const playDir = resolve(contentDir, `Play_${play.replace(/[/\\?%*:|"<>]/g, '_')}`)
-      const result = await apiDownloadCategory(page, playDocs, authCtx, play, playDir, downloadPattern)
-
-      const folderId = playFolderIds[play.toLowerCase()]
-      for (const filePath of result.downloaded) {
-        const fileName = filePath.split('/').pop()!
-        totalDownloaded++
-
-        const fileNameLower = fileName.toLowerCase()
-        const matchedDoc = uniqueDocs.find(d => {
-          const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
-          return fileNameLower.includes(safeName) || safeName.includes(fileNameLower.replace(/\.[^.]+$/, ''))
-        })
-
-        if (driveEnabled && drive && folderId) {
-          try {
-            const uploadResult = await uploadFileToDrive(drive, folderId, filePath, fileName)
-            console.log(`[scrape-saleshub]   → Drive (${uploadResult.id})`)
-            if (matchedDoc) {
-              ;(matchedDoc as any).driveFileId = uploadResult.id
-              ;(matchedDoc as any).driveUrl = uploadResult.webViewLink
-            }
-            totalUploaded++
-          } catch (e: any) {
-            console.warn(`[scrape-saleshub] Upload failed: ${fileName}: ${e.message?.slice(0, 80)}`)
-            totalFailed++
-          }
-        }
-        try { unlinkSync(filePath) } catch {}
-      }
-      totalFailed += result.failed.length
-      console.log(`[scrape-saleshub] Play "${play}": ${result.downloaded.length} downloaded, ${result.failed.length} failed`)
-    }
-
-    console.log(`[scrape-saleshub] API downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
-    } // end if (downloadPattern)
+    console.log(`[scrape-saleshub] Downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
 
     await page.close()
 
