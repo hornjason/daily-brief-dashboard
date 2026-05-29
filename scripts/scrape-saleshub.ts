@@ -288,24 +288,32 @@ async function bulkDownloadByContentType(
   await downloadBtn.click()
   const download = await downloadPromise
 
-  // Save ZIP
+  // Save download — could be a ZIP (multi-select) or a single file (1 item selected)
   mkdirSync(unzipDir, { recursive: true })
-  const zipPath = resolve(outputDir, `${safeName}.zip`)
-  await download.saveAs(zipPath)
-  console.log(`[scrape-saleshub] ZIP saved: ${zipPath} (${download.suggestedFilename()})`)
+  const suggestedName = download.suggestedFilename() || `${safeName}.zip`
+  const isZip = suggestedName.toLowerCase().endsWith('.zip')
+  const savePath = resolve(outputDir, suggestedName)
+  await download.saveAs(savePath)
+  console.log(`[scrape-saleshub] Download saved: ${suggestedName} (${isZip ? 'ZIP' : 'single file'})`)
 
-  // Unzip
-  const proc = Bun.spawnSync(['unzip', '-o', '-q', zipPath, '-d', unzipDir])
-  if (proc.exitCode !== 0) {
-    console.warn(`[scrape-saleshub] unzip failed for ${zipPath}: ${proc.stderr?.toString()?.slice(0, 100)}`)
-    try { unlinkSync(zipPath) } catch {}
-    return []
+  if (isZip) {
+    // Unzip multi-select download
+    const proc = Bun.spawnSync(['unzip', '-o', '-q', savePath, '-d', unzipDir])
+    if (proc.exitCode !== 0) {
+      console.warn(`[scrape-saleshub] unzip failed for ${savePath}: ${proc.stderr?.toString()?.slice(0, 100)}`)
+      try { unlinkSync(savePath) } catch {}
+      return []
+    }
+    try { unlinkSync(savePath) } catch {}
+  } else {
+    // Single file download — move directly into unzip dir
+    const destPath = resolve(unzipDir, suggestedName)
+    const { renameSync } = await import('fs')
+    try { renameSync(savePath, destPath) } catch { /* already there */ }
   }
 
   const files = readdirSync(unzipDir).filter(f => !f.startsWith('.') && !f.startsWith('__'))
   console.log(`[scrape-saleshub] "${contentType}": ${files.length} files extracted`)
-
-  try { unlinkSync(zipPath) } catch {}
   return files.map(f => resolve(unzipDir, f))
 }
 
