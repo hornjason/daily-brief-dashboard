@@ -516,17 +516,19 @@ FeatureModuleRegistry.register({
     try {
       const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
 
-      // Skip re-extraction if same slide deck file IDs as cached
+      // Skip re-extraction if same slide deck file IDs AND cache has actual content
       const existing = readCloudMarketplaceCache()
-      if (existing?.sourceFileIds) {
+      if (existing?.sourceFileIds && existing.clouds?.length > 0) {
         const cachedIds = new Set(existing.sourceFileIds)
         const newIds = new Set(fileIds)
         if (cachedIds.size === newIds.size && [...newIds].every(id => cachedIds.has(id))) {
-          console.log(`[cloud-marketplace] same ${fileIds.length} file IDs as cache — skipping re-extraction`)
-          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds?.length ?? 0 })
+          console.log(`[cloud-marketplace] same ${fileIds.length} file IDs as cache (${existing.clouds.length} clouds) — skipping re-extraction`)
+          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds.length })
           return
         }
         console.log(`[cloud-marketplace] file IDs changed: cached=${existing.sourceFileIds.length}, new=${fileIds.length}`)
+      } else if (existing?.sourceFileIds && (!existing.clouds || existing.clouds.length === 0)) {
+        console.log('[cloud-marketplace] cache has 0 clouds — forcing re-extraction')
       }
 
       if (!slideText || slideText.trim().length < 100) {
@@ -536,6 +538,13 @@ FeatureModuleRegistry.register({
       }
 
       const clouds = await extractCloudData(slideText, htmlBody, newsletterDate)
+
+      // Stale-overwrite guard: don't save empty extraction when previous cache had data
+      if (clouds.length === 0 && existing?.clouds?.length) {
+        console.warn(`[cloud-marketplace] Gemini returned 0 clouds but cache has ${existing.clouds.length} — keeping existing cache`)
+        FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: 'extraction returned 0 clouds' })
+        return
+      }
 
       const cache: CloudMarketplaceCache = {
         newsletterDate,
