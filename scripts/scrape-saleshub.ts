@@ -6,7 +6,7 @@
  *   2. Query API with WithAggregation -> discover TDPs, Plays, Tactics from facets
  *   3. For each TDP + Play: query with content type filter -> get document metadata
  *   4. Download high-value documents -> upload to Google Drive -> record Drive file IDs
- *   5. Build knowledge JSON with documents[] per TDP/Play (driveFileId + driveUrl, no extractedContent)
+ *   5. Build knowledge JSON with documents[] per TDP/Play (driveFileId + driveUrl + extractedContent)
  *   6. Write knowledge JSON to cache + config-templates
  *
  * Replaces the previous multi-pass page scraper (Passes 1-3, ~15 min).
@@ -37,6 +37,7 @@ import {
   discoverFacets as discoverContentFacets,
   queryDocuments as queryContentDocuments,
   probeContentSearchApi,
+  extractTextFromFile,
   type DocCenterDocument,
 } from './saleshub-content-discovery.ts'
 import { findOrCreateFolder } from './sync-saleshub-drive.ts'
@@ -485,7 +486,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       console.warn('[scrape-saleshub] No podBookingsFolderId in settings.json — will download without Drive upload')
     }
 
-    let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
+    let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0, totalExtracted = 0
 
     // Content-type-only bulk download: one ZIP per content type, no TDP/Play filter.
     // This is more reliable than filtering by TDP + content type (avoids sidebar issues).
@@ -512,12 +513,24 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
           }
           totalDownloaded++
 
+          // Extract text content from the file
+          const extractedText = await extractTextFromFile(filePath)
+          if (extractedText.length > 0) {
+            totalExtracted++
+            console.log(`[scrape-saleshub]   📄 ${fileName}: ${extractedText.length} chars extracted`)
+          }
+
           // Match file to a document from API metadata (by name similarity)
           const fileNameLower = fileName.toLowerCase().replace(/\.[^.]+$/, '')
           const matchedDoc = uniqueDocs.find(d => {
             const safeName = d.name.replace(/[/\\?%*:|"<>]/g, '_').toLowerCase()
             return fileNameLower.includes(safeName) || safeName.includes(fileNameLower)
           })
+
+          // Store extracted content in the matched document metadata
+          if (matchedDoc && extractedText.length > 0) {
+            matchedDoc.extractedContent = extractedText
+          }
 
           // Determine Drive folder from matched doc's TDP or Play
           let folderId = ''
@@ -562,7 +575,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       await page.waitForTimeout(3_000)
     }
 
-    console.log(`[scrape-saleshub] Downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
+    console.log(`[scrape-saleshub] Downloads complete: ${totalDownloaded} downloaded, ${totalExtracted} text extracted, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
 
     await page.close()
 
@@ -595,6 +608,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
         salesStage: d.salesStage,
         driveFileId: (d as any).driveFileId ?? '',
         driveUrl: (d as any).driveUrl ?? '',
+        extractedContent: d.extractedContent ?? '',
       })),
     }))
 
@@ -636,6 +650,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
         salesStage: d.salesStage,
         driveFileId: (d as any).driveFileId ?? '',
         driveUrl: (d as any).driveUrl ?? '',
+        extractedContent: d.extractedContent ?? '',
       })),
     }))
 

@@ -280,6 +280,73 @@ export async function extractTextFromPptx(buffer: Buffer): Promise<string> {
 }
 
 /**
+ * Extract text content from any supported file format (PPTX, PDF, DOCX).
+ * Returns extracted text or empty string on failure.
+ */
+export async function extractTextFromFile(filePath: string): Promise<string> {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  const { readFileSync } = await import('fs')
+
+  try {
+    if (ext === 'pptx') {
+      const buffer = Buffer.from(readFileSync(filePath))
+      return await extractTextFromPptx(buffer)
+    }
+
+    if (ext === 'pdf') {
+      const buffer = readFileSync(filePath)
+      const text = buffer.toString('utf-8', 0, Math.min(buffer.length, 500_000))
+      const textParts: string[] = []
+      const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
+      let match: RegExpExecArray | null
+      while ((match = streamRegex.exec(text)) !== null) {
+        const streamText = match[1]
+          .replace(/\\[nrt]/g, ' ')
+          .replace(/\(([^)]*)\)/g, '$1 ')
+          .replace(/[^\x20-\x7E\n]/g, '')
+          .trim()
+        if (streamText.length > 20) textParts.push(streamText)
+      }
+      if (textParts.length > 0) {
+        return textParts.join('\n').slice(0, MAX_EXTRACTED_CHARS)
+      }
+      const printable = buffer.toString('utf-8')
+        .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
+        .replace(/\s{3,}/g, ' ')
+        .trim()
+      return printable.slice(0, MAX_EXTRACTED_CHARS)
+    }
+
+    if (ext === 'docx') {
+      const tmpDir = `/tmp/docx-extract-${Date.now()}`
+      const { mkdirSync, rmSync } = await import('fs')
+      const { resolve } = await import('path')
+      mkdirSync(tmpDir, { recursive: true })
+      const proc = Bun.spawnSync(['unzip', '-o', '-q', filePath, '-d', tmpDir])
+      if (proc.exitCode === 0) {
+        try {
+          const docXml = readFileSync(resolve(tmpDir, 'word', 'document.xml'), 'utf-8')
+          const textParts: string[] = []
+          const regex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g
+          let m: RegExpExecArray | null
+          while ((m = regex.exec(docXml)) !== null) {
+            if (m[1].trim()) textParts.push(m[1].trim())
+          }
+          rmSync(tmpDir, { recursive: true, force: true })
+          return textParts.join(' ').slice(0, MAX_EXTRACTED_CHARS)
+        } catch {
+          rmSync(tmpDir, { recursive: true, force: true })
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[content-discovery] Extraction failed for ${filePath}: ${e.message?.slice(0, 80)}`)
+  }
+
+  return ''
+}
+
+/**
  * Merge discovered documents into knowledge base TDP and SalesPlay nodes.
  * Documents are matched by their TDP/SalesPlay/SalesTactic tags.
  */
