@@ -233,50 +233,103 @@ async function discoverDownloadUrlPattern(
     } catch {}
   }
 
-  // Phase 2: Intercept browser download to discover actual URL
-  console.log(`[scrape-saleshub] API probe failed — intercepting browser download...`)
-  let discoveredUrl: string | null = null
+  // Phase 2: Use Locations.FullPath to navigate to correct doc page, intercept ALL
+  // requests and responses during Download click to find the signed blob URL
+  console.log(`[scrape-saleshub] API probe failed — intercepting browser download via Locations path...`)
 
+  // Get Locations.FullPath from the search response for proper URL construction
+  const locationPath = (sampleDoc as any).locationPath ?? ''
+  let docUrl = ''
+  if (locationPath) {
+    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${encodeURIComponent(locationPath)}`
+  } else {
+    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
+  }
+
+  let discoveredUrl: string | null = null
+  const capturedUrls: string[] = []
+
+  // Intercept ALL requests — look for download/blob/content URLs
   const requestHandler = (req: any) => {
     const url = req.url()
-    if ((url.includes('download') || url.includes('content') || url.includes('file')) &&
-        (url.includes(contentId) || url.includes(versionId)) &&
-        !url.includes('search') && !url.includes('results')) {
-      discoveredUrl = url
-      console.log(`[scrape-saleshub] Intercepted download URL: ${url}`)
+    if (url.includes('download') || url.includes('blob') || url.includes('sig=')) {
+      capturedUrls.push(`REQ: ${url.slice(0, 200)}`)
+      if (url.includes('sig=') || url.includes('download/v1/blob')) {
+        discoveredUrl = url
+        console.log(`[scrape-saleshub] ✓ Intercepted signed download URL: ${url.slice(0, 150)}`)
+      }
     }
   }
+
+  // Intercept ALL responses — look for JSON responses containing downloadUrl
+  const responseHandler = async (res: any) => {
+    const url = res.url()
+    const ct = res.headers()['content-type'] ?? ''
+    if (ct.includes('application/json') && (url.includes('content') || url.includes('download') || url.includes('version'))) {
+      try {
+        const body = await res.json().catch(() => null)
+        if (body?.downloadUrl) {
+          discoveredUrl = body.downloadUrl
+          console.log(`[scrape-saleshub] ✓ Found downloadUrl in JSON response: ${body.downloadUrl.slice(0, 150)}`)
+        }
+      } catch {}
+    }
+    // Also capture binary responses (actual file downloads from CDN)
+    if (ct.includes('octet-stream') || ct.includes('pdf') || ct.includes('presentation') || ct.includes('msword')) {
+      capturedUrls.push(`BINARY: ${url.slice(0, 200)} (${ct})`)
+      if (!discoveredUrl) {
+        discoveredUrl = url
+        console.log(`[scrape-saleshub] ✓ Intercepted binary download: ${url.slice(0, 150)}`)
+      }
+    }
+  }
+
   page.on('request', requestHandler)
+  page.on('response', responseHandler)
 
   try {
-    const docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
+    console.log(`[scrape-saleshub] Navigating to doc page: ${docUrl.slice(0, 120)}...`)
     await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.waitForTimeout(5_000)
+    await page.waitForTimeout(8_000)
 
+    // Try clicking Download
     const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
     if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      console.log(`[scrape-saleshub] Download button visible — clicking...`)
       const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
       await dlBtn.click()
       const download = await downloadPromise
-      if (download) await download.cancel().catch(() => {})
-      await page.waitForTimeout(2_000)
+      if (download) {
+        console.log(`[scrape-saleshub] Download event triggered: ${download.suggestedFilename()}`)
+        discoveredUrl = download.url()
+        console.log(`[scrape-saleshub] ✓ Download URL from event: ${discoveredUrl?.slice(0, 150)}`)
+        await download.cancel().catch(() => {})
+      }
+      await page.waitForTimeout(3_000)
+    } else {
+      console.warn(`[scrape-saleshub] Download button not visible on doc page`)
     }
   } catch (e: any) {
     console.warn(`[scrape-saleshub] Browser probe failed: ${e.message?.slice(0, 100)}`)
   }
 
   page.removeListener('request', requestHandler)
+  page.removeListener('response', responseHandler)
 
-  if (discoveredUrl) {
-    const pattern = discoveredUrl
-      .replace(contentId, '{contentId}')
-      .replace(versionId, '{versionId}')
-      .replace(teamsiteId, '{teamsiteId}')
-    console.log(`[scrape-saleshub] ✓ Browser-intercepted download pattern: ${pattern}`)
-    return pattern
+  // Log all captured URLs for debugging
+  if (capturedUrls.length > 0) {
+    console.log(`[scrape-saleshub] Captured URLs during download: ${capturedUrls.join(' | ')}`)
   }
 
-  console.warn(`[scrape-saleshub] ✗ No download pattern discovered — downloads will be skipped`)
+  if (discoveredUrl) {
+    // If it's a direct signed URL, return it as-is (can't templatize signed URLs)
+    // Instead, return a marker that tells the downloader to use per-doc browser downloads
+    console.log(`[scrape-saleshub] ✓ Download URL discovered: ${discoveredUrl.slice(0, 150)}`)
+    return '__BROWSER_DOWNLOAD__'
+  }
+
+  console.warn(`[scrape-saleshub] ✗ No download URL discovered`)
+  console.warn(`[scrape-saleshub] Captured ${capturedUrls.length} URLs during probe but none matched download patterns`)
   return null
 }
 
@@ -291,9 +344,7 @@ async function apiDownloadDocument(
   outputDir: string,
   urlPattern: string,
 ): Promise<string | null> {
-  const contentId = (doc as any).contentId ?? ''
   const versionId = doc.versionId ?? ''
-  const teamsiteId = authCtx.headers.teamsiteid ?? '1'
   const format = ((doc as any).format ?? '').toLowerCase() || 'pptx'
   const safeName = doc.name.replace(/[/\\?%*:|"<>]/g, '_')
   const fileName = `${safeName}.${format}`
@@ -303,36 +354,30 @@ async function apiDownloadDocument(
     return localPath
   }
 
-  const url = urlPattern
-    .replace('{contentId}', contentId)
-    .replace('{versionId}', versionId)
-    .replace('{teamsiteId}', teamsiteId)
+  mkdirSync(outputDir, { recursive: true })
+
+  // Browser-based download: navigate to doc page, click Download, capture file
+  const locationPath = (doc as any).locationPath ?? ''
+  let docUrl = ''
+  if (locationPath) {
+    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${encodeURIComponent(locationPath)}`
+  } else {
+    docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
+  }
 
   try {
-    const result = await page.evaluate(async (args) => {
-      try {
-        const res = await fetch(args.url, {
-          headers: {
-            Authorization: args.auth,
-            profileversionid: args.pvid,
-            teamsiteid: args.tsid,
-          },
-        })
-        if (!res.ok) return { ok: false, status: res.status }
-        const ct = res.headers.get('content-type') ?? ''
-        if (ct.includes('text/html')) return { ok: false, status: -1 }
-        const buf = await res.arrayBuffer()
-        if (buf.byteLength < 500) return { ok: false, status: -2 }
-        return { ok: true, data: Array.from(new Uint8Array(buf)), size: buf.byteLength }
-      } catch { return { ok: false, status: -3 } }
-    }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE, tsid: teamsiteId })
+    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(5_000)
 
-    if (result.ok && result.data) {
-      mkdirSync(outputDir, { recursive: true })
-      const { writeFileSync } = await import('fs')
-      writeFileSync(localPath, Buffer.from(result.data))
-      if (isRealDocument(localPath)) return localPath
-      try { unlinkSync(localPath) } catch {}
+    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
+    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
+      await dlBtn.click()
+      const download = await downloadPromise
+      const savePath = resolve(outputDir, download.suggestedFilename() || fileName)
+      await download.saveAs(savePath)
+      if (isRealDocument(savePath)) return savePath
+      try { unlinkSync(savePath) } catch {}
     }
   } catch {}
 

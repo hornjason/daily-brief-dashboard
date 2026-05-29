@@ -95,6 +95,13 @@ export function parseDocumentsFromApiResponse(response: any): DocCenterDocument[
     // Store extra fields for download
     ;(doc as any).contentId = d.ContentId ?? ''
     ;(doc as any).format = d.Format ?? d.NativeFormat ?? ''
+    ;(doc as any).sourceBlobId = d.SourceBlobId ?? ''
+    ;(doc as any).sourceContainerName = d.SourceContainerName ?? ''
+    // Extract Locations[0].FullPath for DocCenter URL construction
+    const locations = d.Locations ?? []
+    if (locations.length > 0 && locations[0].FullPath) {
+      ;(doc as any).locationPath = locations[0].FullPath
+    }
 
     // Only set optional fields if they have values
     if (tdpVal) doc.tdp = tdpVal
@@ -467,11 +474,10 @@ export async function discoverFacets(
     console.log(`[content-discovery] Sample doc keys with teamsite/tenant/library: ${teamFields.map(k => `${k}=${JSON.stringify(doc0[k])?.slice(0, 50)}`).join(', ')}`)
     console.log(`[content-discovery] Sample doc top-level keys: ${Object.keys(doc0).join(', ')}`)
     // Log download-relevant fields
-    const dlFields = ['ContentSources', 'Locations', 'DownloadUrl', 'Url', 'Link', 'AssetUrl', 'NativeDownloadUrl', 'ViewUrl']
+    const dlFields = ['ContentSources', 'Locations', 'DownloadUrl', 'Url', 'Link', 'AssetUrl', 'NativeDownloadUrl', 'ViewUrl', 'ThumbnailRelativePathWithSignature', 'OriginUrl', 'UrlObjectOpenMode', 'SourceBlobId', 'SourceContainerName']
     for (const f of dlFields) {
-      if (doc0[f] !== undefined) console.log(`[content-discovery] Doc.${f}: ${JSON.stringify(doc0[f])?.slice(0, 200)}`)
+      if (doc0[f] !== undefined) console.log(`[content-discovery] Doc.${f}: ${JSON.stringify(doc0[f])?.slice(0, 300)}`)
     }
-    // Also dump VersionId, Name, Size for confirmation
     console.log(`[content-discovery] Doc sample: Name=${doc0.Name}, ContentId=${doc0.ContentId}, VersionId=${doc0.VersionId}, Format=${doc0.Format}, Size=${doc0.Size}`)
   }
 
