@@ -678,47 +678,97 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
     } as any
 
     // Merge with existing knowledge for page content (talk tracks, etc.)
+    // Try local cache first, fall back to Drive download (#461)
+    let existing: SalesHubKnowledge | null = null
     const existingPath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
     if (existsSync(existingPath)) {
       try {
-        const existing: SalesHubKnowledge = JSON.parse(readFileSync(existingPath, 'utf-8'))
-        // Merge page content from existing into new TDP nodes
+        existing = JSON.parse(readFileSync(existingPath, 'utf-8'))
+      } catch {}
+    }
+    // Fallback: download from Drive if local cache is missing or has no page content
+    if (!existing || existing.tdps.every(t => !(t as any).whatToSay?.length && !(t as any).customerWins?.length)) {
+      console.log('[scrape-saleshub] Local cache missing or has no page content — trying Drive fallback...')
+      try {
+        const { downloadSaleshubFromDrive } = await import('../src/lib/saleshub-drive-sync.ts')
+        const downloaded = await downloadSaleshubFromDrive()
+        if (downloaded && existsSync(existingPath)) {
+          existing = JSON.parse(readFileSync(existingPath, 'utf-8'))
+          console.log(`[scrape-saleshub] Drive fallback loaded (${existing!.tdps.length} TDPs, ${existing!.salesPlays.length} plays)`)
+        }
+      } catch (e: any) {
+        console.warn(`[scrape-saleshub] Drive fallback failed: ${e.message?.slice(0, 80)}`)
+      }
+    }
+
+    // TDP name mapping: API facets use short names, page scraper used full names
+    const TDP_NAME_MAP: Record<string, string[]> = {
+      'ai': ['ai', 'ai platform'],
+      'app platform': ['app platform', 'application platform'],
+      'automation': ['automation'],
+      'virtualization': ['virtualization'],
+      'server/cloud os': ['server/cloud os'],
+      'container management': ['container management', 'container mgmt'],
+    }
+
+    function findExistingTdp(existingTdps: any[], name: string): any | undefined {
+      const lower = name.toLowerCase()
+      const aliases = TDP_NAME_MAP[lower] ?? [lower]
+      return existingTdps.find(t => aliases.includes(t.name.toLowerCase()))
+    }
+
+    if (existing) {
+      try {
         for (const tdp of knowledge.tdps) {
-          const existingTdp = existing.tdps.find(t => t.name.toLowerCase() === tdp.name.toLowerCase())
+          const existingTdp = findExistingTdp(existing.tdps, tdp.name)
           if (existingTdp) {
-            if (existingTdp.whatToSay?.length) tdp.whatToSay = existingTdp.whatToSay
-            if (existingTdp.whatToShare?.length) tdp.whatToShare = existingTdp.whatToShare
-            if (existingTdp.whatToShow?.length) tdp.whatToShow = existingTdp.whatToShow
-            if (existingTdp.services?.length) tdp.services = existingTdp.services
-            if (existingTdp.customerWins?.length) tdp.customerWins = existingTdp.customerWins
-            if (existingTdp.description) tdp.description = existingTdp.description
-            if (existingTdp.tactics?.length) tdp.tactics = existingTdp.tactics as any
+            if (existingTdp.whatToSay?.length && !tdp.whatToSay?.length) tdp.whatToSay = existingTdp.whatToSay
+            if (existingTdp.whatToShare?.length && !tdp.whatToShare?.length) tdp.whatToShare = existingTdp.whatToShare
+            if (existingTdp.whatToShow?.length && !tdp.whatToShow?.length) tdp.whatToShow = existingTdp.whatToShow
+            if (existingTdp.services?.length && !tdp.services?.length) tdp.services = existingTdp.services
+            if (existingTdp.customerWins?.length && !tdp.customerWins?.length) tdp.customerWins = existingTdp.customerWins
+            if (existingTdp.description && !tdp.description) tdp.description = existingTdp.description
+            if (existingTdp.tactics?.length && !tdp.tactics?.length) tdp.tactics = existingTdp.tactics as any
+            if (existingTdp.metrics?.length && !tdp.metrics?.length) tdp.metrics = existingTdp.metrics
           }
         }
-        // Merge page content from existing into new Play nodes
         for (const play of knowledge.salesPlays) {
           const existingPlay = existing.salesPlays.find(p => p.name.toLowerCase() === play.name.toLowerCase())
           if (existingPlay) {
-            if (existingPlay.description) play.description = existingPlay.description
-            if (existingPlay.tdpAlignment?.length) play.tdpAlignment = existingPlay.tdpAlignment
-            if (existingPlay.customerLens) play.customerLens = existingPlay.customerLens
-            if (existingPlay.realWorldExamples?.length) play.realWorldExamples = existingPlay.realWorldExamples
-            if (existingPlay.personaSection?.roles?.length) play.personaSection = existingPlay.personaSection
+            if (existingPlay.description && !play.description) play.description = existingPlay.description
+            if (existingPlay.tdpAlignment?.length && !play.tdpAlignment?.length) play.tdpAlignment = existingPlay.tdpAlignment
+            // Nested objects: check inner arrays, not just outer object
+            const oldLens = existingPlay.customerLens as any
+            const newLens = play.customerLens as any
+            if (oldLens && (oldLens.pain?.length || oldLens.outcomes?.length || oldLens.impact?.length) &&
+                !(newLens?.pain?.length || newLens?.outcomes?.length || newLens?.impact?.length)) {
+              play.customerLens = existingPlay.customerLens
+            }
+            if (existingPlay.realWorldExamples?.length && !play.realWorldExamples?.length) play.realWorldExamples = existingPlay.realWorldExamples
+            const oldPersona = existingPlay.personaSection as any
+            const newPersona = play.personaSection as any
+            if (oldPersona?.roles?.length && !newPersona?.roles?.length) play.personaSection = existingPlay.personaSection
+            if ((existingPlay as any).emailTemplateUrl && !(play as any).emailTemplateUrl) (play as any).emailTemplateUrl = (existingPlay as any).emailTemplateUrl
+            if ((existingPlay as any).discoveryQuestionsUrl && !(play as any).discoveryQuestionsUrl) (play as any).discoveryQuestionsUrl = (existingPlay as any).discoveryQuestionsUrl
+            if ((existingPlay as any).introPitchDeckUrl && !(play as any).introPitchDeckUrl) (play as any).introPitchDeckUrl = (existingPlay as any).introPitchDeckUrl
           }
         }
-        // Merge tactic page content
         for (const tactic of knowledge.tactics) {
           const existingTactic = existing.tactics.find(t => t.name.toLowerCase() === tactic.name.toLowerCase())
           if (existingTactic) {
-            if (existingTactic.talkTrack) tactic.talkTrack = existingTactic.talkTrack
-            if (existingTactic.whatToShare?.length) tactic.whatToShare = existingTactic.whatToShare
-            if (existingTactic.extractedContent) tactic.extractedContent = existingTactic.extractedContent
-            if (existingTactic.parentTdp) tactic.parentTdp = existingTactic.parentTdp
+            if (existingTactic.talkTrack && !tactic.talkTrack) tactic.talkTrack = existingTactic.talkTrack
+            if (existingTactic.whatToShare?.length && !tactic.whatToShare?.length) tactic.whatToShare = existingTactic.whatToShare
+            if (existingTactic.extractedContent && !tactic.extractedContent) tactic.extractedContent = existingTactic.extractedContent
+            if (existingTactic.parentTdp && !tactic.parentTdp) tactic.parentTdp = existingTactic.parentTdp
           }
+        }
+        // Restore products if new has none
+        if (!knowledge.products?.length && existing.products?.length) {
+          knowledge.products = existing.products
         }
         console.log(`[scrape-saleshub] Merged page content from existing knowledge (${existing.tdps.length} TDPs, ${existing.salesPlays.length} plays, ${existing.tactics.length} tactics)`)
       } catch {
-        console.warn('[scrape-saleshub] Could not merge existing knowledge — starting fresh')
+        console.warn('[scrape-saleshub] Could not merge existing knowledge — proceeding with new data only')
       }
     }
 
