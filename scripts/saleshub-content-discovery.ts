@@ -363,7 +363,9 @@ export async function captureSeismicAuth(page: Page): Promise<{
   const userId = hdrs['x-seismic-userid'] ?? ''
   const searchUrl = `https://saleshub.redhat.com/gateway/services/search/tenants/redhat/api/services/search/v1/results?userId=${userId}&languages=en-us`
 
-  console.log(`[content-discovery] Auth captured (${auth.length} chars)`)
+  const headerKeys = Object.keys(hdrs).filter(k => k.includes('seismic') || k.includes('teamsite') || k.includes('tenant') || k.includes('profile'))
+  console.log(`[content-discovery] Auth captured (${auth.length} chars), relevant headers: ${headerKeys.map(k => `${k}=${hdrs[k]?.slice(0, 30)}`).join(', ')}`)
+  console.log(`[content-discovery] All header keys: ${Object.keys(hdrs).join(', ')}`)
   return { auth, searchUrl, headers: hdrs }
 }
 
@@ -456,6 +458,15 @@ export async function discoverFacets(
     client: authCtx.headers.seismicclientname,
     body,
   })
+
+  // Log teamsite/tenant info from search response for download URL construction
+  const sr = response?.ServiceResult
+  if (sr?.Documents?.[0]) {
+    const doc0 = sr.Documents[0]
+    const teamFields = Object.keys(doc0).filter(k => k.toLowerCase().includes('teamsite') || k.toLowerCase().includes('tenant') || k.toLowerCase().includes('library'))
+    console.log(`[content-discovery] Sample doc keys with teamsite/tenant/library: ${teamFields.map(k => `${k}=${JSON.stringify(doc0[k])?.slice(0, 50)}`).join(', ')}`)
+    console.log(`[content-discovery] Sample doc top-level keys: ${Object.keys(doc0).slice(0, 20).join(', ')}`)
+  }
 
   const facets = parseFacetsFromApiResponse(response)
   console.log(`[content-discovery] Facets: ${facets.tdps.length} TDPs, ${facets.salesPlays.length} plays, ${facets.salesTactics.length} tactics, ${facets.contentTypes.length} content types`)
