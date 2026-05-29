@@ -809,8 +809,19 @@ sync-up: sync-down
 	@echo "Sync daemon running (VNC on :6082)"
 
 sync-down:
+	@if [ "$(FORCE)" != "1" ] && podman ps --filter name=pai-sync-l3 --format '{{.Names}}' 2>/dev/null | grep -q pai-sync-l3; then \
+	  STATUS=$$(podman exec pai-sync-l3 cat /data/cache/keepalive-status.json 2>/dev/null); \
+	  if echo "$$STATUS" | grep -q '"status":"ok"'; then \
+	    LAST=$$(echo "$$STATUS" | grep -o '"lastRun":"[^"]*"' | head -1); \
+	    echo "⚠️  WARNING: pai-sync-l3 has an active authenticated session ($$LAST)"; \
+	    echo "   Destroying it will require VNC re-authentication."; \
+	    echo "   To force: make sync-down FORCE=1"; \
+	    exit 1; \
+	  fi; \
+	fi
 	podman stop pai-sync-l3 2>/dev/null || true
 	podman rm   pai-sync-l3 2>/dev/null || true
+
 
 sync-logs:
 	@echo "━━━ Keepalive Status ━━━"
