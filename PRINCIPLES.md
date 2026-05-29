@@ -95,6 +95,19 @@ This is enforced by requiring Gemini prompts for all consumers to:
 
 If no business objective is known for the customer, the consumer should flag this as a data gap — not fall back to generic positioning.
 
+## syncNow vs ensureFresh Contract (MANDATORY)
+
+Every registered module implements two refresh methods with distinct purposes:
+
+| Method | Called by | Purpose | Cache behavior |
+|--------|-----------|---------|----------------|
+| `syncNow(customerName)` | Refresh button, manual API call, admin panel | Re-fetch from source | **Always re-fetches.** Never checks content hash. Never returns early based on cached data. The user clicked Refresh because they want fresh data. |
+| `ensureFresh(customerSlug)` | Pre-flight refresh before content generation | Ensure data is current | **Checks TTL first**, then optionally checks content hash. Skips if data is fresh. Optimized for speed — consumers call this before generating output. |
+
+**The rule:** Content hash checks, cache-hit skips, and "unchanged input" shortcuts belong in `ensureFresh()` ONLY. `syncNow()` always goes to source. No exceptions.
+
+**Why this matters:** When a user clicks Refresh in the admin panel or on a module tab, they expect fresh data from source. A silent cache-hit return makes the button feel broken. Content hash optimization is valuable for automated pre-flight refresh (where speed matters and the user isn't watching), but it must never intercept a manual refresh.
+
 ## Anti-patterns
 
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
@@ -107,6 +120,7 @@ If no business objective is known for the customer, the consumer should flag thi
 - ❌ Consumer calling `loadCustomerSignals()` WITHOUT `{ ensureFresh: true }` before generating output — produces content from stale/empty data
 - ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
 - ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
+- ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
 
 ## Signal Scoring Quick Reference (ADR-027)
 

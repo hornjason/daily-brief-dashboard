@@ -185,7 +185,7 @@ export interface FeatureModule {
   fetch: (customerName: string) => Promise<void>
   /** Remove all data for an archived customer */
   cleanup: (customerName: string) => Promise<void>
-  /** Manual trigger (exposed via API) */
+  /** Manual trigger — ALWAYS re-fetches from source. Never cache-hit skip. */
   syncNow: (customerName: string) => Promise<void>
   /** Optional: Provide signals for content generation (GitHub Issue #171) */
   signals?: (customerSlug: string) => Promise<Signal[]>
@@ -195,7 +195,7 @@ export interface FeatureModule {
   accountTab?: AccountTabDeclaration
   /** Optional: Where this module applies — defaults to 'both' (GitHub Issue #234) */
   scope?: ModuleScope
-  /** Optional: refresh stale data for a customer before signal collection. Called by ensureSignalsCurrent(). */
+  /** Check cache freshness — may skip via TTL or content hash. Called by pre-flight refresh before content generation. */
   ensureFresh?: (customerSlug: string) => Promise<void>
   /** Optional: how long cached data is considered fresh. Default: 1 hour. */
   cacheTtlMs?: number

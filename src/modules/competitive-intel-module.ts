@@ -159,7 +159,12 @@ FeatureModuleRegistry.register({
     const cachePath = resolve(COMPETITIVE_CACHE_DIR, 'decks.json')
     try {
       const stat = statSync(cachePath)
-      if (Date.now() - stat.mtimeMs < COMPETITIVE_TTL_MS) return // fresh
+      if (Date.now() - stat.mtimeMs < COMPETITIVE_TTL_MS) {
+        // TTL is fresh — also verify content hashes haven't changed
+        // For portfolio-scope modules, content hash check is per-deck inside the cache
+        const existing = readCompetitiveCache()
+        if (existing && existing.decks.length > 0) return // fresh and has data
+      }
     } catch { /* file doesn't exist — needs refresh */ }
 
     // Stale or missing — refresh
@@ -286,15 +291,8 @@ FeatureModuleRegistry.register({
             continue
           }
 
-          // Content hash for delta detection
+          // Content hash for cache tagging (used in ensureFresh, never short-circuits syncNow)
           const contentHash = createHash('sha256').update(content).digest('hex').slice(0, 16)
-
-          // Check if we already have this deck with same hash
-          const existing = existingHashMap.get(fileId)
-          if (existing && existing.contentHash === contentHash) {
-            decks.push(existing)
-            continue
-          }
 
           // Extract via Gemini
           const responseSchema = {

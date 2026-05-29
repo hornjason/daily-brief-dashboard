@@ -438,10 +438,29 @@ FeatureModuleRegistry.register({
   async ensureFresh(customerSlug: string): Promise<void> {
     const cachePath = resolve(TECH_CACHE_DIR, `${customerSlug}.json`)
 
-    // Check if cache exists and is fresh
+    // Check if cache exists and is fresh by TTL
     try {
       const stat = statSync(cachePath)
-      if (Date.now() - stat.mtimeMs < TECH_STACK_TTL_MS) return // fresh
+      if (Date.now() - stat.mtimeMs < TECH_STACK_TTL_MS) {
+        // TTL is fresh — also verify content hash hasn't changed
+        const existing = readExistingTechCache(customerSlug)
+        if (existing) {
+          const intel = readIntelligenceCache(customerSlug)
+          const news = readNewsCache(customerSlug)
+          const docSignals = readDocSignals(customerSlug)
+          const ccspPartners = readCcspCache(customerSlug)
+          const currentHash = createHash('sha256')
+            .update(intel?.company.slice(0, 1000) ?? '')
+            .update(intel?.industry.slice(0, 500) ?? '')
+            .update(String(news.articleCount))
+            .update(ccspPartners.join(','))
+            .update(docSignals.slice(0, 10).join(','))
+            .digest('hex')
+            .slice(0, 16)
+          if (existing.contentHash === currentHash) return // fresh and unchanged
+        }
+        // TTL fresh but hash changed or no cache — fall through to refresh
+      }
     } catch { /* file doesn't exist — needs refresh */ }
 
     // Stale or missing — resolve customer and refresh
@@ -515,7 +534,7 @@ FeatureModuleRegistry.register({
     const docSignals = readDocSignals(customerSlug)
     const ccspPartners = readCcspCache(customerSlug)
 
-    // 2. Content hash check — skip if inputs unchanged
+    // 2. Content hash for cache tagging (used in ensureFresh, never short-circuits syncNow)
     const contentHash = createHash('sha256')
       .update(intel?.company.slice(0, 1000) ?? '')
       .update(intel?.industry.slice(0, 500) ?? '')
@@ -524,13 +543,6 @@ FeatureModuleRegistry.register({
       .update(docSignals.slice(0, 10).join(','))
       .digest('hex')
       .slice(0, 16)
-
-    const existing = readExistingTechCache(customerSlug)
-    if (existing && existing.contentHash === contentHash) {
-      console.log(`[tech-stack] cache hit for ${customerSlug} (hash ${contentHash})`)
-      FeatureModuleRegistry.recordOutcome('tech-stack', { success: true, dataChanged: false, recordCount: existing.technologies.length })
-      return
-    }
 
     // 3. Build context for Gemini extraction
     const contextParts: string[] = []

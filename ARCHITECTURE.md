@@ -1631,6 +1631,8 @@ cacheTtlMs?: number                                     // how long data is fres
 
 New modules automatically participate by implementing `ensureFresh()`. No hardcoded source list. No consumer changes needed. The registry is the single source of truth for what gets refreshed.
 
+**Refresh contract:** `syncNow()` always re-fetches from source (manual refresh). `ensureFresh()` checks cache TTL and may skip (automated pre-flight). Content hash optimization goes in `ensureFresh()` only. See PRINCIPLES.md "syncNow vs ensureFresh Contract".
+
 ### Current implementations
 
 | Module | TTL | Refresh action |
