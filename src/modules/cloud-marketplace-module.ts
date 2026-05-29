@@ -283,7 +283,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       model: 'full',
       responseSchema,
       deltaKey: 'cloud-marketplace-latest',
-      timeoutMs: 60_000,
+      timeoutMs: 180_000,
       temperature: 0.2,
     })
     const parsed = JSON.parse(result.text)
