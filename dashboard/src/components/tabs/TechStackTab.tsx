@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Code, RefreshCw, Building2, Wrench } from 'lucide-react'
+import { Code, RefreshCw, Building2, Wrench, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import SignalWithAging from '../SignalWithAging'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -16,6 +16,8 @@ interface TechSignal {
     infrastructure?: string[]
     redHatProducts?: string[]
     confidence?: 'HIGH' | 'MEDIUM' | 'LOW'
+    why?: string
+    source?: string
     solutionPlayId?: string
     solutionPlayName?: string
     solutionTdp?: string
@@ -41,6 +43,13 @@ function contextLabel(ctx: string | undefined): string {
   if (ctx === 'migrating_from') return 'Migrating From'
   if (ctx === 'developing') return 'Developing'
   return 'Unknown'
+}
+
+function contextColor(ctx: string | undefined): string {
+  if (ctx === 'evaluating') return 'bg-warning/10 text-warning border-warning/20'
+  if (ctx === 'migrating_from') return 'bg-error/10 text-error border-error/20'
+  if (ctx === 'developing') return 'bg-accent/10 text-accent border-accent/20'
+  return 'bg-border/40 text-text-secondary border-border'
 }
 
 // ── Tier 2 Card (Proprietary) ─────────────────────────────────────────────────
@@ -118,22 +127,97 @@ function ProprietaryTechCard({ signal }: { signal: TechSignal }) {
 // ── Tier 1 Row (Industry Tools) ───────────────────────────────────────────────
 
 function IndustryToolRow({ signal }: { signal: TechSignal }) {
+  const [expanded, setExpanded] = useState(false)
   const techName = signal.headline.split(' (')[0] || signal.headline
-  const { confidence, context } = signal.metadata
+  const { confidence, context, why, source, redHatProducts, infrastructure } = signal.metadata
+  const description = signal.detail.split('Red Hat positioning:')[0]?.trim() || signal.detail
+  const hasExpandContent = !!(why || (source && source.startsWith('http')) || description || (redHatProducts && redHatProducts.length > 0) || (infrastructure && infrastructure.length > 0))
 
   return (
-    <SignalWithAging timestamp={signal.timestamp} showTimestamp={true} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <span className="text-sm font-medium text-text-primary truncate" title={techName}>{techName}</span>
-        {context && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-border/40 text-text-secondary shrink-0">
-            {contextLabel(context)}
-          </span>
-        )}
-      </div>
-      <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(confidence)}`}>
-        {confidence ?? 'UNKNOWN'}
-      </span>
+    <SignalWithAging timestamp={signal.timestamp} showTimestamp={!expanded} className="border-b border-border/40 last:border-0">
+      {/* Compact row — always visible */}
+      <button
+        type="button"
+        onClick={() => hasExpandContent && setExpanded(!expanded)}
+        className={`flex items-center justify-between py-2 w-full text-left ${hasExpandContent ? 'cursor-pointer hover:bg-border/20 -mx-2 px-2 rounded transition-colors' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {hasExpandContent && (
+            expanded
+              ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+              : <ChevronRight className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+          )}
+          <span className="text-sm font-medium text-text-primary truncate" title={techName}>{techName}</span>
+          {context && (
+            <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${contextColor(context)}`}>
+              {contextLabel(context)}
+            </span>
+          )}
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(confidence)}`}>
+          {confidence ?? 'UNKNOWN'}
+        </span>
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-2 space-y-3">
+          {why && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary mb-0.5">Why</p>
+              <p className="text-sm text-text-primary leading-relaxed">{why}</p>
+            </div>
+          )}
+
+          {source && source.startsWith('http') && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary mb-0.5">Source</p>
+              <a
+                href={source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-accent hover:text-accent/80 hover:underline transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                {new URL(source).hostname}
+              </a>
+            </div>
+          )}
+
+          {description && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary mb-0.5">Description</p>
+              <p className="text-sm text-text-primary leading-relaxed">{description}</p>
+            </div>
+          )}
+
+          {redHatProducts && redHatProducts.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-text-secondary">Red Hat Products</p>
+              <div className="flex flex-wrap gap-1">
+                {redHatProducts.map((product, idx) => (
+                  <span key={idx} className="text-xs px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 uppercase font-medium">
+                    {product}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {infrastructure && infrastructure.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-text-secondary">Infrastructure</p>
+              <div className="flex flex-wrap gap-1">
+                {infrastructure.map((infra, idx) => (
+                  <span key={idx} className="text-xs px-2 py-0.5 rounded bg-border/40 text-text-primary border border-border">
+                    {infra}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </SignalWithAging>
   )
 }
