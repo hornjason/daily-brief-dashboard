@@ -148,8 +148,8 @@ async ensureFresh(customerSlug: string): Promise<void> {
 
 | Module | Drive file | Status |
 |--------|-----------|--------|
-| `saleshub-content` | `saleshub-knowledge.json` | ❌ **TODO** — reads baked-in config-templates only |
-| `saleshub` | `saleshub-knowledge.json` | ❌ **TODO** — same file, same gap |
+| `saleshub-content` | `saleshub-knowledge.json` | ✅ Implemented (#460) — syncNow + ensureFresh download from Drive |
+| `saleshub` | `saleshub-knowledge.json` | ✅ Implemented (#442) — syncNow downloads from Drive |
 | `cloud-marketplace` | `cloud-marketplace/latest.json` | ❌ **TODO** — reads local cache only |
 | `ecosystem-catalog` | `ecosystem-catalog/*.json` | ❌ **TODO** — reads local cache only |
 | `product-intel` | Product corpus files | ✅ Has its own scraper (not Drive-dependent) |

@@ -2,9 +2,11 @@
 // GitHub Issue #448 — SalesHub Content signal module
 // Emits document-level signals from the SalesHub knowledge base.
 // Portfolio-scope: content is not customer-specific.
+// L3 Drive Refresh (#460): syncNow downloads fresh data from Drive before reloading.
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadSalesHubContent, getKnowledgeMtime, resetContentCache, type SalesHubDocument } from '../lib/saleshub-content.ts'
+import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // weekly — content updates ~monthly
 
@@ -65,9 +67,17 @@ FeatureModuleRegistry.register({
 
   async ensureFresh(_customerSlug: string): Promise<void> {
     const mtime = getKnowledgeMtime()
-    if (mtime === 0) return // no file — nothing to refresh
-    if (Date.now() - mtime < CACHE_TTL_MS) return // fresh
-    console.warn('[saleshub-content] knowledge JSON is older than 7 days — manual refresh recommended')
+    if (mtime > 0 && Date.now() - mtime < CACHE_TTL_MS) return // fresh
+    // Stale or missing — pull from Drive
+    try {
+      const downloaded = await downloadSaleshubFromDrive()
+      if (downloaded) {
+        resetContentCache()
+        console.log('[saleshub-content] refreshed from Drive via ensureFresh')
+      }
+    } catch (e: any) {
+      console.warn(`[saleshub-content] Drive refresh failed in ensureFresh: ${e.message}`)
+    }
   },
 
   async fetch(_customerName: string): Promise<void> {
@@ -79,6 +89,13 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
+    // Download fresh data from Drive before reloading (#460)
+    try {
+      const downloaded = await downloadSaleshubFromDrive()
+      if (downloaded) console.log('[saleshub-content] downloaded fresh knowledge JSON from Drive')
+    } catch (e: any) {
+      console.warn(`[saleshub-content] Drive download failed — falling back to disk: ${e.message}`)
+    }
     resetContentCache()
     const docs = loadSalesHubContent()
     console.log(`[saleshub-content] loaded ${docs.length} documents from knowledge JSON`)
