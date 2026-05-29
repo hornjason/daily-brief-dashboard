@@ -509,6 +509,20 @@ FeatureModuleRegistry.register({
     console.log('[cloud-marketplace] fetching latest newsletter...')
     try {
       const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
+
+      // Skip re-extraction if same slide deck file IDs as cached
+      const existing = readCloudMarketplaceCache()
+      if (existing?.sourceFileIds) {
+        const cachedIds = new Set(existing.sourceFileIds)
+        const newIds = new Set(fileIds)
+        if (cachedIds.size === newIds.size && [...newIds].every(id => cachedIds.has(id))) {
+          console.log(`[cloud-marketplace] same ${fileIds.length} file IDs as cache — skipping re-extraction`)
+          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds?.length ?? 0 })
+          return
+        }
+        console.log(`[cloud-marketplace] file IDs changed: cached=${existing.sourceFileIds.length}, new=${fileIds.length}`)
+      }
+
       if (!slideText || slideText.trim().length < 100) {
         console.warn('[cloud-marketplace] insufficient slide text extracted')
         FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: 'no slide content' })
