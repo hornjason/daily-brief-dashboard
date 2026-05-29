@@ -200,6 +200,7 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
     for (const p of programs) {
       let line = `- Program: ${p.name}`
       if (p.eligibility) line += ` (${p.eligibility})`
+      if (p.validThrough) line += ` — expires ${p.validThrough}`
       lines.push(line)
     }
 
@@ -208,6 +209,7 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
     for (const inc of incentives) {
       let line = `- Incentive: ${inc.name}`
       if (inc.value) line += ` (${inc.value})`
+      if (inc.validThrough) line += ` — expires ${inc.validThrough}`
       lines.push(line)
     }
 

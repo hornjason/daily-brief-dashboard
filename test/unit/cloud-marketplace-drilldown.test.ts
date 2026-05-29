@@ -16,8 +16,8 @@ describe('Cloud marketplace drill-down (#352)', () => {
     const content = readFileSync(modulePath, 'utf-8')
     expect(content).toContain("offeringType: 'summary'")
     expect(content).toContain('offerings: cloud.offerings.map')
-    expect(content).toContain('programs: cloud.programs.map')
-    expect(content).toContain('incentives: cloud.incentives.map')
+    expect(content).toContain('programs: activePrograms.map')
+    expect(content).toContain('incentives: activeIncentives.map')
   })
 
   test('cloud marketplace API route exists for raw detail data', () => {

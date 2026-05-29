@@ -44,6 +44,7 @@ interface CloudProgram {
   description: string
   eligibility?: string
   url?: string
+  validThrough?: string
 }
 
 interface CloudIncentive {
@@ -51,6 +52,7 @@ interface CloudIncentive {
   description: string
   value?: string
   url?: string
+  validThrough?: string
 }
 
 interface CloudSection {
@@ -183,12 +185,14 @@ Extract structured data per cloud provider (AWS, Google/GCP, Microsoft/Azure, Or
 
 For each cloud provider, extract:
 - offerings: new product listings, versions, images (name + description + dates if mentioned + url if a link is present + pricing if mentioned + availability regions/dates if mentioned)
-- programs: marketplace programs, partnership programs (name + description + eligibility if mentioned + url if a link is present)
-- incentives: financial incentives, free trials, credits (name + description + value if mentioned + url if a link is present)
+- programs: marketplace programs, partnership programs (name + description + eligibility if mentioned + url if a link is present + validThrough date if any deadline/expiry is mentioned)
+- incentives: financial incentives, free trials, credits, SPIFFs, sales contests (name + description + value if mentioned + url if a link is present + validThrough date if any deadline/expiry is mentioned)
 - newCountries: newly enabled countries/regions
 - partnerships: partnership announcements
 
 When extracting from HTML content, preserve any hyperlinks as url fields. Extract pricing details (e.g. "Free tier available", "$0.10/hr") and availability info (e.g. "GA in us-east-1", "Preview in all regions").
+
+IMPORTANT: For programs and incentives, extract the validThrough field as a YYYY-MM-DD date when ANY deadline, expiry, or time-bound language is present. Examples: "valid through June 30, 2025" → "2025-06-30", "Q2 (May-June)" → "2026-06-30", "submission deadline Sept 16, 2025" → "2025-09-16", "end of Q1" → "2026-03-31". If no deadline is mentioned, omit validThrough.
 
 Return a JSON object matching this structure:
 {
@@ -197,8 +201,8 @@ Return a JSON object matching this structure:
     {
       "provider": "AWS" | "Google" | "Microsoft" | "Oracle",
       "offerings": [{"name": "...", "description": "...", "dates": "...", "url": "...", "pricing": "...", "availability": "..."}],
-      "programs": [{"name": "...", "description": "...", "eligibility": "...", "url": "..."}],
-      "incentives": [{"name": "...", "description": "...", "value": "...", "url": "..."}],
+      "programs": [{"name": "...", "description": "...", "eligibility": "...", "url": "...", "validThrough": "YYYY-MM-DD"}],
+      "incentives": [{"name": "...", "description": "...", "value": "...", "url": "...", "validThrough": "YYYY-MM-DD"}],
       "newCountries": ["India", "Japan"],
       "partnerships": ["..."]
     }
@@ -242,6 +246,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
                   description: { type: 'string' },
                   eligibility: { type: 'string' },
                   url: { type: 'string' },
+                  validThrough: { type: 'string' },
                 },
                 required: ['name', 'description'],
               },
@@ -255,6 +260,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
                   description: { type: 'string' },
                   value: { type: 'string' },
                   url: { type: 'string' },
+                  validThrough: { type: 'string' },
                 },
                 required: ['name', 'description'],
               },
@@ -625,6 +631,15 @@ FeatureModuleRegistry.register({
         headline = `${cloud.provider} Marketplace: ${cloud.offerings.length} offerings, ${cloud.programs.length} programs — customer uses ${cloud.provider}, position Red Hat solutions`
       }
 
+      // Filter expired programs and incentives
+      const now = new Date().toISOString().slice(0, 10)
+      const activePrograms = cloud.programs.filter(p => !p.validThrough || p.validThrough >= now)
+      const activeIncentives = cloud.incentives.filter(i => !i.validThrough || i.validThrough >= now)
+      const expiredPrograms = cloud.programs.length - activePrograms.length
+      const expiredIncentives = cloud.incentives.length - activeIncentives.length
+      if (expiredPrograms > 0) console.log(`[cloud-marketplace] ${cloud.provider}: filtered ${expiredPrograms} expired program(s)`)
+      if (expiredIncentives > 0) console.log(`[cloud-marketplace] ${cloud.provider}: filtered ${expiredIncentives} expired incentive(s)`)
+
       const detailParts: string[] = []
       for (const o of cloud.offerings) {
         let line = o.name
@@ -632,14 +647,16 @@ FeatureModuleRegistry.register({
         if (o.pricing) line += ` — ${o.pricing}`
         detailParts.push(line)
       }
-      for (const p of cloud.programs) {
+      for (const p of activePrograms) {
         let line = `PROGRAM: ${p.name}`
         if (p.eligibility) line += ` — Eligibility: ${p.eligibility}`
+        if (p.validThrough) line += ` (valid through ${p.validThrough})`
         detailParts.push(line)
       }
-      for (const inc of cloud.incentives) {
+      for (const inc of activeIncentives) {
         let line = `INCENTIVE: ${inc.name}`
         if (inc.value) line += ` — Value: ${inc.value}`
+        if (inc.validThrough) line += ` (valid through ${inc.validThrough})`
         detailParts.push(line)
       }
       if (cloud.newCountries.length) detailParts.push(`NEW COUNTRIES: ${cloud.newCountries.join(', ')}`)
@@ -663,8 +680,8 @@ FeatureModuleRegistry.register({
           acvPlus: cloudACV,
           cloudPartner: ccspPartner,
           offerings: cloud.offerings.map(o => ({ name: o.name, availability: o.availability, pricing: o.pricing, url: o.url })),
-          programs: cloud.programs.map(p => ({ name: p.name, eligibility: p.eligibility, url: p.url, description: p.description })),
-          incentives: cloud.incentives.map(i => ({ name: i.name, value: i.value, url: i.url, description: i.description })),
+          programs: activePrograms.map(p => ({ name: p.name, eligibility: p.eligibility, url: p.url, description: p.description, validThrough: p.validThrough })),
+          incentives: activeIncentives.map(i => ({ name: i.name, value: i.value, url: i.url, description: i.description, validThrough: i.validThrough })),
           newCountries: cloud.newCountries,
           partnerships: cloud.partnerships,
         },
