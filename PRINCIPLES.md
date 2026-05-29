@@ -108,6 +108,56 @@ Every registered module implements two refresh methods with distinct purposes:
 
 **Why this matters:** When a user clicks Refresh in the admin panel or on a module tab, they expect fresh data from source. A silent cache-hit return makes the button feel broken. Content hash optimization is valuable for automated pre-flight refresh (where speed matters and the user isn't watching), but it must never intercept a manual refresh.
 
+## L3 Drive Refresh Contract (MANDATORY for portfolio-scope modules)
+
+Every module that produces portfolio-wide data (not per-customer) MUST support pulling fresh data from Google Drive — not just re-reading a local file baked into the container image.
+
+**Why:** Hero installs bootstrap from a container image that may be days old. The Mac Mini scrapes fresh data and writes to Drive. Without L3 refresh, hero instances serve stale data until a rebuild. The Refresh button should always pull from the live source.
+
+### The contract
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `driveFolderId` | Yes | Shared Drive folder where the Mac Mini writes the source file |
+| `driveFileName` | Yes | Filename to download (e.g., `saleshub-knowledge.json`) |
+| `localCachePath` | Yes | Where to write the downloaded file locally |
+| `syncNow()` | Yes | Downloads fresh file from Drive, replaces local cache, reloads data |
+| `ensureFresh()` | Yes | Checks local file mtime vs TTL, downloads from Drive if stale |
+
+### Implementation pattern
+
+```typescript
+async syncNow(): Promise<void> {
+  // 1. Download from Drive → local cache
+  const driveFile = await downloadFromDrive(driveFolderId, driveFileName)
+  writeFileSync(localCachePath, driveFile)
+  // 2. Reload from fresh local cache
+  resetCache()
+  const data = loadData()
+  recordOutcome({ success: true, recordCount: data.length })
+}
+
+async ensureFresh(customerSlug: string): Promise<void> {
+  const mtime = statSync(localCachePath).mtimeMs
+  if (Date.now() - mtime < cacheTtlMs) return // fresh enough
+  await syncNow('') // pull from Drive
+}
+```
+
+### Modules that need L3 Drive refresh
+
+| Module | Drive file | Status |
+|--------|-----------|--------|
+| `saleshub-content` | `saleshub-knowledge.json` | ❌ **TODO** — reads baked-in config-templates only |
+| `saleshub` | `saleshub-knowledge.json` | ❌ **TODO** — same file, same gap |
+| `cloud-marketplace` | `cloud-marketplace/latest.json` | ❌ **TODO** — reads local cache only |
+| `ecosystem-catalog` | `ecosystem-catalog/*.json` | ❌ **TODO** — reads local cache only |
+| `product-intel` | Product corpus files | ✅ Has its own scraper (not Drive-dependent) |
+
+### Bootstrap integration
+
+During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh data before the first customer brief is generated. This ensures the hero install has current portfolio intelligence from day one.
+
 ## Anti-patterns
 
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
