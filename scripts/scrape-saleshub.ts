@@ -157,33 +157,97 @@ function isEnglishDocument(fileName: string): boolean {
 }
 
 // ── API-based Document Download (#448) ────────────────────────────────────────
+// Seismic download API endpoints (from developer.seismic.com documentation):
+//   GET /integration/v2/teamsites/{teamsiteId}/files/{contentId}/content  (current version)
+//   GET /integration/v2/teamsites/{teamsiteId}/files/{contentId}/versions/{versionId}/content  (specific version)
+// Gateway mapping at saleshub.redhat.com unknown — probe multiple paths.
+
+const SALESHUB_BASE = 'https://saleshub.redhat.com'
 
 /**
- * Discover the Seismic download URL pattern by navigating to a document page
- * and intercepting the download request. Returns a URL template with {contentId}
- * and {versionId} placeholders, or null if discovery fails.
+ * Build candidate download URLs from documented Seismic API + gateway variants.
+ */
+function buildDownloadUrls(teamsiteId: string, contentId: string, versionId: string): string[] {
+  return [
+    // Documented Seismic API paths through gateway
+    `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
+    `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/content`,
+    // Alternative gateway mappings
+    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/integration/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
+    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/v2/teamsites/${teamsiteId}/files/${contentId}/content`,
+    // Direct Seismic API (may work if gateway proxies transparently)
+    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
+    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/v2/files/${contentId}/versions/${versionId}/content`,
+  ]
+}
+
+/**
+ * Discover the working download URL pattern by probing a sample document.
+ * First tries documented Seismic API paths. If all fail, intercepts browser
+ * download to capture the actual URL pattern used by the DocCenter SPA.
  */
 async function discoverDownloadUrlPattern(
   page: Page,
   sampleDoc: DocCenterDocument,
+  authCtx: { auth: string; headers: Record<string, string> },
 ): Promise<string | null> {
   const contentId = (sampleDoc as any).contentId ?? ''
   const versionId = sampleDoc.versionId ?? ''
+  const teamsiteId = authCtx.headers.teamsiteid ?? '1'
 
-  const docUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
-  console.log(`[scrape-saleshub] Probing download URL pattern via ${sampleDoc.name}...`)
+  console.log(`[scrape-saleshub] Probing download URLs for "${sampleDoc.name}" (content=${contentId}, version=${versionId}, teamsite=${teamsiteId})...`)
 
-  let downloadUrl: string | null = null
+  // Phase 1: Try documented API endpoints via page.evaluate (in-browser fetch)
+  const candidates = buildDownloadUrls(teamsiteId, contentId, versionId)
+  for (const url of candidates) {
+    try {
+      const result = await page.evaluate(async (args) => {
+        try {
+          const res = await fetch(args.url, {
+            headers: {
+              Authorization: args.auth,
+              profileversionid: args.pvid,
+              teamsiteid: args.tsid,
+            },
+          })
+          const ct = res.headers.get('content-type') ?? ''
+          if (!res.ok) return { ok: false, status: res.status, ct }
+          if (ct.includes('text/html') || ct.includes('application/json')) return { ok: false, status: res.status, ct }
+          const size = parseInt(res.headers.get('content-length') ?? '0') || 0
+          return { ok: true, status: res.status, ct, size }
+        } catch (e: any) { return { ok: false, status: -1, ct: '', error: e.message } }
+      }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE, tsid: teamsiteId })
 
-  page.on('request', (req) => {
+      console.log(`[scrape-saleshub]   ${url.replace(SALESHUB_BASE, '')} → ${result.status} (${result.ct || 'no-ct'})`)
+
+      if (result.ok) {
+        const pattern = url
+          .replace(contentId, '{contentId}')
+          .replace(versionId, '{versionId}')
+          .replace(teamsiteId, '{teamsiteId}')
+        console.log(`[scrape-saleshub] ✓ Working download pattern found!`)
+        return pattern
+      }
+    } catch {}
+  }
+
+  // Phase 2: Intercept browser download to discover actual URL
+  console.log(`[scrape-saleshub] API probe failed — intercepting browser download...`)
+  let discoveredUrl: string | null = null
+
+  const requestHandler = (req: any) => {
     const url = req.url()
-    if (url.includes('download') && (url.includes(contentId) || url.includes(versionId))) {
-      downloadUrl = url
-      console.log(`[scrape-saleshub] Discovered download URL: ${url}`)
+    if ((url.includes('download') || url.includes('content') || url.includes('file')) &&
+        (url.includes(contentId) || url.includes(versionId)) &&
+        !url.includes('search') && !url.includes('results')) {
+      discoveredUrl = url
+      console.log(`[scrape-saleshub] Intercepted download URL: ${url}`)
     }
-  })
+  }
+  page.on('request', requestHandler)
 
   try {
+    const docUrl = `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
     await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(5_000)
 
@@ -192,40 +256,42 @@ async function discoverDownloadUrlPattern(
       const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
       await dlBtn.click()
       const download = await downloadPromise
-      if (download) {
-        await download.cancel().catch(() => {})
-      }
+      if (download) await download.cancel().catch(() => {})
       await page.waitForTimeout(2_000)
     }
   } catch (e: any) {
-    console.warn(`[scrape-saleshub] Download probe failed: ${e.message?.slice(0, 100)}`)
+    console.warn(`[scrape-saleshub] Browser probe failed: ${e.message?.slice(0, 100)}`)
   }
 
-  if (downloadUrl) {
-    const pattern = downloadUrl
+  page.removeListener('request', requestHandler)
+
+  if (discoveredUrl) {
+    const pattern = discoveredUrl
       .replace(contentId, '{contentId}')
       .replace(versionId, '{versionId}')
-    console.log(`[scrape-saleshub] Download URL pattern: ${pattern}`)
+      .replace(teamsiteId, '{teamsiteId}')
+    console.log(`[scrape-saleshub] ✓ Browser-intercepted download pattern: ${pattern}`)
     return pattern
   }
 
+  console.warn(`[scrape-saleshub] ✗ No download pattern discovered — downloads will be skipped`)
   return null
 }
 
 /**
- * Download a single document via the discovered Seismic download URL pattern.
- * Falls back to Playwright download interception if pattern is not available.
- * Returns the local file path on success, or null on failure.
+ * Download a single document via the discovered download URL pattern.
+ * Uses page.evaluate to fetch within the browser's authenticated context.
  */
 async function apiDownloadDocument(
   page: Page,
   doc: DocCenterDocument,
   authCtx: { auth: string; headers: Record<string, string> },
   outputDir: string,
-  urlPattern?: string | null,
+  urlPattern: string,
 ): Promise<string | null> {
   const contentId = (doc as any).contentId ?? ''
   const versionId = doc.versionId ?? ''
+  const teamsiteId = authCtx.headers.teamsiteid ?? '1'
   const format = ((doc as any).format ?? '').toLowerCase() || 'pptx'
   const safeName = doc.name.replace(/[/\\?%*:|"<>]/g, '_')
   const fileName = `${safeName}.${format}`
@@ -235,51 +301,36 @@ async function apiDownloadDocument(
     return localPath
   }
 
-  // Try direct API download if we have a URL pattern
-  if (urlPattern && contentId && versionId) {
-    const url = urlPattern.replace('{contentId}', contentId).replace('{versionId}', versionId)
-    try {
-      const result = await page.evaluate(async (args) => {
-        try {
-          const res = await fetch(args.url, {
-            headers: { Authorization: args.auth, profileversionid: args.pvid },
-          })
-          if (!res.ok) return { ok: false, status: res.status }
-          const ct = res.headers.get('content-type') ?? ''
-          if (ct.includes('text/html')) return { ok: false, status: -1 }
-          const buf = await res.arrayBuffer()
-          if (buf.byteLength < 500) return { ok: false, status: -2 }
-          return { ok: true, data: Array.from(new Uint8Array(buf)), size: buf.byteLength }
-        } catch { return { ok: false, status: -3 } }
-      }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE })
+  const url = urlPattern
+    .replace('{contentId}', contentId)
+    .replace('{versionId}', versionId)
+    .replace('{teamsiteId}', teamsiteId)
 
-      if (result.ok && result.data) {
-        const buffer = Buffer.from(result.data)
-        mkdirSync(outputDir, { recursive: true })
-        const { writeFileSync } = await import('fs')
-        writeFileSync(localPath, buffer)
-        if (isRealDocument(localPath)) return localPath
-        try { unlinkSync(localPath) } catch {}
-      }
-    } catch {}
-  }
-
-  // Fallback: navigate to doc page and click Download
   try {
-    const docUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
-    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.waitForTimeout(3_000)
+    const result = await page.evaluate(async (args) => {
+      try {
+        const res = await fetch(args.url, {
+          headers: {
+            Authorization: args.auth,
+            profileversionid: args.pvid,
+            teamsiteid: args.tsid,
+          },
+        })
+        if (!res.ok) return { ok: false, status: res.status }
+        const ct = res.headers.get('content-type') ?? ''
+        if (ct.includes('text/html')) return { ok: false, status: -1 }
+        const buf = await res.arrayBuffer()
+        if (buf.byteLength < 500) return { ok: false, status: -2 }
+        return { ok: true, data: Array.from(new Uint8Array(buf)), size: buf.byteLength }
+      } catch { return { ok: false, status: -3 } }
+    }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE, tsid: teamsiteId })
 
-    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
-    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
-      await dlBtn.click()
-      const download = await downloadPromise
+    if (result.ok && result.data) {
       mkdirSync(outputDir, { recursive: true })
-      const savePath = resolve(outputDir, download.suggestedFilename() || fileName)
-      await download.saveAs(savePath)
-      if (isRealDocument(savePath)) return savePath
-      try { unlinkSync(savePath) } catch {}
+      const { writeFileSync } = await import('fs')
+      writeFileSync(localPath, Buffer.from(result.data))
+      if (isRealDocument(localPath)) return localPath
+      try { unlinkSync(localPath) } catch {}
     }
   } catch {}
 
@@ -296,7 +347,7 @@ async function apiDownloadCategory(
   authCtx: { auth: string; headers: Record<string, string> },
   categoryName: string,
   outputDir: string,
-  urlPattern?: string | null,
+  urlPattern: string,
 ): Promise<{ downloaded: string[]; failed: string[] }> {
   const downloaded: string[] = []
   const failed: string[] = []
@@ -680,16 +731,17 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
     let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
 
-    // Discover the download URL pattern by probing one document
+    // Discover the download URL pattern by probing documented Seismic API paths + browser interception
     let downloadPattern: string | null = null
     if (uniqueDocs.length > 0) {
-      downloadPattern = await discoverDownloadUrlPattern(page, uniqueDocs[0])
-      if (!downloadPattern) {
-        console.warn('[scrape-saleshub] Could not discover download URL pattern — will use per-page fallback (slower)')
-      }
+      downloadPattern = await discoverDownloadUrlPattern(page, uniqueDocs[0], authCtx)
+    }
+    if (!downloadPattern) {
+      console.warn('[scrape-saleshub] No download pattern found — skipping file downloads (metadata still recorded)')
     }
 
     // API-based download per TDP — download each document individually via HTTP
+    if (downloadPattern) {
     for (const tdp of facets.tdps) {
       const tdpDocs = uniqueDocs.filter(d => d.tdp?.toLowerCase() === tdp.toLowerCase())
       if (tdpDocs.length === 0) { console.log(`[scrape-saleshub] TDP "${tdp}": 0 documents — skipping`); continue }
@@ -770,6 +822,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
     }
 
     console.log(`[scrape-saleshub] API downloads complete: ${totalDownloaded} downloaded, ${totalUploaded} uploaded to Drive, ${totalSkipped} skipped, ${totalFailed} failed`)
+    } // end if (downloadPattern)
 
     await page.close()
 
