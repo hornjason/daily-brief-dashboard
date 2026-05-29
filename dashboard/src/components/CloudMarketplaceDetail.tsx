@@ -1,36 +1,43 @@
 /**
- * GitHub Issue #352 — Cloud Marketplace Program Drill-Down
+ * GitHub Issue #352, #453 — Customer-Specific Cloud Marketplace
  *
  * Expandable detail per cloud provider showing:
- * - offerings (product listings)
- * - programs (EDP, CPPO, MACC)
- * - incentives (SPIFFs, credits, free trials)
+ * - customer spend or cloud usage intel
+ * - programs (EDP, CPPO, MACC) with eligibility
+ * - incentives (SPIFFs, credits, free trials) with values
+ * - offering count summary (not individual cards)
  * - new countries / partnerships
  */
 
 import { useState, useEffect } from 'react'
-import { Cloud, ChevronDown, ChevronUp, Loader2, Package, Award, DollarSign, Globe, Handshake } from 'lucide-react'
+import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake } from 'lucide-react'
 
 interface CloudOffering {
   name: string
-  description: string
-  dates?: string
+  availability?: string
+  pricing?: string
+  url?: string
 }
 
 interface CloudProgram {
   name: string
   description: string
   eligibility?: string
+  url?: string
 }
 
 interface CloudIncentive {
   name: string
   description: string
   value?: string
+  url?: string
 }
 
-interface CloudSection {
+interface CloudProvider {
   provider: string
+  acv: number
+  hasCloudSpend: boolean
+  hasCloudIntel: boolean
   offerings: CloudOffering[]
   programs: CloudProgram[]
   incentives: CloudIncentive[]
@@ -39,7 +46,7 @@ interface CloudSection {
 }
 
 interface CloudMarketplaceData {
-  clouds: CloudSection[]
+  providers: CloudProvider[]
   newsletterDate: string | null
   cachedAt: string | null
 }
@@ -51,18 +58,22 @@ const PROVIDER_COLORS: Record<string, string> = {
   Oracle: 'text-red-400 bg-red-500/10 border-red-500/20',
 }
 
-export function CloudMarketplaceDetail() {
+interface Props {
+  customerName: string
+}
+
+export function CloudMarketplaceDetail({ customerName }: Props) {
   const [data, setData] = useState<CloudMarketplaceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    fetch('/api/cloud-marketplace/details')
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/cloud-marketplace`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
-  }, [])
+  }, [customerName])
 
   const toggleProvider = (provider: string) => {
     setExpandedProviders(prev => {
@@ -82,12 +93,12 @@ export function CloudMarketplaceDetail() {
     )
   }
 
-  if (!data || data.clouds.length === 0) {
+  if (!data || data.providers.length === 0) {
     return (
       <div className="bg-surface border border-border rounded-xl p-6 text-center">
         <Cloud className="w-8 h-8 text-text-secondary mx-auto mb-2" />
-        <p className="text-sm text-text-secondary">No cloud marketplace data available</p>
-        <p className="text-xs text-text-secondary/60 mt-1">Data refreshes weekly from the Cloud Marketplaces newsletter</p>
+        <p className="text-sm text-text-secondary">No cloud marketplace data for this customer</p>
+        <p className="text-xs text-text-secondary/60 mt-1">Data shows when customer has cloud spend or uses cloud platforms</p>
       </div>
     )
   }
@@ -100,24 +111,36 @@ export function CloudMarketplaceDetail() {
         </p>
       )}
 
-      {data.clouds.map(cloud => {
-        const isExpanded = expandedProviders.has(cloud.provider)
-        const colorClass = PROVIDER_COLORS[cloud.provider] ?? 'text-text-primary bg-border/30 border-border'
-        const totalItems = cloud.offerings.length + cloud.programs.length + cloud.incentives.length
+      {data.providers.map(provider => {
+        const isExpanded = expandedProviders.has(provider.provider)
+        const colorClass = PROVIDER_COLORS[provider.provider] ?? 'text-text-primary bg-border/30 border-border'
+
+        // Count offerings by availability type
+        const availableToday = provider.offerings.filter(o => o.availability === 'Available Today').length
+        const viaPrivateOffer = provider.offerings.filter(o => o.availability === 'Via Private Offer').length
 
         return (
-          <div key={cloud.provider} className="bg-surface border border-border rounded-xl overflow-hidden">
+          <div key={provider.provider} className="bg-surface border border-border rounded-xl overflow-hidden">
             <button
-              onClick={() => toggleProvider(cloud.provider)}
+              onClick={() => toggleProvider(provider.provider)}
               className="w-full px-5 py-4 flex items-center justify-between hover:bg-border/10 transition-colors text-left"
             >
-              <div className="flex items-center gap-3">
-                <span className={`text-sm font-bold px-2.5 py-1 rounded border ${colorClass}`}>
-                  {cloud.provider}
-                </span>
-                <span className="text-xs text-text-secondary">
-                  {totalItems} item{totalItems !== 1 ? 's' : ''}
-                </span>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-bold px-2.5 py-1 rounded border ${colorClass}`}>
+                    {provider.provider}
+                  </span>
+                </div>
+                {provider.hasCloudSpend && (
+                  <span className="text-xs text-text-secondary">
+                    ${Math.round(provider.acv).toLocaleString()} Red Hat marketplace spend
+                  </span>
+                )}
+                {!provider.hasCloudSpend && provider.hasCloudIntel && (
+                  <span className="text-xs text-text-secondary">
+                    Uses {provider.provider}, no RH spend yet
+                  </span>
+                )}
               </div>
               {isExpanded ? (
                 <ChevronUp className="w-4 h-4 text-text-secondary" />
@@ -128,37 +151,18 @@ export function CloudMarketplaceDetail() {
 
             {isExpanded && (
               <div className="px-5 pb-5 space-y-4 border-t border-border/60">
-                {/* Offerings */}
-                {cloud.offerings.length > 0 && (
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Package className="w-3.5 h-3.5 text-accent" />
-                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Offerings</h4>
-                    </div>
-                    <div className="space-y-2">
-                      {cloud.offerings.map((o, i) => (
-                        <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
-                          <p className="text-sm font-medium text-text-primary">{o.name}</p>
-                          <p className="text-xs text-text-secondary mt-1">{o.description}</p>
-                          {o.dates && <p className="text-xs text-accent mt-1">{o.dates}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Programs */}
-                {cloud.programs.length > 0 && (
-                  <div>
+                {provider.programs.length > 0 && (
+                  <div className="mt-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Award className="w-3.5 h-3.5 text-accent" />
                       <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Programs</h4>
                     </div>
                     <div className="space-y-2">
-                      {cloud.programs.map((p, i) => (
+                      {provider.programs.map((p, i) => (
                         <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
                           <p className="text-sm font-medium text-text-primary">{p.name}</p>
-                          <p className="text-xs text-text-secondary mt-1">{p.description}</p>
+                          {p.description && <p className="text-xs text-text-secondary mt-1">{p.description}</p>}
                           {p.eligibility && (
                             <p className="text-xs text-warning mt-1">Eligibility: {p.eligibility}</p>
                           )}
@@ -169,17 +173,17 @@ export function CloudMarketplaceDetail() {
                 )}
 
                 {/* Incentives / SPIFFs */}
-                {cloud.incentives.length > 0 && (
+                {provider.incentives.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <DollarSign className="w-3.5 h-3.5 text-success" />
                       <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Incentives & SPIFFs</h4>
                     </div>
                     <div className="space-y-2">
-                      {cloud.incentives.map((inc, i) => (
+                      {provider.incentives.map((inc, i) => (
                         <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
                           <p className="text-sm font-medium text-text-primary">{inc.name}</p>
-                          <p className="text-xs text-text-secondary mt-1">{inc.description}</p>
+                          {inc.description && <p className="text-xs text-text-secondary mt-1">{inc.description}</p>}
                           {inc.value && (
                             <p className="text-xs text-success font-medium mt-1">{inc.value}</p>
                           )}
@@ -189,15 +193,27 @@ export function CloudMarketplaceDetail() {
                   </div>
                 )}
 
+                {/* Offering Count Summary */}
+                {provider.offerings.length > 0 && (
+                  <div>
+                    <p className="text-xs text-text-secondary">
+                      {provider.offerings.length} Red Hat offering{provider.offerings.length !== 1 ? 's' : ''}
+                      {availableToday > 0 && ` (${availableToday} available today`}
+                      {viaPrivateOffer > 0 && `, ${viaPrivateOffer} via private offer`}
+                      {(availableToday > 0 || viaPrivateOffer > 0) && ')'}
+                    </p>
+                  </div>
+                )}
+
                 {/* New Countries */}
-                {cloud.newCountries.length > 0 && (
+                {provider.newCountries.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Globe className="w-3.5 h-3.5 text-accent" />
                       <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">New Countries</h4>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {cloud.newCountries.map((country, i) => (
+                      {provider.newCountries.map((country, i) => (
                         <span key={i} className="text-xs px-2 py-1 rounded bg-border/40 text-text-primary">{country}</span>
                       ))}
                     </div>
@@ -205,14 +221,14 @@ export function CloudMarketplaceDetail() {
                 )}
 
                 {/* Partnerships */}
-                {cloud.partnerships.length > 0 && (
+                {provider.partnerships.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Handshake className="w-3.5 h-3.5 text-accent" />
                       <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Partnerships</h4>
                     </div>
                     <div className="space-y-1">
-                      {cloud.partnerships.map((p, i) => (
+                      {provider.partnerships.map((p, i) => (
                         <p key={i} className="text-xs text-text-secondary">- {p}</p>
                       ))}
                     </div>

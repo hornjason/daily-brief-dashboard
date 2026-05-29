@@ -1599,7 +1599,7 @@ export function CustomerDetailPage() {
               <Cloud className="w-4 h-4 text-accent" />
               <h2 className="text-base font-semibold text-text-primary">Cloud Marketplace</h2>
             </div>
-            <CloudMarketplaceDetail />
+            <CloudMarketplaceDetail customerName={customerName} />
           </div>
           {/* BKL-HERO-18: L4-only — Cases section absent on L3 hero install */}
           {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
