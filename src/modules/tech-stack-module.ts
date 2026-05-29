@@ -325,7 +325,7 @@ Return ONLY the JSON array, no markdown fences.`
       // Entries with "cite: N" or empty sources get the next available grounding URL.
       let groundingIdx = 0
 
-      return parsed.map((t: any) => {
+      const entries = parsed.map((t: any) => {
         let source = String(t.source ?? '')
 
         // If source is a "cite: N" pattern or empty, try to assign a grounding chunk URL
@@ -352,7 +352,6 @@ Return ONLY the JSON array, no markdown fences.`
         }
       }) as TechEntry[]
 
-      // Resolve grounding redirect URLs to actual source URLs (Issue #215 pattern)
       return resolveGroundingUrls(entries, customerName)
     }
   } catch (e: any) {
