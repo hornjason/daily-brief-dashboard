@@ -174,6 +174,36 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
 - ❌ Caching Gemini output without a quality validator (ADR-024) — every Gemini-generated output must be validated before caching. No validator = no quality visibility = silent degradation.
 
+## ADR → PRINCIPLES.md Enforcement (MANDATORY)
+
+Every ADR that creates a mandatory requirement MUST have a corresponding update in this file. ADRs are decisions; PRINCIPLES.md is enforcement. An ADR without a pre-flight question or anti-pattern entry is a rule nobody checks.
+
+**When creating or updating an ADR, answer these:**
+
+1. **Does this ADR create a mandatory requirement for modules?** If yes → add a pre-flight question above.
+2. **Does this ADR define something modules must NOT do?** If yes → add to the Anti-patterns list above.
+3. **Does this ADR define a new contract between components?** If yes → add a contract section (like syncNow/ensureFresh, L3 Drive Refresh) above.
+
+**ADR template — mandatory sections:**
+
+Every ADR in `docs/adr/` must include these sections:
+- `## Status` — Proposed | Accepted | Deprecated
+- `## Context` — why this decision is needed
+- `## Decision` — what was decided
+- `## Consequences` — positive, negative, risks
+- `## PRINCIPLES.md Update` — **NEW (mandatory)**: state which pre-flight question, anti-pattern, or contract section was added/updated. If none needed, explicitly state "No PRINCIPLES.md update required — this ADR does not create mandatory module requirements." This section prevents drift between decisions and enforcement.
+
+**Cross-reference index — ADRs that created pre-flight questions:**
+
+| Pre-flight # | ADR | Question |
+|---|---|---|
+| 1-3 | ADR-027 | Signal scoring: rawRelevance, metadata, template routing |
+| 4 | ADR-021 | Signal auto-discovery: consumer visibility |
+| 5-6 | ADR-020, #328 | Module registration: ensureFresh, cacheTtlMs |
+| 7 | ADR-021 | Consumer ensureFresh contract |
+| 8 | ADR-020 | Admin panel visibility: refreshEndpoint, recordOutcome |
+| 9 | ADR-024 | Quality validator for Gemini output |
+
 ## Signal Scoring Quick Reference (ADR-027)
 
 | Tier | Range | Meaning |
