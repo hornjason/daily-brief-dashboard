@@ -67,6 +67,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
 7. **If this is a consumer that generates output, does it call `ensureFresh: true`?** Any consumer that produces user-facing content (campaigns, meeting prep, playbooks, account plans, email outreach) MUST call `loadCustomerSignals(slug, name, { ensureFresh: true })` before generation. This guarantees all signal modules are current before the output is built. Without this, consumers generate from empty or stale data — producing low-quality output that damages trust. No consumer may skip this. The cost (a few seconds of cache checks + selective refresh) is always worth it vs generating from stale signals.
 8. **Does this module appear in the admin Data Sources panel?** Every registered module must have: a `refreshEndpoint` (so users can manually refresh), a display name that matches Signal Quality names, and `recordOutcome()` called after every refresh so "Last checked" updates. If a module is invisible to the admin panel, it's invisible to the user — they can't diagnose or fix stale data.
+9. **If this module calls Gemini, does it have a quality validator?** (ADR-024) Every module that generates content via Gemini MUST have a quality validator in `src/quality-validators/`. The validator checks the output for completeness, specificity, and structural correctness before caching. Quality scorecard is saved alongside the output. No Gemini-generated content may be cached without validation. Existing validators: `campaign-validator.ts`, `meeting-prep-validator.ts`, `intelligence-validator.ts`, `account-plan-validator.ts`, `playbook-validator.ts`, `tech-stack-validator.ts`. Reference: `docs/adr/ADR-024-gemini-output-quality-gate.md`.
 
 ## Consumer → ensureFresh Contract
 
@@ -163,7 +164,7 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
 - ❌ Adding signal type to a Gemini prompt instruction — template it, don't prompt-engineer it
 - ❌ Building a consumer that assembles its own signal context — use `templateAll()`
-- ❌ Creating a feature without answering the 5 pre-flight questions
+- ❌ Creating a feature without answering the 9 pre-flight questions
 - ❌ Shipping without checking the signal debug endpoint for the new data
 - ❌ Building a module with cached data but no `ensureFresh()` — consumers will generate with stale/missing data
 - ❌ Hardcoding refresh sources in signal-loader — use the registry auto-discovery pattern
@@ -171,6 +172,7 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
 - ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
 - ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
+- ❌ Caching Gemini output without a quality validator (ADR-024) — every Gemini-generated output must be validated before caching. No validator = no quality visibility = silent degradation.
 
 ## Signal Scoring Quick Reference (ADR-027)
 
