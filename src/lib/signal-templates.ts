@@ -168,55 +168,73 @@ export function templateProductAlignment(signals: Signal[]): string | null {
  * Renders: Provider, ACV, Programs, Offerings
  */
 export function templateCloudMarketplace(signals: Signal[]): string | null {
-  const cloudSignals = signals.filter(s => routeSignal(s) === 'cloud')
+  // Only show clouds the customer actually touches (spend or intelligence)
+  const cloudSignals = signals.filter(s =>
+    routeSignal(s) === 'cloud' && s.metadata?.provider && (s.metadata?.hasCloudSpend || s.metadata?.hasCloudIntel)
+  )
   if (cloudSignals.length === 0) return null
 
-  // #378: Aggregate by provider — collect programs and offerings from all signals
-  // Individual program/incentive signals have offeringType but no programs array
-  const byProvider = new Map<string, { acv: number; programs: Set<string>; offerings: Set<string> }>()
+  // Sort: spend first, then intel
+  const sorted = cloudSignals.slice().sort((a, b) => {
+    const aRank = a.metadata?.hasCloudSpend ? 2 : 1
+    const bRank = b.metadata?.hasCloudSpend ? 2 : 1
+    return bRank - aRank
+  })
 
-  for (const s of cloudSignals) {
+  const lines: string[] = []
+
+  for (const s of sorted) {
     const m = s.metadata ?? {}
-    const provider = String(m.provider ?? 'Unknown')
-    const entry = byProvider.get(provider) ?? { acv: 0, programs: new Set(), offerings: new Set() }
+    const provider = String(m.provider)
+    const acv = m.acvPlus ? `$${Math.round(Number(m.acvPlus)).toLocaleString()}` : null
 
-    // Take max ACV across signals for this provider
-    if (m.acvPlus && Number(m.acvPlus) > entry.acv) entry.acv = Number(m.acvPlus)
-
-    // Collect from explicit programs array (aggregate CCSP signals)
-    if (Array.isArray(m.programs)) {
-      for (const p of m.programs) entry.programs.add(String(p))
+    // Provider header
+    if (m.hasCloudSpend && acv) {
+      lines.push(`**${provider}** — ${acv} Red Hat marketplace spend`)
+    } else {
+      lines.push(`**${provider}** — customer uses ${provider}, no Red Hat marketplace spend yet`)
     }
 
-    // Collect from individual program/incentive signals (offeringType-based)
-    if (m.offeringType === 'program' || m.offeringType === 'incentive') {
-      // Extract program name from headline pattern: "Provider program: NAME — ..."
-      const match = s.headline.match(/(?:program|incentive):\s*([^—–-]+)/i)
-      if (match) entry.programs.add(match[1].trim())
+    // Programs (PPA, CPPO, MACC, Google Cloud Commit) — the actionable items
+    const programs = Array.isArray(m.programs) ? m.programs : []
+    for (const p of programs) {
+      let line = `- Program: ${p.name}`
+      if (p.eligibility) line += ` (${p.eligibility})`
+      lines.push(line)
     }
 
-    // Collect offerings
-    if (Array.isArray(m.productOfferingGroup)) {
-      for (const o of m.productOfferingGroup) entry.offerings.add(String(o))
-    } else if (m.offeringType === 'product' && m.productOfferingGroup) {
-      entry.offerings.add(String(m.productOfferingGroup))
+    // Incentives — directly revenue-relevant
+    const incentives = Array.isArray(m.incentives) ? m.incentives : []
+    for (const inc of incentives) {
+      let line = `- Incentive: ${inc.name}`
+      if (inc.value) line += ` (${inc.value})`
+      lines.push(line)
     }
 
-    byProvider.set(provider, entry)
+    // Offerings — summary count only, not full catalog
+    const offerings = Array.isArray(m.offerings) ? m.offerings : []
+    if (offerings.length) {
+      const available = offerings.filter((o: any) => o.availability?.toLowerCase()?.includes('available today')).length
+      const privateOffer = offerings.filter((o: any) => {
+        const a = (o.availability ?? '').toLowerCase()
+        return a.includes('private offer') || a.includes('subscription')
+      }).length
+      const parts: string[] = []
+      if (available) parts.push(`${available} available today`)
+      if (privateOffer) parts.push(`${privateOffer} via private offer`)
+      lines.push(`- ${offerings.length} Red Hat offerings on ${provider} Marketplace (${parts.join(', ')})`)
+    }
+
+    // New countries
+    const countries = Array.isArray(m.newCountries) && m.newCountries.length ? m.newCountries : []
+    if (countries.length) {
+      lines.push(`- Newly available in: ${countries.join(', ')}`)
+    }
+
+    lines.push('')
   }
 
-  const rows: string[] = []
-  rows.push('| Provider | ACV | Programs | Offerings |')
-  rows.push('|----------|-----|----------|-----------|')
-
-  for (const [provider, data] of byProvider) {
-    const acv = data.acv > 0 ? `$${Math.round(data.acv).toLocaleString()}` : 'N/A'
-    const programs = data.programs.size > 0 ? Array.from(data.programs).join(', ') : 'N/A'
-    const offerings = data.offerings.size > 0 ? Array.from(data.offerings).join(', ').slice(0, 40) : 'N/A'
-    rows.push(`| ${provider} | ${acv} | ${programs} | ${offerings} |`)
-  }
-
-  return rows.join('\n')
+  return lines.join('\n').trim()
 }
 
 /**

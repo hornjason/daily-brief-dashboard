@@ -873,9 +873,13 @@ export async function generateBrief(
       emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
       console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
 
-      // Append deterministic Sales Alignment section via templateAll() (ADR-031)
+      // Append deterministic sections via templateAll() (ADR-031, #451)
       const { templateAll } = await import('./lib/signal-templates.ts')
       const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug: toSlug(customer.name) })
+      if (templateResult.sections.cloudMarketplace) {
+        brief = `${brief}\n\n## Cloud & Marketplace\n\n${templateResult.sections.cloudMarketplace}`
+        console.log(`[brief] Appended Cloud & Marketplace section`)
+      }
       if (templateResult.sections.salesAlignment) {
         brief = `${brief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
         console.log(`[brief] Appended Sales Alignment section`)
@@ -1006,11 +1010,14 @@ Keep total brief under 250 words.`
       'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
       prompt,
     )
-    // Append deterministic Sales Alignment section via templateAll() (ADR-031)
+    // Append deterministic sections via templateAll() (ADR-031, #451)
     const { templateAll } = await import('./lib/signal-templates.ts')
     const customerSlug = toSlug(customer.name)
     const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
     const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug })
+    if (templateResult.sections.cloudMarketplace) {
+      fallbackBrief = `${fallbackBrief}\n\n## Cloud & Marketplace\n\n${templateResult.sections.cloudMarketplace}`
+    }
     if (templateResult.sections.salesAlignment) {
       fallbackBrief = `${fallbackBrief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
     }

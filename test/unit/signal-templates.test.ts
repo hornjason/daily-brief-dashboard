@@ -39,17 +39,28 @@ const mockProductSignal: Signal = {
 
 const mockCloudSignal: Signal = {
   source: 'cloud-marketplace',
-  type: 'cloud-spend',
-  headline: 'AWS Marketplace Activity',
-  detail: 'Customer purchasing OpenShift via AWS Marketplace',
+  type: 'product-intel',
+  headline: 'AWS Marketplace: 2 offerings, 2 programs',
+  detail: 'ROSA\nRHEL\nPROGRAM: Commit\nPROGRAM: EDP',
   score: 0.90,
   timestamp: new Date().toISOString(),
   metadata: {
     provider: 'AWS',
+    offeringType: 'summary',
     hasCloudSpend: true,
+    hasCloudIntel: true,
     acvPlus: 125000,
-    programs: ['Commit', 'EDP'],
-    productOfferingGroup: ['OpenShift', 'RHEL'],
+    offerings: [
+      { name: 'OpenShift', availability: 'Available today' },
+      { name: 'RHEL', availability: 'Available today' },
+    ],
+    programs: [
+      { name: 'Commit', description: 'Committed spend program' },
+      { name: 'EDP', description: 'Enterprise Discount Program' },
+    ],
+    incentives: [],
+    newCountries: [],
+    partnerships: [],
   },
 }
 
@@ -144,60 +155,32 @@ describe('templateCloudMarketplace', () => {
     expect(result).toBeNull()
   })
 
-  test('renders cloud marketplace table', () => {
+  test('renders condensed cloud marketplace with spend and programs', () => {
     const result = templateCloudMarketplace([mockCloudSignal])
-    expect(result).toContain('| Provider | ACV | Programs | Offerings |')
-    expect(result).toContain('| AWS | $125,000 | Commit, EDP | OpenShift, RHEL |')
+    expect(result).toContain('**AWS**')
+    expect(result).toContain('$125,000 Red Hat marketplace spend')
+    expect(result).toContain('Program: Commit')
+    expect(result).toContain('Program: EDP')
+    expect(result).toContain('Red Hat offerings on AWS Marketplace')
   })
 
-  test('aggregates program names from individual program signals (#378)', () => {
-    // Individual program signals have offeringType: 'program' but no programs array
-    const programSignal1: Signal = {
-      source: 'cloud-marketplace',
-      type: 'product-intel',
-      headline: 'AWS program: EDP — leverage existing $50,000 spend',
-      detail: 'Enterprise Discount Program',
-      score: 0.8,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        provider: 'AWS',
-        offeringType: 'program',
-        hasCloudSpend: true,
-        acvPlus: 50000,
-      },
-    }
-    const programSignal2: Signal = {
-      source: 'cloud-marketplace',
-      type: 'product-intel',
-      headline: 'AWS program: CPPO — leverage existing $50,000 spend',
-      detail: 'Channel Partner Private Offer',
-      score: 0.8,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        provider: 'AWS',
-        offeringType: 'program',
-        hasCloudSpend: true,
-        acvPlus: 50000,
-      },
-    }
-
-    const result = templateCloudMarketplace([programSignal1, programSignal2])
-    expect(result).not.toBeNull()
-    // Should aggregate program names from headlines into Programs column
-    expect(result).toContain('EDP')
-    expect(result).toContain('CPPO')
-    // Should show one aggregated row per provider, not individual rows
-    const awsRows = result!.split('\n').filter(l => l.includes('| AWS |'))
-    expect(awsRows.length).toBe(1)
-  })
-
-  test('handles missing ACV', () => {
-    const signalNoACV: Signal = {
+  test('filters out providers without spend or intel', () => {
+    const generalSignal: Signal = {
       ...mockCloudSignal,
-      metadata: { provider: 'Azure', hasCloudSpend: true },
+      metadata: { ...mockCloudSignal.metadata, provider: 'Oracle', hasCloudSpend: false, hasCloudIntel: false, acvPlus: 0 },
     }
-    const result = templateCloudMarketplace([signalNoACV])
-    expect(result).toContain('| Azure | N/A |')
+    const result = templateCloudMarketplace([generalSignal])
+    expect(result).toBeNull()
+  })
+
+  test('shows intel-based providers with positioning message', () => {
+    const intelSignal: Signal = {
+      ...mockCloudSignal,
+      metadata: { ...mockCloudSignal.metadata, provider: 'Azure', hasCloudSpend: false, hasCloudIntel: true, acvPlus: 0 },
+    }
+    const result = templateCloudMarketplace([intelSignal])
+    expect(result).toContain('**Azure**')
+    expect(result).toContain('customer uses Azure, no Red Hat marketplace spend yet')
   })
 })
 

@@ -11,12 +11,13 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
 describe('Cloud marketplace drill-down (#352)', () => {
-  test('cloud-marketplace module signals include offeringType metadata', () => {
+  test('cloud-marketplace module signals use summary offeringType with structured metadata', () => {
     const modulePath = resolve(import.meta.dir, '../../src/modules/cloud-marketplace-module.ts')
     const content = readFileSync(modulePath, 'utf-8')
-    expect(content).toContain("offeringType: 'product'")
-    expect(content).toContain("offeringType: 'program'")
-    expect(content).toContain("offeringType: 'incentive'")
+    expect(content).toContain("offeringType: 'summary'")
+    expect(content).toContain('offerings: cloud.offerings.map')
+    expect(content).toContain('programs: cloud.programs.map')
+    expect(content).toContain('incentives: cloud.incentives.map')
   })
 
   test('cloud marketplace API route exists for raw detail data', () => {
