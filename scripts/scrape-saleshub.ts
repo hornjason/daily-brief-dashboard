@@ -159,14 +159,70 @@ function isEnglishDocument(fileName: string): boolean {
 // ── API-based Document Download (#448) ────────────────────────────────────────
 
 /**
- * Download a single document via the Seismic API using the Bearer token.
- * Tries the content download endpoint, then falls back to the version endpoint.
+ * Discover the Seismic download URL pattern by navigating to a document page
+ * and intercepting the download request. Returns a URL template with {contentId}
+ * and {versionId} placeholders, or null if discovery fails.
+ */
+async function discoverDownloadUrlPattern(
+  page: Page,
+  sampleDoc: DocCenterDocument,
+): Promise<string | null> {
+  const contentId = (sampleDoc as any).contentId ?? ''
+  const versionId = sampleDoc.versionId ?? ''
+
+  const docUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
+  console.log(`[scrape-saleshub] Probing download URL pattern via ${sampleDoc.name}...`)
+
+  let downloadUrl: string | null = null
+
+  page.on('request', (req) => {
+    const url = req.url()
+    if (url.includes('download') && (url.includes(contentId) || url.includes(versionId))) {
+      downloadUrl = url
+      console.log(`[scrape-saleshub] Discovered download URL: ${url}`)
+    }
+  })
+
+  try {
+    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(5_000)
+
+    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
+    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
+      await dlBtn.click()
+      const download = await downloadPromise
+      if (download) {
+        await download.cancel().catch(() => {})
+      }
+      await page.waitForTimeout(2_000)
+    }
+  } catch (e: any) {
+    console.warn(`[scrape-saleshub] Download probe failed: ${e.message?.slice(0, 100)}`)
+  }
+
+  if (downloadUrl) {
+    const pattern = downloadUrl
+      .replace(contentId, '{contentId}')
+      .replace(versionId, '{versionId}')
+    console.log(`[scrape-saleshub] Download URL pattern: ${pattern}`)
+    return pattern
+  }
+
+  return null
+}
+
+/**
+ * Download a single document via the discovered Seismic download URL pattern.
+ * Falls back to Playwright download interception if pattern is not available.
  * Returns the local file path on success, or null on failure.
  */
 async function apiDownloadDocument(
+  page: Page,
   doc: DocCenterDocument,
   authCtx: { auth: string; headers: Record<string, string> },
   outputDir: string,
+  urlPattern?: string | null,
 ): Promise<string | null> {
   const contentId = (doc as any).contentId ?? ''
   const versionId = doc.versionId ?? ''
@@ -179,46 +235,53 @@ async function apiDownloadDocument(
     return localPath
   }
 
-  const downloadUrls = [
-    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v2/versions/${versionId}/download`,
-    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v1/versions/${versionId}/download`,
-    `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/services/content/v2/contents/${contentId}/versions/${versionId}/download`,
-  ]
-
-  for (const url of downloadUrls) {
+  // Try direct API download if we have a URL pattern
+  if (urlPattern && contentId && versionId) {
+    const url = urlPattern.replace('{contentId}', contentId).replace('{versionId}', versionId)
     try {
-      const res = await fetch(url, {
-        headers: {
-          Authorization: authCtx.auth,
-          profileversionid: '1d1918e9-b5b0-4428-b8fc-87e02ad44156',
-          teamsiteid: authCtx.headers.teamsiteid ?? '1',
-          'x-seismic-route': authCtx.headers['x-seismic-route'] ?? '',
-          seismicclientname: authCtx.headers.seismicclientname ?? '',
-        },
-      })
+      const result = await page.evaluate(async (args) => {
+        try {
+          const res = await fetch(args.url, {
+            headers: { Authorization: args.auth, profileversionid: args.pvid },
+          })
+          if (!res.ok) return { ok: false, status: res.status }
+          const ct = res.headers.get('content-type') ?? ''
+          if (ct.includes('text/html')) return { ok: false, status: -1 }
+          const buf = await res.arrayBuffer()
+          if (buf.byteLength < 500) return { ok: false, status: -2 }
+          return { ok: true, data: Array.from(new Uint8Array(buf)), size: buf.byteLength }
+        } catch { return { ok: false, status: -3 } }
+      }, { url, auth: authCtx.auth, pvid: DOCCENTER_PROFILE })
 
-      if (!res.ok) continue
-
-      const contentType = res.headers.get('content-type') ?? ''
-      if (contentType.includes('text/html')) continue
-
-      const buffer = Buffer.from(await res.arrayBuffer())
-      if (buffer.length < 1000) continue
-
-      const { writeFileSync } = await import('fs')
-      mkdirSync(outputDir, { recursive: true })
-      writeFileSync(localPath, buffer)
-
-      if (!isRealDocument(localPath)) {
+      if (result.ok && result.data) {
+        const buffer = Buffer.from(result.data)
+        mkdirSync(outputDir, { recursive: true })
+        const { writeFileSync } = await import('fs')
+        writeFileSync(localPath, buffer)
+        if (isRealDocument(localPath)) return localPath
         try { unlinkSync(localPath) } catch {}
-        continue
       }
-
-      return localPath
-    } catch {
-      continue
-    }
+    } catch {}
   }
+
+  // Fallback: navigate to doc page and click Download
+  try {
+    const docUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${versionId}`
+    await page.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(3_000)
+
+    const dlBtn = page.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"]').first()
+    if (await dlBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      const downloadPromise = page.waitForEvent('download', { timeout: 60_000 })
+      await dlBtn.click()
+      const download = await downloadPromise
+      mkdirSync(outputDir, { recursive: true })
+      const savePath = resolve(outputDir, download.suggestedFilename() || fileName)
+      await download.saveAs(savePath)
+      if (isRealDocument(savePath)) return savePath
+      try { unlinkSync(savePath) } catch {}
+    }
+  } catch {}
 
   return null
 }
@@ -228,10 +291,12 @@ async function apiDownloadDocument(
  * Returns array of local file paths for successfully downloaded documents.
  */
 async function apiDownloadCategory(
+  page: Page,
   docs: DocCenterDocument[],
   authCtx: { auth: string; headers: Record<string, string> },
   categoryName: string,
   outputDir: string,
+  urlPattern?: string | null,
 ): Promise<{ downloaded: string[]; failed: string[] }> {
   const downloaded: string[] = []
   const failed: string[] = []
@@ -242,7 +307,7 @@ async function apiDownloadCategory(
       continue
     }
 
-    const localPath = await apiDownloadDocument(doc, authCtx, outputDir)
+    const localPath = await apiDownloadDocument(page, doc, authCtx, outputDir, urlPattern)
     if (localPath) {
       downloaded.push(localPath)
       console.log(`[scrape-saleshub] + ${doc.name} (${doc.contentType})`)
@@ -615,6 +680,15 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
 
     let totalDownloaded = 0, totalUploaded = 0, totalSkipped = 0, totalFailed = 0
 
+    // Discover the download URL pattern by probing one document
+    let downloadPattern: string | null = null
+    if (uniqueDocs.length > 0) {
+      downloadPattern = await discoverDownloadUrlPattern(page, uniqueDocs[0])
+      if (!downloadPattern) {
+        console.warn('[scrape-saleshub] Could not discover download URL pattern — will use per-page fallback (slower)')
+      }
+    }
+
     // API-based download per TDP — download each document individually via HTTP
     for (const tdp of facets.tdps) {
       const tdpDocs = uniqueDocs.filter(d => d.tdp?.toLowerCase() === tdp.toLowerCase())
@@ -622,7 +696,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       console.log(`[scrape-saleshub] Downloading TDP "${tdp}": ${tdpDocs.length} documents via API...`)
 
       const tdpDir = resolve(contentDir, `TDP_${tdp.replace(/[/\\?%*:|"<>]/g, '_')}`)
-      const result = await apiDownloadCategory(tdpDocs, authCtx, tdp, tdpDir)
+      const result = await apiDownloadCategory(page, tdpDocs, authCtx, tdp, tdpDir, downloadPattern)
 
       const folderId = tdpFolderIds[tdp.toLowerCase()]
       for (const filePath of result.downloaded) {
@@ -662,7 +736,7 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       console.log(`[scrape-saleshub] Downloading Play "${play}": ${playDocs.length} documents via API...`)
 
       const playDir = resolve(contentDir, `Play_${play.replace(/[/\\?%*:|"<>]/g, '_')}`)
-      const result = await apiDownloadCategory(playDocs, authCtx, play, playDir)
+      const result = await apiDownloadCategory(page, playDocs, authCtx, play, playDir, downloadPattern)
 
       const folderId = playFolderIds[play.toLowerCase()]
       for (const filePath of result.downloaded) {
