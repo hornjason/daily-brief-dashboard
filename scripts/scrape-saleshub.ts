@@ -202,25 +202,52 @@ async function bulkDownloadByContentType(
   )
   await page.waitForTimeout(8_000)
 
-  // Click the content type checkbox in the sidebar (visible without any other filter)
+  // Expand all content type options — click every "Show more" / "Show N more" link
+  // The sidebar initially shows only the top ~10 content types; rest are hidden
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const showMore = page.getByText(/Show \d+ more/i).first()
+    const showMoreSimple = page.getByText('Show more', { exact: false }).first()
+    if (await showMore.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await showMore.click()
+      console.log(`[scrape-saleshub] Clicked "Show more" (attempt ${attempt + 1})`)
+      await page.waitForTimeout(2_000)
+    } else if (await showMoreSimple.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await showMoreSimple.click()
+      console.log(`[scrape-saleshub] Clicked "Show more" simple (attempt ${attempt + 1})`)
+      await page.waitForTimeout(2_000)
+    } else {
+      break
+    }
+  }
+
+  // Also scroll the sidebar to ensure all options are rendered
+  await page.evaluate(() => {
+    const panels = document.querySelectorAll('[class*="filter"], [class*="sidebar"], [class*="facet"], [class*="panel"]')
+    panels.forEach(p => {
+      p.scrollTop = p.scrollHeight
+      setTimeout(() => { p.scrollTop = 0 }, 500)
+    })
+  })
+  await page.waitForTimeout(2_000)
+
+  // Click the content type checkbox
   const ctCheckbox = page.getByText(contentType, { exact: true }).first()
   if (!await ctCheckbox.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    // Try scrolling sidebar to find it
-    await page.evaluate(() => {
-      const panels = document.querySelectorAll('[class*="filter"], [class*="sidebar"], [class*="facet"]')
-      panels.forEach(p => { p.scrollTop = p.scrollHeight })
-    })
-    await page.waitForTimeout(2_000)
+    // Last resort: try partial match
+    const ctPartial = page.getByText(contentType).first()
+    if (await ctPartial.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await ctPartial.click()
+      console.log(`[scrape-saleshub] Applied content type filter (partial match): "${contentType}"`)
+      await page.waitForTimeout(5_000)
+    } else {
+      console.warn(`[scrape-saleshub] Content type "${contentType}" not visible in sidebar — skipping`)
+      return []
+    }
+  } else {
+    await ctCheckbox.click()
+    await page.waitForTimeout(5_000)
+    console.log(`[scrape-saleshub] Applied content type filter: "${contentType}"`)
   }
-
-  if (!await ctCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    console.warn(`[scrape-saleshub] Content type "${contentType}" not visible in sidebar — skipping`)
-    return []
-  }
-
-  await ctCheckbox.click()
-  await page.waitForTimeout(5_000)
-  console.log(`[scrape-saleshub] Applied content type filter: "${contentType}"`)
 
   // Select all items
   const masterSelectors = [
