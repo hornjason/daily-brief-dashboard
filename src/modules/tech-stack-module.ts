@@ -351,12 +351,35 @@ Return ONLY the JSON array, no markdown fences.`
           lastResearched: now,
         }
       }) as TechEntry[]
+
+      // Resolve grounding redirect URLs to actual source URLs (Issue #215 pattern)
+      return resolveGroundingUrls(entries, customerName)
     }
   } catch (e: any) {
     console.error(`[tech-stack] Gemini extraction failed for ${customerName}: ${e?.message}`)
   }
 
   return []
+}
+
+async function resolveGroundingUrls(entries: TechEntry[], customerName: string): Promise<TechEntry[]> {
+  return Promise.all(entries.map(async (entry) => {
+    if (!entry.source || !entry.source.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
+      return entry
+    }
+
+    try {
+      const res = await fetch(entry.source, { redirect: 'manual', signal: AbortSignal.timeout(5000) })
+      const location = res.headers.get('location')
+      if (location && location.startsWith('http') && !location.includes('grounding-api-redirect')) {
+        return { ...entry, source: location }
+      }
+    } catch { /* timeout or network error — use fallback */ }
+
+    // Fallback: Google search for the tool + company
+    const fallback = `https://www.google.com/search?q=${encodeURIComponent(`${customerName} ${entry.name}`)}`
+    return { ...entry, source: fallback }
+  }))
 }
 
 async function enrichProprietaryTech(customerName: string, tech: TechEntry): Promise<TechEntry> {
