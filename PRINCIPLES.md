@@ -95,6 +95,31 @@ This is enforced by requiring Gemini prompts for all consumers to:
 
 If no business objective is known for the customer, the consumer should flag this as a data gap — not fall back to generic positioning.
 
+## Gemini Output Quality Gate Contract (MANDATORY — ADR-024)
+
+Every module that calls Gemini for content extraction or generation MUST wrap the output with `validateAndRetry()` from `src/gemini-quality-gate.ts`. No exceptions — this was a hard-learned rule after cloud marketplace shipped extraction without validation and produced empty/degraded cache that replaced good data.
+
+### The contract
+
+1. **Create a validator** in `src/quality-validators/{module}-validator.ts` implementing `QualityValidator`
+2. **Define checks** specific to the content type (minimum item counts, required fields populated, structural completeness)
+3. **Wire `validateAndRetry()`** around the Gemini call in `syncNow()`
+4. **Stale-overwrite guard** — if validated output scores lower than existing cache, keep existing cache
+5. **Scorecard persistence** — save `.qualityScorecard` alongside the cached output
+
+### Minimum checks for extraction modules (like cloud-marketplace, competitive-intel, tech-stack)
+
+- Minimum record count (e.g., >= 3 cloud providers, >= 5 total offerings)
+- Required fields populated (not empty strings)
+- Output not smaller than existing cache without explanation
+- No duplicate/repeated entries
+
+### Anti-patterns
+
+- ❌ Calling Gemini for extraction without `validateAndRetry()` — produces silent quality degradation
+- ❌ Caching empty/degraded extraction output without comparing to existing cache — overwrites good data with bad
+- ❌ Relying solely on `responseSchema` for quality — schema enforces structure, not content completeness
+
 ## syncNow vs ensureFresh Contract (MANDATORY)
 
 Every registered module implements two refresh methods with distinct purposes:
