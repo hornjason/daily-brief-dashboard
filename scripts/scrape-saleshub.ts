@@ -169,15 +169,17 @@ const SALESHUB_BASE = 'https://saleshub.redhat.com'
  */
 function buildDownloadUrls(teamsiteId: string, contentId: string, versionId: string): string[] {
   return [
+    // Pattern matching the working search API: /gateway/services/{service}/tenants/redhat/api/services/{service}/v1/...
+    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/services/library/v1/files/${contentId}/versions/${versionId}/download`,
+    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/services/library/v2/files/${contentId}/versions/${versionId}/download`,
+    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/services/content/v1/files/${contentId}/versions/${versionId}/download`,
+    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/services/content/v2/files/${contentId}/versions/${versionId}/download`,
     // Documented Seismic API paths through gateway
     `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
     `${SALESHUB_BASE}/gateway/services/integration/v2/teamsites/${teamsiteId}/files/${contentId}/content`,
-    // Alternative gateway mappings
-    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/integration/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
-    `${SALESHUB_BASE}/gateway/services/library/tenants/redhat/api/v2/teamsites/${teamsiteId}/files/${contentId}/content`,
-    // Direct Seismic API (may work if gateway proxies transparently)
-    `${SALESHUB_BASE}/gateway/services/content/tenants/redhat/api/v2/teamsites/${teamsiteId}/files/${contentId}/versions/${versionId}/content`,
-    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/v2/files/${contentId}/versions/${versionId}/content`,
+    // DocCenter-specific paths
+    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/services/doccenter/v1/files/${contentId}/download`,
+    `${SALESHUB_BASE}/gateway/services/doccenter/tenants/redhat/api/v1/contents/${contentId}/download`,
   ]
 }
 

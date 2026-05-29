@@ -465,7 +465,14 @@ export async function discoverFacets(
     const doc0 = sr.Documents[0]
     const teamFields = Object.keys(doc0).filter(k => k.toLowerCase().includes('teamsite') || k.toLowerCase().includes('tenant') || k.toLowerCase().includes('library'))
     console.log(`[content-discovery] Sample doc keys with teamsite/tenant/library: ${teamFields.map(k => `${k}=${JSON.stringify(doc0[k])?.slice(0, 50)}`).join(', ')}`)
-    console.log(`[content-discovery] Sample doc top-level keys: ${Object.keys(doc0).slice(0, 20).join(', ')}`)
+    console.log(`[content-discovery] Sample doc top-level keys: ${Object.keys(doc0).join(', ')}`)
+    // Log download-relevant fields
+    const dlFields = ['ContentSources', 'Locations', 'DownloadUrl', 'Url', 'Link', 'AssetUrl', 'NativeDownloadUrl', 'ViewUrl']
+    for (const f of dlFields) {
+      if (doc0[f] !== undefined) console.log(`[content-discovery] Doc.${f}: ${JSON.stringify(doc0[f])?.slice(0, 200)}`)
+    }
+    // Also dump VersionId, Name, Size for confirmation
+    console.log(`[content-discovery] Doc sample: Name=${doc0.Name}, ContentId=${doc0.ContentId}, VersionId=${doc0.VersionId}, Format=${doc0.Format}, Size=${doc0.Size}`)
   }
 
   const facets = parseFacetsFromApiResponse(response)
