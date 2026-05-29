@@ -275,7 +275,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
     required: ['newsletterDate', 'clouds'],
   }
 
-  const userPrompt = `Slide deck content (HTML):\n\n${slideText.slice(0, 30000)}\n\nNewsletter email body (HTML):\n\n${htmlBody.slice(0, 10000)}\n\nExtract cloud marketplace data as JSON. Preserve any URLs found in anchor tags.`
+  const userPrompt = `Slide deck content:\n\n${slideText.slice(0, 15000)}\n\nNewsletter email body:\n\n${htmlBody.slice(0, 5000)}\n\nExtract cloud marketplace data as JSON. Preserve any URLs found in anchor tags.`
 
   try {
     const result = await callGemini(EXTRACTION_PROMPT, userPrompt, {
