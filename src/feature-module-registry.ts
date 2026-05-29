@@ -50,7 +50,7 @@ const SIGNAL_BUDGETS: Record<string, number> = {
   'ccsp': 8,
   'cases': 8,
   'cloud-marketplace': 10,
-  'tech-stack': 8,
+  'tech-stack': 50,
   'rh-rss': 5,
   'subscriptions': 5,
   'intelligence': 5,
