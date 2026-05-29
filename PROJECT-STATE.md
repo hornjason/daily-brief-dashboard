@@ -11,7 +11,7 @@ updated: 2026-05-28
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-28 — SalesHub DocCenter content discovery (#448: signal module wired, scraper improvements merged). Bulk ZIP + Drive upload, freshness check, cache skip. Signal module `saleshub-content` registered. 2172 unit tests passing.
+Last updated: 2026-05-29 — SalesHub DocCenter shipped (#448): 225 files downloaded, 67 with extracted text (2.7M chars), signal module live. L3 Drive Refresh (#460): admin refresh pulls from Drive. Scraper merge resilience (#461): Drive fallback + name mapping. Coverage 81%. L3 refresh contract in PRINCIPLES.md. 2147 unit tests passing.
 
 ---
 
