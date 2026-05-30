@@ -499,3 +499,95 @@ describe('Export parity — Google Docs export covers Dashboard sections', () =>
     expect(missing).toEqual([])
   })
 })
+
+// ── ADR → PRINCIPLES.md Drift Detection ─────────────────────────────────────
+// Every ADR that creates mandatory requirements must have a corresponding
+// entry in PRINCIPLES.md. This test catches drift automatically.
+
+describe('ADR → PRINCIPLES.md drift detection', () => {
+  const principlesPath = resolve(__dirname, '../../PRINCIPLES.md')
+  const adrDir = resolve(__dirname, '../../docs/adr')
+
+  let principlesContent: string
+  let adrFiles: string[]
+
+  beforeAll(() => {
+    principlesContent = readFileSync(principlesPath, 'utf-8')
+    adrFiles = existsSync(adrDir)
+      ? readdirSync(adrDir).filter(f => f.endsWith('.md')).sort()
+      : []
+  })
+
+  test('every ADR with mandatory requirements is referenced in PRINCIPLES.md', () => {
+    const unreferenced: string[] = []
+
+    for (const file of adrFiles) {
+      const content = readFileSync(resolve(adrDir, file), 'utf-8')
+
+      const adrMatch = file.match(/(?:ADR-)?(\d+)/)
+      if (!adrMatch) continue
+      const adrNum = adrMatch[1]
+
+      // Check if ADR creates cross-module mandatory requirements
+      // Look for "modules MUST", "consumers MUST", "every module", "every consumer" — not just "required" in isolation
+      const hasMust = /modules?\s+MUST|consumers?\s+MUST|every\s+module|every\s+consumer|always\s+use\s+`/i.test(content)
+      if (!hasMust) continue
+
+      // Check if referenced in PRINCIPLES.md
+      const adrRef = `ADR-${adrNum.padStart(3, '0')}`
+      const isReferenced = principlesContent.includes(adrRef) || principlesContent.includes(`ADR-${adrNum}`)
+
+      if (!isReferenced) {
+        unreferenced.push(`${file} creates mandatory requirements but is not referenced in PRINCIPLES.md`)
+      }
+    }
+
+    expect(unreferenced).toEqual([])
+  })
+
+  test('every ADR has a PRINCIPLES.md Update section', () => {
+    const missing: string[] = []
+
+    for (const file of adrFiles) {
+      const content = readFileSync(resolve(adrDir, file), 'utf-8')
+      if (/status:\s*deprecated/i.test(content)) continue
+
+      const hasPrinciplesSection = content.includes('PRINCIPLES.md Update') ||
+        content.includes('PRINCIPLES.md update') ||
+        content.includes('No PRINCIPLES.md update required')
+
+      if (!hasPrinciplesSection) {
+        missing.push(file)
+      }
+    }
+
+    // Advisory for now — existing ADRs predate the requirement
+    if (missing.length > 0) {
+      console.warn(`[advisory] ${missing.length} ADRs missing PRINCIPLES.md Update section:`)
+      for (const m of missing) console.warn(`  ${m}`)
+    }
+  })
+
+  test('PRINCIPLES.md has at least 15 pre-flight questions', () => {
+    const questions = principlesContent.match(/^\d+\.\s+\*\*/gm) ?? []
+    expect(questions.length).toBeGreaterThanOrEqual(15)
+  })
+
+  test('PRINCIPLES.md references all contract sections', () => {
+    const requiredSections = [
+      'syncNow vs ensureFresh',
+      'L3 Drive Refresh',
+      'Feature Module Registry Contract',
+      'Module Navigation Contract',
+      'Gemini Call Standardization',
+      'Playbook State Contract',
+      'Scheduler Registry Contract',
+      'Portfolio Signal Relevance',
+      'Solution Intelligence Contract',
+      'Template Engine Unification',
+    ]
+
+    const missing = requiredSections.filter(s => !principlesContent.includes(s))
+    expect(missing).toEqual([])
+  })
+})
