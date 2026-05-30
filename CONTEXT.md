@@ -309,6 +309,10 @@ _Avoid_: "page template", "page layout"
 **Contract-driven standardization**:
 Every module declares its full presence — data lifecycle, signals, navigation, tabs, scope — in a single `FeatureModule` registration. The system auto-discovers everything from the contract. No manual wiring, no special-casing, no per-module layout code. Adding a new feature = one file implementing the contract. UI components (`ModulePageShell`, `CustomerPicker`, tab bar) are shared and identical across all modules.
 
+**ADR governance — 3-layer drift prevention**:
+Architectural decisions live in `docs/adr/ADR-NNN-*.md`. Mandatory requirements from ADRs are enforced in `PRINCIPLES.md` (15 pre-flight questions, 19 anti-patterns, 10 contract sections). Drift between ADRs and PRINCIPLES.md is caught by 4 automated tests in `test/unit/architecture-compliance.test.ts`: (1) every ADR with cross-module mandatory language must be referenced in PRINCIPLES.md, (2) every ADR should have a "PRINCIPLES.md Update" section, (3) pre-flight question count ≥15, (4) all 10 contract sections present. New ADRs that create mandatory requirements without updating PRINCIPLES.md fail the build.
+_Avoid_: "manual audit", "convention-only enforcement"
+
 **Desktop-only**:
 The dashboard targets desktop browsers only. Mobile/tablet responsiveness is a future item — the app runs on a local container, so mobile access requires network access to the host. No responsive breakpoints or mobile layouts in current scope.
 

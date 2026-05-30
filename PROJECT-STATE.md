@@ -11,7 +11,7 @@ updated: 2026-05-29
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-29 — Tech Stack grounded search shipped (#386, #454, #455, #456): Gemini discovers real tools from job postings/case studies, context classification (using/evaluating/migrating_from), why field, source URL resolution, expandable UI, quality validator (ADR-024), budget uncapped. syncNow/ensureFresh contract enforced. ADR→PRINCIPLES.md enforcement contract added. Rebuild guard (#463). 2151 unit tests passing.
+Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure: all 16 ADRs audited, 18 items added (6 pre-flight questions Q10-Q15, 7 anti-patterns, 8 contract sections). 4 automated drift detection tests in architecture-compliance.test.ts — new ADRs that create mandatory requirements without updating PRINCIPLES.md fail the build. PRINCIPLES.md now has 15 pre-flight questions, 19 anti-patterns, 10 contract sections. 2155 unit tests passing.
 
 ---
 

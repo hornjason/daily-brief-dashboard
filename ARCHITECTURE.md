@@ -1668,8 +1668,12 @@ Two-layer enforcement of the three-layer architecture (scoring → templates →
 - **Consumer template usage:** All consumer files must import from `signal-templates.ts`
 - **Consumer pre-flight:** All consumers must use `loadCustomerSignals({ ensureFresh: true })` or `ensureSignalsCurrent()`
 - **Module coverage report:** Advisory listing of modules with `signals()` but missing `ensureFresh`/`cacheTtlMs`
+- **ADR → PRINCIPLES.md drift detection:** Every ADR with cross-module mandatory requirements (`modules MUST`, `consumers MUST`, `every module`, etc.) must be referenced in PRINCIPLES.md. Fails the build if a new ADR creates requirements without updating PRINCIPLES.md.
+- **ADR template compliance:** Advisory check that every ADR has a `## PRINCIPLES.md Update` section (warns for existing ADRs, will promote to failing once all are updated).
+- **Pre-flight question count:** PRINCIPLES.md must have ≥15 pre-flight questions — prevents accidental deletion.
+- **Contract section presence:** PRINCIPLES.md must contain all 10 named contract sections (syncNow/ensureFresh, L3 Drive Refresh, Feature Module Registry, Module Navigation, Gemini Call, Playbook State, Scheduler Registry, Portfolio Signal Relevance, Solution Intelligence, Template Engine Unification).
 
-All checks use auto-discovery from the registry and file system — no hardcoded lists. New modules and consumers are automatically checked.
+All checks use auto-discovery from the registry and file system — no hardcoded lists. New modules, consumers, and ADRs are automatically checked.
 
 ### Runtime compliance
 

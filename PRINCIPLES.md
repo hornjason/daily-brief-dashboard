@@ -322,6 +322,8 @@ Every ADR in `docs/adr/` must include these sections:
 - `## Consequences` — positive, negative, risks
 - `## PRINCIPLES.md Update` — **NEW (mandatory)**: state which pre-flight question, anti-pattern, or contract section was added/updated. If none needed, explicitly state "No PRINCIPLES.md update required — this ADR does not create mandatory module requirements." This section prevents drift between decisions and enforcement.
 
+**Automated enforcement:** `test/unit/architecture-compliance.test.ts` includes 4 drift detection tests that run on every `bun test`. If a new ADR creates mandatory requirements without updating this file, the build fails. This is the final safety net — convention + test + cross-reference index.
+
 **Cross-reference index — ADRs that created pre-flight questions:**
 
 | Pre-flight # | ADR | Question |
