@@ -9,6 +9,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'fs
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { sanitizeErr } from '../utils.ts'
+import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
+import { competitiveIntelValidator } from '../quality-validators/competitive-intel-validator.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -321,7 +323,25 @@ FeatureModuleRegistry.register({
             temperature: 0.2,
           })
 
-          const parsed = JSON.parse(result.text)
+          // ADR-024: Quality gate — validate and retry if below threshold
+          const gateResult = await validateAndRetry(
+            result.text,
+            { validator: competitiveIntelValidator },
+            async (failures, _attempt) => {
+              const feedback = formatFailureFeedback(failures)
+              const retryResult = await callGemini(EXTRACTION_PROMPT, content.slice(0, 40000) + '\n\n' + feedback, {
+                callType: 'competitive-intel-extraction',
+                model: 'full',
+                responseSchema,
+                deltaKey: `competitive-intel-${fileId}-retry`,
+                timeoutMs: 60_000,
+                temperature: 0.2,
+              })
+              return retryResult.text
+            }
+          )
+
+          const parsed = JSON.parse(gateResult.output)
           const extractions: CompetitiveExtraction[] = (Array.isArray(parsed) ? parsed : []).map((e: any) => ({
             competitor: String(e.competitor ?? ''),
             product: String(e.product ?? ''),
