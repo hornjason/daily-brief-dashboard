@@ -16,6 +16,8 @@ import { getFeatureCache } from './product-feature-radar.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
+import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
+import { customerProductIntelValidator } from './quality-validators/customer-product-intel-validator.ts'
 import { getAiConfig, getGeminiModel, getAutomationConfig } from './ai-config.ts'
 import { readSheetCache, readPipelineCache, toSlug } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
@@ -596,7 +598,39 @@ For initiativeAlignment: derive from the Account Intelligence section above. Eac
 
       if (jsonMatch) {
         try {
-          const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0])
+          const rawJsonText = jsonMatch[1] ?? jsonMatch[0]
+
+          // ADR-024: Quality gate — validate and retry if below threshold
+          const gateResult = await validateAndRetry(
+            rawJsonText,
+            { validator: customerProductIntelValidator },
+            async (failures, _attempt) => {
+              const feedback = formatFailureFeedback(failures)
+              // Re-invoke Gemini with failure feedback
+              const retryRes = await fetch(url, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(60_000),
+                body: JSON.stringify({
+                  systemInstruction: { parts: [{ text: systemPrompt }] },
+                  contents: [{ role: 'user', parts: [{ text: userPrompt + '\n\n' + feedback }] }],
+                  generationConfig: {
+                    temperature: getAiConfig().customerIntelTemperature,
+                    maxOutputTokens: 2048,
+                    thinkingConfig: { thinkingBudget: 0 },
+                  },
+                }),
+              })
+              if (!retryRes.ok) throw new Error(`Gemini retry failed: ${retryRes.status}`)
+              const retryJson = await retryRes.json() as any
+              const retryParts: any[] = retryJson.candidates?.[0]?.content?.parts ?? []
+              const retryText = retryParts.map((p: any) => p.text ?? '').join('\n').trim()
+              const retryMatch = retryText.match(/```json\s*([\s\S]*?)\s*```/) ?? retryText.match(/(\{[\s\S]*\})/)
+              return retryMatch ? (retryMatch[1] ?? retryMatch[0]) : rawJsonText
+            }
+          )
+
+          const parsed = JSON.parse(gateResult.output)
           intel = {
             product: slug,
             customer: customerName,

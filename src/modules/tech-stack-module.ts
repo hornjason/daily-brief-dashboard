@@ -14,6 +14,8 @@ import { getGeminiModel } from '../ai-config.ts'
 import { recordGeminiUsage } from '../gemini-cost-tracker.ts'
 import { sanitizeErr } from '../utils.ts'
 import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
+import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
+import { techStackValidator } from '../quality-validators/tech-stack-validator.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -320,6 +322,49 @@ Return ONLY the JSON array, no markdown fences.`
         }
       }
       if (!Array.isArray(parsed)) return []
+
+      // ADR-024: Quality gate — validate parsed JSON before proceeding
+      const gateResult = await validateAndRetry(
+        JSON.stringify(parsed),
+        { validator: techStackValidator },
+        async (failures, _attempt) => {
+          const feedback = formatFailureFeedback(failures)
+          // Re-invoke Gemini with failure feedback appended
+          const retryRes = await fetch(url, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(60_000),
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: userPrompt + '\n\n' + feedback }] }],
+              tools: [{ googleSearch: {} }],
+              generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 8192,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
+            }),
+          })
+          if (!retryRes.ok) throw new Error(`Gemini retry failed: ${retryRes.status}`)
+          const retryJson = await retryRes.json() as any
+          const retryParts: any[] = retryJson.candidates?.[0]?.content?.parts ?? []
+          let retryMatch: RegExpMatchArray | null = null
+          for (const p of retryParts) {
+            const t = (p.text ?? '').trim()
+            if (!t) continue
+            retryMatch = t.match(/```json\s*([\s\S]*?)\s*```/) ?? t.match(/(\[[\s\S]*\])/)
+            if (retryMatch) break
+          }
+          return retryMatch ? (retryMatch[1] ?? retryMatch[0]) : '[]'
+        }
+      )
+      // Re-parse from the gate's best output
+      try {
+        parsed = JSON.parse(gateResult.output)
+        if (!Array.isArray(parsed)) parsed = []
+      } catch {
+        // Gate output was invalid — fall back to original parsed
+      }
 
       const now = new Date().toISOString()
 
