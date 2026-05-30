@@ -1547,7 +1547,7 @@ The registry examines metadata to classify each signal:
 `redHatProducts` non-empty (+0.10), `acvPlus`/`amount` > 0 (+0.10), `confidence: HIGH` (+0.05), `context: evaluating/migrating_from` (+0.10), `severity` 1 (+0.15) / 2 (+0.10), `endDate` within 90 days (+0.10), `hasCloudSpend` (+0.10), `confidence: LOW` (-0.10).
 
 ### Per-source budget caps
-Applied in `collectAllSignals()` after scoring. pipeline=10, ccsp=8, cases=8, cloud-marketplace=10, tech-stack=8, rh-rss=5, subscriptions=5, intelligence=5, value-maps=3, news-radar=5, default=5.
+Applied in `collectAllSignals()` after scoring. pipeline=10, ccsp=8, cases=8, cloud-marketplace=10, tech-stack=50, rh-rss=5, subscriptions=5, intelligence=5, value-maps=3, news-radar=5, default=5. Tech-stack uncapped (#454) — all detected technologies surface.
 
 ### Signal debug
 `GET /api/customer/:name/signals/debug` returns every signal with score, tier, rawRelevance, metadata, and tier classification (Critical/High/Medium/Low/Noise).
