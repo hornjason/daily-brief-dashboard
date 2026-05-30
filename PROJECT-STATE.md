@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-29
+updated: 2026-05-30
 ---
 
 # DailyBriefDashboard — Project State
@@ -11,7 +11,7 @@ updated: 2026-05-29
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure: all 16 ADRs audited, 18 items added (6 pre-flight questions Q10-Q15, 7 anti-patterns, 8 contract sections). 4 automated drift detection tests in architecture-compliance.test.ts — new ADRs that create mandatory requirements without updating PRINCIPLES.md fail the build. PRINCIPLES.md now has 15 pre-flight questions, 19 anti-patterns, 10 contract sections. 2155 unit tests passing.
+Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship workflow hardened: mid-session fix rule (no inline fixes >1 line), doc cascade matrix in DURABILITY step, 3-layer drift prevention (convention + workflow + test). PRINCIPLES.md: 15 pre-flight questions, 19 anti-patterns, 10 contract sections. 2155 unit tests passing (33 architecture compliance tests including 4 drift detectors).
 
 ---
 

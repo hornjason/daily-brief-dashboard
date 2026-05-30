@@ -1692,6 +1692,45 @@ All checks use auto-discovery from the registry and file system — no hardcoded
 
 Admin page Feature Modules section shows compliance warnings per module.
 
+## §26a. Ship Workflow & Doc Cascade (2026-05-30)
+
+Every implementation task follows the `ship` skill: SCOPE → BUILD → VERIFY → DURABILITY. No inline fixes, no skipping steps.
+
+### Mid-session fix rule
+
+When testing or verifying reveals a new bug, do NOT fix inline. If >1 line of logic change → log it, write ACs, send to Marcus through ship. The only exemption is single-character typos or config value swaps.
+
+### Doc cascade matrix (fires in DURABILITY step)
+
+After every VERIFY, check which files need updating:
+
+| What changed | Update these files |
+|-------------|-------------------|
+| New ADR or contract | PRINCIPLES.md + ARCHITECTURE.md |
+| New module | ARCHITECTURE.md + PROJECT-STATE.md |
+| New endpoint | PROJECT-STATE.md |
+| New UI page or tab | PROJECT-STATE.md |
+| Structural pattern change | CONTEXT.md + ARCHITECTURE.md |
+| Agent workflow change | `~/.claude/PAI/BRIEF-TEMPLATES.md` |
+| Skill workflow change | `skills/{skill}/SKILL.md` |
+| Every deployment | PROJECT-STATE.md (last-updated line) |
+
+**Core 4 files** (always ask "does this need updating?"):
+1. `PRINCIPLES.md` — contracts and enforcement
+2. `ARCHITECTURE.md` — how things work
+3. `PROJECT-STATE.md` — what exists right now
+4. `CONTEXT.md` — domain language
+
+Most changes touch 1-2 files, not all 4. The matrix tells you which ones.
+
+### Three-layer drift prevention
+
+| Layer | What it catches | When it fires |
+|-------|----------------|---------------|
+| Convention | ADR template requires "PRINCIPLES.md Update" section | When Serena writes an ADR (Step 6 in architecture-and-adr skill) |
+| Workflow | Ship DURABILITY doc cascade matrix | After every VERIFY in the ship skill |
+| Test | `architecture-compliance.test.ts` drift detection | Every `bun test` run — fails the build |
+
 ## §27. Solution Intelligence Engine (ADR-030, 2026-05-21)
 
 Cross-reference layer that sits between data caches and signal-producing modules. Reads from multiple existing caches, computes cross-references, and provides enriched context.
