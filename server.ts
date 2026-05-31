@@ -84,6 +84,7 @@ import './src/modules/saleshub-module.ts'  // #424
 import './src/modules/ecosystem-catalog-module.ts'  // #438
 import './src/modules/cloud-marketplace-module.ts'  // #306, #451
 import './src/modules/saleshub-content-module.ts'  // #448
+import './src/modules/recommended-actions-module.ts'  // #482 — Intelligence Graph cross-referencing
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
