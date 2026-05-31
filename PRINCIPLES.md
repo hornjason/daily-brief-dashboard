@@ -87,6 +87,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 9. **Does every signal carry a source URL?** (#479) Every signal that references a source document, case, opportunity, partner solution, or article MUST populate the `url` field with a clickable link to the source. Intelligence without traceability is noise — users need one-click drill-down from recommendations to full details.
 10. **Is this module ingesting ALL available data from its source?** (#478) If a module reads from a cache file or API, it must emit signals for the complete dataset, not a truncated subset. Content caps for Gemini prompts are the Gemini call's concern — the signal itself must carry the full record. Budget caps in the registry control what consumers see; modules must not pre-truncate their signal output.
 11. **Does this callGemini() use the default model tier?** (#472) Never hardcode `model: 'lite'` or `model: 'full'` in callGemini options. Use the project default (set in ai-config.ts). Hardcoded tiers create invisible tech debt that persists across model migrations. Enforced by `test/unit/architecture-compliance.test.ts`.
+12. **If this module cross-references other modules' signals, does it use `collectAllSignalsUnbudgeted()`?** (#482, ADR-032) Cross-referencing modules need the full signal set to avoid missing corroborating signals that were budget-capped out. Only `collectAllSignalsUnbudgeted()` provides the complete picture. Using `collectAllSignals()` for cross-referencing produces incomplete recommendations.
 
 ## Consumer → ensureFresh Contract
 
@@ -235,6 +236,19 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Hardcoding `model: 'lite'` or `model: 'full'` in callGemini() — use project defaults from ai-config.ts. Only `model: 'pro'` is an allowed override, and only when justified. (#472)
 - ❌ Emitting signals without a `url` field — every signal must be traceable to its source for one-click drill-down. (#479)
 - ❌ Using wrong field names when reading cache data — verify field names against actual cache structure (e.g., `productDescription` not `productName`). (#473)
+- ❌ Using `collectAllSignals()` (budgeted) for cross-referencing logic — budget caps may remove signals that are corroborating inputs to a recommendation. Use `collectAllSignalsUnbudgeted()` for cross-reference computation; let the registry budget-cap the recommendation module's output. (#482, ADR-032)
+
+## Cross-Referencing Module Contract (MANDATORY — ADR-032)
+
+Any module that reads OTHER modules' signals to produce composite outputs (recommendations, correlations, intelligence graphs) MUST:
+
+1. Use `collectAllSignalsUnbudgeted()` — never the budgeted variant
+2. Register as a feature module (not a standalone utility) — so its output is budget-capped, debuggable, and visible in admin
+3. Set `rawRelevance` based on composite confidence (signal corroboration count + freshness + specificity) — never hardcode `score`
+4. Use Gemini only for narrative synthesis (`narrative` field), never for decision logic (which signals match which solutions)
+5. Cap its own output via registry budget (recommended: 5 per customer for composite recommendations)
+
+The query helper's outputs flow through `templateAll()` like any other signal. Consumers never call the query helper directly.
 
 ## Enforcement: architecture-compliance.test.ts
 
