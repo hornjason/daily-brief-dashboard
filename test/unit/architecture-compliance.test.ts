@@ -622,3 +622,96 @@ describe('PRINCIPLES.md integrity', () => {
     expect(principlesContent).toContain('architecture-compliance.test.ts')
   })
 })
+
+// ── #500: Ingested content quality — no binary garbage ──────────────────────
+
+describe('Content quality: ingested text must be readable (not binary)', () => {
+  const COMMON_WORDS = new Set([
+    'the', 'and', 'for', 'with', 'this', 'that', 'from', 'have', 'are', 'not',
+    'but', 'can', 'all', 'will', 'red', 'hat', 'cloud', 'platform', 'open',
+    'your', 'our', 'how', 'use', 'new', 'data', 'learn', 'more', 'about',
+  ])
+
+  function isReadableText(text: string): boolean {
+    if (!text || text.length < 20) return true
+    const sample = text.slice(0, 300)
+    const words = sample.match(/[a-zA-Z]{3,}/g) ?? []
+    if (words.length < 3) return false
+    const realWords = words.filter(w => COMMON_WORDS.has(w.toLowerCase()))
+    return realWords.length >= 2
+  }
+
+  test('saleshub-knowledge.json: extractedContent fields contain readable text, not binary', () => {
+    const paths = [
+      resolve(SRC_DIR, '../config-templates/saleshub-knowledge.json'),
+      resolve(SRC_DIR, '../config/saleshub-knowledge.json'),
+    ]
+    let kb: any = null
+    for (const p of paths) {
+      if (existsSync(p)) {
+        kb = JSON.parse(readFileSync(p, 'utf-8'))
+        break
+      }
+    }
+    if (!kb) return
+
+    const failures: string[] = []
+    for (const tdp of kb.tdps ?? []) {
+      for (const doc of tdp.documents ?? []) {
+        const text = doc.extractedContent ?? doc.textContent ?? ''
+        if (text.length >= 20 && !isReadableText(text)) {
+          failures.push(`${tdp.name}/${doc.name}: binary content (${text.slice(0, 40)}...)`)
+        }
+      }
+    }
+
+    expect(failures).toEqual([])
+  })
+
+  test('no config-template JSON files contain binary-encoded text fields', () => {
+    const configDir = resolve(SRC_DIR, '../config-templates')
+    if (!existsSync(configDir)) return
+
+    const failures: string[] = []
+    const jsonFiles = readdirSync(configDir).filter(f => f.endsWith('.json'))
+
+    for (const file of jsonFiles) {
+      try {
+        const content = JSON.parse(readFileSync(resolve(configDir, file), 'utf-8'))
+        checkObjectForBinaryText(content, file, '', failures)
+      } catch { /* skip unparseable */ }
+    }
+
+    expect(failures).toEqual([])
+  })
+})
+
+function checkObjectForBinaryText(obj: any, file: string, path: string, failures: string[]): void {
+  if (!obj || typeof obj !== 'object') return
+  const TEXT_KEYS = new Set(['extractedContent', 'textContent', 'extractedText', 'bodyText', 'content'])
+  const COMMON_WORDS = new Set([
+    'the', 'and', 'for', 'with', 'this', 'that', 'from', 'have', 'are', 'not',
+    'but', 'can', 'all', 'will', 'red', 'hat', 'cloud', 'your', 'our', 'how',
+  ])
+
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < Math.min(obj.length, 50); i++) {
+      checkObjectForBinaryText(obj[i], file, `${path}[${i}]`, failures)
+    }
+    return
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (TEXT_KEYS.has(key) && typeof value === 'string' && value.length >= 20) {
+      const sample = value.slice(0, 300)
+      const words = sample.match(/[a-zA-Z]{3,}/g) ?? []
+      const realWords = words.filter(w => COMMON_WORDS.has(w.toLowerCase()))
+      if (words.length >= 3 && realWords.length < 2) {
+        failures.push(`${file}${path}.${key}: binary content (${value.slice(0, 40)}...)`)
+      }
+    }
+    if (typeof value === 'object' && value !== null) {
+      checkObjectForBinaryText(value, file, `${path}.${key}`, failures)
+    }
+  }
+}
