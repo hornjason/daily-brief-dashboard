@@ -9,6 +9,7 @@ import { NewsRadarSettings } from '../NewsRadarSettings'
 interface AiSettings {
   intelligenceEnabled: boolean
   docClassifyMaxAgeDays: number
+  modelOverrides: Record<string, string>
 }
 
 interface RefreshIntervals {
@@ -141,6 +142,56 @@ function AiSettingsSection() {
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
           </button>
+        </div>
+      </div>
+
+      {/* Model Overrides */}
+      <div className="mt-4 border-t border-gray-700 pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-200">Model Overrides</p>
+          <button
+            onClick={() => handleSave({ modelOverrides: settings.modelOverrides })}
+            disabled={saving}
+            className="px-2 py-1 text-xs bg-accent/20 text-accent rounded hover:bg-accent/30 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : saved ? 'Saved' : 'Save Overrides'}
+          </button>
+        </div>
+        <div className="max-h-64 overflow-y-auto">
+          <table className="w-full text-xs" data-testid="model-overrides-table">
+            <thead><tr className="text-gray-400 border-b border-gray-700"><th className="text-left py-1 pr-2">Call Type</th><th className="text-left py-1">Model</th></tr></thead>
+            <tbody>
+              {[
+                'brief-synthesis', 'campaign-generation', 'customer-product-intel', 'customer-product-intel-expansion',
+                'doc-classify', 'doc-pdf-extraction', 'event-enrichment', 'news-search', 'news-scoring',
+                'tech-stack-extract', 'account-intelligence', 'account-plan', 'meeting-prep',
+                'domain-inference', 'competitive-intel', 'product-feature-extract', 'product-qa',
+                'value-positioning', 'expansion-analysis', 'material-extraction',
+              ].map(ct => (
+                <tr key={ct} className="border-b border-gray-800">
+                  <td className="py-1 pr-2 text-gray-300 font-mono">{ct}</td>
+                  <td className="py-1">
+                    <select
+                      value={(settings.modelOverrides ?? {})[ct] ?? 'default'}
+                      onChange={(e) => {
+                        const overrides = { ...(settings.modelOverrides ?? {}) }
+                        if (e.target.value === 'default') { delete overrides[ct] }
+                        else { overrides[ct] = e.target.value }
+                        setSettings({ ...settings, modelOverrides: overrides })
+                      }}
+                      data-testid={`model-override-${ct}`}
+                      className="bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-xs text-white focus:outline-none focus:border-accent"
+                    >
+                      <option value="default">default</option>
+                      <option value="full">full (flash)</option>
+                      <option value="lite">lite (flash-lite)</option>
+                      <option value="pro">pro</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -96,7 +96,7 @@ export async function callGemini(
   }
 
   // ── Step 2: Resolve model ──────────────────────────────────────────────────
-  const modelName = resolveModel(options.model ?? 'full')
+  const modelName = resolveModel(options.model ?? 'full', callType)
 
   // ── Step 3: Resolve timeout ────────────────────────────────────────────────
   const timeoutMs = resolveTimeout(options)
@@ -165,7 +165,14 @@ export async function callGemini(
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-function resolveModel(model: 'full' | 'lite' | 'pro'): string {
+function resolveModel(model: 'full' | 'lite' | 'pro', callType?: string): string {
+  if (callType) {
+    const overrides = getAiConfig().modelOverrides ?? {}
+    const override = overrides[callType]
+    if (override === 'pro') return 'gemini-2.5-pro'
+    if (override === 'lite') return getGeminiModelLite()
+    if (override === 'full') return getGeminiModel()
+  }
   if (model === 'pro') return 'gemini-2.5-pro'
   if (model === 'lite') return getGeminiModelLite()
   return getGeminiModel()

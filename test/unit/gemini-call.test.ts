@@ -493,6 +493,114 @@ describe('callGemini() — integration with primitives', () => {
   })
 })
 
+// ── Model override from config tests ────────────────────────────────────────
+
+describe('callGemini() — per-callType model overrides', () => {
+  test('uses config override when callType has an override set', async () => {
+    const fetchModule = await import('../../src/gemini-fetch.ts')
+    const authModule = await import('../../src/gemini-auth.ts')
+    const costModule = await import('../../src/gemini-cost-tracker.ts')
+    const aiConfigModule = await import('../../src/ai-config.ts')
+
+    const fetchSpy = spyOn(fetchModule, 'fetchGeminiWithRetry').mockImplementation(() =>
+      mockGeminiResponse('Test')
+    )
+    const authSpy = spyOn(authModule, 'getGeminiToken').mockImplementation(mockGetGeminiToken)
+    const costSpy = spyOn(costModule, 'recordGeminiUsage').mockImplementation(mockRecordGeminiUsage)
+    const configSpy = spyOn(aiConfigModule, 'getAiConfig').mockReturnValue({
+      ...aiConfigModule.DEFAULT_AI_CONFIG,
+      modelOverrides: { 'brief-synthesis': 'pro' },
+    })
+
+    const { callGemini } = await import('../../src/gemini-call.ts')
+
+    const result = await callGemini(
+      'You are a test assistant',
+      'Say hello',
+      {
+        callType: 'brief-synthesis',
+        model: 'lite',
+      }
+    )
+
+    expect(result.model).toBe('gemini-2.5-pro')
+
+    fetchSpy.mockRestore()
+    authSpy.mockRestore()
+    costSpy.mockRestore()
+    configSpy.mockRestore()
+  })
+
+  test('falls back to caller-specified model when no override exists', async () => {
+    const fetchModule = await import('../../src/gemini-fetch.ts')
+    const authModule = await import('../../src/gemini-auth.ts')
+    const costModule = await import('../../src/gemini-cost-tracker.ts')
+    const aiConfigModule = await import('../../src/ai-config.ts')
+
+    const fetchSpy = spyOn(fetchModule, 'fetchGeminiWithRetry').mockImplementation(() =>
+      mockGeminiResponse('Test')
+    )
+    const authSpy = spyOn(authModule, 'getGeminiToken').mockImplementation(mockGetGeminiToken)
+    const costSpy = spyOn(costModule, 'recordGeminiUsage').mockImplementation(mockRecordGeminiUsage)
+    const configSpy = spyOn(aiConfigModule, 'getAiConfig').mockReturnValue({
+      ...aiConfigModule.DEFAULT_AI_CONFIG,
+      modelOverrides: {},
+    })
+
+    const { callGemini } = await import('../../src/gemini-call.ts')
+
+    const result = await callGemini(
+      'You are a test assistant',
+      'Say hello',
+      {
+        callType: 'news-scoring',
+        model: 'lite',
+      }
+    )
+
+    expect(result.model).toContain('flash-lite')
+
+    fetchSpy.mockRestore()
+    authSpy.mockRestore()
+    costSpy.mockRestore()
+    configSpy.mockRestore()
+  })
+
+  test('falls back to caller model when modelOverrides is undefined in config', async () => {
+    const fetchModule = await import('../../src/gemini-fetch.ts')
+    const authModule = await import('../../src/gemini-auth.ts')
+    const costModule = await import('../../src/gemini-cost-tracker.ts')
+    const aiConfigModule = await import('../../src/ai-config.ts')
+
+    const fetchSpy = spyOn(fetchModule, 'fetchGeminiWithRetry').mockImplementation(() =>
+      mockGeminiResponse('Test')
+    )
+    const authSpy = spyOn(authModule, 'getGeminiToken').mockImplementation(mockGetGeminiToken)
+    const costSpy = spyOn(costModule, 'recordGeminiUsage').mockImplementation(mockRecordGeminiUsage)
+    const configWithoutOverrides = { ...aiConfigModule.DEFAULT_AI_CONFIG }
+    delete (configWithoutOverrides as any).modelOverrides
+    const configSpy = spyOn(aiConfigModule, 'getAiConfig').mockReturnValue(configWithoutOverrides)
+
+    const { callGemini } = await import('../../src/gemini-call.ts')
+
+    const result = await callGemini(
+      'You are a test assistant',
+      'Say hello',
+      {
+        callType: 'doc-classify',
+        model: 'pro',
+      }
+    )
+
+    expect(result.model).toBe('gemini-2.5-pro')
+
+    fetchSpy.mockRestore()
+    authSpy.mockRestore()
+    costSpy.mockRestore()
+    configSpy.mockRestore()
+  })
+})
+
 // ── Grounding + responseSchema guard (issue #425) ──────────────────────────
 
 describe('buildRequestBody() — grounding vs responseSchema guard', () => {

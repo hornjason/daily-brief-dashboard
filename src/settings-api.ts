@@ -438,6 +438,20 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       updated.docClassifyMaxAgeDays = v
     }
 
+    if ('modelOverrides' in body) {
+      const v = body.modelOverrides as Record<string, string>
+      if (typeof v !== 'object' || v === null || Array.isArray(v)) {
+        return c.json({ error: 'modelOverrides must be an object mapping callType to model tier' }, 400)
+      }
+      const validTiers = new Set(['full', 'lite', 'pro'])
+      for (const [key, tier] of Object.entries(v)) {
+        if (!validTiers.has(tier)) {
+          return c.json({ error: `modelOverrides["${key}"] must be one of: full, lite, pro` }, 400)
+        }
+      }
+      updated.modelOverrides = v
+    }
+
     try {
       let settings: Record<string, unknown> = {}
       try { settings = JSON.parse(readFileSync(USER_SETTINGS_PATH, 'utf-8')) } catch {}
