@@ -24,6 +24,58 @@ export interface NewsProvider {
   searchNews(customerName: string, domain?: string): Promise<NewsItem[]>
 }
 
+// ── Keyword-based heuristic scoring (#491) ──────────────────────────────────
+
+/**
+ * Deterministic scoring for obvious cases. Returns null when
+ * the article needs Gemini's contextual judgment.
+ *
+ * Score ranges align with news-config.ts significanceGuidelines:
+ * - 9-10: Critical (bankruptcy, major acquisition, C-suite departure)
+ * - 7-8:  Important (new tech initiative, major partnership, earnings)
+ * - 4-6:  Notable (product launch, minor leadership, industry report)
+ * - 1-3:  Low (routine press release, minor mention)
+ * - Otherwise → null (needs Gemini)
+ */
+function scoreByKeywords(
+  article: Omit<NewsItem, 'significanceScore'>,
+  customerName: string,
+  config: NewsConfig
+): number | null {
+  const text = (article.headline + ' ' + article.summary).toLowerCase()
+  const customerLower = customerName.toLowerCase()
+
+  // Critical keywords from config → score 8-9
+  for (const kw of config.criticalKeywords) {
+    if (text.includes(kw.toLowerCase())) {
+      if (text.includes(customerLower)) return 9
+      return 8
+    }
+  }
+
+  // Exclude keywords → score 2
+  for (const kw of config.excludeKeywords) {
+    if (text.includes(kw.toLowerCase())) return 2
+  }
+
+  // Customer name in headline specifically → score 7
+  if (article.headline.toLowerCase().includes(customerLower)) return 7
+
+  // High-signal types
+  const highSignalTypes = new Set(['acquisition', 'partnership', 'earnings', 'leadership'])
+  if (highSignalTypes.has(article.signalType)) return 7
+
+  // Medium-signal types
+  const mediumSignalTypes = new Set(['product', 'technology', 'regulatory', 'financial'])
+  if (mediumSignalTypes.has(article.signalType)) return 5
+
+  // Low-signal types
+  const lowSignalTypes = new Set(['blog post', 'thought leadership', 'company news'])
+  if (lowSignalTypes.has(article.signalType)) return 4
+
+  return null
+}
+
 // ── Implementation ───────────────────────────────────────────────────────────
 
 class GeminiGroundedNewsProvider implements NewsProvider {
@@ -174,11 +226,33 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
   /**
    * Second Gemini call: Score significance of articles
+   *
+   * Try keyword-based heuristic scoring first. Only send articles to Gemini
+   * that couldn't be scored deterministically.
    */
   private async scoreSignificance(articles: Omit<NewsItem, 'significanceScore'>[], customerName: string): Promise<NewsItem[]> {
     const config = loadNewsConfig()
 
-    // Build scoring guidelines from config
+    // Try keyword scoring first
+    const scored: NewsItem[] = []
+    const needsGemini: Omit<NewsItem, 'significanceScore'>[] = []
+
+    for (const article of articles) {
+      const keywordScore = scoreByKeywords(article, customerName, config)
+      if (keywordScore !== null) {
+        scored.push({ ...article, significanceScore: keywordScore })
+      } else {
+        needsGemini.push(article)
+      }
+    }
+
+    if (needsGemini.length === 0) {
+      console.log(`[news-provider] all ${scored.length} articles scored by keyword heuristic, skipping Gemini`)
+      return scored
+    }
+
+    console.log(`[news-provider] ${scored.length} articles scored by keyword heuristic, ${needsGemini.length} need Gemini scoring`)
+
     const guidelines = Object.entries(config.significanceGuidelines)
       .map(([range, desc]) => `- ${range}: ${desc}`)
       .join('\n')
@@ -189,7 +263,7 @@ ${guidelines}
 Higher scores for articles mentioning: ${config.criticalKeywords.join(', ')}
 Lower scores for articles mentioning: ${config.excludeKeywords.join(', ')}
 
-Input articles: ${JSON.stringify(articles, null, 2)}
+Input articles: ${JSON.stringify(needsGemini, null, 2)}
 
 Return: same array with significanceScore (integer 1-10) added to each item.
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
@@ -198,33 +272,31 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       callType: 'news-scoring',
       customerName,
       temperature: 0.2,
-      // No deltaKey — scoring depends on fresh articles from search
     })
 
     if (!result.text) {
       console.warn('[news-provider] Gemini returned no content for scoring query')
-      // Fallback: return articles with default score from config
-      return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
+      const geminiScored = needsGemini.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
+      return [...scored, ...geminiScored]
     }
 
-    // Parse JSON response
+    let geminiScored: NewsItem[]
     try {
-      // Strip markdown code blocks if present
       const cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      const scoredArticles = JSON.parse(cleaned)
+      const parsedArticles = JSON.parse(cleaned)
 
-      if (!Array.isArray(scoredArticles)) {
+      if (!Array.isArray(parsedArticles)) {
         console.warn('[news-provider] Gemini scoring response was not an array')
-        return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
+        geminiScored = needsGemini.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
+      } else {
+        geminiScored = parsedArticles
       }
-
-      return scoredArticles
     } catch (e: any) {
       console.warn('[news-provider] Failed to parse Gemini scoring response:', e.message)
-      console.warn('[news-provider] Raw response:', result.text.slice(0, 500))
-      // Fallback: return articles with default score from config
-      return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
+      geminiScored = needsGemini.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
     }
+
+    return [...scored, ...geminiScored]
   }
 
   /**
