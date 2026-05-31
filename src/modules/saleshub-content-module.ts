@@ -1,50 +1,63 @@
 // src/modules/saleshub-content-module.ts
-// GitHub Issue #448 — SalesHub Content signal module
-// Emits document-level signals from the SalesHub knowledge base.
+// GitHub Issues #448, #507 — SalesHub Content signal module
+// Emits document-level signals from the SalesHub Drive folder.
+// #507: Lists files directly from Drive instead of reading knowledge JSON.
 // Portfolio-scope: content is not customer-specific.
-// L3 Drive Refresh (#460): syncNow downloads fresh data from Drive before reloading.
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { loadSalesHubContent, getKnowledgeMtime, resetContentCache, type SalesHubDocument } from '../lib/saleshub-content.ts'
-import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
+import {
+  loadDriveContent,
+  getDriveContentMtime,
+  getDriveContentCachePath,
+  resetDriveContentCache,
+  mapFolderToProduct,
+  type DriveContentFile,
+} from '../lib/saleshub-content.ts'
+import { listSaleshubDriveFiles } from '../lib/saleshub-drive-sync.ts'
 import { loadCustomerContext, matchesSubscriptionProducts } from '../lib/customer-context-loader.ts'
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // weekly — content updates ~monthly
 
 /**
- * Format a document into a markdown detail block for signal consumers.
+ * Derive a user-friendly content type label from MIME type.
  */
-function formatDocumentDetail(doc: SalesHubDocument): string {
+function mimeToContentType(mimeType: string): string {
+  if (mimeType === 'application/vnd.google-apps.document') return 'Document'
+  if (mimeType === 'application/vnd.google-apps.presentation') return 'Presentation'
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') return 'Spreadsheet'
+  if (mimeType === 'application/pdf') return 'PDF'
+  if (mimeType.includes('presentationml') || mimeType.includes('powerpoint')) return 'PowerPoint'
+  if (mimeType.includes('spreadsheetml') || mimeType.includes('excel')) return 'Excel'
+  if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) return 'Word Document'
+  return 'File'
+}
+
+/**
+ * Format a Drive file into a markdown detail block for signal consumers.
+ */
+function formatDriveFileDetail(file: DriveContentFile): string {
   const parts: string[] = []
 
-  parts.push(`**${doc.name}**`)
+  parts.push(`**${file.name}**`)
 
-  if (doc.contentType) {
-    parts.push(`Content Type: ${doc.contentType}`)
+  const contentType = mimeToContentType(file.mimeType)
+  parts.push(`Content Type: ${contentType}`)
+
+  const product = mapFolderToProduct(file.parentFolder)
+  parts.push(`Product: ${product}`)
+
+  parts.push(`Folder: ${file.parentFolder}`)
+
+  if (file.driveUrl) {
+    parts.push(`[View Document](${file.driveUrl})`)
   }
 
-  if (doc.product) {
-    parts.push(`Product: ${doc.product}`)
-  }
-
-  if (doc.tdp) {
-    parts.push(`TDP: ${doc.tdp}`)
-  }
-
-  if (doc.salesPlay) {
-    parts.push(`Sales Play: ${doc.salesPlay}`)
-  }
-
-  if (doc.salesStage) {
-    parts.push(`Sales Stage: ${doc.salesStage}`)
-  }
-
-  if (doc.distributionTerms) {
-    parts.push(`Distribution: ${doc.distributionTerms}`)
-  }
-
-  if (doc.driveUrl) {
-    parts.push(`[View Document](${doc.driveUrl})`)
+  if (file.extractedText) {
+    // Include first 500 chars of extracted text as preview
+    const preview = file.extractedText.length > 500
+      ? file.extractedText.slice(0, 500) + '...'
+      : file.extractedText
+    parts.push(`\n${preview}`)
   }
 
   return parts.join('\n')
@@ -63,19 +76,18 @@ FeatureModuleRegistry.register({
   refreshInterval: null, // on-demand only
 
   cachePaths: (_slug: string) => {
-    // Uses same knowledge JSON as saleshub module
-    return []
+    return [getDriveContentCachePath()]
   },
 
   async ensureFresh(_customerSlug: string): Promise<void> {
-    const mtime = getKnowledgeMtime()
+    const mtime = getDriveContentMtime()
     if (mtime > 0 && Date.now() - mtime < CACHE_TTL_MS) return // fresh
-    // Stale or missing — pull from Drive
+    // Stale or missing — list files from Drive
     try {
-      const downloaded = await downloadSaleshubFromDrive()
-      if (downloaded) {
-        resetContentCache()
-        console.log('[saleshub-content] refreshed from Drive via ensureFresh')
+      const result = await listSaleshubDriveFiles()
+      if (result) {
+        resetDriveContentCache()
+        console.log(`[saleshub-content] refreshed Drive content via ensureFresh (${result.totalFiles} files)`)
       }
     } catch (e: any) {
       console.warn(`[saleshub-content] Drive refresh failed in ensureFresh: ${e.message}`)
@@ -91,50 +103,62 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Download fresh data from Drive before reloading (#460)
+    // List files directly from Drive folder (#507)
     try {
-      const downloaded = await downloadSaleshubFromDrive()
-      if (downloaded) console.log('[saleshub-content] downloaded fresh knowledge JSON from Drive')
+      const result = await listSaleshubDriveFiles()
+      if (result) {
+        resetDriveContentCache()
+        console.log(`[saleshub-content] listed ${result.totalFiles} files from Drive (${result.withText} with text)`)
+        FeatureModuleRegistry.recordOutcome('saleshub-content', {
+          success: true,
+          recordCount: result.totalFiles,
+        })
+        return
+      }
     } catch (e: any) {
-      console.warn(`[saleshub-content] Drive download failed — falling back to disk: ${e.message}`)
+      console.warn(`[saleshub-content] Drive listing failed: ${e.message}`)
     }
-    resetContentCache()
-    const docs = loadSalesHubContent()
-    if (docs.length === 0) {
-      console.warn(`[saleshub-content] zero-record guard: 0 documents loaded`)
-      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: 'No documents loaded' })
+
+    // Fallback: read from existing cache
+    resetDriveContentCache()
+    const files = loadDriveContent()
+    if (files.length === 0) {
+      console.warn('[saleshub-content] zero-record guard: 0 files in Drive content cache')
+      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: 'No files in Drive cache' })
       return
     }
-    console.log(`[saleshub-content] loaded ${docs.length} documents from knowledge JSON`)
+    console.log(`[saleshub-content] loaded ${files.length} files from Drive content cache`)
     FeatureModuleRegistry.recordOutcome('saleshub-content', {
       success: true,
-      recordCount: docs.length,
+      recordCount: files.length,
     })
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {
-    const docs = loadSalesHubContent()
-    if (docs.length === 0) return []
+    const files = loadDriveContent()
+    if (files.length === 0) return []
 
     // Load customer context for filtering (#486)
     const customerCtx = loadCustomerContext(customerSlug)
 
     const signals: Signal[] = []
 
-    for (const doc of docs) {
-      // Check if document's product/tdp matches customer subscriptions (#486)
-      const matchTargets = [doc.product, doc.tdp].filter((t): t is string => !!t && t.length > 0)
+    for (const file of files) {
+      const product = mapFolderToProduct(file.parentFolder)
+      const contentType = mimeToContentType(file.mimeType)
+
+      // Check if file's product (from folder name) matches customer subscriptions (#486)
+      const matchTargets = [product, file.parentFolder, file.name].filter(t => t.length > 0)
       const isCustomerMatch = matchesSubscriptionProducts(matchTargets, customerCtx.products)
 
       const metadata: Record<string, unknown> = {
-        documentName: doc.name,
-        contentType: doc.contentType,
-        tdp: doc.tdp,
-        salesPlay: doc.salesPlay,
-        product: doc.product,
-        distributionTerms: doc.distributionTerms,
-        salesStage: doc.salesStage,
-        driveUrl: doc.driveUrl,
+        documentName: file.name,
+        contentType,
+        product,
+        parentFolder: file.parentFolder,
+        driveUrl: file.driveUrl,
+        driveId: file.driveId,
+        mimeType: file.mimeType,
       }
 
       if (isCustomerMatch) {
@@ -144,10 +168,10 @@ FeatureModuleRegistry.register({
       signals.push({
         source: 'SalesHub Content',
         type: 'intelligence',
-        headline: `${doc.contentType}: ${doc.name}`,
-        detail: formatDocumentDetail(doc),
-        timestamp: doc.versionCreated || new Date().toISOString(),
-        url: doc.driveUrl,
+        headline: `${contentType}: ${file.name}`,
+        detail: formatDriveFileDetail(file),
+        timestamp: file.modifiedTime || new Date().toISOString(),
+        url: file.driveUrl,
         rawRelevance: 0.4, // general-scope baseline; customer match raises via scoring
         metadata,
       })

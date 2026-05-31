@@ -1,10 +1,11 @@
 // src/lib/saleshub-content.ts
-// GitHub Issue #448 — SalesHub Content library (signal module consumption layer)
-// Reads saleshub-knowledge.json and extracts document metadata for signal emission.
+// GitHub Issue #448, #507 — SalesHub Content library (signal module consumption layer)
+// Reads Drive content cache (drive-content.json) and knowledge JSON for signal emission.
 // Pure functions, no framework deps.
 
 import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { CACHE_DIR } from './paths.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -256,4 +257,117 @@ export function resetContentCache(): void {
   _cache = null
   _cacheMtime = 0
   _lastCheck = 0
+}
+
+// ── Drive Content Cache (#507) ──────────────────────────────────────────────
+
+export interface DriveContentFile {
+  name: string
+  mimeType: string
+  driveUrl: string
+  driveId: string
+  size: number | null
+  modifiedTime: string
+  parentFolder: string
+  extractedText: string | null
+}
+
+export interface DriveContentCache {
+  files: DriveContentFile[]
+  lastSynced: string
+  totalFiles: number
+  withText: number
+}
+
+const DRIVE_CONTENT_CACHE_PATH = resolve(CACHE_DIR, 'saleshub', 'drive-content.json')
+
+let _driveCache: DriveContentCache | null = null
+let _driveCacheMtime: number = 0
+let _driveLastCheck: number = 0
+
+function loadDriveCacheFromDisk(): DriveContentCache | null {
+  const now = Date.now()
+  if (_driveCache && now - _driveLastCheck < CHECK_INTERVAL_MS) {
+    return _driveCache
+  }
+
+  try {
+    if (!existsSync(DRIVE_CONTENT_CACHE_PATH)) return null
+    const mtime = statSync(DRIVE_CONTENT_CACHE_PATH).mtimeMs
+    if (_driveCache && mtime === _driveCacheMtime) {
+      _driveLastCheck = now
+      return _driveCache
+    }
+    _driveCache = JSON.parse(readFileSync(DRIVE_CONTENT_CACHE_PATH, 'utf-8'))
+    _driveCacheMtime = mtime
+    _driveLastCheck = now
+    return _driveCache
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Load Drive content files from the local cache.
+ * Returns empty array if cache does not exist.
+ */
+export function loadDriveContent(): DriveContentFile[] {
+  const cache = loadDriveCacheFromDisk()
+  return cache?.files ?? []
+}
+
+/**
+ * Get the mtime of the Drive content cache file (for ensureFresh checks).
+ */
+export function getDriveContentMtime(): number {
+  try {
+    if (existsSync(DRIVE_CONTENT_CACHE_PATH)) {
+      return statSync(DRIVE_CONTENT_CACHE_PATH).mtimeMs
+    }
+  } catch {}
+  return 0
+}
+
+/**
+ * Get the path to the Drive content cache file.
+ */
+export function getDriveContentCachePath(): string {
+  return DRIVE_CONTENT_CACHE_PATH
+}
+
+/**
+ * Reset the Drive content in-memory cache (for testing or forced reload).
+ */
+export function resetDriveContentCache(): void {
+  _driveCache = null
+  _driveCacheMtime = 0
+  _driveLastCheck = 0
+}
+
+// ── Product folder name mapping (#507) ──────────────────────────────────────
+
+const FOLDER_PRODUCT_MAP: Array<{ pattern: RegExp; product: string }> = [
+  { pattern: /^(Ansible|AAP)/i, product: 'Red Hat Ansible Automation Platform' },
+  { pattern: /^(OpenShift|OCP)/i, product: 'Red Hat OpenShift' },
+  { pattern: /^(RHEL|Red Hat Enterprise Linux|Enterprise Linux)/i, product: 'Red Hat Enterprise Linux' },
+  { pattern: /^(Advanced Cluster|ACM|RHACM)/i, product: 'Red Hat Advanced Cluster Management' },
+  { pattern: /^(Quay)/i, product: 'Red Hat Quay' },
+  { pattern: /^(Satellite)/i, product: 'Red Hat Satellite' },
+  { pattern: /^(JBoss|EAP|Middleware)/i, product: 'Red Hat JBoss Enterprise Application Platform' },
+  { pattern: /^(Insights)/i, product: 'Red Hat Insights' },
+  { pattern: /^(Virtualization|RHV|CNV|OpenShift Virtualization)/i, product: 'Red Hat OpenShift Virtualization' },
+  { pattern: /^(Storage|ODF|Ceph)/i, product: 'Red Hat OpenShift Data Foundation' },
+  { pattern: /^(Integration|Fuse|Camel|3scale)/i, product: 'Red Hat Integration' },
+  { pattern: /^(Developer|DevSpaces|CodeReady)/i, product: 'Red Hat Developer Tools' },
+]
+
+/**
+ * Map a Drive folder name to a known Red Hat product name.
+ * Returns the folder name unchanged if no mapping found.
+ */
+export function mapFolderToProduct(folderName: string): string {
+  for (const { pattern, product } of FOLDER_PRODUCT_MAP) {
+    if (pattern.test(folderName)) return product
+  }
+  return folderName
 }
