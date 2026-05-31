@@ -960,5 +960,35 @@ export function createCustomerRouter(): Hono {
     }
   })
 
+  // ── GET /api/customer/:name/recommendations — Cross-referencing recommended actions (#482, ADR-032) ──
+  router.get('/api/customer/:name/recommendations', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    try {
+      const slug = toSlug(customer.name)
+      const mod = (await import('./feature-module-registry.ts')).FeatureModuleRegistry.get('recommended-actions')
+      if (!mod?.signals) {
+        return c.json({ error: 'Recommended actions module not registered' }, 500)
+      }
+      const signals = await mod.signals(slug)
+      return c.json({
+        customer: customer.name,
+        recommendations: signals.map(s => ({
+          headline: s.headline,
+          detail: s.detail,
+          score: s.score,
+          rawRelevance: s.rawRelevance,
+          url: s.url,
+          metadata: s.metadata,
+        })),
+        count: signals.length,
+      })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   return router
 }

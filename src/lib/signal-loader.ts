@@ -3,7 +3,7 @@
 // Combines registry signal collection + legacy cache fallback
 // GitHub Issue #328 — Universal pre-flight signal refresh
 
-import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, scoreSignal, applyTimeDecay, type Signal } from '../feature-module-registry.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +84,44 @@ export async function ensureSignalsCurrent(
   }
 
   return { refreshed, skipped, failed }
+}
+
+// ── Unbounded signal collection (ADR-032 §3) ────────────────────────────────
+
+/**
+ * Collect ALL signals from all registered modules WITHOUT budget caps.
+ * Used exclusively by cross-referencing modules (recommended-actions) that need
+ * the full signal set for comprehensive cross-referencing.
+ *
+ * Same as collectAllSignals() but skips the per-source budget cap step.
+ * Signals are still scored and time-decayed — just not capped.
+ *
+ * GitHub Issue #482, ADR-032 §3
+ */
+export async function collectAllSignalsUnbudgeted(
+  customerSlug: string,
+): Promise<Signal[]> {
+  const allSignals: Signal[] = []
+  const modules = FeatureModuleRegistry.getRegisteredModules()
+
+  for (const module of modules) {
+    if (!module.signals) continue
+    // Skip the recommended-actions module to avoid circular dependency
+    if (module.name === 'recommended-actions') continue
+
+    try {
+      const signals = await module.signals(customerSlug)
+      allSignals.push(...signals)
+    } catch (e: any) {
+      console.warn(
+        `[signal-loader] collectAllSignalsUnbudgeted: ${module.name} failed for ${customerSlug}:`,
+        e?.message ?? e,
+      )
+    }
+  }
+
+  // Score and apply time decay (same as collectAllSignals) but NO budget cap
+  return allSignals.map(scoreSignal).map(applyTimeDecay)
 }
 
 // ── Signal loading ───────────────────────────────────────────────────────────

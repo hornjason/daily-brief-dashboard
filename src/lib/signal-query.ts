@@ -1,0 +1,341 @@
+/**
+ * src/lib/signal-query.ts — Cross-referencing query helper
+ * GitHub Issue #482, ADR-032 §6
+ *
+ * Pure function that cross-references customer signals against the solution
+ * portfolio (solution plays, ecosystem partners, cloud marketplace, saleshub)
+ * and returns ranked recommended actions.
+ *
+ * No Gemini calls — all logic is deterministic rule-based matching.
+ * The `narrative` field stays undefined (lazy generation comes later).
+ */
+
+import type { Signal } from '../feature-module-registry.ts'
+import type { EcosystemPartnerCache } from './ecosystem-catalog.ts'
+
+/**
+ * Check if any target strings match against tech names (case-insensitive substring).
+ * Inlined from customer-context-loader.ts to avoid dependency on file that may not exist in all contexts.
+ */
+function matchesTechStack(targets: string[], customerTechs: string[]): boolean {
+  if (customerTechs.length === 0 || targets.length === 0) return false
+  for (const target of targets) {
+    const targetLower = target.toLowerCase()
+    for (const tech of customerTechs) {
+      if (tech.includes(targetLower) || targetLower.includes(tech)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface RecommendedAction {
+  /** Composite narrative placeholder until Gemini fills it */
+  action: string
+  /** Confidence based on signal corroboration count */
+  confidence: 'high' | 'medium' | 'emerging'
+  /** The signals that triggered this recommendation */
+  triggerSignals: Signal[]
+  /** The matched solution from the portfolio */
+  solution: {
+    name: string
+    type: 'play' | 'partner' | 'program' | 'product' | 'incentive'
+    url?: string
+    assets?: Array<{ name: string; url: string; type: string }>
+  }
+  /** One-click actions for the consumer UI */
+  actions: string[]
+  /** Gemini-generated "why this, why now" — populated lazily, may be absent */
+  narrative?: string
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_RECOMMENDATIONS = 10
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Extract technology names from signal metadata or headline */
+function extractTechNames(signal: Signal): string[] {
+  const m = signal.metadata ?? {}
+  const names: string[] = []
+
+  // Direct techName field (from tech-stack-module)
+  if (typeof m.techName === 'string') names.push(m.techName)
+
+  // technologies array (from tech-stack-module)
+  if (Array.isArray(m.technologies)) {
+    for (const t of m.technologies) {
+      if (typeof t === 'string') names.push(t)
+    }
+  }
+
+  // matchedTechnologies (from solution-intelligence-module)
+  if (Array.isArray(m.matchedTechnologies)) {
+    for (const t of m.matchedTechnologies) {
+      if (typeof t === 'string') names.push(t)
+    }
+  }
+
+  // techMentions (from cases with tech context)
+  if (Array.isArray(m.techMentions)) {
+    for (const t of m.techMentions) {
+      if (typeof t === 'string') names.push(t)
+    }
+  }
+
+  return [...new Set(names)]
+}
+
+/** Extract keywords from text for fuzzy matching against trigger technologies */
+function extractKeywordsFromText(text: string): string[] {
+  // Common tech keywords to look for in free text
+  const keywords = text.toLowerCase().split(/[\s,;:.!?()\[\]{}]+/).filter(w => w.length >= 3)
+  return [...new Set(keywords)]
+}
+
+/** Check if any trigger technology matches the given tech names (case-insensitive) */
+function matchesTriggers(techNames: string[], triggers: string[]): boolean {
+  const techLower = techNames.map(t => t.toLowerCase())
+  for (const trigger of triggers) {
+    const triggerLower = trigger.toLowerCase()
+    for (const tech of techLower) {
+      if (tech === triggerLower || tech.includes(triggerLower) || triggerLower.includes(tech)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/** Check if signal text mentions any trigger technology */
+function textMentionsTrigger(signal: Signal, triggers: string[]): boolean {
+  const text = `${signal.headline} ${signal.detail}`.toLowerCase()
+  for (const trigger of triggers) {
+    const triggerLower = trigger.toLowerCase()
+    if (triggerLower.length >= 3 && text.includes(triggerLower)) {
+      return true
+    }
+  }
+  return false
+}
+
+// ── Confidence scoring (ADR-032 §6 Step 4) ────────────────────────────────────
+
+function computeConfidence(triggerCount: number): 'high' | 'medium' | 'emerging' {
+  if (triggerCount >= 3) return 'high'
+  if (triggerCount >= 2) return 'medium'
+  return 'emerging'
+}
+
+// ── Cross-reference dimensions ────────────────────────────────────────────────
+
+interface PendingRecommendation {
+  solutionKey: string
+  solutionName: string
+  solutionType: 'play' | 'partner' | 'program' | 'product' | 'incentive'
+  solutionUrl?: string
+  assets?: Array<{ name: string; url: string; type: string }>
+  triggerSignals: Signal[]
+  actions: string[]
+}
+
+/**
+ * Core cross-referencing function.
+ * ADR-032 §6 — Algorithm Steps 1-5.
+ *
+ * Pure function, no framework dependencies, fully testable.
+ */
+export function getRecommendations(
+  signals: Signal[],
+  solutionPlays: any[],
+  ecosystemPartners: any[],
+  cloudMarketplace: any,
+  saleshubKnowledge: any,
+): RecommendedAction[] {
+  if (signals.length === 0) return []
+  if (solutionPlays.length === 0 && (!ecosystemPartners || ecosystemPartners.length === 0) && !cloudMarketplace) return []
+
+  // Step 1: Bucket signals by type
+  const techSignals = signals.filter(s => s.type === 'technology' || s.source === 'tech-stack')
+  const caseSignals = signals.filter(s => s.type === 'case' || s.source === 'cases')
+  const cloudSignals = signals.filter(s => s.type === 'cloud-spend' || s.source === 'ccsp')
+  const subSignals = signals.filter(s => s.type === 'subscription' || s.source === 'subscriptions')
+  const intelSignals = signals.filter(s => s.type === 'intelligence' || s.source === 'intelligence')
+
+  // Accumulator: group by solution key to merge corroborating signals
+  const pending = new Map<string, PendingRecommendation>()
+
+  function addTrigger(key: string, defaults: Omit<PendingRecommendation, 'triggerSignals'>, signal: Signal) {
+    const existing = pending.get(key)
+    if (existing) {
+      // Don't add duplicate signals
+      if (!existing.triggerSignals.some(s => s === signal)) {
+        existing.triggerSignals.push(signal)
+      }
+    } else {
+      pending.set(key, { ...defaults, triggerSignals: [signal] })
+    }
+  }
+
+  // Step 2a: Tech-stack x solution-plays
+  for (const signal of techSignals) {
+    const techNames = extractTechNames(signal)
+    if (techNames.length === 0) continue
+
+    for (const play of solutionPlays) {
+      if (matchesTriggers(techNames, play.triggerTechnologies ?? [])) {
+        addTrigger(`play:${play.id}`, {
+          solutionKey: `play:${play.id}`,
+          solutionName: play.name,
+          solutionType: 'play',
+          solutionUrl: undefined,
+          assets: undefined,
+          actions: ['View play deck', 'Draft email', 'Prep meeting'],
+        }, signal)
+      }
+    }
+  }
+
+  // Step 2b: Tech-stack x ecosystem-catalog
+  if (ecosystemPartners && ecosystemPartners.length > 0) {
+    for (const signal of techSignals) {
+      const techNames = extractTechNames(signal)
+      if (techNames.length === 0) continue
+
+      for (const partner of ecosystemPartners as EcosystemPartnerCache[]) {
+        for (const solution of partner.solutions) {
+          // Match partner name or solution categories against tech names
+          const targets = [
+            partner.partnerName,
+            ...solution.categories,
+            solution.platform,
+          ]
+          if (matchesTechStack(targets, techNames.map(t => t.toLowerCase()))) {
+            const assets = solution.resources?.map(r => ({
+              name: r.title,
+              url: r.url,
+              type: r.type,
+            }))
+            addTrigger(`partner:${partner.partnerSlug}:${solution.name}`, {
+              solutionKey: `partner:${partner.partnerSlug}:${solution.name}`,
+              solutionName: `${partner.partnerName}: ${solution.name}`,
+              solutionType: 'partner',
+              solutionUrl: solution.url,
+              assets,
+              actions: ['View partner solution', 'Request joint call', 'Share with customer'],
+            }, signal)
+          }
+        }
+      }
+    }
+  }
+
+  // Step 2c: Cloud-spend x cloud-marketplace programs
+  if (cloudMarketplace?.clouds && cloudSignals.length > 0) {
+    for (const signal of cloudSignals) {
+      const provider = String(signal.metadata?.provider ?? signal.metadata?.cloudPartner ?? '')
+      if (!provider) continue
+
+      for (const cloud of cloudMarketplace.clouds) {
+        if (cloud.provider.toLowerCase() === provider.toLowerCase() ||
+            provider.toLowerCase().includes(cloud.provider.toLowerCase())) {
+          for (const program of cloud.programs) {
+            addTrigger(`program:${cloud.provider}:${program.name}`, {
+              solutionKey: `program:${cloud.provider}:${program.name}`,
+              solutionName: program.name,
+              solutionType: 'program',
+              solutionUrl: undefined,
+              assets: undefined,
+              actions: ['View program details', 'Check eligibility', 'Draft proposal'],
+            }, signal)
+          }
+        }
+      }
+    }
+  }
+
+  // Step 2d: Case signals x solution-plays (technology mentions in cases)
+  for (const signal of caseSignals) {
+    const techMentions = extractTechNames(signal)
+
+    // Also check case text for technology mentions
+    for (const play of solutionPlays) {
+      const triggers = play.triggerTechnologies ?? []
+      if (
+        (techMentions.length > 0 && matchesTriggers(techMentions, triggers)) ||
+        textMentionsTrigger(signal, triggers)
+      ) {
+        addTrigger(`play:${play.id}`, {
+          solutionKey: `play:${play.id}`,
+          solutionName: play.name,
+          solutionType: 'play',
+          solutionUrl: undefined,
+          assets: undefined,
+          actions: ['View play deck', 'Draft email', 'Prep meeting'],
+        }, signal)
+      }
+    }
+  }
+
+  // Step 2e: Intelligence signals x solution-plays (business objectives alignment)
+  for (const signal of intelSignals) {
+    for (const play of solutionPlays) {
+      const triggers = play.triggerTechnologies ?? []
+      // Check if intelligence text mentions trigger technologies
+      if (textMentionsTrigger(signal, triggers)) {
+        addTrigger(`play:${play.id}`, {
+          solutionKey: `play:${play.id}`,
+          solutionName: play.name,
+          solutionType: 'play',
+          solutionUrl: undefined,
+          assets: undefined,
+          actions: ['View play deck', 'Draft email', 'Prep meeting'],
+        }, signal)
+      }
+    }
+  }
+
+  // Step 2f: Subscription x product-lifecycle (not implemented here — lifecycle data loading
+  // is handled by solution-intelligence-module already, this would be for future enrichment)
+
+  // Step 3: Convert pending to RecommendedAction[]
+  const recommendations: RecommendedAction[] = []
+
+  for (const rec of pending.values()) {
+    const triggerCount = rec.triggerSignals.length
+    const confidence = computeConfidence(triggerCount)
+
+    const triggerSummary = rec.triggerSignals
+      .map(s => s.headline)
+      .slice(0, 3)
+      .join(' + ')
+
+    recommendations.push({
+      action: `${triggerSummary} → ${rec.solutionName}`,
+      confidence,
+      triggerSignals: rec.triggerSignals,
+      solution: {
+        name: rec.solutionName,
+        type: rec.solutionType,
+        url: rec.solutionUrl,
+        assets: rec.assets,
+      },
+      actions: rec.actions,
+      narrative: undefined, // Lazy Gemini generation — ADR-032 §5
+    })
+  }
+
+  // Step 5: Rank by confidence then trigger count, cap at MAX_RECOMMENDATIONS
+  const confidenceOrder = { high: 3, medium: 2, emerging: 1 }
+  recommendations.sort((a, b) => {
+    const confDiff = confidenceOrder[b.confidence] - confidenceOrder[a.confidence]
+    if (confDiff !== 0) return confDiff
+    return b.triggerSignals.length - a.triggerSignals.length
+  })
+
+  return recommendations.slice(0, MAX_RECOMMENDATIONS)
+}
