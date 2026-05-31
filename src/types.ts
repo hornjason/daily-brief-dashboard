@@ -73,8 +73,10 @@ export interface EmailHighlight {
   from: string
   date: string
   snippet: string
+  bodyText?: string  // #476 — plain text body from Gmail full format, capped at 5000 chars
   actionRequired: boolean
   classification?: 'ACTION_REQUIRED' | 'FYI' | 'RESPONSE_NEEDED'  // GitHub Issue #347 — classification for signal scoring
+  entities?: import('./lib/email-entity-extractor.ts').EmailEntities  // #476 — extracted entities
 }
 
 export interface SupportCase {
