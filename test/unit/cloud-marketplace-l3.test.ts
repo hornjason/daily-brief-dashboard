@@ -49,7 +49,7 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
   })
 
   test('responseSchema includes url, pricing, availability in offerings', () => {
-    const schemaSection = content.slice(content.indexOf('const responseSchema'))
+    const schemaSection = content.slice(content.indexOf('const RESPONSE_SCHEMA'))
     expect(schemaSection).toContain("url: { type: 'string' }")
     expect(schemaSection).toContain("pricing: { type: 'string' }")
     expect(schemaSection).toContain("availability: { type: 'string' }")
