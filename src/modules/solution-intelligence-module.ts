@@ -17,6 +17,8 @@ FeatureModuleRegistry.register({
   displayName: 'Solution Intelligence',
   refreshEndpoint: '/api/customer/_global/modules/solution-intelligence/sync',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: undefined, // no TTL — pure computation, no cache of its own
 
   async ensureFresh(_customerSlug: string): Promise<void> {

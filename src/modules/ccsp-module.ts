@@ -20,7 +20,8 @@ FeatureModuleRegistry.register({
   name: 'ccsp',
   displayName: 'CCSP Cloud Spend',
   refreshEndpoint: '/api/refresh/ccsp',
-
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   scope: 'customer',
   cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours — data from L3 Drive CSV refresh
 

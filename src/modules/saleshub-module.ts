@@ -23,7 +23,8 @@ FeatureModuleRegistry.register({
   name: 'saleshub',
   displayName: 'SalesHub Knowledge',
   refreshEndpoint: '/api/saleshub/refresh',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
   cacheTtlMs: 7 * 24 * 60 * 60 * 1000, // 7 days — data from Drive sync
 

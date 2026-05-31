@@ -75,6 +75,8 @@ FeatureModuleRegistry.register({
   displayName: 'Intelligence',
   refreshEndpoint: '/api/intelligence/generate-all',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cachePaths: () => [],
   cacheTtlMs: INTELLIGENCE_TTL_MS,
   async fetch(): Promise<void> {},

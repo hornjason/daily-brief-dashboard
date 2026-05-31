@@ -47,6 +47,8 @@ FeatureModuleRegistry.register({
   displayName: 'M&A Activity',
   refreshEndpoint: '/api/refresh/ma',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: 30 * 24 * 60 * 60 * 1000, // 30 days — static data, monthly refresh
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 

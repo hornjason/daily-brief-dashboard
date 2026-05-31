@@ -91,6 +91,8 @@ FeatureModuleRegistry.register({
   displayName: 'Recommended Actions',
   refreshEndpoint: '/api/customer/_global/modules/recommended-actions/sync',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: undefined, // no TTL — pure computation, no cache of its own
 
   async ensureFresh(_customerSlug: string): Promise<void> {

@@ -93,7 +93,8 @@ FeatureModuleRegistry.register({
   name: 'rh-events',
   displayName: 'Events',
   refreshEndpoint: '/api/customer/_global/modules/rh-events/sync',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   nav: {

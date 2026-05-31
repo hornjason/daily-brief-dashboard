@@ -6,7 +6,8 @@ import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 FeatureModuleRegistry.register({
   name: 'meeting-prep',
   refreshEndpoint: '/api/customer/_global/modules/meeting-prep/sync',
-
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   scope: 'both',
   cacheTtlMs: undefined, // no TTL — generation is on-demand
 

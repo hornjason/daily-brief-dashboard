@@ -19,7 +19,8 @@ FeatureModuleRegistry.register({
   name: 'rh-rss',
   displayName: 'RSS Feeds',
   refreshEndpoint: '/api/admin/rss-feeds/refresh',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   nav: {

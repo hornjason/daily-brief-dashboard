@@ -42,6 +42,15 @@ beforeAll(async () => {
   await import('../../src/modules/playbook-module.ts')
   await import('../../src/modules/tech-stack-module.ts')
   await import('../../src/modules/cloud-marketplace-module.ts')
+  await import('../../src/modules/competitive-intel-module.ts')
+  await import('../../src/modules/ecosystem-catalog-module.ts')
+  await import('../../src/modules/ma-module.ts')
+  await import('../../src/modules/partner-catalog-module.ts')
+  await import('../../src/modules/recommended-actions-module.ts')
+  await import('../../src/modules/saleshub-content-module.ts')
+  await import('../../src/modules/saleshub-module.ts')
+  await import('../../src/modules/solution-intelligence-module.ts')
+  await import('../../src/modules/value-positioning-module.ts')
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -566,6 +575,34 @@ describe('Signal data quality — no pre-truncation in signals()', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 13. PRINCIPLES.MD PRE-FLIGHT QUESTION COUNT (#480)
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13a. ADR-032a: SIGNAL ROLE CLASSIFICATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-032a: Signal role classification', () => {
+  test('all registered modules declare signalRole', () => {
+    const modules = FeatureModuleRegistry.getRegisteredModules()
+    const violations: string[] = []
+    for (const mod of modules) {
+      if (!mod.signalRole) {
+        violations.push(`${mod.name} must declare signalRole`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('all registered modules declare signalAudience', () => {
+    const modules = FeatureModuleRegistry.getRegisteredModules()
+    const violations: string[] = []
+    for (const mod of modules) {
+      if (!mod.signalAudience) {
+        violations.push(`${mod.name} must declare signalAudience`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+})
 
 describe('PRINCIPLES.md integrity', () => {
   const principlesPath = resolve(import.meta.dir, '../../PRINCIPLES.md')

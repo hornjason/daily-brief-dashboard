@@ -110,8 +110,16 @@ export async function collectAllSignalsUnbudgeted(
     if (module.name === 'recommended-actions') continue
 
     try {
-      const signals = await module.signals(customerSlug)
-      allSignals.push(...signals)
+      const rawSignals = await module.signals(customerSlug)
+      // ADR-032a: Stamp signals with module's declared role/audience if not already set
+      const moduleRole = module.signalRole
+      const moduleAudience = module.signalAudience
+      const stampedSignals = rawSignals.map(s => ({
+        ...s,
+        role: s.role ?? moduleRole,
+        audience: s.audience ?? moduleAudience,
+      }))
+      allSignals.push(...stampedSignals)
     } catch (e: any) {
       console.warn(
         `[signal-loader] collectAllSignalsUnbudgeted: ${module.name} failed for ${customerSlug}:`,

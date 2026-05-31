@@ -712,6 +712,8 @@ FeatureModuleRegistry.register({
   displayName: 'Cloud Marketplace',
   refreshEndpoint: '/api/refresh/cloud-marketplace',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   refreshInterval: 7 * 24 * 60 * 60 * 1000,
 
   cachePaths: () => ['data/cache/cloud-marketplace/latest.json'],

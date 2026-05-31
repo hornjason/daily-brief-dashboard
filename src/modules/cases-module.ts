@@ -18,6 +18,8 @@ FeatureModuleRegistry.register({
   displayName: 'RH Cases',
   refreshEndpoint: '/api/scrape/rh',
   scope: 'portfolio',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: 4 * 60 * 60 * 1000, // 4 hours — data from RH API scraper
 
   async ensureFresh(_customerSlug: string): Promise<void> {

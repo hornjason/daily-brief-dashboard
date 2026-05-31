@@ -173,11 +173,15 @@ export function getRecommendations(
   if (solutionPlays.length === 0 && (!ecosystemPartners || ecosystemPartners.length === 0) && !cloudMarketplace) return []
 
   // Step 1: Bucket signals by type
-  const techSignals = signals.filter(s => s.type === 'technology' || s.source === 'tech-stack')
-  const caseSignals = signals.filter(s => s.type === 'case' || s.source === 'cases')
-  const cloudSignals = signals.filter(s => s.type === 'cloud-spend' || s.source === 'ccsp')
-  const subSignals = signals.filter(s => s.type === 'subscription' || s.source === 'subscriptions')
-  const intelSignals = signals.filter(s => s.type === 'intelligence' || s.source === 'intelligence')
+  // ADR-032a: Only trigger signals create play matches; enrichment attaches assets
+  const triggerOnly = signals.filter(s => s.role !== 'enrichment')
+  const enrichmentOnly = signals.filter(s => s.role === 'enrichment')
+
+  const techSignals = triggerOnly.filter(s => s.type === 'technology' || s.source === 'tech-stack')
+  const caseSignals = triggerOnly.filter(s => s.type === 'case' || s.source === 'cases')
+  const cloudSignals = triggerOnly.filter(s => s.type === 'cloud-spend' || s.source === 'ccsp')
+  const subSignals = triggerOnly.filter(s => s.type === 'subscription' || s.source === 'subscriptions')
+  const intelSignals = triggerOnly.filter(s => s.type === 'intelligence' || s.source === 'intelligence')
 
   // Accumulator: group by solution key to merge corroborating signals
   const pending = new Map<string, PendingRecommendation>()
@@ -323,10 +327,14 @@ export function getRecommendations(
     const weightedScore = computeWeightedScore(rec.triggerSignals)
     const confidence = computeConfidence(weightedScore)
 
-    const triggerSummary = rec.triggerSignals
+    // ADR-032a: Prefer customer-specific trigger signals in headline, not portfolio content
+    const customerTriggers = rec.triggerSignals
+      .filter(s => s.audience === 'customer-specific' || s.metadata?.customerSlug)
       .map(s => s.headline)
       .slice(0, 3)
       .join(' + ')
+
+    const triggerSummary = customerTriggers || rec.triggerSignals.map(s => s.headline).slice(0, 2).join(' + ')
 
     scored.push({
       weightedScore,
@@ -344,6 +352,31 @@ export function getRecommendations(
         narrative: undefined, // Lazy Gemini generation — ADR-032 §5
       },
     })
+  }
+
+  // Step 4: Attach enrichment assets to matched recommendations (ADR-032a)
+  for (const item of scored) {
+    const enrichAssets: Array<{ name: string; url: string; type: string; source: string }> = []
+    for (const es of enrichmentOnly) {
+      // Match enrichment to play by technology keyword overlap
+      const playTriggers = solutionPlays.find(
+        p => `play:${p.id}` === item.rec.solution.name || p.name === item.rec.solution.name
+      )?.triggerTechnologies ?? []
+      if (playTriggers.length > 0 && textMentionsTrigger(es, playTriggers)) {
+        enrichAssets.push({
+          name: es.headline,
+          url: es.url ?? '',
+          type: es.source,
+          source: es.source,
+        })
+      }
+    }
+    if (enrichAssets.length > 0) {
+      item.rec.solution.assets = [
+        ...(item.rec.solution.assets ?? []),
+        ...enrichAssets.slice(0, 5), // cap at 5 enrichment assets per play
+      ]
+    }
   }
 
   // Step 5: Rank by weighted score (not raw trigger count), then by confidence tier (#495)

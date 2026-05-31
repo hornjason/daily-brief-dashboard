@@ -34,6 +34,10 @@ export interface Signal {
   metadata?: Record<string, unknown>
   /** ISO 8601 — signal is stale/irrelevant after this date (GitHub Issue #278) */
   expiresAt?: string
+  /** ADR-032a: Cross-reference role — 'trigger' creates play matches, 'enrichment' attaches assets */
+  role?: 'trigger' | 'enrichment'
+  /** ADR-032a: Signal audience — 'all' for portfolio-wide, 'customer-specific' for per-customer */
+  audience?: 'all' | 'customer-specific'
 }
 
 // ── Centralized Scoring (ADR-027) ───────────────────────────────────────────
@@ -201,6 +205,10 @@ export interface FeatureModule {
   ensureFresh?: (customerSlug: string) => Promise<void>
   /** Optional: how long cached data is considered fresh. Default: 1 hour. */
   cacheTtlMs?: number
+  /** ADR-032a: Default role for signals from this module */
+  signalRole?: 'trigger' | 'enrichment'
+  /** ADR-032a: Default audience for signals from this module */
+  signalAudience?: 'all' | 'customer-specific'
 }
 
 export interface ModuleStatus {
@@ -370,8 +378,14 @@ export const FeatureModuleRegistry = {
 
       const moduleStartTime = performance.now()
       try {
-        const signals = await module.signals(customerSlug)
+        const rawSignals = await module.signals(customerSlug)
         const moduleElapsed = performance.now() - moduleStartTime
+        // ADR-032a: Stamp signals with module's declared role/audience if not already set
+        const signals = rawSignals.map(s => ({
+          ...s,
+          role: s.role ?? module.signalRole,
+          audience: s.audience ?? module.signalAudience,
+        }))
         moduleTimes.push({ name: module.name, ms: moduleElapsed, count: signals.length })
         allSignals.push(...signals)
       } catch (e: any) {

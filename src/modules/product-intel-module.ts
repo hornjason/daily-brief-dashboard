@@ -18,7 +18,8 @@ FeatureModuleRegistry.register({
   name: 'product-intel',
   displayName: 'Product Features',
   refreshEndpoint: '/api/products/features/refresh-all',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   nav: {

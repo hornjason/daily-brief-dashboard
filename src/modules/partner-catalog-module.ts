@@ -56,7 +56,8 @@ FeatureModuleRegistry.register({
   name: 'partner-catalog',
   displayName: 'Partner Catalog',
   refreshEndpoint: '/api/customer/_global/modules/partner-catalog/sync',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
   cacheTtlMs: undefined, // no TTL — config-driven
 

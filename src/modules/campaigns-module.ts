@@ -7,7 +7,8 @@ import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration,
 FeatureModuleRegistry.register({
   name: 'campaigns',
   refreshEndpoint: '/api/customer/_global/modules/campaigns/sync',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'both',
   cacheTtlMs: undefined, // no TTL — generation is on-demand
 

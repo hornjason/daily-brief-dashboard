@@ -54,7 +54,8 @@ FeatureModuleRegistry.register({
   name: 'saleshub-content',
   displayName: 'SalesHub Content',
   refreshEndpoint: '/api/refresh/saleshub-content',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   cacheTtlMs: CACHE_TTL_MS,

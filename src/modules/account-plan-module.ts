@@ -92,6 +92,8 @@ function isAccountPlanFresh(customerSlug: string): boolean {
 FeatureModuleRegistry.register({
   name: 'account-plan',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cachePaths: () => [],
   cacheTtlMs: ACCOUNT_PLAN_TTL_MS,
   async fetch(): Promise<void> {},

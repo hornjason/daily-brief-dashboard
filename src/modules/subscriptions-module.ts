@@ -18,6 +18,8 @@ FeatureModuleRegistry.register({
   displayName: 'Subscriptions',
   refreshEndpoint: '/api/refresh/subscriptions',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: 4 * 60 * 60 * 1000, // 4 hours — data from Sheets refresh
   cachePaths: () => [],
 

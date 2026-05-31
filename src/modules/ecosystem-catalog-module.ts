@@ -50,7 +50,8 @@ FeatureModuleRegistry.register({
   name: 'ecosystem-catalog',
   displayName: 'Ecosystem Catalog',
   refreshEndpoint: '/api/refresh/ecosystem-catalog',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   cacheTtlMs: CACHE_TTL_MS,

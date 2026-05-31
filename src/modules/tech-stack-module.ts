@@ -404,6 +404,8 @@ FeatureModuleRegistry.register({
   displayName: 'Tech Stack',
   refreshEndpoint: '/api/refresh/tech-stack',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   accountTab: {

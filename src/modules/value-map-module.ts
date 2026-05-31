@@ -63,7 +63,8 @@ FeatureModuleRegistry.register({
   name: 'value-maps',
   displayName: 'Value Maps',
   refreshEndpoint: '/api/products/refresh-all',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly

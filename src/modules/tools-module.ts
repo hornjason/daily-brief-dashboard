@@ -12,7 +12,8 @@ import { google } from 'googleapis'
 FeatureModuleRegistry.register({
   name: 'tools',
   refreshEndpoint: '/api/customer/_global/modules/tools/sync',
-
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   scope: 'customer',
   cacheTtlMs: undefined, // no TTL — NotebookLM only
 

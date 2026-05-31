@@ -151,6 +151,8 @@ FeatureModuleRegistry.register({
   displayName: 'Competitive Intel',
   refreshEndpoint: '/api/refresh/competitive-intel',
   scope: 'portfolio',
+  signalRole: 'enrichment',
+  signalAudience: 'all',
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: () => ['data/cache/competitive-intel/decks.json'],

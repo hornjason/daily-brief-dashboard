@@ -13,6 +13,8 @@ FeatureModuleRegistry.register({
   name: 'customer-docs',
   refreshEndpoint: '/api/customer/_global/modules/customer-docs/sync',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: 7 * 24 * 60 * 60 * 1000, // 7 days — read-only, no independent refresh
 
   async ensureFresh(_customerSlug: string): Promise<void> {

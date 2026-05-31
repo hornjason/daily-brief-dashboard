@@ -20,7 +20,8 @@ FeatureModuleRegistry.register({
   name: 'news-radar',
   displayName: 'News Radar',
   refreshEndpoint: '/api/refresh/news',
-
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   scope: 'both',
 
   nav: {

@@ -106,7 +106,8 @@ FeatureModuleRegistry.register({
   name: 'product-lifecycle',
   displayName: 'Product Lifecycle',
   refreshEndpoint: '/api/products/refresh-all',
-
+  signalRole: 'trigger',
+  signalAudience: 'all',
   scope: 'portfolio',
 
   nav: {

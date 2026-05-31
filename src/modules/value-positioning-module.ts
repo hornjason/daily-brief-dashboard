@@ -10,7 +10,8 @@ FeatureModuleRegistry.register({
   name: 'value-positioning',
   displayName: 'Value Positioning',
   refreshEndpoint: '/api/customer/_global/modules/value-positioning/sync',
-
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   scope: 'customer',
   cacheTtlMs: undefined, // no TTL — config-driven
 

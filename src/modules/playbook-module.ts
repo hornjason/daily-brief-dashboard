@@ -53,7 +53,8 @@ function engagementEntryToSignal(entry: EngagementEntry, customerSlug: string): 
 FeatureModuleRegistry.register({
   name: 'playbook',
   refreshEndpoint: '/api/customer/_global/modules/playbook/sync',
-
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   scope: 'customer',
   cacheTtlMs: undefined, // no TTL — generation is on-demand
 

@@ -73,6 +73,8 @@ function isEmailCacheFresh(customerSlug: string): boolean {
 FeatureModuleRegistry.register({
   name: 'emails',
   scope: 'customer',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cachePaths: () => [],
   cacheTtlMs: EMAILS_TTL_MS,
   async fetch(): Promise<void> {},

@@ -19,6 +19,8 @@ FeatureModuleRegistry.register({
   displayName: 'Pipeline',
   refreshEndpoint: '/api/refresh/pipeline',
   scope: 'portfolio',
+  signalRole: 'trigger',
+  signalAudience: 'customer-specific',
   cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours — data from L3 Drive CSV refresh
   cachePaths: () => ['data/cache/pipeline-data.json'],
 
