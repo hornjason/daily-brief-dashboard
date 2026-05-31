@@ -10,13 +10,14 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake } from 'lucide-react'
+import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake, ExternalLink } from 'lucide-react'
 
 interface CloudOffering {
   name: string
   availability?: string
   pricing?: string
   url?: string
+  sourceUrl?: string
 }
 
 interface CloudProgram {
@@ -24,6 +25,7 @@ interface CloudProgram {
   description: string
   eligibility?: string
   url?: string
+  sourceUrl?: string
 }
 
 interface CloudIncentive {
@@ -31,6 +33,7 @@ interface CloudIncentive {
   description: string
   value?: string
   url?: string
+  sourceUrl?: string
 }
 
 interface CloudProvider {
@@ -49,6 +52,7 @@ interface CloudMarketplaceData {
   providers: CloudProvider[]
   newsletterDate: string | null
   cachedAt: string | null
+  driveFolderUrl: string | null
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -106,8 +110,19 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
   return (
     <div className="space-y-3">
       {data.newsletterDate && (
-        <p className="text-xs text-text-secondary">
-          Newsletter: {data.newsletterDate}
+        <p className="text-xs text-text-secondary flex items-center gap-2">
+          <span>Newsletter: {data.newsletterDate}</span>
+          {data.driveFolderUrl && (
+            <a
+              href={data.driveFolderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:text-accent/80 inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span>View in Drive</span>
+            </a>
+          )}
         </p>
       )}
 
@@ -141,6 +156,11 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                     Uses {provider.provider}, no RH spend yet
                   </span>
                 )}
+                {!provider.hasCloudSpend && !provider.hasCloudIntel && (
+                  <span className="text-xs text-text-secondary/60">
+                    Explore {provider.provider} marketplace opportunities
+                  </span>
+                )}
               </div>
               {isExpanded ? (
                 <ChevronUp className="w-4 h-4 text-text-secondary" />
@@ -161,7 +181,14 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                     <div className="space-y-2">
                       {provider.programs.map((p, i) => (
                         <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
-                          <p className="text-sm font-medium text-text-primary">{p.name}</p>
+                          <p className="text-sm font-medium text-text-primary">
+                            {p.name}
+                            {p.sourceUrl && (
+                              <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-accent hover:text-accent/80 inline-flex">
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </p>
                           {p.description && <p className="text-xs text-text-secondary mt-1">{p.description}</p>}
                           {p.eligibility && (
                             <p className="text-xs text-warning mt-1">Eligibility: {p.eligibility}</p>
@@ -182,7 +209,14 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                     <div className="space-y-2">
                       {provider.incentives.map((inc, i) => (
                         <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
-                          <p className="text-sm font-medium text-text-primary">{inc.name}</p>
+                          <p className="text-sm font-medium text-text-primary">
+                            {inc.name}
+                            {inc.sourceUrl && (
+                              <a href={inc.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-accent hover:text-accent/80 inline-flex">
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </p>
                           {inc.description && <p className="text-xs text-text-secondary mt-1">{inc.description}</p>}
                           {inc.value && (
                             <p className="text-xs text-success font-medium mt-1">{inc.value}</p>
@@ -193,15 +227,31 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                   </div>
                 )}
 
-                {/* Offering Count Summary */}
+                {/* Offerings */}
                 {provider.offerings.length > 0 && (
                   <div>
-                    <p className="text-xs text-text-secondary">
-                      {provider.offerings.length} Red Hat offering{provider.offerings.length !== 1 ? 's' : ''}
-                      {availableToday > 0 && ` (${availableToday} available today`}
-                      {viaPrivateOffer > 0 && `, ${viaPrivateOffer} via private offer`}
-                      {(availableToday > 0 || viaPrivateOffer > 0) && ')'}
-                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Cloud className="w-3.5 h-3.5 text-accent" />
+                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                        Red Hat Offerings ({provider.offerings.length})
+                      </h4>
+                    </div>
+                    <div className="space-y-2">
+                      {provider.offerings.map((o, i) => (
+                        <div key={i} className="bg-bg-secondary/30 rounded-lg p-3">
+                          <p className="text-sm font-medium text-text-primary">
+                            {o.name}
+                            {o.sourceUrl && (
+                              <a href={o.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-accent hover:text-accent/80 inline-flex">
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </p>
+                          {o.availability && <p className="text-xs text-text-secondary mt-1">{o.availability}</p>}
+                          {o.pricing && <p className="text-xs text-success font-medium mt-1">{o.pricing}</p>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

@@ -103,8 +103,10 @@ FeatureModuleRegistry.register({
     const deckId = getValueMapsDeckId()
     if (deckId) {
       await fetchFromDrive(deckId)
+      FeatureModuleRegistry.recordOutcome('value-maps', { success: true })
     } else {
       clearValueMapCache()
+      FeatureModuleRegistry.recordOutcome('value-maps', { success: true, recordCount: 0 })
     }
   },
 

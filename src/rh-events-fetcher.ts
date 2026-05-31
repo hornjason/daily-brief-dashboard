@@ -6,7 +6,7 @@
  * Tags events with product keywords and region for filtering.
  */
 
-import { existsSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import { google } from 'googleapis'
@@ -595,6 +595,17 @@ export async function fetchRHEvents(): Promise<void> {
     const events = parseDocHTML(html)
 
     console.log(`[rh-events] parsed ${events.length} events`)
+
+    // Min-count guard (#464): if events < 3 but existing cache has >= 3, skip write
+    if (events.length < 3 && existsSync(CACHE_PATH)) {
+      try {
+        const existing = JSON.parse(readFileSync(CACHE_PATH, 'utf-8')) as EventsCache
+        if (existing.events && existing.events.length >= 3) {
+          console.warn(`[rh-events] min-count guard: parsed ${events.length} events < 3 but cache has ${existing.events.length} — keeping existing`)
+          return
+        }
+      } catch { /* corrupt cache — proceed with write */ }
+    }
 
     // Write cache
     const cache: EventsCache = {

@@ -10,6 +10,11 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { readCCSPCache } from '../cache-layer.ts'
 import { toSlug } from '../cache-layer.ts'
+import { statSync } from 'fs'
+import { resolve } from 'path'
+
+const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+const CCSP_CACHE_PATH = resolve(CACHE_DIR, 'ccsp-data.json')
 
 FeatureModuleRegistry.register({
   name: 'ccsp',
@@ -17,8 +22,17 @@ FeatureModuleRegistry.register({
   refreshEndpoint: '/api/refresh/ccsp',
 
   scope: 'customer',
+  cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours — data from L3 Drive CSV refresh
 
   cachePaths: () => ['data/cache/ccsp-data.json'],
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    try {
+      const stat = statSync(CCSP_CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+    await this.syncNow('')
+  },
 
   async fetch(): Promise<void> {
     // CCSP data comes from L3 Drive sync via refresh-engine — not fetched per-customer

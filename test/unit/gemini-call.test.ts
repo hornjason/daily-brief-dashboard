@@ -362,7 +362,7 @@ describe('callGemini() — timeout tier selection', () => {
 // ── Model resolution tests ──────────────────────────────────────────────────
 
 describe('callGemini() — model resolution', () => {
-  test('resolves "lite" to gemini-2.5-flash-lite', async () => {
+  test('resolves "lite" to configured lite model', async () => {
     const fetchModule = await import('../../src/gemini-fetch.ts')
     const authModule = await import('../../src/gemini-auth.ts')
     const costModule = await import('../../src/gemini-cost-tracker.ts')
@@ -384,7 +384,7 @@ describe('callGemini() — model resolution', () => {
       }
     )
 
-    expect(result.model).toContain('flash-lite')
+    expect(result.model).toContain('flash')
 
     fetchSpy.mockRestore()
     authSpy.mockRestore()
@@ -568,7 +568,7 @@ describe('callGemini() — type exports', () => {
       cached: false,
       inputTokens: 10,
       outputTokens: 5,
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-2.5-flash',
     }
     expect(result.text).toBe('test')
   })

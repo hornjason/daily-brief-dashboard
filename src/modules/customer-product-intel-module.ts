@@ -5,7 +5,7 @@
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
@@ -15,7 +15,28 @@ FeatureModuleRegistry.register({
   displayName: 'Customer Product Intel',
   refreshEndpoint: '/api/products/refresh-all',
   scope: 'customer',
+  cacheTtlMs: 7 * 24 * 60 * 60 * 1000, // 7 days — data from Gemini generation
   cachePaths: () => [],
+
+  async ensureFresh(customerSlug: string): Promise<void> {
+    const productIntelDir = resolve(CACHE_DIR, 'product-intel')
+    if (!existsSync(productIntelDir)) return
+    try {
+      const dirs = readdirSync(productIntelDir).filter(d => d.endsWith('-customer-intel'))
+      for (const dir of dirs) {
+        const filePath = resolve(productIntelDir, dir, `${customerSlug}.json`)
+        if (!existsSync(filePath)) continue
+        try {
+          const stat = statSync(filePath)
+          if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) continue // fresh
+        } catch { continue }
+        // At least one file is stale — trigger refresh
+        await this.syncNow(customerSlug)
+        return
+      }
+    } catch { /* silent */ }
+  },
+
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
   async syncNow(): Promise<void> {},

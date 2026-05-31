@@ -11,19 +11,16 @@ const moduleSource = readFileSync(MODULE_PATH, 'utf-8')
 
 describe('tech-stack-module grounded search (#386)', () => {
 
-  test('AC-1: extractTechnologies request includes tools: [{ googleSearch: {} }]', () => {
-    // The extractTechnologies function must include google search tool in request body
-    // Find the extractTechnologies function and verify it has googleSearch in its body
+  test('AC-1: extractTechnologies request enables grounding via callGemini', () => {
+    // After C7 refactor: grounding is enabled via callGemini's grounding: true option
     const fnStart = moduleSource.indexOf('async function extractTechnologies')
     expect(fnStart).toBeGreaterThan(-1)
 
-    // Find the end of the function (next top-level async function or module registration)
     const fnEnd = moduleSource.indexOf('async function enrichProprietaryTech', fnStart)
     const fnBody = moduleSource.slice(fnStart, fnEnd)
 
-    // Must have tools with googleSearch
-    expect(fnBody).toContain('googleSearch')
-    expect(fnBody).toMatch(/tools:\s*\[\s*\{\s*googleSearch:\s*\{\s*\}\s*\}\s*\]/)
+    // Must enable grounding via callGemini option
+    expect(fnBody).toContain('grounding: true')
   })
 
   test('AC-2: system prompt instructs active research from job postings, case studies, partner announcements', () => {
@@ -85,13 +82,13 @@ describe('tech-stack-module grounded search (#386)', () => {
     expect(fnBody).toContain('"source":')
   })
 
-  test('AC-8: timeout increased to 60_000 for grounded search', () => {
+  test('AC-8: timeout set to 60_000 for grounded search via callGemini', () => {
     const fnStart = moduleSource.indexOf('async function extractTechnologies')
     const fnEnd = moduleSource.indexOf('async function enrichProprietaryTech', fnStart)
     const fnBody = moduleSource.slice(fnStart, fnEnd)
 
-    expect(fnBody).toContain('AbortSignal.timeout(60_000)')
-    expect(fnBody).not.toContain('AbortSignal.timeout(45_000)')
+    // After C7 refactor: timeout is set via callGemini's timeoutMs option
+    expect(fnBody).toContain('timeoutMs: 60_000')
   })
 
   test('AC-A1: lookupPositioning function unchanged', () => {
@@ -116,13 +113,13 @@ describe('tech-stack-module grounded search (#386)', () => {
     expect(moduleSource).toContain('.slice(0, 16)')
   })
 
-  test('grounding metadata extraction: parses groundingChunks from response', () => {
+  test('grounding metadata extraction: parses groundingChunks from callGemini result', () => {
     const fnStart = moduleSource.indexOf('async function extractTechnologies')
     const fnEnd = moduleSource.indexOf('async function enrichProprietaryTech', fnStart)
     const fnBody = moduleSource.slice(fnStart, fnEnd)
 
-    // Must reference groundingMetadata or groundingChunks for source extraction
-    expect(fnBody).toContain('groundingMetadata')
+    // After C7 refactor: grounding chunks come from geminiResult.groundingChunks
+    expect(fnBody).toContain('groundingChunks')
   })
 })
 
@@ -245,7 +242,7 @@ describe('tech-stack-module source URLs (#456)', () => {
     const fnEnd = moduleSource.indexOf('async function enrichProprietaryTech', fnStart)
     const fnBody = moduleSource.slice(fnStart, fnEnd)
 
-    expect(fnBody).toContain('groundingMetadata')
+    // After C7 refactor: groundingChunks come from geminiResult, not raw response
     expect(fnBody).toContain('groundingChunks')
     expect(fnBody).toContain('chunk?.web?.uri')
   })

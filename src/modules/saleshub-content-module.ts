@@ -99,6 +99,11 @@ FeatureModuleRegistry.register({
     }
     resetContentCache()
     const docs = loadSalesHubContent()
+    if (docs.length === 0) {
+      console.warn(`[saleshub-content] zero-record guard: 0 documents loaded`)
+      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: 'No documents loaded' })
+      return
+    }
     console.log(`[saleshub-content] loaded ${docs.length} documents from knowledge JSON`)
     FeatureModuleRegistry.recordOutcome('saleshub-content', {
       success: true,

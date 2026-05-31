@@ -11,8 +11,14 @@ import { google } from 'googleapis'
 
 FeatureModuleRegistry.register({
   name: 'tools',
+  refreshEndpoint: '/api/customer/_global/modules/tools/sync',
 
   scope: 'customer',
+  cacheTtlMs: undefined, // no TTL — NotebookLM only
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — NotebookLM sync is on-demand only
+  },
 
   nav: {
     label: 'Tools',
@@ -103,5 +109,6 @@ FeatureModuleRegistry.register({
     // Sync to NotebookLM
     await createOrUpdateNotebook(customer, driveFiles)
     console.log(`[tools-module] Synced ${driveFiles.length} files to NotebookLM for ${customerName}`)
+    FeatureModuleRegistry.recordOutcome('tools', { success: true, recordCount: driveFiles.length })
   },
 })

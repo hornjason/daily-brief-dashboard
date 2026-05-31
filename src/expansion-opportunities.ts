@@ -13,10 +13,8 @@ import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { loadProductConfig, type ProductConfig } from './product-release-radar.ts'
 import { getFeatureCache } from './product-feature-radar.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { callGemini } from './gemini-call.ts'
 import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
-import { getGeminiModel } from './ai-config.ts'
 import { readSheetCache, readPipelineCache } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
 import { customers } from './server-state.ts'
@@ -243,72 +241,14 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
 
   // ── Gemini API call ─────────────────────────────────────────────────────────
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-
-  if (!project) {
-    console.warn('[expansion-opps] GOOGLE_CLOUD_PROJECT not set — returning empty')
-    const result: ExpansionOpportunitiesResult = {
-      customerName,
-      recommendations: [],
-      generatedAt: new Date().toISOString(),
-      allProductsCovered: false,
-    }
-    writeExpansionCache(customerSlug, result)
-    return result
-  }
-
   try {
-    const token = await getGeminiToken()
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1024,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+    const geminiResult = await callGemini(systemPrompt, userPrompt, {
+      callType: 'expansion-opportunities',
+      customerName,
+      temperature: 0.3,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[expansion-opps] Gemini error ${res.status}: ${sanitizeErr(err)}`)
-      const fallback: ExpansionOpportunitiesResult = {
-        customerName,
-        recommendations: [],
-        generatedAt: new Date().toISOString(),
-        allProductsCovered: false,
-      }
-      writeExpansionCache(customerSlug, fallback)
-      return fallback
-    }
-
-    const json = await res.json() as any
-
-    // Record token usage
-    const usage = json.usageMetadata
-    if (usage) {
-      recordGeminiUsage({
-        timestamp:    new Date().toISOString(),
-        callType:     'expansion-opportunities',
-        customerName,
-        inputTokens:  usage.promptTokenCount ?? 0,
-        outputTokens: usage.candidatesTokenCount ?? 0,
-        model,
-      })
-    }
-
-    // Parse response
-    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+    const text = geminiResult.text
 
     // Extract JSON
     const fenceMatch = text.match(/```json\s*([\s\S]*?)\s*```/)

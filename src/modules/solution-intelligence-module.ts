@@ -15,7 +15,13 @@ import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
 FeatureModuleRegistry.register({
   name: 'solution-intelligence',
   displayName: 'Solution Intelligence',
+  refreshEndpoint: '/api/customer/_global/modules/solution-intelligence/sync',
   scope: 'customer',
+  cacheTtlMs: undefined, // no TTL — pure computation, no cache of its own
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — read-only computation from other module caches
+  },
 
   cachePaths: () => [],
 

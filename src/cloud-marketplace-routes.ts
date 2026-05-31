@@ -78,20 +78,24 @@ export function createCloudMarketplaceRouter(): Hono {
         partnerships: s.metadata?.partnerships ?? [],
       }))
 
-      // Read cache file for newsletterDate and cachedAt
+      // Read cache file for newsletterDate, cachedAt, and cmFolderId
       let newsletterDate: string | null = null
       let cachedAt: string | null = null
+      let driveFolderUrl: string | null = null
       if (existsSync(CACHE_PATH)) {
         try {
           const cache = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
           newsletterDate = cache.newsletterDate ?? null
           cachedAt = cache.cachedAt ?? null
+          if (cache.cmFolderId) {
+            driveFolderUrl = `https://drive.google.com/drive/folders/${cache.cmFolderId}`
+          }
         } catch {
           // Ignore cache read failures
         }
       }
 
-      return c.json({ providers, newsletterDate, cachedAt })
+      return c.json({ providers, newsletterDate, cachedAt, driveFolderUrl })
     } catch (e: any) {
       return c.json({ error: e.message }, 500)
     }

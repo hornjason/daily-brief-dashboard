@@ -52,8 +52,14 @@ function engagementEntryToSignal(entry: EngagementEntry, customerSlug: string): 
 
 FeatureModuleRegistry.register({
   name: 'playbook',
+  refreshEndpoint: '/api/customer/_global/modules/playbook/sync',
 
   scope: 'customer',
+  cacheTtlMs: undefined, // no TTL — generation is on-demand
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — playbook generation is on-demand via API
+  },
 
   accountTab: {
     label: 'Playbook',

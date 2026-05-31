@@ -49,6 +49,11 @@ export interface GeminiFetchContext {
    * Optional log prefix for retry-delay diagnostic lines. Defaults to `[gemini-fetch]`.
    */
   logPrefix?: string
+  /**
+   * Caller-owned AbortSignal. When set, composed with the per-attempt timeout
+   * via `AbortSignal.any()` so callers (e.g. bootstrap abort) can cancel in-flight requests.
+   */
+  signal?: AbortSignal
 }
 
 function redactBearer(s: string): string {
@@ -69,8 +74,18 @@ function buildInit(token: string, body: string, ctx: GeminiFetchContext): Reques
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body,
   }
+  // Compose per-attempt timeout with caller-owned signal (if any) via AbortSignal.any()
+  const signals: AbortSignal[] = []
   if (typeof ctx.timeoutMs === 'number' && ctx.timeoutMs > 0) {
-    init.signal = AbortSignal.timeout(ctx.timeoutMs)
+    signals.push(AbortSignal.timeout(ctx.timeoutMs))
+  }
+  if (ctx.signal) {
+    signals.push(ctx.signal)
+  }
+  if (signals.length === 1) {
+    init.signal = signals[0]
+  } else if (signals.length > 1) {
+    init.signal = AbortSignal.any(signals)
   }
   return init
 }

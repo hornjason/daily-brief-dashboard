@@ -218,6 +218,12 @@ export async function fetchRedHatRSS(): Promise<void> {
     }
   }
 
+  // Min-count guard (#464): if merged < 5 but existing cache had >= 5, skip write
+  if (merged.length < 5 && existingItems.length >= 5) {
+    console.warn(`[rh-rss] min-count guard: merged ${merged.length} items < 5 but cache has ${existingItems.length} — keeping existing`)
+    return
+  }
+
   // Write cache
   const cache: RSSCache = {
     items: merged,

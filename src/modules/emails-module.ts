@@ -83,7 +83,10 @@ FeatureModuleRegistry.register({
     const { fetchCustomerEmails } = await import('../customer.ts')
     const { customers } = await import('../server-state.ts')
     const customer = customers.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
-    if (customer) await fetchCustomerEmails(customer)
+    if (customer) {
+      await fetchCustomerEmails(customer)
+      FeatureModuleRegistry.recordOutcome('emails', { success: true })
+    }
   },
 
   async ensureFresh(customerSlug: string): Promise<void> {

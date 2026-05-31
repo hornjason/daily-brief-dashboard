@@ -12,19 +12,17 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { getGeminiToken } from './gemini-auth.ts'
 import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
 import { accountPlanValidator } from './quality-validators/account-plan-validator.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
-import { getGeminiModel } from './ai-config.ts'
 import { customers } from './server-state.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
 import { getOperatorProfile } from './account-team.ts'
 import { CONFIG_DIR } from './lib/paths.ts'
+import { callGemini } from './gemini-call.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
@@ -84,67 +82,24 @@ async function upsertAccountPlanDoc(
   return driveClient.upsertDoc(folderId, docName, markdownContent, { onConflict: 'rewrite' })
 }
 
-// ── Gemini call with multimodal support ──────────────────────────────────────
+// ── Gemini multimodal call via callGemini() gateway ─────────────────────────
 
-async function callGeminiMultimodal(opts: {
+async function callGeminiForAccountPlan(opts: {
   systemPrompt: string
-  textParts: { text: string }[]
+  userPrompt: string
   pdfParts?: { inlineData: { mimeType: string; data: string } }[]
-  maxOutputTokens?: number
   temperature?: number
-  callType?: string
   customerName?: string
 }): Promise<string> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  // Assemble parts: text parts first, then PDF inline data
-  const parts: any[] = [
-    ...(opts.pdfParts ?? []),
-    ...opts.textParts,
-  ]
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(300_000),  // 5 min for long generation
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        temperature: opts.temperature ?? 0.7,
-        maxOutputTokens: opts.maxOutputTokens ?? 8192,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
+  const result = await callGemini(opts.systemPrompt, opts.userPrompt, {
+    callType: 'account-plan-generation',
+    customerName: opts.customerName,
+    inlineDataParts: opts.pdfParts?.map(p => ({ mimeType: p.inlineData.mimeType, data: p.inlineData.data })),
+    timeoutMs: 300_000,
+    temperature: opts.temperature ?? 0.7,
   })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 300)}`)
-  }
-
-  const json = await res.json() as any
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType: opts.callType ?? 'account-plan',
-      customerName: opts.customerName ?? 'unknown',
-      inputTokens: usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (!text) throw new Error('Gemini returned empty response')
-  return text
+  if (!result.text) throw new Error('Gemini returned empty response')
+  return result.text
 }
 
 // ── Core generation logic ────────────────────────────────────────────────────
@@ -228,14 +183,12 @@ ${playbook}
 ---
 Now generate a complete Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. Include ${aeName} as the AE and ${operatorName} as the ASA in the team members section.`
 
-  // Call Gemini with multimodal (text + PDF image)
-  const rawMarkdown = await callGeminiMultimodal({
+  // Call Gemini with multimodal (text + PDF image) via callGemini() gateway
+  const rawMarkdown = await callGeminiForAccountPlan({
     systemPrompt: SYSTEM_PROMPT,
-    textParts: [{ text: userPrompt }],
+    userPrompt,
     pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-    maxOutputTokens: 8192,
     temperature: 0.7,
-    callType: 'account-plan-generation',
     customerName: customer.name,
   })
 
@@ -245,13 +198,11 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
     { validator: accountPlanValidator },
     async (failures) => {
       const feedback = formatFailureFeedback(failures)
-      return callGeminiMultimodal({
+      return callGeminiForAccountPlan({
         systemPrompt: SYSTEM_PROMPT,
-        textParts: [{ text: userPrompt + '\n\n' + feedback }],
+        userPrompt: userPrompt + '\n\n' + feedback,
         pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-        maxOutputTokens: 8192,
         temperature: 0.7,
-        callType: 'account-plan-generation',
         customerName: customer.name,
       })
     }

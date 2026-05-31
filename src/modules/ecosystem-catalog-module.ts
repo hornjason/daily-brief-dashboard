@@ -7,6 +7,7 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadAllEcosystemPartners, getEcosystemCacheDir, type EcosystemSolution, type EcosystemResource } from '../lib/ecosystem-catalog.ts'
 import { loadCustomerContext, matchesTechStack } from '../lib/customer-context-loader.ts'
+import { downloadEcosystemCatalogFromDrive } from '../lib/ecosystem-catalog-drive-sync.ts'
 import { statSync } from 'fs'
 import { resolve } from 'path'
 
@@ -68,11 +69,13 @@ FeatureModuleRegistry.register({
       const stat = statSync(dir)
       if (Date.now() - stat.mtimeMs < CACHE_TTL_MS) return // fresh
     } catch {
-      // Directory missing — nothing to refresh in Phase 1
+      // Directory missing — try Drive download
+      await downloadEcosystemCatalogFromDrive()
       return
     }
-    // In Phase 2, this would trigger the scraper. For now, log a warning.
-    console.warn('[ecosystem-catalog] cache directory is older than 30 days — manual refresh recommended')
+    // Stale — pull fresh data from Drive
+    console.log('[ecosystem-catalog] cache directory is older than 30 days — refreshing from Drive')
+    await downloadEcosystemCatalogFromDrive()
   },
 
   async fetch(_customerName: string): Promise<void> {
@@ -84,9 +87,15 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Phase 1: re-read cached files. Phase 2 will add scraper trigger.
+    // L3 Drive refresh: download latest partner files before reloading
+    await downloadEcosystemCatalogFromDrive()
     const partners = loadAllEcosystemPartners()
     const totalSolutions = partners.reduce((sum, p) => sum + p.solutions.length, 0)
+    if (totalSolutions === 0) {
+      console.warn(`[ecosystem-catalog] zero-record guard: 0 solutions loaded from ${partners.length} partners`)
+      FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: false, error: 'No solutions loaded' })
+      return
+    }
     console.log(`[ecosystem-catalog] loaded ${partners.length} partners with ${totalSolutions} solutions`)
     FeatureModuleRegistry.recordOutcome('ecosystem-catalog', {
       success: true,

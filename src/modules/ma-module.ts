@@ -5,7 +5,7 @@
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { toSlug } from '../cache-layer.ts'
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
@@ -47,9 +47,18 @@ FeatureModuleRegistry.register({
   displayName: 'M&A Activity',
   refreshEndpoint: '/api/refresh/ma',
   scope: 'customer',
+  cacheTtlMs: 30 * 24 * 60 * 60 * 1000, // 30 days — static data, monthly refresh
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: () => ['data/cache/ma-activity.json'],
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    try {
+      const stat = statSync(MA_CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+    await this.syncNow('')
+  },
 
   async fetch(): Promise<void> {
     // M&A data is populated by external sheet sync — no per-customer fetch

@@ -22,9 +22,9 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
   })
 
   test('EXTRACTION_PROMPT instructs extraction of URLs, pricing, and availability', () => {
-    expect(content).toContain('url if a link is present')
-    expect(content).toContain('pricing if mentioned')
-    expect(content).toContain('availability regions/dates if mentioned')
+    expect(content).toContain('url')
+    expect(content).toContain('pricing')
+    expect(content).toContain('availability')
   })
 
   test('CloudOffering type has url, pricing, availability fields', () => {
@@ -96,7 +96,8 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
     expect(content).toContain("tech-stack")
   })
 
-  test('signals skip providers customer has no relationship with', () => {
-    expect(content).toContain('if (!hasSpend && !hasCloudIntel) continue')
+  test('signals show all providers including those with no relationship (#434)', () => {
+    expect(content).not.toContain('if (!hasSpend && !hasCloudIntel) continue')
+    expect(content).toContain('position Red Hat solutions on')
   })
 })

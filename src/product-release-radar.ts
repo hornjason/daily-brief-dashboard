@@ -18,9 +18,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
 import { sanitizeErr } from './utils.ts'
 import { DATA_DIR, CONFIG_DIR, CACHE_DIR as BASE_CACHE_DIR } from './lib/paths.ts'
 
@@ -363,14 +361,6 @@ export async function synthesizeWithGemini(
   summary: string
   bullets: string[]
 }> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   const systemPrompt = `You are a Red Hat product analyst. Extract structured information from Red Hat product documentation and release notes.
 Always respond with valid JSON matching exactly this schema:
 {
@@ -388,43 +378,13 @@ ${rawContent}
 
 Extract the current version, GA date, EOL date, a 2-3 sentence summary, and 3-5 bullet points from the above content. If a field cannot be determined, use null.`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(60_000),
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature:     0.3,
-        maxOutputTokens: 1024,
-        thinkingConfig:  { thinkingBudget: 0 },
-      },
-    }),
+  const geminiResult = await callGemini(systemPrompt, userPrompt, {
+    callType: 'product-release-radar',
+    customerName: productName,
+    temperature: 0.3,
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    console.error(`[product-release-radar] Gemini error ${res.status}: ${sanitizeErr(err)}`)
-    throw new Error(`Gemini API error ${res.status}`)
-  }
-
-  const json = await res.json() as any
-
-  // Record token usage for cost tracking (BKL-M52)
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp:    new Date().toISOString(),
-      callType:     'product-release-radar',
-      customerName: productName,
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const text = geminiResult.text
 
   // Extract JSON from response (may be wrapped in ```json blocks)
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)

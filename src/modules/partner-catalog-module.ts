@@ -55,8 +55,14 @@ function partnerMatchesCustomerProducts(
 FeatureModuleRegistry.register({
   name: 'partner-catalog',
   displayName: 'Partner Catalog',
+  refreshEndpoint: '/api/customer/_global/modules/partner-catalog/sync',
 
   scope: 'portfolio',
+  cacheTtlMs: undefined, // no TTL — config-driven
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — partner data is config-driven, no independent cache
+  },
 
   cachePaths: (_slug: string) => [
     'data/config/partners.json',

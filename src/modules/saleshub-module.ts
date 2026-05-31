@@ -13,6 +13,7 @@ import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 import { resetKnowledgeCache, getKnowledgeStats } from '../lib/saleshub-knowledge-loader.ts'
 import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
 import { resolve } from 'path'
+import { statSync } from 'fs'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
@@ -24,8 +25,18 @@ FeatureModuleRegistry.register({
   refreshEndpoint: '/api/saleshub/refresh',
 
   scope: 'portfolio',
+  cacheTtlMs: 7 * 24 * 60 * 60 * 1000, // 7 days — data from Drive sync
 
   refreshInterval: null, // on-demand only
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    const configPath = resolve(getConfigDir(), 'saleshub-knowledge.json')
+    try {
+      const stat = statSync(configPath)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+    await this.syncNow('')
+  },
 
   cachePaths: () => [
     resolve(getConfigDir(), 'saleshub-knowledge.json'),
@@ -63,6 +74,11 @@ FeatureModuleRegistry.register({
     resetKnowledgeCache()
     const stats = getKnowledgeStats()
     const totalRecords = stats.tdpCount + stats.salesPlayCount + stats.tacticCount
+    if (totalRecords === 0) {
+      console.warn(`[saleshub-module] zero-record guard: 0 TDPs + plays + tactics loaded`)
+      FeatureModuleRegistry.recordOutcome('saleshub', { success: false, error: 'No records loaded' })
+      return
+    }
     console.log(
       `[saleshub-module] reloaded: ${stats.tdpCount} TDPs, ${stats.salesPlayCount} plays, ${stats.tacticCount} tactics`
     )

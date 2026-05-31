@@ -50,6 +50,12 @@ export interface GeminiCallOptions {
   grounding?: boolean           // enable Google Search grounding
   responseSchema?: object       // for structured JSON output
   deltaKey?: string             // cache key for input-hash delta detection
+  inlineDataParts?: Array<{ mimeType: string; data: string }>  // multimodal: PDF/image inlineData
+  signal?: AbortSignal          // caller-owned abort signal (composed with per-attempt timeout)
+}
+
+export interface GroundingChunk {
+  web?: { uri: string; title?: string }
 }
 
 export interface GeminiResult {
@@ -58,6 +64,12 @@ export interface GeminiResult {
   inputTokens: number           // 0 if cached
   outputTokens: number          // 0 if cached
   model: string                 // actual model used
+  groundingChunks?: GroundingChunk[]
+  groundingMetadata?: {
+    groundingChunks?: GroundingChunk[]
+    groundingSupports?: Array<{ segment?: { text: string }; groundingChunkIndices?: number[] }>
+    webSearchQueries?: string[]
+  }
 }
 
 export async function callGemini(
@@ -107,6 +119,7 @@ export async function callGemini(
       location: LOCATION,
       timeoutMs,
       logPrefix: `[callGemini:${callType}]`,
+      signal: options.signal,
     }
   )
 
@@ -114,6 +127,14 @@ export async function callGemini(
   const responseBody = await response.json()
   const text = extractText(responseBody)
   const { inputTokens, outputTokens } = extractTokens(responseBody)
+
+  // ── Step 6b: Extract grounding metadata (if present) ──────────────────────
+  const rawGrounding = responseBody.candidates?.[0]?.groundingMetadata
+  const groundingMetadata = rawGrounding ? {
+    groundingChunks: rawGrounding.groundingChunks,
+    groundingSupports: rawGrounding.groundingSupports,
+    webSearchQueries: rawGrounding.webSearchQueries,
+  } : undefined
 
   // ── Step 7: Cost tracking ──────────────────────────────────────────────────
   recordGeminiUsage({
@@ -137,6 +158,8 @@ export async function callGemini(
     inputTokens,
     outputTokens,
     model: modelName,
+    groundingChunks: groundingMetadata?.groundingChunks,
+    groundingMetadata,
   }
 }
 
@@ -164,11 +187,19 @@ export function buildRequestBody(
   options: GeminiCallOptions,
   modelName: string
 ): object {
+  // Build user content parts: text first, then any inline data (PDF/image)
+  const userParts: any[] = [{ text: userPrompt }]
+  if (options.inlineDataParts && options.inlineDataParts.length > 0) {
+    for (const p of options.inlineDataParts) {
+      userParts.push({ inlineData: { mimeType: p.mimeType, data: p.data } })
+    }
+  }
+
   const body: any = {
     contents: [
       {
         role: 'user',
-        parts: [{ text: userPrompt }],
+        parts: userParts,
       },
     ],
     systemInstruction: {

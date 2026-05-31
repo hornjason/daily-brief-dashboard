@@ -9,13 +9,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, statSyn
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { toSlug } from '../cache-layer.ts'
-import { getGeminiToken } from '../gemini-auth.ts'
-import { getGeminiModel } from '../ai-config.ts'
-import { recordGeminiUsage } from '../gemini-cost-tracker.ts'
+import { callGemini } from '../gemini-call.ts'
 import { sanitizeErr } from '../utils.ts'
 import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
-import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
-import { techStackValidator } from '../quality-validators/tech-stack-validator.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -175,18 +171,6 @@ function readExistingTechCache(customerSlug: string): TechStackCache | null {
 // ── Gemini calls ───────────────────────────────────────────────────────────────
 
 async function extractTechnologies(customerName: string, context: string): Promise<TechEntry[]> {
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-
-  if (!project) {
-    console.warn('[tech-stack] GOOGLE_CLOUD_PROJECT not set — skipping tech extraction')
-    return []
-  }
-
-  const model = getGeminiModel()
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   const systemPrompt = `You are a technology detection system for enterprise customer analysis. You actively research companies using Google Search to discover their real technology stack from public sources.
 
 Research strategy:
@@ -236,65 +220,31 @@ IMPORTANT for the source field: Include the FULL URL where you found evidence of
 Return ONLY the JSON array, no markdown fences.`
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        tools: [{ googleSearch: {} }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 8192,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+    const geminiResult = await callGemini(systemPrompt, userPrompt, {
+      callType: 'tech-stack-extract',
+      customerName,
+      grounding: true,
+      temperature: 0.2,
+      timeoutMs: 60_000,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[tech-stack] Gemini extraction error ${res.status}: ${sanitizeErr(err)}`)
-      return []
-    }
-
-    const json = await res.json() as any
-
-    // Record token usage
-    const usage = json.usageMetadata
-    if (usage) {
-      recordGeminiUsage({
-        timestamp: new Date().toISOString(),
-        callType: 'tech-stack-extract',
-        customerName,
-        inputTokens: usage.promptTokenCount ?? 0,
-        outputTokens: usage.candidatesTokenCount ?? 0,
-        model,
-      })
-    }
-
-    const candidate = json.candidates?.[0]
-    const parts: any[] = candidate?.content?.parts ?? []
+    const text = geminiResult.text
 
     // Extract and IMMEDIATELY resolve grounding sources — redirect URLs expire quickly
-    const groundingMetadata = candidate?.groundingMetadata
     const rawGroundingUrls: string[] = []
-    if (groundingMetadata?.groundingChunks) {
-      for (const chunk of groundingMetadata.groundingChunks) {
+    if (geminiResult.groundingChunks) {
+      for (const chunk of geminiResult.groundingChunks) {
         if (chunk?.web?.uri) rawGroundingUrls.push(chunk.web.uri)
       }
     }
     // Resolve all redirect URLs in parallel while they're still fresh
     const groundingSources = await resolveGroundingRedirects(rawGroundingUrls)
 
-    // Grounded search may return multiple text parts with duplicate content.
-    // Parse the first part that contains a valid JSON array.
+    // Parse the first valid JSON array from the text
     let jsonMatch: RegExpMatchArray | null = null
-    for (const p of parts) {
-      const t = (p.text ?? '').trim()
-      if (!t) continue
-      jsonMatch = t.match(/```json\s*([\s\S]*?)\s*```/) ?? t.match(/(\[[\s\S]*\])/)
-      if (jsonMatch) break
+    const textTrimmed = text.trim()
+    if (textTrimmed) {
+      jsonMatch = textTrimmed.match(/```json\s*([\s\S]*?)\s*```/) ?? textTrimmed.match(/(\[[\s\S]*\])/)
     }
 
     if (jsonMatch) {
@@ -322,49 +272,6 @@ Return ONLY the JSON array, no markdown fences.`
         }
       }
       if (!Array.isArray(parsed)) return []
-
-      // ADR-024: Quality gate — validate parsed JSON before proceeding
-      const gateResult = await validateAndRetry(
-        JSON.stringify(parsed),
-        { validator: techStackValidator },
-        async (failures, _attempt) => {
-          const feedback = formatFailureFeedback(failures)
-          // Re-invoke Gemini with failure feedback appended
-          const retryRes = await fetch(url, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(60_000),
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ role: 'user', parts: [{ text: userPrompt + '\n\n' + feedback }] }],
-              tools: [{ googleSearch: {} }],
-              generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 8192,
-                thinkingConfig: { thinkingBudget: 0 },
-              },
-            }),
-          })
-          if (!retryRes.ok) throw new Error(`Gemini retry failed: ${retryRes.status}`)
-          const retryJson = await retryRes.json() as any
-          const retryParts: any[] = retryJson.candidates?.[0]?.content?.parts ?? []
-          let retryMatch: RegExpMatchArray | null = null
-          for (const p of retryParts) {
-            const t = (p.text ?? '').trim()
-            if (!t) continue
-            retryMatch = t.match(/```json\s*([\s\S]*?)\s*```/) ?? t.match(/(\[[\s\S]*\])/)
-            if (retryMatch) break
-          }
-          return retryMatch ? (retryMatch[1] ?? retryMatch[0]) : '[]'
-        }
-      )
-      // Re-parse from the gate's best output
-      try {
-        parsed = JSON.parse(gateResult.output)
-        if (!Array.isArray(parsed)) parsed = []
-      } catch {
-        // Gate output was invalid — fall back to original parsed
-      }
 
       const now = new Date().toISOString()
 
@@ -444,15 +351,6 @@ function buildSourceFallback(customerName: string, toolName: string): string {
 }
 
 async function enrichProprietaryTech(customerName: string, tech: TechEntry): Promise<TechEntry> {
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-
-  if (!project) return tech
-
-  const model = getGeminiModel()
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   const userPrompt = `Research "${tech.name}" by ${customerName}. What is it, what does it run on, what infrastructure does it use, how could Red Hat products (OpenShift, RHEL, Ansible Automation Platform, Advanced Cluster Security, Advanced Cluster Management) complement it?
 
 Return a JSON object:
@@ -466,42 +364,19 @@ Return a JSON object:
 Return ONLY the JSON object, no markdown.`
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        tools: [{ googleSearch: {} }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1024,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    })
-
-    if (!res.ok) {
-      console.warn(`[tech-stack] Tier 2 enrichment failed for ${tech.name}: ${res.status}`)
-      return tech
-    }
-
-    const json = await res.json() as any
-
-    const usage = json.usageMetadata
-    if (usage) {
-      recordGeminiUsage({
-        timestamp: new Date().toISOString(),
+    const result = await callGemini(
+      'You are a technology research assistant. Research the given technology and return structured JSON.',
+      userPrompt,
+      {
         callType: 'tech-stack-enrich',
         customerName,
-        inputTokens: usage.promptTokenCount ?? 0,
-        outputTokens: usage.candidatesTokenCount ?? 0,
-        model,
-      })
-    }
+        grounding: true,
+        temperature: 0.3,
+        timeoutMs: 30_000,
+      }
+    )
 
-    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+    const text = result.text
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
 
     if (jsonMatch) {

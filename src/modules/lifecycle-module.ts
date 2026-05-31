@@ -147,8 +147,8 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Same as fetch for this module
     await fetchProductLifecycle()
+    FeatureModuleRegistry.recordOutcome('product-lifecycle', { success: true })
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {

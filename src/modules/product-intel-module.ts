@@ -88,9 +88,9 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Same as fetch for this module
     await refreshAllProducts()
     await refreshAllFeatures()
+    FeatureModuleRegistry.recordOutcome('product-intel', { success: true })
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {

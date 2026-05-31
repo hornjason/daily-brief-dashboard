@@ -9,8 +9,14 @@ import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 FeatureModuleRegistry.register({
   name: 'value-positioning',
   displayName: 'Value Positioning',
+  refreshEndpoint: '/api/customer/_global/modules/value-positioning/sync',
 
   scope: 'customer',
+  cacheTtlMs: undefined, // no TTL — config-driven
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — value positioning is config-driven, no independent cache
+  },
 
   refreshInterval: null, // on-demand only
 

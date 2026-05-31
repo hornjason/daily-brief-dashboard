@@ -106,6 +106,7 @@ FeatureModuleRegistry.register({
     const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
     const configDir = process.env.CONFIG_DIR ?? 'config'
     await generateAndSaveAccountPlan(customer, cacheDir, configDir)
+    FeatureModuleRegistry.recordOutcome('account-plan', { success: true })
   },
 
   async ensureFresh(customerSlug: string): Promise<void> {

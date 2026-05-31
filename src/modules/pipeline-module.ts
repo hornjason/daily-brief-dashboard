@@ -8,13 +8,28 @@ import { readPipelineCache } from '../cache-layer.ts'
 import { normalizeForQuery } from '../utils.ts'
 import { customers } from '../server-state.ts'
 import { toSlug } from '../cache-layer.ts'
+import { statSync } from 'fs'
+import { resolve } from 'path'
+
+const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+const PIPELINE_CACHE_PATH = resolve(CACHE_DIR, 'pipeline-data.json')
 
 FeatureModuleRegistry.register({
   name: 'pipeline',
   displayName: 'Pipeline',
   refreshEndpoint: '/api/refresh/pipeline',
   scope: 'portfolio',
+  cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours — data from L3 Drive CSV refresh
   cachePaths: () => ['data/cache/pipeline-data.json'],
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    try {
+      const stat = statSync(PIPELINE_CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+    await this.syncNow('')
+  },
+
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
   async syncNow(): Promise<void> {},

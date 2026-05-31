@@ -14,9 +14,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { CACHE_DIR } from './lib/paths.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './ai-config.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { callGemini } from './gemini-call.ts'
 import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
 import { toSlug } from './cache-layer.ts'
 import { getOperatorProfile } from './account-team.ts'
@@ -310,66 +308,13 @@ export async function generateValuePositioning(
 
   const userPrompt = buildPositioningPrompt(customer.name, ctx)
 
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model = getGeminiModel()
-
-  if (!project) {
-    console.warn('[value-positioning] GOOGLE_CLOUD_PROJECT not set — returning empty')
-    const empty: ValuePositioningResult = {
-      customerName: customer.name,
-      sections: { currentState: '', solutionAlignment: [], artOfPossible: '', nextSteps: [] },
-      signalSummary: {
-        intelligenceAvailable: !!ctx.intelligence,
-        accountPlanAvailable: !!ctx.accountPlan,
-        casesCount: ctx.cases.total,
-        pipelineCount: ctx.pipeline.totalOpps,
-        valueMapProducts: ctx.valueMapProducts,
-      },
-      generatedAt: new Date().toISOString(),
-      driveUrl: '',
-    }
-    writePositioningCache(slug, empty)
-    return empty
-  }
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(120_000),
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 4096,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
+  const geminiResult = await callGemini(SYSTEM_PROMPT, userPrompt, {
+    callType: 'value-positioning',
+    customerName: customer.name,
+    temperature: 0.5,
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`)
-  }
-
-  const json = await res.json() as any
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType: 'value-positioning',
-      customerName: customer.name,
-      inputTokens: usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const rawText = geminiResult.text
   if (!rawText) throw new Error('Gemini returned empty response')
 
   // Parse JSON from response

@@ -78,12 +78,24 @@ FeatureModuleRegistry.register({
     const slug = toSlug(customerName)
     const cachePath = resolve(CACHE_DIR, `${slug}.json`)
 
+    // Stale-overwrite guard (#464): 0 articles but existing cache has articles → keep existing
+    if (articles.length === 0 && existsSync(cachePath)) {
+      try {
+        const existing = JSON.parse(readFileSync(cachePath, 'utf8'))
+        if (existing.articles && existing.articles.length > 0) {
+          console.warn(`[news-module] stale-overwrite guard: got 0 articles for ${customerName} but cache has ${existing.articles.length} — keeping existing`)
+          return
+        }
+      } catch { /* corrupt cache — proceed with write */ }
+    }
+
     const entry = {
       articles,
       lastUpdated: new Date().toISOString(),
     }
 
     writeFileSync(cachePath, JSON.stringify(entry, null, 2), { mode: 0o600 })
+    FeatureModuleRegistry.recordOutcome('news-radar', { success: true, recordCount: articles.length })
   },
 
   async cleanup(customerName: string): Promise<void> {

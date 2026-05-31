@@ -60,8 +60,11 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Same as fetch for this module
     await fetchRedHatRSS()
+    try {
+      const raw = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
+      FeatureModuleRegistry.recordOutcome('rh-rss', { success: true, recordCount: raw.items?.length ?? 0 })
+    } catch { FeatureModuleRegistry.recordOutcome('rh-rss', { success: false, error: 'Failed to read RSS cache' }) }
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {

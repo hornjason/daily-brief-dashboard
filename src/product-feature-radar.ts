@@ -11,9 +11,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { getAiConfig, getGeminiModel } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
+import { getAiConfig } from './ai-config.ts'
 import { getCachedDriveCorpus } from './product-drive-ingest.ts'
 import { getCachedSummary, loadProductConfig, validateScrapedContent } from './product-release-radar.ts'
 import { sanitizeErr } from './utils.ts'
@@ -394,58 +393,16 @@ Extract ALL features including those listed in Technology Preview sections. Outp
 }]`
 
   // 6. Call Gemini
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-
-  if (!project) {
-    console.warn('[feature-radar] GOOGLE_CLOUD_PROJECT not set — skipping Gemini extraction')
-    return null
-  }
 
   try {
-    const token = await getGeminiToken()
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(90_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 10240,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+    const geminiResult = await callGemini(systemPrompt, userPrompt, {
+      callType: 'product-feature-extraction',
+      customerName: slug,
+      temperature: 0.2,
+      timeoutMs: 90_000,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[feature-radar] Gemini error ${res.status} for ${slug}: ${sanitizeErr(err)}`)
-      return null
-    }
-
-    const json = await res.json() as any
-
-    // Record token usage
-    const usage = json.usageMetadata
-    if (usage) {
-      recordGeminiUsage({
-        timestamp:    new Date().toISOString(),
-        callType:     'product-feature-extraction',
-        customerName: slug,
-        inputTokens:  usage.promptTokenCount ?? 0,
-        outputTokens: usage.candidatesTokenCount ?? 0,
-        model,
-      })
-    }
-
-    // Parse response — scan all parts (Gemini 2.5 Flash may include thinking parts)
-    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+    const text = geminiResult.text
 
     // Strip markdown fences if present
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\[[\s\S]*\])/)
@@ -539,7 +496,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
       summaryHash: summary?.contentHash ?? '',
       extractedAt: new Date().toISOString(),
       enrichedAt: null,
-      geminiModel: model,
+      geminiModel: geminiResult.model,
     }
 
     mkdirSync(CACHE_DIR, { recursive: true })
@@ -579,10 +536,7 @@ export async function enrichFeatures(slug: string): Promise<void> {
   // BKL-MC04: clone cache before mutation to avoid aliasing bugs on concurrent reads
   const cache = { ...rawCache, features: rawCache.features.map(f => ({ ...f, sourceUrls: [...f.sourceUrls] })) }
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-  if (!project) {
+  if (!process.env.GOOGLE_CLOUD_PROJECT) {
     console.warn('[feature-radar] GOOGLE_CLOUD_PROJECT not set — skipping enrichment')
     return
   }
@@ -668,45 +622,20 @@ export async function enrichFeatures(slug: string): Promise<void> {
 
     // Call Gemini for enrichment synthesis
     try {
-      const token = await getGeminiToken()
-      const apiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(60_000),
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: 'Write an enriched description (4-6 sentences) helping a Solutions Architect discuss this feature with a customer. Include technical specifics: supported configurations, use cases, competitive advantages.' }] },
-          contents: [{ role: 'user', parts: [{ text: `Feature: ${feature.name} (${feature.status})\nCurrent: ${feature.description}\nAdditional docs:\n${fetchedContent}` }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 1024,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
-      })
-
-      if (res.ok) {
-        const json = await res.json() as any
-        const usage = json.usageMetadata
-        if (usage) {
-          recordGeminiUsage({
-            timestamp:    new Date().toISOString(),
-            callType:     'product-feature-enrichment',
-            customerName: slug,
-            inputTokens:  usage.promptTokenCount ?? 0,
-            outputTokens: usage.candidatesTokenCount ?? 0,
-            model,
-          })
+      const enrichResult = await callGemini(
+        'Write an enriched description (4-6 sentences) helping a Solutions Architect discuss this feature with a customer. Include technical specifics: supported configurations, use cases, competitive advantages.',
+        `Feature: ${feature.name} (${feature.status})\nCurrent: ${feature.description}\nAdditional docs:\n${fetchedContent}`,
+        {
+          callType: 'product-feature-enrichment',
+          customerName: slug,
+          temperature: 0.3,
         }
+      )
 
-        const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-        const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
-        if (text.length > 20) {
-          feature.enrichedDescription = text
-          feature.enrichmentUrls = enrichmentUrls
-          enrichedCount++
-        }
+      if (enrichResult.text.length > 20) {
+        feature.enrichedDescription = enrichResult.text
+        feature.enrichmentUrls = enrichmentUrls
+        enrichedCount++
       }
     } catch (e: any) {
       console.warn(`[feature-radar] enrichment Gemini call failed for ${feature.name}:`, e?.message)

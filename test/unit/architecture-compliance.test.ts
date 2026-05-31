@@ -499,3 +499,89 @@ describe('Export parity — Google Docs export covers Dashboard sections', () =>
     expect(missing).toEqual([])
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 11. SIGNAL DATA QUALITY — no hardcoded model tiers (#472, #480)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Signal data quality — no hardcoded Gemini model tiers', () => {
+  test('no callGemini calls use model: \'lite\' (PRINCIPLES.md Q11)', () => {
+    const violations: string[] = []
+    const allTsFiles = readdirSync(SRC_DIR, { recursive: true }) as string[]
+    for (const file of allTsFiles) {
+      if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue
+      const filePath = resolve(SRC_DIR, file)
+      try {
+        const content = readFileSync(filePath, 'utf-8')
+        if (content.includes("model: 'lite'")) {
+          violations.push(`src/${file}`)
+        }
+      } catch { /* skip unreadable */ }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('no callGemini calls use model: \'full\' (PRINCIPLES.md Q11)', () => {
+    const violations: string[] = []
+    const allTsFiles = readdirSync(SRC_DIR, { recursive: true }) as string[]
+    for (const file of allTsFiles) {
+      if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue
+      if (file === 'gemini-call.ts') continue // type definition is OK
+      const filePath = resolve(SRC_DIR, file)
+      try {
+        const content = readFileSync(filePath, 'utf-8')
+        if (content.includes("model: 'full'")) {
+          violations.push(`src/${file}`)
+        }
+      } catch { /* skip unreadable */ }
+    }
+    expect(violations).toEqual([])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. SIGNAL DATA QUALITY — modules must not pre-truncate signals (#480)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Signal data quality — no pre-truncation in signals()', () => {
+  // Known exceptions: emails-module.ts caps at 50 emails (pre-existing, tracked in #476)
+  const TRUNCATION_EXCEPTIONS = new Set(['emails-module.ts'])
+
+  test('no module signals() method slices its output array', () => {
+    const violations: string[] = []
+    for (const file of getModuleFiles()) {
+      if (TRUNCATION_EXCEPTIONS.has(file)) continue
+      const content = readSrc(`modules/${file}`)
+      const signalsMatch = content.match(/async signals\([^)]*\)[^{]*\{([\s\S]*?)^\s*\},?\s*$/m)
+      if (!signalsMatch) continue
+      const signalsBody = signalsMatch[1]
+      if (/return\s+\w+\.slice\s*\(\s*0\s*,/m.test(signalsBody)) {
+        violations.push(`modules/${file}: signals() truncates output array — budget caps are the registry's job`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13. PRINCIPLES.MD PRE-FLIGHT QUESTION COUNT (#480)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('PRINCIPLES.md integrity', () => {
+  const principlesPath = resolve(import.meta.dir, '../../PRINCIPLES.md')
+  const principlesContent = existsSync(principlesPath) ? readFileSync(principlesPath, 'utf-8') : ''
+
+  test('pre-flight questions have not been removed (minimum 11)', () => {
+    const questionCount = (principlesContent.match(/^\d+\.\s+\*\*/gm) ?? []).length
+    expect(questionCount).toBeGreaterThanOrEqual(11)
+  })
+
+  test('anti-patterns section exists and has minimum entries', () => {
+    const antiPatterns = (principlesContent.match(/^- ❌/gm) ?? []).length
+    expect(antiPatterns).toBeGreaterThanOrEqual(15)
+  })
+
+  test('enforcement section references architecture-compliance.test.ts', () => {
+    expect(principlesContent).toContain('architecture-compliance.test.ts')
+  })
+})

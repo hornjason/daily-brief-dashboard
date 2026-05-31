@@ -134,8 +134,11 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Same as fetch for this module
     await fetchRHEvents()
+    try {
+      const raw = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
+      FeatureModuleRegistry.recordOutcome('rh-events', { success: true, recordCount: raw.events?.length ?? 0 })
+    } catch { FeatureModuleRegistry.recordOutcome('rh-events', { success: false, error: 'Failed to read events cache' }) }
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {

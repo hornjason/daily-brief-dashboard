@@ -6,8 +6,14 @@ import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration,
 
 FeatureModuleRegistry.register({
   name: 'campaigns',
+  refreshEndpoint: '/api/customer/_global/modules/campaigns/sync',
 
   scope: 'both',
+  cacheTtlMs: undefined, // no TTL — generation is on-demand
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // No-op — campaign generation is on-demand, no independent cache
+  },
 
   nav: {
     label: 'Campaigns',

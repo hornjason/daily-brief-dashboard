@@ -317,7 +317,6 @@ FeatureModuleRegistry.register({
 
           const result = await callGemini(EXTRACTION_PROMPT, content.slice(0, 40000), {
             callType: 'competitive-intel-extraction',
-            model: 'full',
             responseSchema,
             deltaKey: `competitive-intel-${fileId}`,
             timeoutMs: 60_000,
@@ -332,7 +331,6 @@ FeatureModuleRegistry.register({
               const feedback = formatFailureFeedback(failures)
               const retryResult = await callGemini(EXTRACTION_PROMPT, content.slice(0, 40000) + '\n\n' + feedback, {
                 callType: 'competitive-intel-extraction',
-                model: 'full',
                 responseSchema,
                 deltaKey: `competitive-intel-${fileId}-retry`,
                 timeoutMs: 60_000,

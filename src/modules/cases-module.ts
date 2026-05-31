@@ -4,7 +4,7 @@
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
 import { normalizeForQuery } from '../utils.ts'
@@ -18,10 +18,32 @@ FeatureModuleRegistry.register({
   displayName: 'RH Cases',
   refreshEndpoint: '/api/scrape/rh',
   scope: 'portfolio',
+  cacheTtlMs: 4 * 60 * 60 * 1000, // 4 hours — data from RH API scraper
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    try {
+      const stat = statSync(CASES_PATH)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return
+    } catch { /* file doesn't exist */ }
+    await this.syncNow('')
+  },
+
   cachePaths: () => ['data/cache/cases.json'],
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
-  async syncNow(): Promise<void> {},
+  async syncNow(): Promise<void> {
+    if (!existsSync(CASES_PATH)) return
+    try {
+      const raw = JSON.parse(readFileSync(CASES_PATH, 'utf-8'))
+      const cases = raw.cases ?? (Array.isArray(raw) ? raw : [])
+      if (cases.length === 0) {
+        console.warn(`[cases-module] syncNow: cache file exists but has 0 cases`)
+        FeatureModuleRegistry.recordOutcome('cases', { success: false, error: 'Cache has 0 cases' })
+        return
+      }
+      FeatureModuleRegistry.recordOutcome('cases', { success: true, recordCount: cases.length })
+    } catch { /* corrupt cache */ }
+  },
 
   async signals(customerSlug: string): Promise<Signal[]> {
     if (!existsSync(CASES_PATH)) return []
