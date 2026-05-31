@@ -260,6 +260,63 @@ interface MatchedTechDetail {
   source: string
 }
 
+/** Known vendor prefixes stripped during fuzzy matching */
+const VENDOR_PREFIXES = [
+  'hashicorp', 'red hat', 'microsoft', 'amazon', 'google',
+  'oracle', 'ibm', 'vmware', 'cisco', 'palo alto',
+]
+
+/**
+ * Check if trigger matches tech name via word-boundary-aware substring.
+ * The trigger must appear as a complete word (bounded by start/end/space/hyphen/punctuation).
+ * E.g. "centos" matches inside "centos linux" but "an" does NOT match inside "ansible".
+ */
+function triggerMatchesAsWord(techNameLower: string, triggerLower: string): boolean {
+  // Trigger must be at least 3 chars to qualify for substring matching
+  if (triggerLower.length < 3) return false
+  const idx = techNameLower.indexOf(triggerLower)
+  if (idx === -1) return false
+  // Check word boundary before
+  if (idx > 0) {
+    const charBefore = techNameLower[idx - 1]
+    if (/[a-z0-9]/.test(charBefore)) return false
+  }
+  // Check word boundary after
+  const endIdx = idx + triggerLower.length
+  if (endIdx < techNameLower.length) {
+    const charAfter = techNameLower[endIdx]
+    if (/[a-z0-9]/.test(charAfter)) return false
+  }
+  return true
+}
+
+/**
+ * Extract content from parentheses in a tech name.
+ * "Amazon Web Services (AWS)" → ["aws"]
+ */
+function extractParenthetical(techNameLower: string): string[] {
+  const results: string[] = []
+  const re = /\(([^)]+)\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(techNameLower)) !== null) {
+    results.push(m[1].trim())
+  }
+  return results
+}
+
+/**
+ * Strip known vendor prefix from tech name and return the remainder.
+ * "hashicorp terraform" → "terraform"
+ */
+function stripVendorPrefix(techNameLower: string): string | null {
+  for (const prefix of VENDOR_PREFIXES) {
+    if (techNameLower.startsWith(prefix + ' ')) {
+      return techNameLower.slice(prefix.length + 1).trim()
+    }
+  }
+  return null
+}
+
 function matchTechnologies(
   detectedTechs: TechEntry[],
   triggerTechnologies: string[]
@@ -270,16 +327,54 @@ function matchTechnologies(
   const confidenceOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
 
   const triggerSet = new Set(triggerTechnologies.map(t => t.toLowerCase()))
+  const triggersLower = triggerTechnologies.map(t => t.toLowerCase())
 
   for (const tech of detectedTechs) {
     const techNameLower = tech.name.toLowerCase()
+    let didMatch = false
+
+    // Fast path: exact match
     if (triggerSet.has(techNameLower)) {
+      didMatch = true
+    }
+
+    // Fallback 1: trigger is a word-boundary substring of tech name
+    if (!didMatch) {
+      for (const trigger of triggersLower) {
+        if (triggerMatchesAsWord(techNameLower, trigger)) {
+          didMatch = true
+          break
+        }
+      }
+    }
+
+    // Fallback 2: extract parenthetical content and check against triggers
+    if (!didMatch) {
+      const parentheticals = extractParenthetical(techNameLower)
+      for (const p of parentheticals) {
+        if (triggerSet.has(p)) {
+          didMatch = true
+          break
+        }
+      }
+    }
+
+    // Fallback 3: strip vendor prefix and re-check
+    if (!didMatch) {
+      const stripped = stripVendorPrefix(techNameLower)
+      if (stripped && triggerSet.has(stripped)) {
+        didMatch = true
+      }
+    }
+
+    if (didMatch) {
       matched.push(tech.name)
       matchedDetails.push({ tech: tech.name, source: tech.category })
       if (confidenceOrder[tech.confidence] > confidenceOrder[bestConfidence]) {
         bestConfidence = tech.confidence
       }
     }
+
     // Also check infrastructure array for matches — use parent tech's confidence
     for (const infra of tech.infrastructure ?? []) {
       if (triggerSet.has(infra.toLowerCase()) && !matched.includes(infra)) {
