@@ -6,10 +6,7 @@
  * Returns answer text + extracted source citations + confidence level.
  */
 
-import { resolve } from 'path'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { sanitizeErr } from './utils.ts'
+import { callGemini, type GroundingChunk } from './gemini-call.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,77 +32,16 @@ const PRODUCT_NAMES: Record<ProductKey, string> = {
   aap:  'Red Hat Ansible Automation Platform (AAP)',
 }
 
-// ── Raw Gemini call returning full response JSON (for grounding metadata) ─────
-// NOTE: This cannot be migrated to callGemini() yet because it needs access to
-// grounding metadata (groundingChunks, groundingSupports) for source extraction.
-// callGemini() currently only exposes text. Migration blocked on BKL-ARCH-06 Phase 3
-// (grounding metadata exposure in GeminiResult).
-
-async function callGeminiGroundedRaw(opts: {
-  systemPrompt: string
-  userPrompt: string
-  callType?: string
-  customerName?: string
-}): Promise<any> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = 'gemini-2.5-flash-lite'  // BKL-AI-COST-01: product Q&A is high-volume, use lite model
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  const res = await fetch(url, {
-    method:  'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(60_000),
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: {
-        temperature:     0.7,
-        maxOutputTokens: 4096,
-        thinkingConfig:  { thinkingBudget: 0 },
-      },
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    console.error(`[product-intelligence] Gemini error ${res.status}: ${sanitizeErr(err)}`)
-    throw new Error(`Gemini grounded API error ${res.status}`)
-  }
-
-  const json = await res.json() as any
-
-  // Record token usage for cost tracking (BKL-M52)
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp:    new Date().toISOString(),
-      callType:     opts.callType ?? 'product-query',
-      customerName: opts.customerName ?? 'unknown',
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  return json
-}
-
 // ── Source extraction from Gemini grounding metadata ─────────────────────────
 
-function extractSources(json: any): ProductSource[] {
-  const candidate = json.candidates?.[0]
-  if (!candidate) return []
+function extractSources(groundingMeta: { groundingChunks?: GroundingChunk[]; groundingSupports?: Array<{ segment?: { text: string }; groundingChunkIndices?: number[] }> } | undefined): ProductSource[] {
+  if (!groundingMeta) return []
 
   const sources: ProductSource[] = []
   const seen = new Set<string>()
 
   // groundingMetadata.groundingChunks — each chunk has a .web object with uri + title
-  const chunks: any[] = candidate.groundingMetadata?.groundingChunks ?? []
+  const chunks: GroundingChunk[] = groundingMeta.groundingChunks ?? []
   for (const chunk of chunks) {
     const web = chunk.web
     if (!web?.uri) continue
@@ -115,15 +51,15 @@ function extractSources(json: any): ProductSource[] {
     if (!title) {
       try { title = new URL(web.uri).hostname } catch { title = web.uri }
     }
-    sources.push({ title, url: web.uri })
+    sources.push({ title: title!, url: web.uri })
   }
 
   // Fallback: groundingSupports — older grounding format
   if (sources.length === 0) {
-    const supports: any[] = candidate.groundingMetadata?.groundingSupports ?? []
+    const supports = groundingMeta.groundingSupports ?? []
     for (const support of supports) {
-      for (const chunk of (support.groundingChunkIndices ?? [])) {
-        const web = chunks[chunk]?.web
+      for (const idx of (support.groundingChunkIndices ?? [])) {
+        const web = chunks[idx]?.web
         if (!web?.uri || seen.has(web.uri)) continue
         seen.add(web.uri)
         sources.push({
@@ -174,15 +110,16 @@ export async function queryProductIntelligence(
 
   const userPrompt = `Question about ${productDisplay}:\n\n${question}`
 
-  const json = await callGeminiGroundedRaw({
-    systemPrompt,
-    userPrompt,
-    callType:     'product-query',
+  const result = await callGemini(systemPrompt, userPrompt, {
+    callType: 'product-query',
     customerName: customerName ?? product,
+    grounding: true,
+    temperature: 0.7,
+    timeoutMs: 60_000,
   })
 
-  const answer = json.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No answer returned from Gemini.'
-  const sources = extractSources(json)
+  const answer = result.text || 'No answer returned from Gemini.'
+  const sources = extractSources(result.groundingMetadata)
   const confidence = deriveConfidence(sources)
 
   return { answer, sources, confidence }

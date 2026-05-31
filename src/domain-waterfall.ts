@@ -2,8 +2,7 @@
 // BKL-BOOT-05: bootstrap-orchestrator needs these functions but they were
 // private to setup-routes.ts. Extracted here so both modules can import them.
 
-import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel, getGeminiModelLite } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
 
 /** Legal suffixes to strip from company names before Clearbit lookup */
 export const LEGAL_SUFFIXES = /,?\s*\b(Inc\.?|LLC\.?|L\.?L\.?C\.?|Corp\.?|Corporation|Ltd\.?|Limited|L\.?P\.?|Co(?:-?op)?\.?|Group|Holdings|Incorporated)\s*$/i
@@ -74,33 +73,18 @@ export async function tier1Clearbit(companyName: string, signal?: AbortSignal): 
  * - No PII sent; only company names from customers.json config
  */
 export async function tier2LLM(companyName: string): Promise<string | null> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  if (!project) { console.warn('[infer-domains] GOOGLE_CLOUD_PROJECT unset — Gemini disabled, falling through to Clearbit'); return null }
-
   try {
-    const token = await getGeminiToken()
-    const model = getGeminiModelLite()
-
     const safeName = companyName.replace(/['"\\]/g, '')
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
     const systemPrompt = 'You are a company domain lookup tool. Reply with ONLY the primary domain (e.g. rei.com), nothing else. If genuinely unknown, reply unknown. Companies may be known by brand names, acronyms, or DBAs different from their legal name — use the most recognizable one.'
     const userPrompt = `What is the primary official website domain for this company: '${safeName}'? Note: this may be a legal entity name — use the brand/DBA name if better known (e.g. "Recreational Equipment Inc" → rei.com, "International Business Machines" → ibm.com). Reply with ONLY the domain, nothing else. If genuinely unknown, reply 'unknown'.`
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        tools: [{ google_search: {} }],  // BKL-DOMAIN-01: Google Search grounding for better domain resolution
-        generationConfig: { temperature: 0, maxOutputTokens: 64, thinkingConfig: { thinkingBudget: 0 } },
-      }),
+    const result = await callGemini(systemPrompt, userPrompt, {
+      callType: 'domain-inference',
+      grounding: true,
+      temperature: 0,
+      timeoutMs: 30_000,
     })
-    if (!res.ok) return null
-    const json = await res.json() as any
-    let domain = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().toLowerCase()
+    let domain = result.text.trim().toLowerCase()
       .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '').replace(/['"]/g, '')
     if (domain === 'unknown' || domain === '' || !domain.includes('.')) return null
     domain = domain.split('/')[0]
@@ -236,29 +220,16 @@ export async function batchInferDomains(names: string[], signal?: AbortSignal): 
   const result = new Map<string, string | null>()
   if (names.length === 0) return result
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  if (!project) {
+  if (!process.env.GOOGLE_CLOUD_PROJECT) {
     console.warn('[infer-domains] GOOGLE_CLOUD_PROJECT unset — batch inference disabled')
     for (const n of names) result.set(n, null)
     return result
   }
 
-  const model = getGeminiModelLite()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   for (let i = 0; i < names.length; i += 20) {
     const chunk = names.slice(i, i + 20)
     // Default every name in this chunk to null; overwrite on success.
     for (const n of chunk) result.set(n, null)
-
-    let token: string
-    try {
-      token = await getGeminiToken()
-    } catch (e: any) {
-      console.warn('[infer-domains] batch token fetch failed:', e?.message ?? e)
-      continue
-    }
 
     const prompt = `For each company name below, return its primary official website domain.
 Rules:
@@ -271,27 +242,19 @@ Companies:
 ${JSON.stringify(chunk, null, 2)}`
 
     try {
-      // BKL-DOM-INF-02: chain caller-owned signal with the per-call 30s timeout
-      // so the bootstrap waterfall can abort in-flight Gemini calls when its
-      // outer 60s race fires.
-      const combinedSignal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000)
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        signal: combinedSignal,
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-        }),
-      })
-      if (!res.ok) {
-        console.warn(`[infer-domains] batch HTTP ${res.status} for chunk of ${chunk.length}`)
-        continue
-      }
-      const json = await res.json() as any
-      const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim()
+      // BKL-DOM-INF-02: callGemini composes the caller-owned signal with per-attempt timeout
+      // so the bootstrap waterfall can abort in-flight Gemini calls when its outer 60s race fires.
+      const geminiResult = await callGemini(
+        '', // no system prompt — batchInferDomains uses user prompt only
+        prompt,
+        {
+          callType: 'batch-domain-inference',
+          temperature: 0,
+          timeoutMs: 30_000,
+          signal,
+        }
+      )
+      const raw = geminiResult.text.trim()
       const stripped = raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
       let parsed: unknown
       try {

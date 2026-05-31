@@ -20,9 +20,8 @@ import { renderCustomerHeader, renderPreviousBrief, renderAccountIntelligence, r
 import type { RenderContext as SignalRenderContext, SignalBundle } from './customer/signals/types.ts'
 import { isPrimaryCalendarEvent } from './calendar-filter.ts'
 import { isFreeOrTrial } from './health-score.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { fetchGeminiWithRetry } from './gemini-fetch.ts'
-import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './ai-config.ts'
+import { getAiConfig, getAutomationConfig } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { ensureSignalsCurrent } from './lib/signal-loader.ts'
 import { classifyDocs } from './doc-extraction.ts'
@@ -269,70 +268,16 @@ export async function callLLM(systemPrompt: string, userPrompt: string, callType
     return '[GEMINI_DISABLED: fixture response for testing]'
   }
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief synthesis is high-volume, use lite model
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
-
-  // Prefer service account key (works without cloud-platform OAuth scope on the user token).
-  // Fall back to user OAuth token (requires cloud-platform scope).
-  async function getAccessToken(): Promise<string> {
-    let t: string | null | undefined
-    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-    if (saKeyB64) {
-      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-      const jwtAuth = new google.auth.JWT({
-        email: keyData.client_email,
-        key:   keyData.private_key,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      })
-      t = (await jwtAuth.getAccessToken()).token
-    } else {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      t = (await auth.getAccessToken()).token
-    }
-    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-    return t
-  }
-
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: { temperature: getAiConfig().briefSynthesisTemperature, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
+  const result = await callGemini(systemPrompt, userPrompt, {
+    callType,
+    customerName,
+    temperature: getAiConfig().briefSynthesisTemperature,
   })
 
-  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
-  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
-  // canonical "Gemini API error NNN (project=... location=... model=...)"
-  // message with Bearer redaction.
-  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
-    callType, customerName, model, project, location,
-    logPrefix: '[brief] callLLM',
-  })
-
-  const json = await res.json() as any
-  // BKL-M52: record token usage for cost tracking
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType,
-      customerName,
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-    if (usageOut) {
-      usageOut.tokensUsed = (usage.totalTokenCount ?? ((usage.promptTokenCount ?? 0) + (usage.candidatesTokenCount ?? 0)))
-    }
+  if (usageOut) {
+    usageOut.tokensUsed = result.inputTokens + result.outputTokens
   }
-  const finishReason = json.candidates?.[0]?.finishReason
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (finishReason === 'MAX_TOKENS') {
-    console.warn(`[brief] callLLM: Gemini output truncated (finishReason=MAX_TOKENS, callType=${callType}, customer=${customerName}, chars=${text.length})`)
-  }
-  return text
+  return result.text
 }
 
 // ── Structured extraction types & constants (R17) ────────────────────────────
@@ -529,79 +474,22 @@ export async function callLLMStructured<T = any>(systemPrompt: string, userPromp
     return { items: [], data_gaps: ['GEMINI_DISABLED'] } as unknown as T
   }
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief extraction is high-volume, use lite model
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
-
-  async function getAccessToken(): Promise<string> {
-    let t: string | null | undefined
-    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-    if (saKeyB64) {
-      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-      const jwtAuth = new google.auth.JWT({
-        email: keyData.client_email,
-        key:   keyData.private_key,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      })
-      t = (await jwtAuth.getAccessToken()).token
-    } else {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      t = (await auth.getAccessToken()).token
-    }
-    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-    return t
-  }
-
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: {
-      temperature: getAiConfig().briefSynthesisTemperature,
-      maxOutputTokens: 8192,
-      thinkingConfig: { thinkingBudget: 0 },  // gemini-2.5-flash thinking model: disable thinking so all output tokens go to structured JSON output
-      responseMimeType: 'application/json',
-      responseSchema,
-    },
+  const result = await callGemini(systemPrompt, userPrompt, {
+    callType,
+    customerName,
+    temperature: getAiConfig().briefSynthesisTemperature,
+    responseSchema,
   })
 
-  function parseStructured(json: any): any {
-    const finishReason = json.candidates?.[0]?.finishReason
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    if (!text) {
-      throw new Error(`Gemini structured call returned empty response (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName})`)
-    }
-    try {
-      return JSON.parse(text)
-    } catch {
-      throw new Error(`Gemini structured response is not valid JSON (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName}): ${text.slice(0, 200)}`)
-    }
+  const text = result.text
+  if (!text) {
+    throw new Error(`Gemini structured call returned empty response (callType=${callType}, customer=${customerName})`)
   }
-
-  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
-  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
-  // canonical "Gemini API error NNN (project=... location=... model=...)"
-  // message with Bearer redaction.
-  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
-    callType, customerName, model, project, location,
-    logPrefix: '[brief] callLLMStructured',
-  })
-
-  const json = await res.json() as any
-  // BKL-M52: record token usage for cost tracking
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType,
-      customerName,
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`Gemini structured response is not valid JSON (callType=${callType}, customer=${customerName}): ${text.slice(0, 200)}`)
   }
-  return parseStructured(json)
 }
 
 // ── BKL-AI-FP-09: Delta XML source builder ───────────────────────────────────

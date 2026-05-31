@@ -20,7 +20,7 @@ import { fetchCustomerEmails } from './customer.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, fetchCalendar } from './google.ts'
 import { getRecentHistory } from './kpi-history.ts'
 import { sanitizeErr } from './utils.ts'
-import { getGeminiModelLite } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
@@ -121,28 +121,6 @@ export async function synthesizeMorningSummary(signals: { customer: string; type
     }
   } catch { /* cache miss */ }
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModelLite()  // BKL-AI-COST-01: morning synthesis is high-volume, use lite model
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for synthesis')
-
-  let token: string | null | undefined
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email: keyData.client_email,
-      key:   keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    token = (await jwtAuth.getAccessToken()).token
-  } else {
-    const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH: TOKEN_PATH } = await import('./google.ts')
-    const auth = makeAuth(TOKEN_PATH)
-    token = (await auth.getAccessToken()).token
-  }
-  if (!token) throw new Error('Failed to get access token for morning synthesis')
-
   const criticalCount = signals.filter(s => s.severity === 'critical').length
   const highCount     = signals.filter(s => s.severity === 'high').length
   const mediumCount   = signals.filter(s => s.severity === 'medium').length
@@ -162,22 +140,11 @@ Format your response as markdown with bold headers and bullet points. Keep each 
 - 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
   const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-    }),
+  const result = await callGemini(systemPrompt, userPrompt, {
+    callType: 'daily-briefing-synthesis',
+    temperature: 0.4,
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`)
-  }
-  const json = await res.json() as any
-  const synthesis: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const synthesis: string = result.text
 
   // Cache result
   try {

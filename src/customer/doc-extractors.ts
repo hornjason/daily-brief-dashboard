@@ -3,12 +3,11 @@
 // fetchCustomerDocsImpl. Folder resolution stays in docs-fetcher.ts;
 // only the file-content extraction is dispatched through this module.
 
-import { google, type drive_v3 } from 'googleapis'
+import { type drive_v3 } from 'googleapis'
 import { extractText as extractPdfText } from 'unpdf'
 import { Buffer } from 'buffer'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
-import { getGeminiModelLite } from '../ai-config.ts'
+import { callGemini } from '../gemini-call.ts'
 
 // ── Constants (moved from docs-fetcher.ts) ──────────────────────────────────
 export const EXPORTABLE_MIME_TYPES = new Set([
@@ -108,61 +107,22 @@ export class PdfDocExtractor implements DocExtractor {
         return capped
       }
 
-      // Fallback: Gemini multimodal via Vertex
+      // Fallback: Gemini multimodal via callGemini() gateway
       console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using multimodal fallback`)
       const b64 = pdfBytes.toString('base64')
+      if (b64.length === 0) return null
 
-      const project  = process.env.GOOGLE_CLOUD_PROJECT
-      const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-      const model    = getGeminiModelLite()
-
-      if (!project || b64.length === 0) return null
-
-      let token: string | null | undefined
-      const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-      if (saKeyB64) {
-        let keyData: Record<string, unknown>
-        try {
-          keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-        } catch {
-          console.warn('[docs] SA key parse failed — check GEMINI_SERVICE_ACCOUNT_KEY format')
-          // fall through: keyData undefined, Vertex path will skip
-          keyData = {}
+      const geminiResult = await callGemini(
+        '', // no system prompt needed for extraction
+        'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.',
+        {
+          callType: 'doc-pdf-extraction',
+          temperature: 0,
+          inlineDataParts: [{ mimeType: 'application/pdf', data: b64 }],
         }
-        if (keyData.client_email && keyData.private_key) {
-          const jwtAuth = new google.auth.JWT({
-            email: keyData.client_email as string,
-            key:   keyData.private_key as string,
-            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-          })
-          token = (await jwtAuth.getAccessToken()).token
-        }
-      } else {
-        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-        token = (await auth.getAccessToken()).token
-      }
+      )
 
-      if (!token) return null
-
-      const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-      const geminiRes = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { inlineData: { mimeType: 'application/pdf', data: b64 } },
-              { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
-            ],
-          }],
-          generationConfig: { temperature: 0, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
-        }),
-      })
-      if (!geminiRes.ok) return null
-
-      const json = await geminiRes.json() as any
-      const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      const extracted = geminiResult.text
       const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
       if (capped.length > 50) {
         if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
