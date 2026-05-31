@@ -355,10 +355,12 @@ export function getRecommendations(
   }
 
   // Step 4: Attach enrichment assets to matched recommendations (ADR-032a)
+  // Only attach partner/ecosystem/saleshub content — not RSS news or outage alerts
+  const ENRICHMENT_SOURCES = new Set(['SalesHub Content', 'ecosystem-catalog', 'partner-catalog', 'saleshub', 'competitive-intel'])
   for (const item of scored) {
     const enrichAssets: Array<{ name: string; url: string; type: string; source: string }> = []
     for (const es of enrichmentOnly) {
-      // Match enrichment to play by technology keyword overlap
+      if (!ENRICHMENT_SOURCES.has(es.source)) continue
       const playTriggers = solutionPlays.find(
         p => `play:${p.id}` === item.rec.solution.name || p.name === item.rec.solution.name
       )?.triggerTechnologies ?? []
@@ -374,7 +376,7 @@ export function getRecommendations(
     if (enrichAssets.length > 0) {
       item.rec.solution.assets = [
         ...(item.rec.solution.assets ?? []),
-        ...enrichAssets.slice(0, 5), // cap at 5 enrichment assets per play
+        ...enrichAssets.slice(0, 5),
       ]
     }
   }

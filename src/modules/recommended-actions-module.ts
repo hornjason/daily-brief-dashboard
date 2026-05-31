@@ -137,6 +137,29 @@ FeatureModuleRegistry.register({
   async syncNow() { _resultCache.clear() },
 })
 
+// ── TDP data cleanup helpers (#498) ──────────────────────────────────────────
+
+const SCRAPER_ARTIFACTS = ['arrow up', 'arrow down', 'arrow left', 'arrow right', 'displaying slide', 'item(s) selected', 'select case studies from', 'real customer stories and proven outcomes']
+
+function isScraperArtifact(name: string): boolean {
+  const lower = name.toLowerCase().trim()
+  if (lower.length < 3) return true
+  return SCRAPER_ARTIFACTS.some(a => lower.includes(a))
+}
+
+function resolveSaleshubUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  if (url.startsWith('https://') || url.startsWith('http://')) return url
+  if (url.startsWith('/apps/')) return `https://saleshub.redhat.com${url}`
+  return url
+}
+
+function cleanTdpItems(items: any[]): Array<{ name: string; url?: string }> {
+  return (items ?? [])
+    .filter((w: any) => w.name && !isScraperArtifact(w.name))
+    .map((w: any) => ({ name: w.name, url: resolveSaleshubUrl(w.url) || undefined }))
+}
+
 // ── Play→TDP content join (#498) ─────────────────────────────────────────────
 
 function findPlayData(solutionName: string): { play: any; tdp: any } | null {
@@ -185,13 +208,13 @@ function toSignal(ra: RecommendedAction, customerSlug: string): Signal {
       } : undefined,
       tdp: tdp ? {
         name: tdp.name,
-        cheatsheetUrl: tdp.cheatsheetUrl,
-        customerDeckUrl: tdp.customerDeckUrl,
-        whatToSay: (tdp.whatToSay ?? []).filter((w: any) => w.name && w.name !== 'arrow down').slice(0, 5),
-        whatToShare: (tdp.whatToShare ?? []).filter((w: any) => w.name).slice(0, 5),
-        whatToShow: (tdp.whatToShow ?? []).filter((w: any) => w.name).slice(0, 5),
-        customerWins: (tdp.customerWins ?? []).filter((w: any) => w.name && !w.name.includes('item(s) selected')).slice(0, 3),
-        tactics: (tdp.tactics ?? []).slice(0, 5),
+        cheatsheetUrl: resolveSaleshubUrl(tdp.cheatsheetUrl),
+        customerDeckUrl: resolveSaleshubUrl(tdp.customerDeckUrl),
+        whatToSay: cleanTdpItems(tdp.whatToSay).slice(0, 5),
+        whatToShare: cleanTdpItems(tdp.whatToShare).slice(0, 5),
+        whatToShow: cleanTdpItems(tdp.whatToShow).slice(0, 5),
+        customerWins: cleanTdpItems(tdp.customerWins).slice(0, 3),
+        tactics: (tdp.tactics ?? []).filter((t: string) => typeof t === 'string' && !isScraperArtifact(t)).slice(0, 5),
         documentCount: (tdp.documents ?? []).length,
         serviceCount: (tdp.services ?? []).length,
       } : undefined,
