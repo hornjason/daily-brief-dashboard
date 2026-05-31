@@ -67,6 +67,7 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - **Primary DA runs `make rebuild`** from `/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/` after all changes are merged to main. Run it autonomously — do not ask Jason.
 - **AGENTS: Never run `make rebuild`** — background/worktree agents verify with `curl` only. Worktree rebuilds use stale data/config and silently destroy in-flight changes. The Makefile enforces this with a worktree guard — `make build` exits 1 from a `.claude/worktrees/` path.
 - **One rebuild, at the end, from project root** — when multiple agents work in parallel, merge all changes to main first, then the primary DA runs one rebuild.
+- **After merging a worktree branch, verify `git status` is clean.** Uncommitted changes after a worktree merge are orphaned work — log as an issue, commit separately with its own scope, or discard. Never let orphaned changes accumulate in the working tree. Never commit orphaned changes mixed with new work.
 - Verify: `curl -s http://localhost:7777/api/aes`
 - Container: `pai-dashboard` | Port: `7777` | VNC: `localhost:6080`
 
