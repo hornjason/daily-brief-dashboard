@@ -441,6 +441,8 @@ export function createCustomerRouter(): Hono {
         score: s.score,
         rawRelevance: s.rawRelevance,
         timestamp: s.timestamp,
+        role: s.role,
+        audience: s.audience,
         metadata: s.metadata,
       }))
     })
