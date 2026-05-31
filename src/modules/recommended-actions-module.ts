@@ -175,6 +175,18 @@ function findPlayData(solutionName: string): { play: any; tdp: any } | null {
 
 // ── Signal conversion ─────────────────────────────────────────────────────────
 
+function buildTriggerSummary(triggerSignals: Signal[]): Array<{ source: string; headline: string }> {
+  const seen = new Set<string>()
+  const result: Array<{ source: string; headline: string }> = []
+  for (const s of triggerSignals) {
+    const key = `${s.source}:${s.headline.slice(0, 40)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push({ source: s.source, headline: s.headline.slice(0, 80) })
+  }
+  return result.slice(0, 8)
+}
+
 function toSignal(ra: RecommendedAction, customerSlug: string): Signal {
   const playData = ra.solution.type === 'play' ? findPlayData(ra.solution.name) : null
   const play = playData?.play
@@ -199,6 +211,7 @@ function toSignal(ra: RecommendedAction, customerSlug: string): Signal {
       redHatProducts: play?.redHatProducts ?? extractProducts(ra),
       actions: ra.actions,
       assets: ra.solution.assets,
+      triggerSignals: buildTriggerSummary(ra.triggerSignals),
       play: play ? {
         summary: play.summary,
         valueProps: play.valueProps ?? [],

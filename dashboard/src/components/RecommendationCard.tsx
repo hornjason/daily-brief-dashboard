@@ -45,6 +45,7 @@ export interface RecommendationCardProps {
   redHatProducts: string[]
   actions: string[]
   assets?: Array<{ name: string; url?: string; type: string; source?: string }>
+  triggerSignals?: Array<{ source: string; headline: string }>
   play?: PlayData
   tdp?: TdpData
   /** #494: Customer slug for action button navigation */
@@ -120,6 +121,7 @@ export function RecommendationCard({
   redHatProducts,
   actions,
   assets,
+  triggerSignals,
   play,
   tdp,
   customerSlug,
@@ -183,6 +185,21 @@ export function RecommendationCard({
       {/* Expanded detail */}
       {expanded && (
         <div className="px-3 pb-3 space-y-3 border-t border-border/40 pt-2">
+          {/* Trigger signals — why this play matches THIS customer */}
+          {triggerSignals && triggerSignals.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Triggered By</p>
+              <div className="space-y-0.5">
+                {triggerSignals.map((ts, i) => (
+                  <div key={i} className="text-xs flex items-start gap-1.5">
+                    <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono text-[10px] shrink-0">{ts.source}</span>
+                    <span className="text-text-secondary">{ts.headline}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Play summary + value props */}
           {play && (
             <div className="space-y-1.5">
@@ -351,6 +368,7 @@ export function signalToRecommendation(s: any): RecommendationCardProps {
     redHatProducts: s.metadata?.redHatProducts ?? [],
     actions: s.metadata?.actions ?? [],
     assets: s.metadata?.assets ?? [],
+    triggerSignals: s.metadata?.triggerSignals ?? [],
     play: s.metadata?.play,
     tdp: s.metadata?.tdp,
     customerSlug: s.metadata?.customerSlug ?? '',
