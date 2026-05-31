@@ -166,6 +166,32 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
 
 // ── Gmail: emails from/about this customer (last 30 days) ───────────────────
 
+/**
+ * #476 — Extract plain text from Gmail MIME payload.
+ * Handles direct text/plain bodies and multipart messages (including nested).
+ */
+function extractPlainTextFromPayload(payload: any): string {
+  if (!payload) return ''
+  // Direct text/plain body
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
+  }
+  // Multipart — recurse into parts
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body?.data) {
+        return Buffer.from(part.body.data, 'base64url').toString('utf-8')
+      }
+      // Nested multipart (e.g., multipart/alternative inside multipart/mixed)
+      if (part.parts) {
+        const nested = extractPlainTextFromPayload(part)
+        if (nested) return nested
+      }
+    }
+  }
+  return ''
+}
+
 export async function fetchCustomerEmails(customer: Customer): Promise<EmailHighlight[]> {
   // ADR-013 Tier 2: serve from cache when fresh (2h TTL)
   const customerSlug = toSlug(customer.name)
@@ -197,11 +223,12 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
     messages.map((msg) =>
       gmail.users.messages.get({
         userId: 'me', id: msg.id!,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
+        format: 'full',  // #476 — full body for entity extraction
       })
     )
   )
+
+  const { extractEmailEntities } = await import('./lib/email-entity-extractor.ts')  // #476
 
   const emails = details.map(({ data }) => {
     const h = data.payload?.headers ?? []
@@ -210,8 +237,14 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
     const from = get('From')
     const snippet = data.snippet ?? ''
 
+    // #476 — Extract plain text body from MIME payload, cap at 5000 chars
+    const bodyText = extractPlainTextFromPayload(data.payload).slice(0, 5000)
+
     // GitHub Issue #347 — Classify emails during fetch so classification feeds into signal scoring
     const intel = classifyEmail(subject, snippet, from)
+
+    // #476 — Extract entities from email body + subject
+    const entities = extractEmailEntities(bodyText, subject)
 
     return {
       customer: customer.name,
@@ -219,10 +252,12 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
       from,
       date: get('Date'),
       snippet,
+      bodyText,  // #476 — capped at 5000 chars
       actionRequired: /requirements?|action|urgent|asap|follow.?up|need|waiting|deadline/i.test(
         subject + ' ' + snippet
       ),
       classification: intel.classification, // #347 — store classification for emails-module scoring
+      entities,  // #476 — extracted tech, product, competitor, action items
     } satisfies EmailHighlight
   })
 

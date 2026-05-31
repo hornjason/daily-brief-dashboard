@@ -123,9 +123,16 @@ FeatureModuleRegistry.register({
     if (emails.length === 0) return []
 
     return emails.slice(0, 50).map(e => {
-      const searchText = `${e.subject ?? ''} ${e.snippet ?? ''} ${e.body ?? ''}`
-      const techMentions = extractTechMentions(searchText)
-      const competitiveMentions = extractCompetitiveMentions(searchText)
+      const searchText = `${e.subject ?? ''} ${e.snippet ?? ''} ${e.bodyText ?? ''} ${e.body ?? ''}`
+
+      // #476 — Use pre-extracted entities from cache when available, fall back to inline extraction
+      const cachedEntities = e.entities
+      const techMentions = cachedEntities?.techMentions?.length
+        ? cachedEntities.techMentions
+        : extractTechMentions(searchText)
+      const competitiveMentions = cachedEntities?.competitiveMentions?.length
+        ? cachedEntities.competitiveMentions
+        : extractCompetitiveMentions(searchText)
 
       let rawRelevance = e.classification === 'ACTION_REQUIRED' ? 0.8
         : e.classification === 'RESPONSE_NEEDED' ? 0.6 : 0.4
@@ -151,6 +158,9 @@ FeatureModuleRegistry.register({
           threadId: e.threadId,
           techMentions,
           competitiveMentions,
+          // #476 — Include full entity data for downstream consumers
+          productMentions: cachedEntities?.productMentions ?? [],
+          actionItems: cachedEntities?.actionItems ?? [],
         },
       }
     })
