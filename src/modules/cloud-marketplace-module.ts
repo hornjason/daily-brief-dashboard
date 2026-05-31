@@ -211,87 +211,310 @@ Return a JSON object matching this structure:
 
 Only include clouds that have actual content. If a cloud has no offerings/programs/incentives/countries/partnerships, omit it entirely.`
 
-async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
-  const responseSchema = {
-    type: 'object',
-    properties: {
-      newsletterDate: { type: 'string' },
-      clouds: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            provider: { type: 'string', enum: ['AWS', 'Google', 'Microsoft', 'Oracle'] },
-            offerings: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  dates: { type: 'string' },
-                  url: { type: 'string' },
-                  pricing: { type: 'string' },
-                  availability: { type: 'string' },
-                },
-                required: ['name', 'description'],
-              },
-            },
-            programs: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  eligibility: { type: 'string' },
-                  url: { type: 'string' },
-                  validThrough: { type: 'string' },
-                },
-                required: ['name', 'description'],
-              },
-            },
-            incentives: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  value: { type: 'string' },
-                  url: { type: 'string' },
-                  validThrough: { type: 'string' },
-                },
-                required: ['name', 'description'],
-              },
-            },
-            newCountries: { type: 'array', items: { type: 'string' } },
-            partnerships: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['provider', 'offerings', 'programs', 'incentives', 'newCountries', 'partnerships'],
-        },
-      },
-    },
-    required: ['newsletterDate', 'clouds'],
+// ── Provider section splitting ────────────────────────────────────────────────
+
+const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
+  { key: 'AWS', patterns: [/\bAWS\b/i, /\bAmazon Web Services\b/i] },
+  { key: 'Google', patterns: [/\bGoogle\s*Cloud\b/i, /\bGCP\b/i, /\bGoogle Cloud Platform\b/i] },
+  { key: 'Microsoft', patterns: [/\bMicrosoft\b/i, /\bAzure\b/i] },
+  { key: 'Oracle', patterns: [/\bOracle\b/i, /\bOCI\b/i] },
+]
+
+/**
+ * Split slide text into per-provider sections by finding heading-like boundaries.
+ * Returns a map of provider key → content. If clear boundaries aren't found,
+ * returns null so the caller can fall back to overlapping chunks.
+ */
+function splitByProvider(text: string): Map<string, string> | null {
+  // Look for provider headings: lines that start with or are dominated by a provider name
+  // Common patterns: "AWS", "Amazon Web Services", "Google Cloud / GCP", "Microsoft Azure", "Oracle OCI"
+  const lines = text.split('\n')
+
+  // Find heading lines and their positions
+  const headings: { line: number; provider: string }[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    // Skip very long lines (body content, not headings)
+    if (line.length > 200) continue
+    // Skip empty lines
+    if (line.length === 0) continue
+
+    for (const { key, patterns } of PROVIDER_LABELS) {
+      // A heading is a line where the provider name is prominent (first word or very short line)
+      const isHeading = patterns.some(p => p.test(line)) && (
+        line.length < 80 ||  // short line = likely heading
+        patterns.some(p => line.match(p)?.index === 0) // starts with provider
+      )
+      if (isHeading) {
+        // Don't add duplicate providers — take the first occurrence
+        if (!headings.some(h => h.provider === key)) {
+          headings.push({ line: i, provider: key })
+        }
+        break
+      }
+    }
   }
 
-  const userPrompt = `Slide deck content:\n\n${slideText.slice(0, 15000)}\n\nNewsletter email body:\n\n${htmlBody.slice(0, 5000)}\n\nExtract cloud marketplace data as JSON. Preserve any URLs found in anchor tags.`
+  // Need at least 2 distinct provider headings to consider this a valid split
+  if (headings.length < 2) return null
+
+  // Sort by line number
+  headings.sort((a, b) => a.line - b.line)
+
+  const sections = new Map<string, string>()
+  for (let i = 0; i < headings.length; i++) {
+    const start = headings[i].line
+    const end = i + 1 < headings.length ? headings[i + 1].line : lines.length
+    sections.set(headings[i].provider, lines.slice(start, end).join('\n'))
+  }
+
+  return sections
+}
+
+/**
+ * Split text into overlapping chunks when provider boundaries aren't clear.
+ * Each chunk is up to `chunkSize` chars with `overlap` chars of overlap.
+ */
+function splitIntoChunks(text: string, chunkSize: number = 40_000, overlap: number = 5_000): string[] {
+  if (text.length <= chunkSize) return [text]
+  const chunks: string[] = []
+  let start = 0
+  while (start < text.length) {
+    chunks.push(text.slice(start, start + chunkSize))
+    start += chunkSize - overlap
+  }
+  return chunks
+}
+
+// ── Gemini extraction (per-provider or chunked) ──────────────────────────────
+
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    newsletterDate: { type: 'string' },
+    clouds: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          provider: { type: 'string', enum: ['AWS', 'Google', 'Microsoft', 'Oracle'] },
+          offerings: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+                dates: { type: 'string' },
+                url: { type: 'string' },
+                pricing: { type: 'string' },
+                availability: { type: 'string' },
+              },
+              required: ['name', 'description'],
+            },
+          },
+          programs: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+                eligibility: { type: 'string' },
+                url: { type: 'string' },
+                validThrough: { type: 'string' },
+              },
+              required: ['name', 'description'],
+            },
+          },
+          incentives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+                value: { type: 'string' },
+                url: { type: 'string' },
+                validThrough: { type: 'string' },
+              },
+              required: ['name', 'description'],
+            },
+          },
+          newCountries: { type: 'array', items: { type: 'string' } },
+          partnerships: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['provider', 'offerings', 'programs', 'incentives', 'newCountries', 'partnerships'],
+      },
+    },
+  },
+  required: ['newsletterDate', 'clouds'],
+} as const
+
+/**
+ * Call Gemini for a single content chunk and return extracted cloud sections.
+ */
+async function extractChunk(
+  slideContent: string,
+  htmlContent: string,
+  newsletterDate: string,
+  deltaKeySuffix: string,
+): Promise<CloudSection[]> {
+  const userPrompt = `Slide deck content:\n\n${slideContent}\n\nNewsletter email body:\n\n${htmlContent}\n\nExtract cloud marketplace data as JSON. Preserve any URLs found in anchor tags.`
 
   try {
     const result = await callGemini(EXTRACTION_PROMPT, userPrompt, {
       callType: 'cloud-marketplace-extraction',
-      model: 'lite',
-      responseSchema,
-      deltaKey: 'cloud-marketplace-latest',
+      responseSchema: RESPONSE_SCHEMA,
+      deltaKey: `cloud-marketplace-${deltaKeySuffix}`,
       timeoutMs: 60_000,
       temperature: 0.2,
     })
     const parsed = JSON.parse(result.text)
     return parsed.clouds ?? []
   } catch (e: any) {
-    console.error(`[cloud-marketplace] Gemini extraction failed: ${sanitizeErr(e.message)}`)
+    console.error(`[cloud-marketplace] Gemini extraction failed for ${deltaKeySuffix}: ${sanitizeErr(e.message)}`)
     return []
   }
+}
+
+/**
+ * Merge cloud sections from multiple extraction calls.
+ * When the same provider appears in multiple chunks, combine their arrays.
+ */
+function mergeCloudSections(allSections: CloudSection[]): CloudSection[] {
+  const byProvider = new Map<string, CloudSection>()
+  for (const section of allSections) {
+    const existing = byProvider.get(section.provider)
+    if (existing) {
+      existing.offerings.push(...section.offerings)
+      existing.programs.push(...section.programs)
+      existing.incentives.push(...section.incentives)
+      existing.newCountries.push(...section.newCountries)
+      existing.partnerships.push(...section.partnerships)
+    } else {
+      byProvider.set(section.provider, {
+        provider: section.provider,
+        offerings: [...section.offerings],
+        programs: [...section.programs],
+        incentives: [...section.incentives],
+        newCountries: [...section.newCountries],
+        partnerships: [...section.partnerships],
+      })
+    }
+  }
+
+  // Deduplicate within each provider
+  for (const section of byProvider.values()) {
+    section.offerings = dedupeByName(section.offerings)
+    section.programs = dedupeByName(section.programs)
+    section.incentives = dedupeByName(section.incentives)
+    section.newCountries = [...new Set(section.newCountries)]
+    section.partnerships = [...new Set(section.partnerships)]
+  }
+
+  return Array.from(byProvider.values())
+}
+
+function dedupeByName<T extends { name: string }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  return items.filter(item => {
+    const key = item.name.toLowerCase().trim()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
+ * Extract cloud marketplace data from slide text and newsletter HTML.
+ *
+ * Strategy:
+ * 1. Try to split slide text by provider headings (AWS, Google, Microsoft, Oracle)
+ * 2. If clear boundaries found: send each provider section separately to Gemini
+ * 3. If no clear boundaries: split into overlapping chunks of ~40K chars
+ * 4. Merge per-provider results, deduplicating offerings/programs/incentives
+ *
+ * This replaces the previous single-call approach that truncated 85% of content
+ * via .slice(0, 15000) on slideText and .slice(0, 5000) on htmlBody.
+ */
+async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
+  const allSections: CloudSection[] = []
+
+  // Strategy 1: Split by provider sections
+  const providerSections = splitByProvider(slideText)
+
+  if (providerSections && providerSections.size >= 2) {
+    console.log(`[cloud-marketplace] splitting by ${providerSections.size} provider sections: ${[...providerSections.keys()].join(', ')}`)
+
+    // Send each provider section separately with relevant HTML context
+    const extractions = await Promise.all(
+      [...providerSections.entries()].map(([provider, content]) => {
+        // Include HTML body relevant to this provider (search for provider mentions)
+        const relevantHtml = extractRelevantHtml(htmlBody, provider)
+        return extractChunk(content, relevantHtml, newsletterDate, provider.toLowerCase())
+      })
+    )
+    for (const sections of extractions) {
+      allSections.push(...sections)
+    }
+  } else {
+    // Strategy 2: Overlapping chunks
+    const slideChunks = splitIntoChunks(slideText, 40_000, 5_000)
+    const htmlChunks = splitIntoChunks(htmlBody, 20_000, 3_000)
+    console.log(`[cloud-marketplace] no clear provider boundaries — using ${slideChunks.length} slide chunk(s) + ${htmlChunks.length} HTML chunk(s)`)
+
+    // Process slide chunks
+    const slideExtractions = await Promise.all(
+      slideChunks.map((chunk, i) =>
+        extractChunk(chunk, '', newsletterDate, `slide-chunk-${i}`)
+      )
+    )
+    for (const sections of slideExtractions) {
+      allSections.push(...sections)
+    }
+
+    // Process HTML chunks (newsletter body often has additional content)
+    const htmlExtractions = await Promise.all(
+      htmlChunks.map((chunk, i) =>
+        extractChunk('', chunk, newsletterDate, `html-chunk-${i}`)
+      )
+    )
+    for (const sections of htmlExtractions) {
+      allSections.push(...sections)
+    }
+  }
+
+  const merged = mergeCloudSections(allSections)
+  console.log(`[cloud-marketplace] extracted ${merged.length} providers with ${merged.reduce((sum, c) => sum + c.offerings.length, 0)} total offerings`)
+  return merged
+}
+
+/**
+ * Extract HTML content relevant to a specific provider.
+ * Searches for paragraphs/sections mentioning the provider name.
+ */
+function extractRelevantHtml(html: string, provider: string): string {
+  if (!html || html.length === 0) return ''
+
+  const providerPatterns = PROVIDER_LABELS.find(p => p.key === provider)?.patterns ?? []
+  if (providerPatterns.length === 0) return html.slice(0, 10_000)
+
+  // Split HTML into rough blocks (by <p>, <div>, <tr>, <li> boundaries)
+  const blocks = html.split(/(?=<(?:p|div|tr|li|h[1-6])\b)/i)
+  const relevant: string[] = []
+  let totalLen = 0
+  const MAX_RELEVANT = 15_000
+
+  for (const block of blocks) {
+    if (providerPatterns.some(p => p.test(block))) {
+      relevant.push(block)
+      totalLen += block.length
+      if (totalLen >= MAX_RELEVANT) break
+    }
+  }
+
+  return relevant.length > 0 ? relevant.join('') : html.slice(0, 10_000)
 }
 
 // ── Cache management ───────────────────────────────────────────────────────────
