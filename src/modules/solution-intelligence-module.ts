@@ -31,6 +31,7 @@ FeatureModuleRegistry.register({
         detail: play.valueProps.join('; '),
         rawRelevance: play.confidence === 'HIGH' ? 0.9 : play.confidence === 'MEDIUM' ? 0.7 : 0.5,
         timestamp: new Date().toISOString(),
+        url: play.linkedAssets?.[0]?.url || undefined,  // #479: first linked asset URL
         metadata: {
           customerSlug,
           solutionPlayId: play.playId,

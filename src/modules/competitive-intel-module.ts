@@ -122,6 +122,7 @@ function generateSignals(cache: CompetitiveIntelCache): Signal[] {
         detail,
         rawRelevance,
         timestamp: deck.cachedAt,
+        url: deck.deckId ? `https://docs.google.com/presentation/d/${deck.deckId}` : undefined,  // #479
         metadata: {
           competitor: extraction.competitor,
           product: extraction.product,

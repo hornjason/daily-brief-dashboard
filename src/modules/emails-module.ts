@@ -139,6 +139,7 @@ FeatureModuleRegistry.register({
         detail: `From: ${e.from ?? 'Unknown'} | ${e.date ?? ''}${e.classification ? ` | ${e.classification}` : ''}`,
         rawRelevance,
         timestamp: e.date ?? new Date().toISOString(),
+        url: e.threadId ? `https://mail.google.com/mail/u/0/#inbox/${e.threadId}` : undefined,  // #479
         metadata: {
           customerSlug,
           from: e.from,

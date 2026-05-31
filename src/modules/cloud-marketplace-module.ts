@@ -685,6 +685,9 @@ FeatureModuleRegistry.register({
 
       const rawRelevance = hasSpend ? 0.8 : hasCloudIntel ? 0.65 : 0.4
 
+      // #479: Use first offering or program URL as representative link
+      const representativeUrl = cloud.offerings.find(o => o.url)?.url ?? activePrograms.find(p => p.url)?.url
+
       signals.push({
         source: 'cloud-marketplace',
         type: 'product-intel',
@@ -692,6 +695,7 @@ FeatureModuleRegistry.register({
         detail: detailParts.join('\n'),
         rawRelevance,
         timestamp: marketplaceCache.cachedAt,
+        url: representativeUrl || undefined,
         metadata: {
           customerSlug: (hasSpend || hasCloudIntel) ? customerSlug : undefined,
           provider: cloud.provider,

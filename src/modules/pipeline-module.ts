@@ -64,6 +64,7 @@ FeatureModuleRegistry.register({
         rawRelevance,
         timestamp: cache.cachedAt ?? new Date().toISOString(),
         expiresAt: closeDate || undefined,  // Opportunities expire after close date (GitHub Issue #278)
+        url: opp.oppId ? `https://redhatcrm.lightning.force.com/lightning/r/Opportunity/${opp.oppId}/view` : undefined,  // #479
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           opportunityName: name,
