@@ -65,6 +65,7 @@ import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
 import { TechStackTab } from '../components/tabs/TechStackTab'
 import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
+import { IntelligenceInsightsCard } from '../components/RecommendationCard'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1590,6 +1591,7 @@ export function CustomerDetailPage() {
         <aside className="hidden lg:block w-[38%] p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
           <SignalInventoryPanel customerName={customerName} />
+          <IntelligenceInsightsCard customerName={customerName} />
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
           <div className="bg-surface border border-border rounded-xl p-5">
