@@ -491,7 +491,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                     {topRecommendations.map(({ customer, rec }, i) => (
                       <div key={i}>
                         <div className="text-xs font-semibold text-text-primary mb-1">{customer}</div>
-                        <RecommendationCard {...rec} />
+                        <RecommendationCard {...rec} customerSlug={rec.customerSlug || customer} />
                       </div>
                     ))}
                   </>

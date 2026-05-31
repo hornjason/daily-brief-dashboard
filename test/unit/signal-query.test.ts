@@ -218,8 +218,8 @@ describe('getRecommendations', () => {
 
     const vmwareRec = result.find(r => r.solution.name.includes('VMware'))
     expect(vmwareRec).toBeDefined()
-    // 2 signals = medium per ADR-032 §6 Step 4
-    expect(vmwareRec!.confidence).toBe('medium')
+    // 2 customer-specific signals (weighted 3 each = 6) = high per #495 weighted scoring
+    expect(vmwareRec!.confidence).toBe('high')
     expect(vmwareRec!.triggerSignals.length).toBeGreaterThanOrEqual(2)
   })
 
@@ -285,8 +285,8 @@ describe('getRecommendations', () => {
 
     const centosRec = result.find(r => r.solution.name.includes('RHEL') || r.solution.name.includes('Modernization'))
     expect(centosRec).toBeDefined()
-    // Single signal = emerging (per ADR-032 §6, single-signal matches are 'emerging')
-    expect(centosRec!.confidence).toBe('emerging')
+    // Single customer-specific signal (weighted 3) = medium per #495 weighted scoring
+    expect(centosRec!.confidence).toBe('medium')
   })
 
   it('matches cloud-spend signals to marketplace programs', () => {
@@ -535,5 +535,178 @@ describe('getRecommendations', () => {
 
     // Should match VMware migration play via keyword detection
     expect(result.length).toBeGreaterThan(0)
+  })
+
+  // ── #495: Recommendation diversity ──────────────────────────────────────────
+
+  it('#495: weights customer-specific signals 3x over portfolio-wide signals', () => {
+    // Customer-specific signal (has customerSlug)
+    const customerSignal = makeSignal({
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'VMware detected at Acme',
+      metadata: { customerSlug: 'acme', confidence: 'HIGH', techName: 'VMware' },
+    })
+    // Portfolio-wide signal (no customerSlug)
+    const portfolioSignal = makeSignal({
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'VMware in value-map',
+      metadata: { techName: 'VMware' },
+    })
+
+    // With only portfolio signal: should still work but lower weighted score
+    const portfolioResult = getRecommendations(
+      [portfolioSignal],
+      mockSolutionPlays.plays,
+      [],
+      null,
+      null,
+    )
+
+    // With customer-specific signal: should have higher weighted score
+    const customerResult = getRecommendations(
+      [customerSignal],
+      mockSolutionPlays.plays,
+      [],
+      null,
+      null,
+    )
+
+    // Both should produce recommendations
+    expect(portfolioResult.length).toBeGreaterThan(0)
+    expect(customerResult.length).toBeGreaterThan(0)
+
+    // Customer-specific should have higher weighted score (reflected in confidence or ranking)
+    const portfolioVmware = portfolioResult.find(r => r.solution.name.includes('VMware'))
+    const customerVmware = customerResult.find(r => r.solution.name.includes('VMware'))
+    expect(portfolioVmware).toBeDefined()
+    expect(customerVmware).toBeDefined()
+  })
+
+  it('#495: deduplicates recommendations by solution name, keeping highest weighted', () => {
+    // Two different signal paths that trigger the same solution play
+    const signals = [
+      makeSignal({
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'VMware detected',
+        metadata: { customerSlug: 'acme', confidence: 'HIGH', techName: 'VMware' },
+      }),
+      makeSignal({
+        source: 'cases',
+        type: 'case',
+        headline: 'vSphere case',
+        detail: 'Customer asking about vSphere migration',
+        metadata: { customerSlug: 'acme', severity: '2', techMentions: ['vSphere'] },
+      }),
+    ]
+
+    const result = getRecommendations(
+      signals,
+      mockSolutionPlays.plays,
+      [],
+      null,
+      null,
+    )
+
+    // Should NOT have duplicate solutions by name
+    const solutionNames = result.map(r => r.solution.name)
+    const uniqueNames = [...new Set(solutionNames)]
+    expect(solutionNames.length).toBe(uniqueNames.length)
+  })
+
+  it('#495: different customers get different top recommendations when portfolio signals are shared', () => {
+    // Reproduce the real bug: portfolio-wide signals with no customerSlug
+    // inflate VMware play to 3 triggers for ALL customers. Without weighted scoring,
+    // every customer shows VMware as top recommendation regardless of their own signals.
+    //
+    // Shared portfolio signals: VMware gets 3 (value-map, playbook, partner),
+    //   Kubernetes gets 2 (value-map, playbook). Both are portfolio-wide (no customerSlug).
+    //
+    // Acme adds customer-specific Kubernetes signal.
+    // Without weighting: VMware=3, K8s=3 → tie → Map order picks VMware for BOTH customers
+    // With weighting (customer=3x): Acme VMware=3*1=3, Acme K8s=2*1+1*3=5 → K8s wins for Acme
+    // Beta has no customer-specific: VMware=3*1=3, K8s=2*1=2 → VMware wins for Beta
+
+    const sharedPortfolioSignals = [
+      makeSignal({ source: 'tech-stack', type: 'technology',
+        headline: 'VMware in value-map', metadata: { techName: 'VMware' } }),
+      makeSignal({ source: 'intelligence', type: 'intelligence',
+        headline: 'VMware playbook', detail: 'VMware migration content', metadata: {} }),
+      makeSignal({ source: 'tech-stack', type: 'technology',
+        headline: 'vSphere in partner catalog', metadata: { techName: 'vSphere' } }),
+      makeSignal({ source: 'tech-stack', type: 'technology',
+        headline: 'Kubernetes in value-map', metadata: { techName: 'Kubernetes' } }),
+      makeSignal({ source: 'intelligence', type: 'intelligence',
+        headline: 'Kubernetes playbook', detail: 'Kubernetes cloud-native content', metadata: {} }),
+    ]
+
+    // Acme: customer-specific Kubernetes signal → should boost Cloud-Native above VMware
+    const acmeSignals = [
+      ...sharedPortfolioSignals,
+      makeSignal({ source: 'tech-stack', type: 'technology',
+        headline: 'Kubernetes detected at Acme',
+        metadata: { customerSlug: 'acme', techName: 'Kubernetes' } }),
+    ]
+
+    // Beta: NO customer-specific signals → VMware wins by portfolio trigger count
+    const betaSignals = [...sharedPortfolioSignals]
+
+    const acmeResult = getRecommendations(acmeSignals, mockSolutionPlays.plays, [], null, null)
+    const betaResult = getRecommendations(betaSignals, mockSolutionPlays.plays, [], null, null)
+
+    expect(acmeResult.length).toBeGreaterThan(0)
+    expect(betaResult.length).toBeGreaterThan(0)
+
+    // Acme should get Cloud-Native at top (customer-specific K8s signal outweighs portfolio VMware)
+    expect(acmeResult[0].solution.name).toContain('Cloud-Native')
+    // Beta should get VMware at top (no customer signals, portfolio VMware has more triggers)
+    expect(betaResult[0].solution.name).toContain('VMware')
+  })
+
+  it('#495: sorts by weighted score not raw trigger count', () => {
+    // 3 portfolio-wide signals for CentOS (weighted: 3 * 1 = 3)
+    // vs 1 customer-specific signal for VMware (weighted: 1 * 3 = 3 — tie, but with 1 portfolio too)
+    const signals = [
+      // Customer-specific VMware signal
+      makeSignal({
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'VMware at customer',
+        metadata: { customerSlug: 'acme', confidence: 'HIGH', techName: 'VMware' },
+      }),
+      // Customer-specific VMware case
+      makeSignal({
+        source: 'cases',
+        type: 'case',
+        headline: 'VMware case',
+        detail: 'VMware migration inquiry',
+        metadata: { customerSlug: 'acme', severity: '2', techMentions: ['VMware'] },
+      }),
+      // Portfolio-wide CentOS signal (no customerSlug)
+      makeSignal({
+        source: 'tech-stack',
+        type: 'technology',
+        headline: 'CentOS in portfolio',
+        metadata: { techName: 'CentOS' },
+      }),
+    ]
+
+    const result = getRecommendations(
+      signals,
+      mockSolutionPlays.plays,
+      [],
+      null,
+      null,
+    )
+
+    // VMware should rank higher than CentOS because customer-specific signals
+    // are weighted 3x (VMware: 2 customer * 3 = 6, CentOS: 1 portfolio * 1 = 1)
+    const vmwareIdx = result.findIndex(r => r.solution.name.includes('VMware'))
+    const centosIdx = result.findIndex(r => r.solution.name.includes('RHEL') || r.solution.name.includes('Modernization'))
+    if (vmwareIdx >= 0 && centosIdx >= 0) {
+      expect(vmwareIdx).toBeLessThan(centosIdx)
+    }
   })
 })

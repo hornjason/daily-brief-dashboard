@@ -23,6 +23,10 @@ export interface RecommendationCardProps {
   triggerSignalCount: number
   redHatProducts: string[]
   actions: string[]
+  /** #494: Customer slug for action button navigation */
+  customerSlug?: string
+  /** #494: Solution URL for "View play deck" action */
+  solutionUrl?: string
 }
 
 const CONFIDENCE_STYLES: Record<string, { dot: string; text: string; bg: string; border: string; label: string }> = {
@@ -49,6 +53,39 @@ const CONFIDENCE_STYLES: Record<string, { dot: string; text: string; bg: string;
   },
 }
 
+/** #494: Route action button clicks to appropriate pages */
+function handleAction(action: string, customerSlug?: string, solutionUrl?: string) {
+  const actionLower = action.toLowerCase()
+
+  if (actionLower.includes('draft email')) {
+    if (customerSlug) {
+      window.location.href = `/dashboard/campaigns?customer=${encodeURIComponent(customerSlug)}`
+    }
+    return
+  }
+
+  if (actionLower.includes('prep meeting')) {
+    if (customerSlug) {
+      window.location.href = `/dashboard/meeting-prep?customer=${encodeURIComponent(customerSlug)}`
+    }
+    return
+  }
+
+  if (actionLower.includes('view play deck') || actionLower.includes('view partner solution') || actionLower.includes('view program details')) {
+    if (solutionUrl) {
+      window.open(solutionUrl, '_blank')
+    } else if (customerSlug) {
+      window.location.href = `/dashboard/customer/${encodeURIComponent(customerSlug)}`
+    }
+    return
+  }
+
+  // Fallback: navigate to customer detail if we have a slug
+  if (customerSlug) {
+    window.location.href = `/dashboard/customer/${encodeURIComponent(customerSlug)}`
+  }
+}
+
 export function RecommendationCard({
   headline,
   detail,
@@ -58,6 +95,8 @@ export function RecommendationCard({
   triggerSignalCount,
   redHatProducts,
   actions,
+  customerSlug,
+  solutionUrl,
 }: RecommendationCardProps) {
   const [expanded, setExpanded] = useState(false)
   const style = CONFIDENCE_STYLES[confidence] ?? CONFIDENCE_STYLES.EMERGING
@@ -139,13 +178,16 @@ export function RecommendationCard({
             </div>
           )}
 
-          {/* Action buttons (stubs) */}
+          {/* Action buttons (#494: wired to navigation) */}
           {actions.length > 0 && (
             <div className="flex items-center gap-1.5 pt-1 flex-wrap">
               {actions.map(action => (
                 <button
                   key={action}
-                  onClick={(e) => { e.stopPropagation() }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleAction(action, customerSlug, solutionUrl)
+                  }}
                   className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors"
                 >
                   {action}
@@ -170,6 +212,8 @@ export function signalToRecommendation(s: any): RecommendationCardProps {
     triggerSignalCount: s.metadata?.triggerSignalCount ?? 0,
     redHatProducts: s.metadata?.redHatProducts ?? [],
     actions: s.metadata?.actions ?? [],
+    customerSlug: s.metadata?.customerSlug ?? '',
+    solutionUrl: s.metadata?.solutionUrl ?? '',
   }
 }
 

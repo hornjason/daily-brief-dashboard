@@ -125,9 +125,22 @@ function textMentionsTrigger(signal: Signal, triggers: string[]): boolean {
 
 // ── Confidence scoring (ADR-032 §6 Step 4) ────────────────────────────────────
 
-function computeConfidence(triggerCount: number): 'high' | 'medium' | 'emerging' {
-  if (triggerCount >= 3) return 'high'
-  if (triggerCount >= 2) return 'medium'
+/** #495: Weight customer-specific signals 3x to ensure recommendation diversity */
+const CUSTOMER_SIGNAL_WEIGHT = 3
+const PORTFOLIO_SIGNAL_WEIGHT = 1
+
+function computeWeightedScore(triggers: Signal[]): number {
+  let score = 0
+  for (const s of triggers) {
+    const isCustomerSpecific = !!s.metadata?.customerSlug
+    score += isCustomerSpecific ? CUSTOMER_SIGNAL_WEIGHT : PORTFOLIO_SIGNAL_WEIGHT
+  }
+  return score
+}
+
+function computeConfidence(weightedScore: number): 'high' | 'medium' | 'emerging' {
+  if (weightedScore >= 5) return 'high'
+  if (weightedScore >= 3) return 'medium'
   return 'emerging'
 }
 
@@ -302,40 +315,46 @@ export function getRecommendations(
   // Step 2f: Subscription x product-lifecycle (not implemented here — lifecycle data loading
   // is handled by solution-intelligence-module already, this would be for future enrichment)
 
-  // Step 3: Convert pending to RecommendedAction[]
-  const recommendations: RecommendedAction[] = []
+  // Step 3: Convert pending to RecommendedAction[] with weighted scoring (#495)
+  // Deduplication by solution name happens naturally via the pending Map (keyed by solution).
+  const scored: Array<{ rec: RecommendedAction; weightedScore: number }> = []
 
   for (const rec of pending.values()) {
-    const triggerCount = rec.triggerSignals.length
-    const confidence = computeConfidence(triggerCount)
+    const weightedScore = computeWeightedScore(rec.triggerSignals)
+    const confidence = computeConfidence(weightedScore)
 
     const triggerSummary = rec.triggerSignals
       .map(s => s.headline)
       .slice(0, 3)
       .join(' + ')
 
-    recommendations.push({
-      action: `${triggerSummary} → ${rec.solutionName}`,
-      confidence,
-      triggerSignals: rec.triggerSignals,
-      solution: {
-        name: rec.solutionName,
-        type: rec.solutionType,
-        url: rec.solutionUrl,
-        assets: rec.assets,
+    scored.push({
+      weightedScore,
+      rec: {
+        action: `${triggerSummary} → ${rec.solutionName}`,
+        confidence,
+        triggerSignals: rec.triggerSignals,
+        solution: {
+          name: rec.solutionName,
+          type: rec.solutionType,
+          url: rec.solutionUrl,
+          assets: rec.assets,
+        },
+        actions: rec.actions,
+        narrative: undefined, // Lazy Gemini generation — ADR-032 §5
       },
-      actions: rec.actions,
-      narrative: undefined, // Lazy Gemini generation — ADR-032 §5
     })
   }
 
-  // Step 5: Rank by confidence then trigger count, cap at MAX_RECOMMENDATIONS
+  // Step 5: Rank by weighted score (not raw trigger count), then by confidence tier (#495)
   const confidenceOrder = { high: 3, medium: 2, emerging: 1 }
-  recommendations.sort((a, b) => {
-    const confDiff = confidenceOrder[b.confidence] - confidenceOrder[a.confidence]
-    if (confDiff !== 0) return confDiff
-    return b.triggerSignals.length - a.triggerSignals.length
+  scored.sort((a, b) => {
+    // Primary: weighted score (customer-specific signals count 3x)
+    const scoreDiff = b.weightedScore - a.weightedScore
+    if (scoreDiff !== 0) return scoreDiff
+    // Tiebreaker: confidence tier
+    return confidenceOrder[b.rec.confidence] - confidenceOrder[a.rec.confidence]
   })
 
-  return recommendations.slice(0, MAX_RECOMMENDATIONS)
+  return scored.map(s => s.rec).slice(0, MAX_RECOMMENDATIONS)
 }
