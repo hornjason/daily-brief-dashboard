@@ -122,7 +122,7 @@ FeatureModuleRegistry.register({
         detail: data.company.substring(0, 300),
         rawRelevance: 0.7,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
-        url: data.companyDocUrl,
+        url: data.companyDocUrl || undefined,
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'company',
@@ -141,7 +141,7 @@ FeatureModuleRegistry.register({
         detail: data.industry.substring(0, 300),
         rawRelevance: 0.6,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
-        url: data.industryDocUrl,
+        url: data.industryDocUrl || undefined,
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'industry',

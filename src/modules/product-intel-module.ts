@@ -131,6 +131,7 @@ FeatureModuleRegistry.register({
         detail: summary.summaryText,
         rawRelevance,
         timestamp: new Date().toISOString(),
+        url: `/dashboard/products/${summary.slug}`,  // #479: link to product detail page
         metadata,
       })
     }

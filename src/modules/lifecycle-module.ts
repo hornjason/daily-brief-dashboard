@@ -264,6 +264,7 @@ FeatureModuleRegistry.register({
         detail,
         rawRelevance,
         timestamp: cache.fetchedAt,
+        url: metadata.lifecycleUrl || undefined,  // #479: promote metadata.lifecycleUrl
         metadata,
       })
     }

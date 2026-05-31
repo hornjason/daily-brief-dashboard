@@ -610,6 +610,7 @@ FeatureModuleRegistry.register({
         detail: `${tech.description}${tech.redHatPositioning ? ' Red Hat positioning: ' + tech.redHatPositioning : ''}`,
         rawRelevance,
         timestamp: tech.lastResearched,
+        url: (tech.source && tech.source !== 'provided-context') ? tech.source : undefined,  // #479: promote metadata.source (URL)
         metadata: {
           customerSlug,
           category: tech.category,

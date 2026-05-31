@@ -62,6 +62,7 @@ FeatureModuleRegistry.register({
           detail: parts.join(' | ') || 'Product intel generated',
           rawRelevance,
           timestamp: intel.generatedAt ?? data.cachedAt ?? new Date().toISOString(),
+          url: `/dashboard/products/${product}`,  // #479: link to product detail page
           metadata: {
             customerSlug,
             product,

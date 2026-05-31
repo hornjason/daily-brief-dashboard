@@ -64,6 +64,7 @@ FeatureModuleRegistry.register({
         detail: `Status: ${c.status} | Severity: ${c.severity} | Product: ${c.product ?? 'Unknown'} | Open ${c.daysOpen ?? '?'} days`,
         rawRelevance,
         timestamp: new Date().toISOString(),
+        url: c.caseNumber ? `https://access.redhat.com/support/cases/#/case/${c.caseNumber}` : undefined,  // #479
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           caseNumber: c.caseNumber,
