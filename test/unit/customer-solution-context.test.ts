@@ -9,7 +9,7 @@ const CACHE_DIR = resolve(TEST_DIR, 'cache')
 
 const CATALOG = {
   version: 2,
-  tdps: ['Automation', 'Virtualization', 'App Platform'],
+  tdps: ['Automation', 'Virtualization', 'App Platform', 'Infrastructure', 'Cloud', 'IaC'],
   plays: [
     {
       id: 'vmware-migration',
@@ -42,6 +42,36 @@ const CATALOG = {
       valueProps: ['Enterprise K8s with security built in'],
       cloudAmplifiers: ['AWS', 'Azure'],
       category: 'platform',
+    },
+    {
+      id: 'platform-modernization',
+      name: 'Infrastructure Modernization with RHEL',
+      tdp: 'Infrastructure',
+      summary: 'Migrate from legacy OS to RHEL',
+      triggerTechnologies: ['CentOS', 'Ubuntu', 'SUSE', 'Oracle Linux'],
+      redHatProducts: ['rhel'],
+      valueProps: ['Consolidate on enterprise Linux'],
+      category: 'modernization',
+    },
+    {
+      id: 'cloud-marketplace',
+      name: 'Cloud Marketplace and CPPO',
+      tdp: 'Cloud',
+      summary: 'Leverage marketplace for procurement',
+      triggerTechnologies: ['AWS', 'Azure', 'Google Cloud'],
+      redHatProducts: ['ocp', 'rhel'],
+      valueProps: ['Simplify procurement through marketplace'],
+      category: 'marketplace',
+    },
+    {
+      id: 'iac-modernization',
+      name: 'IaC Modernization with AAP',
+      tdp: 'IaC',
+      summary: 'Replace legacy IaC with Ansible',
+      triggerTechnologies: ['Terraform', 'Puppet', 'Chef', 'SaltStack'],
+      redHatProducts: ['aap'],
+      valueProps: ['Unified automation platform'],
+      category: 'automation',
     },
   ],
 }
@@ -217,6 +247,99 @@ describe('activeSolutionPlays', () => {
     const ctx = getCustomerSolutionContext('acme')
     expect(ctx.activeSolutionPlays[0].valueProps).toEqual(['Eliminate VMware licensing costs'])
     expect(ctx.activeSolutionPlays[0].redHatProducts).toEqual(['ocp', 'rhel'])
+  })
+
+  // ── Fuzzy Matching: Trigger-is-Substring ─────────────────────────────
+
+  it('matches "CentOS Linux" against trigger "CentOS" via substring', () => {
+    writeTechStackCache('acme', [
+      { name: 'CentOS Linux', category: 'os', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    const play = ctx.activeSolutionPlays.find(p => p.playId === 'platform-modernization')
+    expect(play).toBeDefined()
+    expect(play!.matchedTechnologies).toContain('CentOS Linux')
+  })
+
+  // ── Fuzzy Matching: Parenthetical Extraction ─────────────────────────
+
+  it('matches "Amazon Web Services (AWS)" against trigger "AWS" via parenthetical extraction', () => {
+    writeTechStackCache('acme', [
+      { name: 'Amazon Web Services (AWS)', category: 'cloud', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    const play = ctx.activeSolutionPlays.find(p => p.playId === 'cloud-marketplace')
+    expect(play).toBeDefined()
+    expect(play!.matchedTechnologies).toContain('Amazon Web Services (AWS)')
+  })
+
+  // ── Fuzzy Matching: Vendor Prefix Stripping ──────────────────────────
+
+  it('matches "HashiCorp Terraform" against trigger "Terraform" via vendor prefix stripping', () => {
+    writeTechStackCache('acme', [
+      { name: 'HashiCorp Terraform', category: 'iac', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    const play = ctx.activeSolutionPlays.find(p => p.playId === 'iac-modernization')
+    expect(play).toBeDefined()
+    expect(play!.matchedTechnologies).toContain('HashiCorp Terraform')
+  })
+
+  // ── No False Positives ───────────────────────────────────────────────
+
+  it('does NOT match "Ansible" against a trigger "An" (word boundary protection)', () => {
+    // Temporarily override catalog with a play that has a short trigger
+    writeFileSync(resolve(CONFIG_DIR, 'solution-plays.json'), JSON.stringify({
+      version: 2,
+      plays: [{
+        id: 'fake-play',
+        name: 'Fake Play',
+        tdp: 'Test',
+        summary: 'Test',
+        triggerTechnologies: ['An'],
+        redHatProducts: ['test'],
+        valueProps: ['test'],
+        category: 'test',
+      }],
+    }))
+    resetCatalogCache()
+    writeTechStackCache('acme', [
+      { name: 'Ansible', category: 'automation', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    expect(ctx.activeSolutionPlays).toEqual([])
+  })
+
+  it('does NOT match "Python" against a trigger "Py" (word boundary protection)', () => {
+    writeFileSync(resolve(CONFIG_DIR, 'solution-plays.json'), JSON.stringify({
+      version: 2,
+      plays: [{
+        id: 'fake-play',
+        name: 'Fake Play',
+        tdp: 'Test',
+        summary: 'Test',
+        triggerTechnologies: ['Py'],
+        redHatProducts: ['test'],
+        valueProps: ['test'],
+        category: 'test',
+      }],
+    }))
+    resetCatalogCache()
+    writeTechStackCache('acme', [
+      { name: 'Python', category: 'language', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    expect(ctx.activeSolutionPlays).toEqual([])
+  })
+
+  it('exact match still works as fast path for "Docker"', () => {
+    writeTechStackCache('acme', [
+      { name: 'Docker', category: 'container', context: 'using', confidence: 'HIGH', redHatProducts: [], infrastructure: [] },
+    ])
+    const ctx = getCustomerSolutionContext('acme')
+    const play = ctx.activeSolutionPlays.find(p => p.playId === 'cloud-native')
+    expect(play).toBeDefined()
+    expect(play!.matchedTechnologies).toContain('Docker')
   })
 })
 
