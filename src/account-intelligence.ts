@@ -190,8 +190,7 @@ Be specific and cite current information.`,
       callType: 'intelligence-industry-research',
       customerName,
       grounding: true,
-      model: 'full',
-      temperature: 1.0,
+      temperature: 0.3,  // Factual extraction with grounding — low temperature for accuracy
     }
   )
 
@@ -211,7 +210,6 @@ Return JSON with these fields:
       callType: 'intelligence-industry-structure',
       customerName,
       responseSchema: INDUSTRY_SCHEMA,
-      model: 'full',
       temperature: 0.2,
     }
   )
@@ -486,8 +484,7 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
       callType: 'intelligence-company',
       customerName: customer.name,
       grounding: true,
-      model: 'full',
-      temperature: 1.0,
+      temperature: 0.7,  // Analytical synthesis with grounding — moderate temperature for balanced narrative
     }
   )
 
@@ -504,8 +501,7 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
           callType: 'intelligence-company',
           customerName: customer.name,
           grounding: true,
-          model: 'full',
-          temperature: 1.0,
+          temperature: 0.7,  // Analytical synthesis with grounding — moderate temperature for balanced narrative
         }
       )
       return retryResult.text
@@ -671,8 +667,7 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
       callType: 'intelligence-analysis',
       customerName: customer.name,
       grounding: true,
-      model: 'full',
-      temperature: 1.0,
+      temperature: 0.7,  // Analytical synthesis with grounding — moderate temperature for balanced narrative
     }
   )
   const analysis = analysisResult.text

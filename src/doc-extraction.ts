@@ -184,7 +184,6 @@ export async function callGeminiStructured(systemPrompt: string, userPrompt: str
     {
       callType: 'doc-classify',
       customerName: 'unknown',
-      model: 'lite',
       temperature: 0.7,
       responseSchema,
     }

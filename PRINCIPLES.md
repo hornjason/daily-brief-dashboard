@@ -7,6 +7,23 @@ updated: 2026-05-20
 
 # Design Principles — Deep Module Architecture
 
+## Mission & Vision
+
+**This system exists to open opportunities, close bigger deals, and make customers successful** — by pulling together every signal Red Hat has about a customer and connecting it to actionable solutions, programs, and plays.
+
+Red Hat has signals scattered everywhere — cases, subscriptions, cloud spend, pipeline, tech stack, partner ecosystems, sales plays, marketplace programs — and nobody is pulling them together intelligently to drive action for customers. This system does that.
+
+**Every design decision must answer:** "Does this help surface what Red Hat can do for a specific customer based on their signals?" If it doesn't connect signals to actions, it's not serving the goal.
+
+**Three capabilities this system must deliver:**
+1. **Cross-reference engine** — Given a customer's signals, surface matching solutions from ecosystem catalog, marketplace programs, saleshub plays, partner demos, free trials, and interactive labs.
+2. **AI-driven recommendation** — Signal-to-action mapping is inferred by AI from the full signal profile + solution portfolio. Not manually curated.
+3. **Accumulation over time** — Historical signals compound. Trajectories matter. Nothing is lost on regeneration.
+
+**This system scales with its data.** More signals, more history, more intelligence. Every module, contract, and consumer should be designed to grow with the product.
+
+---
+
 Every feature in this project follows three architectural layers. Violating these principles creates one-off gaps that require manual discovery and surgical fixes. Design for least complexity from the start.
 
 ## The Three Layers
@@ -95,6 +112,21 @@ This is enforced by requiring Gemini prompts for all consumers to:
 
 If no business objective is known for the customer, the consumer should flag this as a data gap — not fall back to generic positioning.
 
+## Gemini Gateway Contract (MANDATORY — C7)
+
+All Gemini calls MUST go through `callGemini()` from `src/gemini-call.ts`. No direct URL construction, no hardcoded model names, no inline `thinkingConfig` or `temperature`. The gateway handles:
+
+- **Model resolution** — `'lite'` / `'full'` / `'pro'` → actual model ID from `ai-config.ts`
+- **Endpoint routing** — Gemini 3.x → US multi-region (`aiplatform.us.rep.googleapis.com`), 2.x → regional
+- **Thinking config** — 3.x: `thinkingLevel: 'minimal'`, 2.x: `thinkingBudget: 0` for Flash
+- **Temperature gating** — 3.x models do not accept temperature/top_p/top_k
+- **Output token budget** — 3.x: 16384 (thinking tokens consume budget), 2.x: model default
+- **Cost tracking, delta caching, retry logic** — centralized, not duplicated per consumer
+
+**Why:** When migrating from gemini-2.5-flash-lite to gemini-3.5-flash, only modules using `callGemini()` worked. The 10 modules with direct Vertex AI calls all hit 404 errors and required individual patching. Every future model migration has the same risk. One gateway, zero direct calls.
+
+**Violation indicator:** `grep -rn 'aiplatform.googleapis.com' src/ | grep -v gemini-call.ts` — any matches are violations.
+
 ## Gemini Output Quality Gate Contract (MANDATORY — ADR-024)
 
 Every module that calls Gemini for content extraction or generation MUST wrap the output with `validateAndRetry()` from `src/gemini-quality-gate.ts`. No exceptions — this was a hard-learned rule after cloud marketplace shipped extraction without validation and produced empty/degraded cache that replaced good data.
@@ -137,13 +169,13 @@ Every registered module implements two refresh methods with distinct purposes:
 
 Every module that produces portfolio-wide data (not per-customer) MUST support pulling fresh data from Google Drive — not just re-reading a local file baked into the container image.
 
-**Why:** Hero installs bootstrap from a container image that may be days old. The Mac Mini scrapes fresh data and writes to Drive. Without L3 refresh, hero instances serve stale data until a rebuild. The Refresh button should always pull from the live source.
+**Why:** Hero installs bootstrap from a container image that may be days old. The producing instance (Mac Mini for saleshub, hero install for cloud-marketplace) scrapes fresh data and writes to Drive. Without L3 refresh, other instances serve stale data until a rebuild. The Refresh button should always pull from the live source.
 
 ### The contract
 
 | Field | Required | Purpose |
 |-------|----------|---------|
-| `driveFolderId` | Yes | Shared Drive folder where the Mac Mini writes the source file |
+| `driveFolderId` | Yes | Shared Drive folder where the producing instance writes the source file |
 | `driveFileName` | Yes | Filename to download (e.g., `saleshub-knowledge.json`) |
 | `localCachePath` | Yes | Where to write the downloaded file locally |
 | `syncNow()` | Yes | Downloads fresh file from Drive, replaces local cache, reloads data |
@@ -175,8 +207,8 @@ async ensureFresh(customerSlug: string): Promise<void> {
 |--------|-----------|--------|
 | `saleshub-content` | `saleshub-knowledge.json` | ✅ Implemented (#460) — syncNow + ensureFresh download from Drive |
 | `saleshub` | `saleshub-knowledge.json` | ✅ Implemented (#442) — syncNow downloads from Drive |
-| `cloud-marketplace` | `cloud-marketplace/latest.json` | ❌ **TODO** — reads local cache only |
-| `ecosystem-catalog` | `ecosystem-catalog/*.json` | ❌ **TODO** — reads local cache only |
+| `cloud-marketplace` | `cloud-marketplace/latest.json` | ✅ Implemented (#462) — syncNow + ensureFresh download from Drive |
+| `ecosystem-catalog` | `ecosystem-catalog/*.json` | ✅ Implemented (#462) — syncNow + ensureFresh download from Drive |
 | `product-intel` | Product corpus files | ✅ Has its own scraper (not Drive-dependent) |
 
 ### Bootstrap integration
@@ -196,6 +228,21 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
 - ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
 - ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
+
+## Enforcement: architecture-compliance.test.ts
+
+**Every rule in this file is enforced by `test/unit/architecture-compliance.test.ts`.** This test runs on every `bun test` (Gate 1, pre-push). Failing tests block push. The test auto-discovers modules from the registry and filesystem — no hardcoded lists.
+
+What it enforces:
+- ADR-027: no hardcoded scores in modules (must use rawRelevance)
+- Module contract: ensureFresh, cacheTtlMs, refreshEndpoint, displayName
+- Consumer contract: must use templateAll(), must call ensureFresh=true
+- Service extraction: route files thin, services have zero Hono imports
+- ADR↔PRINCIPLES drift: new ADRs with mandatory requirements must update this file
+- Pre-flight question count: cannot drop below current count
+- Contract section integrity: all named sections must exist
+
+**When adding a new contract or pre-flight question:** add the enforcement check to architecture-compliance.test.ts in the same PR. A contract without a test is a suggestion, not a rule.
 
 ## Signal Scoring Quick Reference (ADR-027)
 

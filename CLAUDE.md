@@ -177,6 +177,9 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Bootstrap E2E: `npx playwright test test/bootstrap-e2e.spec.ts --timeout=600000`
 - State isolation: snapshot/restore per test via `POST /api/__test/snapshot` + `restore`
 
+**Architecture compliance test (MANDATORY READ before adding or modifying any module):**
+`test/unit/architecture-compliance.test.ts` — enforces ALL ADR contracts, module registration, signal quality, consumer rules, and ADR↔PRINCIPLES.md drift detection. Runs on every `bun test`. Failing tests block push. Before adding a new module, new signal type, new ADR, or modifying any contract — read this file to understand what's enforced. Currently covers: ADR-027 scoring (no hardcoded scores), ensureFresh/cacheTtlMs, refreshEndpoint, consumer templateAll() usage, service extraction, path contract, scheduler contract, admin UI, API endpoints, config propagation, export parity, ADR↔PRINCIPLES drift.
+
 **Every bug fix MUST have a test — zero exceptions (MANDATORY):**
 - API-level bug → regression test in `test/regression.spec.ts` with BKL reference (REG-NNN pattern)
 - UI-only bug (React render, CSS, state) → Playwright browser test in `test/ui-regression.spec.ts`

@@ -217,7 +217,6 @@ Return as JSON with this exact structure:
   const result = await callGemini('', userPrompt, {
     callType: 'ae-voice-detection',
     customerName: aeName,
-    model: 'full',
     temperature: 0.3,
     responseSchema,
     // No deltaKey — email sets change as more emails are sent

@@ -280,7 +280,6 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
   try {
     const result = await callGemini(EXTRACTION_PROMPT, userPrompt, {
       callType: 'cloud-marketplace-extraction',
-      model: 'lite',
       responseSchema,
       deltaKey: 'cloud-marketplace-latest',
       timeoutMs: 60_000,
@@ -533,7 +532,7 @@ FeatureModuleRegistry.register({
         const newIds = new Set(fileIds)
         if (cachedIds.size === newIds.size && [...newIds].every(id => cachedIds.has(id))) {
           console.log(`[cloud-marketplace] same ${fileIds.length} file IDs as cache (${existing.clouds.length} clouds) — skipping re-extraction`)
-          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds.reduce((n: number, c: any) => n + (c.offerings?.length ?? 0) + (c.programs?.length ?? 0) + (c.incentives?.length ?? 0), 0) })
+          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds.length })
           return
         }
         console.log(`[cloud-marketplace] file IDs changed: cached=${existing.sourceFileIds.length}, new=${fileIds.length}`)
@@ -581,7 +580,7 @@ FeatureModuleRegistry.register({
         console.warn(`[cloud-marketplace] Drive write failed (non-fatal): ${sanitizeErr(driveErr.message)}`)
       }
 
-      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: clouds.reduce((n, c) => n + c.offerings.length + c.programs.length + c.incentives.length, 0) })
+      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: clouds.length })
       console.log(`[cloud-marketplace] cached ${clouds.length} cloud sections for ${newsletterDate}`)
     } catch (e: any) {
       console.error(`[cloud-marketplace] sync failed: ${sanitizeErr(e.message)}`)

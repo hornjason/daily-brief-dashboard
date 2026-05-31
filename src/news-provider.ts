@@ -73,7 +73,6 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
     const result = await callGemini('', userPrompt, {
       callType: 'news-search',
       customerName,
-      model: 'full',
       temperature: 0.3,
       grounding: true,
       // No deltaKey — news is real-time grounded search, always fresh
@@ -198,7 +197,6 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
     const result = await callGemini('', userPrompt, {
       callType: 'news-scoring',
       customerName,
-      model: 'full',
       temperature: 0.2,
       // No deltaKey — scoring depends on fresh articles from search
     })

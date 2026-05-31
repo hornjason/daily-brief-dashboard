@@ -723,7 +723,6 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
         {
           callType: 'meeting-prep-attendee-research',
           customerName: customer.name,
-          model: 'full',
           grounding: true,
           timeoutMs: 60_000,
         }
@@ -788,7 +787,7 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
         const partnerResult = await callGemini(
           'You are a B2B sales intelligence researcher. Research this company and describe their business and any Red Hat partnership status. Be concise — 3-4 lines max.',
           `Research: ${partnerDomains.join(', ')} — what do they do? Are they a Red Hat partner?`,
-          { callType: 'meeting-prep-partner-research', customerName: customer.name, model: 'full', grounding: true, timeoutMs: 30_000 }
+          { callType: 'meeting-prep-partner-research', customerName: customer.name, grounding: true, timeoutMs: 30_000 }
         )
         partnerResearch = partnerResult.text
       } catch { partnerResearch = `Partner domains identified: ${partnerDomains.join(', ')}` }
@@ -1045,7 +1044,6 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
       callType: 'meeting-prep-derived-from-playbook',
       customerName: customer.name,
-      model: 'full',
       timeoutMs: 90_000, // Shorter timeout — less synthesis needed
     })
 
@@ -1061,7 +1059,6 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
           {
             callType: 'meeting-prep-derived-from-playbook',
             customerName: customer.name,
-            model: 'full',
             timeoutMs: 90_000,
           }
         )
@@ -1181,7 +1178,6 @@ Use the Product & Market Intelligence context above to identify the most relevan
     const geminiResult = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-synthesis',
       customerName: customer.name,
-      model: 'full',
       timeoutMs: 120_000,
     })
 
@@ -1197,7 +1193,6 @@ Use the Product & Market Intelligence context above to identify the most relevan
           {
             callType: 'meeting-prep-synthesis',
             customerName: customer.name,
-            model: 'full',
             timeoutMs: 120_000,
           }
         )

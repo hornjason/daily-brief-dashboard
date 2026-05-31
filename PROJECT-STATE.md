@@ -283,6 +283,8 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 **Unit tests (2026-05-28):** `test/unit/` — 2088 tests across 198 files covering modules, signals, scrapers, bootstrap, cache, API routes. Run: `bun test --isolate test/unit/` (requires Bun 1.3.13+; `--isolate` gives each file a fresh global scope)
 
+**Architecture compliance tests:** `test/unit/architecture-compliance.test.ts` — 33+ tests enforcing all ADR contracts, module registration, signal quality, consumer rules, service extraction, and ADR↔PRINCIPLES.md drift detection. Runs on every `bun test`. Read before adding or modifying any module, signal type, ADR, or contract.
+
 **CI gate (2026-04-10):** `make lint` runs `scripts/check-empty-catches.sh` — fails build if any `.catch(() => {})` exists in `dashboard/src/`
 
 **Open items:** BKL-TEST-12 (endpoint allowlist), BKL-TEST-18 (delta guard), BKL-TEST-19 (fixture detection), BKL-TEST-20 (setup.spec.ts wrapper), BKL-TEST-21 (complete unit coverage), BKL-TEST-22 (@destructive tag routing)

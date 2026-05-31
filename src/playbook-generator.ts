@@ -373,7 +373,6 @@ Generate the 6 narrative sections plus product alignment entries as structured J
   const geminiResult = await callGemini(systemPrompt, userPrompt, {
     callType: 'playbook-generation',
     customerName: customer.name,
-    model: 'full',
     responseSchema,
     deltaKey: `playbook-${slug}`,
     temperature: 0.3,
@@ -660,7 +659,6 @@ For MEDDPICC: if the meeting notes provide evidence for any qualification field,
   const geminiResult = await callGemini(systemPrompt, userPrompt, {
     callType: 'playbook-note-ingestion',
     customerName: existing.customerName,
-    model: 'full',
     responseSchema,
     deltaKey: `playbook-ingest-${existing.customerSlug}-${docId}`,
     temperature: 0.2,

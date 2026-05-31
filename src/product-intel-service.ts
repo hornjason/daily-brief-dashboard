@@ -536,7 +536,6 @@ export async function generateWhatsNew(slug: string, forceRefresh: boolean): Pro
 
   const result = await callGemini(systemPrompt, userPrompt, {
     callType: 'product-whats-new',
-    model: 'full',
     deltaKey,
     responseSchema: {
       type: 'ARRAY',

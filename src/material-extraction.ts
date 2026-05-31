@@ -125,7 +125,6 @@ Now extract structured data from this material in JSON format.`
   const result = await callGemini(DECOMPOSITION_PROMPT, userPrompt, {
     callType: 'material-decomposition',
     customerName: 'n/a',
-    model: 'full',
     temperature: 0.3,
     // No deltaKey — material content may change, and we want fresh extraction each time
   })

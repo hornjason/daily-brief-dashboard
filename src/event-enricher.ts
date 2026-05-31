@@ -258,7 +258,6 @@ async function enrichSingleEvent(event: RHEvent): Promise<EnrichmentEntry> {
   try {
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'event-enrichment',
-      model: 'lite',
       deltaKey,
     })
 

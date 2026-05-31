@@ -260,7 +260,6 @@ ${personasStr}`
   const result = await callGemini(CAMPAIGN_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-generation',
     customerName: opts.customerName,
-    model: 'pro',  // Pro for campaigns — better instruction following for council rules
     temperature: 0.7,
     // No deltaKey — campaigns are customer-specific and material may change
   })
