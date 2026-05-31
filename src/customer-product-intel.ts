@@ -13,12 +13,11 @@ import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { loadProductConfig, type ProductConfig, type ProductSummary } from './product-release-radar.ts'
 import { getFeatureCache } from './product-feature-radar.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { getGeminiToken } from './gemini-auth.ts'
-import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
+import { callGemini } from './gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
 import { customerProductIntelValidator } from './quality-validators/customer-product-intel-validator.ts'
-import { getAiConfig, getGeminiModel, getAutomationConfig } from './ai-config.ts'
+import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
+import { getAiConfig, getAutomationConfig } from './ai-config.ts'
 import { readSheetCache, readPipelineCache, toSlug } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
 import { customers } from './server-state.ts'
@@ -107,8 +106,6 @@ function customerIntelCacheDir(slug: string): string {
 function customerIntelCachePath(slug: string, customerSlug: string): string {
   return resolve(customerIntelCacheDir(slug), `${customerSlug}.json`)
 }
-
-// ── Gemini auth (mirrors product-release-radar.ts pattern) ───────────────────
 
 // ── Filtering helpers ─────────────────────────────────────────────────────────
 
@@ -213,14 +210,6 @@ async function generateExpansionAnalysis(opts: {
     }
   } catch { /* cache miss — regenerate */ }
 
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-
-  if (!project) {
-    console.warn('[customer-product-intel] GOOGLE_CLOUD_PROJECT not set — skipping expansion analysis')
-    return makeExpansionDefault(slug, customerName, productCacheHash)
-  }
-
   const systemPrompt = `You are a Red Hat Solutions Architect expansion analyzer. Given a company's profile and industry context, assess whether a specific Red Hat product would be relevant for them — even though they don't currently subscribe to it.
 
 Rules:
@@ -252,51 +241,16 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
 }`
 
   try {
-    const token = await getGeminiToken()
-    // Use gemini-2.5-flash-lite for cost-optimized supplementary analysis
-    const expansionModel = 'gemini-2.5-flash-lite'
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${expansionModel}:generateContent`
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
+    const result = await callGemini(systemPrompt, userPrompt, {
+      callType: 'customer-product-intel-expansion',
+      customerName,
+      model: 'lite',
+      temperature: 0.3,
+      timeoutMs: 30_000,
+      deltaKey: `expansion:${slug}:${customerSlug}`,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[customer-product-intel] expansion Gemini error ${res.status}: ${sanitizeErr(err)}`)
-      const fallback = makeExpansionDefault(slug, customerName, productCacheHash)
-      writeCustomerIntelCache(slug, customerSlug, contentHash, fallback)
-      return fallback
-    }
-
-    const json = await res.json() as any
-
-    // Record token usage
-    const usage = json.usageMetadata
-    if (usage) {
-      recordGeminiUsage({
-        timestamp:    new Date().toISOString(),
-        callType:     'customer-product-intel-expansion',
-        customerName,
-        inputTokens:  usage.promptTokenCount ?? 0,
-        outputTokens: usage.candidatesTokenCount ?? 0,
-        model:        'gemini-2.5-flash-lite',
-      })
-    }
-
-    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+    const text = result.text
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
 
     if (jsonMatch) {
@@ -530,128 +484,65 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
 For featureTalkingPoints: select the top 3-5 features from the feature radar that are most relevant to THIS customer's signals. Each must cite a specific customer signal. Return [] if no features were provided or none are relevant.
 For initiativeAlignment: derive from the Account Intelligence section above. Each item must name the initiative, then explain the product connection. 1-3 items maximum.`
 
-  // ── Gemini API call ───────────────────────────────────────────────────────
-
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-
-  if (!project) {
-    console.warn('[customer-product-intel] GOOGLE_CLOUD_PROJECT not set — skipping Gemini, returning default')
-    const intel = defaultIntel(slug, customerName, productSummary.contentHash)
-    writeCustomerIntelCache(slug, customerSlug, contentHash, intel)
-    return intel
-  }
+  // ── Gemini API call (via callGemini gateway) ──────────────────────────────
 
   let intel = defaultIntel(slug, customerName, productSummary.contentHash)
 
   try {
-    const token = await getGeminiToken()
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(60_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature:     getAiConfig().customerIntelTemperature,
-          maxOutputTokens: 2048,
-          thinkingConfig:  { thinkingBudget: 0 },
-        },
-      }),
+    const result = await callGemini(systemPrompt, userPrompt, {
+      callType: 'customer-product-intel',
+      customerName,
+      temperature: getAiConfig().customerIntelTemperature,
+      deltaKey: `customer-intel:${slug}:${customerSlug}`,
     })
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`[customer-product-intel] Gemini error ${res.status}: ${sanitizeErr(err)}`)
-      // Fall through to write default and return
-    } else {
-      const json = await res.json() as any
+    const text = result.text
+    console.log(`[customer-product-intel] Gemini raw text (${slug}/${customerSlug}): ${text.slice(0, 300)}`)
 
-      // Record token usage for cost tracking
-      const usage = json.usageMetadata
-      if (usage) {
-        recordGeminiUsage({
-          timestamp:    new Date().toISOString(),
-          callType:     'customer-product-intel',
-          customerName,
-          inputTokens:  usage.promptTokenCount ?? 0,
-          outputTokens: usage.candidatesTokenCount ?? 0,
-          model,
-        })
-      }
+    // Strip markdown fences if present
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
 
-      // Gemini 2.5 Flash may return a thinking part before the text part — scan all parts
-      const finishReason = json.candidates?.[0]?.finishReason
-      if (finishReason === 'MAX_TOKENS') {
-        console.warn(`[customer-product-intel] Gemini hit MAX_TOKENS for ${slug}/${customerSlug} — output truncated, increase maxOutputTokens`)
-      }
-      const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
-      const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
-      console.log(`[customer-product-intel] Gemini raw text (${slug}/${customerSlug}, finish=${finishReason}): ${text.slice(0, 300)}`)
+    if (jsonMatch) {
+      try {
+        const rawJsonText = jsonMatch[1] ?? jsonMatch[0]
 
-      // Strip markdown fences if present
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
-
-      if (jsonMatch) {
-        try {
-          const rawJsonText = jsonMatch[1] ?? jsonMatch[0]
-
-          // ADR-024: Quality gate — validate and retry if below threshold
-          const gateResult = await validateAndRetry(
-            rawJsonText,
-            { validator: customerProductIntelValidator },
-            async (failures, _attempt) => {
-              const feedback = formatFailureFeedback(failures)
-              // Re-invoke Gemini with failure feedback
-              const retryRes = await fetch(url, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                signal: AbortSignal.timeout(60_000),
-                body: JSON.stringify({
-                  systemInstruction: { parts: [{ text: systemPrompt }] },
-                  contents: [{ role: 'user', parts: [{ text: userPrompt + '\n\n' + feedback }] }],
-                  generationConfig: {
-                    temperature: getAiConfig().customerIntelTemperature,
-                    maxOutputTokens: 2048,
-                    thinkingConfig: { thinkingBudget: 0 },
-                  },
-                }),
-              })
-              if (!retryRes.ok) throw new Error(`Gemini retry failed: ${retryRes.status}`)
-              const retryJson = await retryRes.json() as any
-              const retryParts: any[] = retryJson.candidates?.[0]?.content?.parts ?? []
-              const retryText = retryParts.map((p: any) => p.text ?? '').join('\n').trim()
-              const retryMatch = retryText.match(/```json\s*([\s\S]*?)\s*```/) ?? retryText.match(/(\{[\s\S]*\})/)
-              return retryMatch ? (retryMatch[1] ?? retryMatch[0]) : rawJsonText
-            }
-          )
-
-          const parsed = JSON.parse(gateResult.output)
-          intel = {
-            product: slug,
-            customer: customerName,
-            relevanceScore: parsed.relevanceScore ?? 'NONE',
-            priorityAction: parsed.priorityAction ?? 'Analysis unavailable',
-            roadmapRelevance: parsed.roadmapRelevance ?? [],
-            expansionOpportunities: parsed.expansionOpportunities ?? [],
-            caseAlignment: parsed.caseAlignment ?? [],
-            competitiveAngle: parsed.competitiveAngle ?? null,
-            featureTalkingPoints: Array.isArray(parsed.featureTalkingPoints) ? parsed.featureTalkingPoints : [],
-            initiativeAlignment: Array.isArray(parsed.initiativeAlignment) ? parsed.initiativeAlignment : [],
-            generatedAt: new Date().toISOString(),
-            productCacheHash: productSummary.contentHash,
+        // ADR-024: Quality gate — validate and retry if below threshold
+        const gateResult = await validateAndRetry(
+          rawJsonText,
+          { validator: customerProductIntelValidator },
+          async (failures, _attempt) => {
+            const feedback = formatFailureFeedback(failures)
+            const retryResult = await callGemini(systemPrompt, userPrompt + '\n\n' + feedback, {
+              callType: 'customer-product-intel',
+              customerName,
+              temperature: getAiConfig().customerIntelTemperature,
+            })
+            const retryMatch = retryResult.text.match(/```json\s*([\s\S]*?)\s*```/) ?? retryResult.text.match(/(\{[\s\S]*\})/)
+            return retryMatch ? (retryMatch[1] ?? retryMatch[0]) : rawJsonText
           }
-        } catch (parseErr: any) {
-          console.warn(`[customer-product-intel] JSON parse failed for ${slug}/${customerSlug}:`, parseErr?.message)
-          // intel remains the default
+        )
+
+        const parsed = JSON.parse(gateResult.output)
+        intel = {
+          product: slug,
+          customer: customerName,
+          relevanceScore: parsed.relevanceScore ?? 'NONE',
+          priorityAction: parsed.priorityAction ?? 'Analysis unavailable',
+          roadmapRelevance: parsed.roadmapRelevance ?? [],
+          expansionOpportunities: parsed.expansionOpportunities ?? [],
+          caseAlignment: parsed.caseAlignment ?? [],
+          competitiveAngle: parsed.competitiveAngle ?? null,
+          featureTalkingPoints: Array.isArray(parsed.featureTalkingPoints) ? parsed.featureTalkingPoints : [],
+          initiativeAlignment: Array.isArray(parsed.initiativeAlignment) ? parsed.initiativeAlignment : [],
+          generatedAt: new Date().toISOString(),
+          productCacheHash: productSummary.contentHash,
         }
-      } else {
-        console.warn(`[customer-product-intel] Gemini response contained no JSON for ${slug}/${customerSlug}`)
+      } catch (parseErr: any) {
+        console.warn(`[customer-product-intel] JSON parse failed for ${slug}/${customerSlug}:`, parseErr?.message)
+        // intel remains the default
       }
+    } else {
+      console.warn(`[customer-product-intel] Gemini response contained no JSON for ${slug}/${customerSlug}`)
     }
   } catch (e: any) {
     console.error(`[customer-product-intel] Gemini call failed for ${slug}/${customerSlug}:`, e?.message)
