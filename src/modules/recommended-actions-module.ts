@@ -137,28 +137,64 @@ FeatureModuleRegistry.register({
   async syncNow() { _resultCache.clear() },
 })
 
+// ── Play→TDP content join (#498) ─────────────────────────────────────────────
+
+function findPlayData(solutionName: string): { play: any; tdp: any } | null {
+  const plays = loadSolutionPlays()
+  const play = plays.find(p => p.name === solutionName)
+  if (!play?.tdp) return play ? { play, tdp: null } : null
+
+  const knowledge = loadSaleshubKnowledge()
+  const tdps = knowledge?.tdps ?? []
+  const tdp = tdps.find((t: any) => t.name.toLowerCase() === play.tdp.toLowerCase())
+  return { play, tdp: tdp ?? null }
+}
+
 // ── Signal conversion ─────────────────────────────────────────────────────────
 
 function toSignal(ra: RecommendedAction, customerSlug: string): Signal {
+  const playData = ra.solution.type === 'play' ? findPlayData(ra.solution.name) : null
+  const play = playData?.play
+  const tdp = playData?.tdp
+
   return {
     source: 'recommended-actions',
     type: 'recommendation',
     headline: ra.action,
-    detail: ra.narrative ?? ra.solution.name,
+    detail: ra.narrative ?? play?.summary ?? ra.solution.name,
     rawRelevance: ra.confidence === 'high' ? 0.95
                : ra.confidence === 'medium' ? 0.75
                : 0.55,
     timestamp: new Date().toISOString(),
-    url: ra.solution.url,
+    url: tdp?.cheatsheetUrl ?? ra.solution.url,
     metadata: {
       customerSlug,
       solutionType: ra.solution.type,
       solutionName: ra.solution.name,
       triggerSignalCount: ra.triggerSignals.length,
       confidence: ra.confidence.toUpperCase(),
-      redHatProducts: extractProducts(ra),
+      redHatProducts: play?.redHatProducts ?? extractProducts(ra),
       actions: ra.actions,
       assets: ra.solution.assets,
+      play: play ? {
+        summary: play.summary,
+        valueProps: play.valueProps ?? [],
+        cloudAmplifiers: play.cloudAmplifiers ?? [],
+        relatedPlays: play.relatedPlays ?? [],
+        category: play.category,
+      } : undefined,
+      tdp: tdp ? {
+        name: tdp.name,
+        cheatsheetUrl: tdp.cheatsheetUrl,
+        customerDeckUrl: tdp.customerDeckUrl,
+        whatToSay: (tdp.whatToSay ?? []).filter((w: any) => w.name && w.name !== 'arrow down').slice(0, 5),
+        whatToShare: (tdp.whatToShare ?? []).filter((w: any) => w.name).slice(0, 5),
+        whatToShow: (tdp.whatToShow ?? []).filter((w: any) => w.name).slice(0, 5),
+        customerWins: (tdp.customerWins ?? []).filter((w: any) => w.name && !w.name.includes('item(s) selected')).slice(0, 3),
+        tactics: (tdp.tactics ?? []).slice(0, 5),
+        documentCount: (tdp.documents ?? []).length,
+        serviceCount: (tdp.services ?? []).length,
+      } : undefined,
     },
   }
 }

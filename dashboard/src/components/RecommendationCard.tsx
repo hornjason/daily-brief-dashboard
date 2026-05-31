@@ -14,6 +14,27 @@
 import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Zap, Lightbulb } from 'lucide-react'
 
+export interface PlayData {
+  summary: string
+  valueProps: string[]
+  cloudAmplifiers: string[]
+  relatedPlays: string[]
+  category: string
+}
+
+export interface TdpData {
+  name: string
+  cheatsheetUrl?: string
+  customerDeckUrl?: string
+  whatToSay: Array<{ name: string; url?: string }>
+  whatToShare: Array<{ name: string; url?: string }>
+  whatToShow: Array<{ name: string; url?: string }>
+  customerWins: Array<{ name: string; description?: string }>
+  tactics: string[]
+  documentCount: number
+  serviceCount: number
+}
+
 export interface RecommendationCardProps {
   headline: string
   detail: string
@@ -23,6 +44,9 @@ export interface RecommendationCardProps {
   triggerSignalCount: number
   redHatProducts: string[]
   actions: string[]
+  assets?: Array<{ name: string; url?: string; type: string; source?: string }>
+  play?: PlayData
+  tdp?: TdpData
   /** #494: Customer slug for action button navigation */
   customerSlug?: string
   /** #494: Solution URL for "View play deck" action */
@@ -95,6 +119,9 @@ export function RecommendationCard({
   triggerSignalCount,
   redHatProducts,
   actions,
+  assets,
+  play,
+  tdp,
   customerSlug,
   solutionUrl,
 }: RecommendationCardProps) {
@@ -155,12 +182,123 @@ export function RecommendationCard({
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="px-3 pb-3 space-y-2 border-t border-border/40">
-          {/* Detail text */}
-          {detail && (
-            <p className="text-xs text-text-secondary leading-relaxed pt-2">
-              {detail}
-            </p>
+        <div className="px-3 pb-3 space-y-3 border-t border-border/40 pt-2">
+          {/* Play summary + value props */}
+          {play && (
+            <div className="space-y-1.5">
+              {play.summary && (
+                <p className="text-xs text-text-primary leading-relaxed">{play.summary}</p>
+              )}
+              {play.valueProps.length > 0 && (
+                <ul className="space-y-0.5">
+                  {play.valueProps.map((vp, i) => (
+                    <li key={i} className="text-xs text-text-secondary flex items-start gap-1.5">
+                      <span className="text-accent mt-0.5">•</span>
+                      <span>{vp}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Source materials — clickable links */}
+          {tdp && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Source Materials</p>
+              <div className="flex flex-wrap gap-1.5">
+                {tdp.cheatsheetUrl && (
+                  <a href={tdp.cheatsheetUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors">
+                    📋 Cheat Sheet
+                  </a>
+                )}
+                {tdp.customerDeckUrl && (
+                  <a href={tdp.customerDeckUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors">
+                    📊 Customer Deck
+                  </a>
+                )}
+                {tdp.documentCount > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-lg bg-border/30 text-text-secondary">
+                    📄 {tdp.documentCount} docs
+                  </span>
+                )}
+                {tdp.serviceCount > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-lg bg-border/30 text-text-secondary">
+                    🔧 {tdp.serviceCount} services
+                  </span>
+                )}
+              </div>
+
+              {/* What to say */}
+              {tdp.whatToSay.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-text-secondary mb-1">What to Say</p>
+                  <ul className="space-y-0.5">
+                    {tdp.whatToSay.map((item, i) => (
+                      <li key={i} className="text-xs text-text-secondary flex items-start gap-1.5">
+                        <span className="text-amber-400 mt-0.5">▸</span>
+                        {item.url ? (
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{item.name}</a>
+                        ) : (
+                          <span>{item.name}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* What to show */}
+              {tdp.whatToShow.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-text-secondary mb-1">What to Show</p>
+                  <ul className="space-y-0.5">
+                    {tdp.whatToShow.map((item, i) => (
+                      <li key={i} className="text-xs text-text-secondary flex items-start gap-1.5">
+                        <span className="text-emerald-400 mt-0.5">▸</span>
+                        {item.url ? (
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{item.name}</a>
+                        ) : (
+                          <span>{item.name}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Customer wins */}
+              {tdp.customerWins.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-text-secondary mb-1">Customer Wins</p>
+                  {tdp.customerWins.map((win, i) => (
+                    <p key={i} className="text-xs text-text-secondary">🏆 {win.name}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Enrichment assets — partner solutions */}
+          {assets && assets.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Related Solutions</p>
+              <div className="space-y-0.5">
+                {assets.map((a, i) => (
+                  <div key={i} className="text-xs text-text-secondary flex items-start gap-1.5">
+                    <span className="text-blue-400 mt-0.5">▸</span>
+                    {a.url ? (
+                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{a.name}</a>
+                    ) : (
+                      <span>{a.name}</span>
+                    )}
+                    {a.source && <span className="text-text-secondary/50 text-[10px]">({a.source})</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Red Hat products */}
@@ -186,7 +324,7 @@ export function RecommendationCard({
                   key={action}
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleAction(action, customerSlug, solutionUrl)
+                    handleAction(action, customerSlug, solutionUrl ?? tdp?.cheatsheetUrl)
                   }}
                   className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors"
                 >
@@ -212,8 +350,11 @@ export function signalToRecommendation(s: any): RecommendationCardProps {
     triggerSignalCount: s.metadata?.triggerSignalCount ?? 0,
     redHatProducts: s.metadata?.redHatProducts ?? [],
     actions: s.metadata?.actions ?? [],
+    assets: s.metadata?.assets ?? [],
+    play: s.metadata?.play,
+    tdp: s.metadata?.tdp,
     customerSlug: s.metadata?.customerSlug ?? '',
-    solutionUrl: s.metadata?.solutionUrl ?? '',
+    solutionUrl: s.url ?? s.metadata?.solutionUrl ?? '',
   }
 }
 
