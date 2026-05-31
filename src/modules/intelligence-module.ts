@@ -11,6 +11,48 @@ import { resolve } from 'path'
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const INTELLIGENCE_TTL_MS = 14 * 24 * 60 * 60 * 1000  // 14 days
 
+function extractStructuredFields(companyText: string): {
+  businessObjectives: string[]
+  initiatives: string[]
+  technologyStrategy: string | null
+} {
+  const sections: Record<string, string> = {}
+  let current: string | null = null
+  for (const line of companyText.split('\n')) {
+    const match = line.match(/^#+\s+(.+)/)
+    if (match) {
+      current = match[1].trim()
+      sections[current] = ''
+    } else if (current) {
+      sections[current] += line + '\n'
+    }
+  }
+
+  const objectives: string[] = []
+  const initiatives: string[] = []
+
+  const oppsText = sections['Opportunities (External, Positive — informed by PESTLE)'] ?? ''
+  for (const line of oppsText.split('\n')) {
+    const fact = line.match(/\*\*Specific Fact:\*\*\s*(.+)/i)
+    if (fact) objectives.push(fact[1].trim().slice(0, 200))
+  }
+
+  const strengthsText = sections['Strengths (Internal, Positive)'] ?? ''
+  for (const line of strengthsText.split('\n')) {
+    const fact = line.match(/\*\*Specific Fact:\*\*\s*(.+)/i)
+    if (fact) initiatives.push(fact[1].trim().slice(0, 200))
+  }
+
+  const techText = sections['Technological'] ?? ''
+  const techStrategy = techText.trim().slice(0, 500) || null
+
+  return {
+    businessObjectives: objectives.slice(0, 5),
+    initiatives: initiatives.slice(0, 5),
+    technologyStrategy: techStrategy,
+  }
+}
+
 /**
  * Check if intelligence cache exists and is fresh.
  */
@@ -72,6 +114,7 @@ FeatureModuleRegistry.register({
     const signals: Signal[] = []
 
     if (data.company) {
+      const structured = extractStructuredFields(data.company)
       signals.push({
         source: 'intelligence',
         type: 'intelligence',
@@ -79,11 +122,13 @@ FeatureModuleRegistry.register({
         detail: data.company.substring(0, 300),
         rawRelevance: 0.7,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
+        url: data.companyDocUrl,
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'company',
           length: data.company.length,
           docUrl: data.companyDocUrl,
+          ...structured,
         },
       })
     }
@@ -96,11 +141,13 @@ FeatureModuleRegistry.register({
         detail: data.industry.substring(0, 300),
         rawRelevance: 0.6,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
+        url: data.industryDocUrl,
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'industry',
           length: data.industry.length,
           docUrl: data.industryDocUrl,
+          industrySegment: data.industryClassification ?? null,
         },
       })
     }
