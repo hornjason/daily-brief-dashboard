@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText, Lightbulb } from 'lucide-react'
+import { RecommendationCard, signalToRecommendation, type RecommendationCardProps } from './RecommendationCard'
 
 /** Lightweight inline markdown renderer for constrained AI output.
  *  Handles: **bold**, ## headings, - bullets, and paragraphs. */
@@ -112,10 +113,10 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
     return saved ? JSON.parse(saved) : false  // default expanded
   })
   const [showBriefModal, setShowBriefModal] = useState(false)
-  // #216: Internal tab state for Today | Alerts | Intelligence
-  const [activeTab, setActiveTab] = useState<'today' | 'alerts' | 'intelligence'>(() => {
+  // #216: Internal tab state for Today | Alerts | Recommendations | Intelligence
+  const [activeTab, setActiveTab] = useState<'today' | 'alerts' | 'recommendations' | 'intelligence'>(() => {
     const saved = localStorage.getItem('ms-active-tab')
-    return (saved as 'today' | 'alerts' | 'intelligence') || 'today'
+    return (saved as 'today' | 'alerts' | 'recommendations' | 'intelligence') || 'today'
   })
   // Severity group expand state for Alerts tab (Critical expanded by default)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['critical']))
@@ -137,6 +138,38 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
       .then(data => setNewsHighlights(data.highlights || []))
       .catch(() => {})
   }, [])
+
+  // #484: Fetch top recommendations across priority customers
+  const [topRecommendations, setTopRecommendations] = useState<Array<{ customer: string; rec: RecommendationCardProps }>>([])
+  useEffect(() => {
+    // Get the top 3 priority customers (those with critical/high signals) and fetch their recommendations
+    if (!data?.signals?.length) return
+    const priorityCustomers = [...new Set(
+      data.signals
+        .filter(s => s.severity === 'critical' || s.severity === 'high')
+        .map(s => s.customer)
+    )].slice(0, 5)
+
+    if (priorityCustomers.length === 0) return
+
+    Promise.all(
+      priorityCustomers.map(customer =>
+        fetch(`/api/customer/${encodeURIComponent(customer)}/signals/debug`)
+          .then(r => r.ok ? r.json() : { signals: [] })
+          .then(debugData => {
+            const recSignals = (debugData.signals ?? [])
+              .filter((s: any) => s.source === 'recommended-actions' && s.type === 'recommendation')
+              .sort((a: any, b: any) => (b.metadata?.triggerSignalCount ?? 0) - (a.metadata?.triggerSignalCount ?? 0))
+            const topRec = recSignals[0]
+            return topRec ? { customer, rec: signalToRecommendation(topRec) } : null
+          })
+          .catch(() => null)
+      )
+    ).then(results => {
+      const valid = results.filter((r): r is { customer: string; rec: RecommendationCardProps } => r !== null)
+      setTopRecommendations(valid.slice(0, 3))
+    })
+  }, [data?.signals])
 
   const briefPreview = useMemo(() => {
     if (!data?.synthesis) return ''
@@ -277,9 +310,11 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
         <>
           {/* #216: Tab bar */}
           <div className="flex gap-1 px-6 py-2 border-b border-border/40">
-            {(['today', 'alerts', 'intelligence'] as const).map(tab => {
+            {(['today', 'alerts', 'recommendations', 'intelligence'] as const).map(tab => {
               const count = tab === 'alerts'
                 ? signalsBySeverity.critical.length + signalsBySeverity.high.length
+                : tab === 'recommendations'
+                ? topRecommendations.length
                 : undefined
               return (
                 <button
@@ -294,9 +329,11 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                       : 'text-text-secondary hover:text-text-primary hover:bg-border/20'
                   }`}
                 >
-                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : 'Customer News'}
+                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : tab === 'recommendations' ? 'Actions' : 'Customer News'}
                   {count !== undefined && count > 0 && (
-                    <span className="ml-1.5 px-1.5 py-0.5 bg-health-red/20 text-health-red text-xs rounded-full">
+                    <span className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
+                      tab === 'alerts' ? 'bg-health-red/20 text-health-red' : 'bg-emerald-500/20 text-emerald-400'
+                    }`}>
                       {count}
                     </span>
                   )}
@@ -431,6 +468,32 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                         )}
                       </div>
                     )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Recommendations Tab (#484) */}
+            {activeTab === 'recommendations' && (
+              <div className="space-y-3">
+                {topRecommendations.length === 0 ? (
+                  <div className="text-center py-6 space-y-2">
+                    <Lightbulb className="w-6 h-6 text-text-secondary mx-auto" />
+                    <p className="text-sm text-text-secondary">
+                      No recommendations yet — signals are building across your accounts
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-text-secondary">
+                      Top recommended actions from your priority accounts
+                    </p>
+                    {topRecommendations.map(({ customer, rec }, i) => (
+                      <div key={i}>
+                        <div className="text-xs font-semibold text-text-primary mb-1">{customer}</div>
+                        <RecommendationCard {...rec} />
+                      </div>
+                    ))}
                   </>
                 )}
               </div>
