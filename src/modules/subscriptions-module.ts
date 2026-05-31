@@ -4,17 +4,32 @@
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+
+function normalizeProductName(raw: string): string {
+  return raw.replace(/^Red Hat\s+/i, '').replace(/,\s.*$/, '').trim() || raw
+}
 
 FeatureModuleRegistry.register({
   name: 'subscriptions',
   displayName: 'Subscriptions',
   refreshEndpoint: '/api/refresh/subscriptions',
   scope: 'customer',
+  cacheTtlMs: 4 * 60 * 60 * 1000, // 4 hours — data from Sheets refresh
   cachePaths: () => [],
+
+  async ensureFresh(customerSlug: string): Promise<void> {
+    const cachePath = resolve(CACHE_DIR, `${customerSlug}-sheets.json`)
+    try {
+      const stat = statSync(cachePath)
+      if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+    await this.syncNow(customerSlug)
+  },
+
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
   async syncNow(): Promise<void> {},
@@ -35,7 +50,8 @@ FeatureModuleRegistry.register({
     const products = new Map<string, any[]>()
 
     for (const row of rows) {
-      const product = row.productName ?? row.product ?? row.SKU ?? 'Unknown'
+      const rawProduct = row.productDescription ?? row.productName ?? row.product ?? row.SKU ?? row.sku ?? 'Unknown'
+      const product = normalizeProductName(rawProduct)
       if (!products.has(product)) products.set(product, [])
       products.get(product)!.push(row)
     }

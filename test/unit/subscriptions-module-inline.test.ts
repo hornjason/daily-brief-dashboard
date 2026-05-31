@@ -105,6 +105,34 @@ describe('subscriptions module per-product signal generation (Issue #346)', () =
     expect(scored.score).toBeCloseTo(0.75, 2)
   })
 
+  it('resolves productDescription field from actual cache format (#473)', () => {
+    // Real cache data uses productDescription + sku (lowercase), not productName/product/SKU
+    const mockSheetData = {
+      cachedAt: new Date().toISOString(),
+      rows: [
+        { sku: 'RH00244F3', productDescription: 'Red Hat Enterprise Linux Server for Virtual Datacenters, Premium (Embedded, Billing)', quantity: 6, status: 'Active', startDate: '2024-10-17', endDate: '2027-10-16' },
+        { sku: 'RH00244', productDescription: 'Red Hat Enterprise Linux Server for Virtual Datacenters, Premium (Embedded, Billing)', quantity: 47, status: 'Active', startDate: '2026-01-19', endDate: '2029-01-18' },
+        { sku: 'RH00244F5', productDescription: 'Red Hat Enterprise Linux Server for Virtual Datacenters, Premium (Embedded, Billing)', quantity: 4, status: 'Active', startDate: '2024-08-22', endDate: '2029-08-21' },
+      ],
+    }
+
+    const products = new Map<string, any[]>()
+    for (const row of mockSheetData.rows) {
+      const rawProduct = row.productDescription ?? row.productName ?? row.product ?? row.SKU ?? row.sku ?? 'Unknown'
+      const product = rawProduct.replace(/^Red Hat\s+/i, '').replace(/,\s.*$/, '').trim() || rawProduct
+      if (!products.has(product)) products.set(product, [])
+      products.get(product)!.push(row)
+    }
+
+    // All 3 rows should group under the normalized product name
+    expect(products.size).toBe(1)
+    const [productName, subs] = [...products.entries()][0]
+    expect(productName).toBe('Enterprise Linux Server for Virtual Datacenters')
+    expect(productName).not.toContain('Unknown')
+    expect(subs.length).toBe(3)
+    expect(subs.reduce((s: number, r: any) => s + r.quantity, 0)).toBe(57)
+  })
+
   it('endDate booster DOES fire for renewal within 60 days', () => {
     const today = new Date()
     const in60Days = new Date(today)
