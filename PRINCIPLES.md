@@ -84,6 +84,9 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
 7. **If this is a consumer that generates output, does it call `ensureFresh: true`?** Any consumer that produces user-facing content (campaigns, meeting prep, playbooks, account plans, email outreach) MUST call `loadCustomerSignals(slug, name, { ensureFresh: true })` before generation. This guarantees all signal modules are current before the output is built. Without this, consumers generate from empty or stale data — producing low-quality output that damages trust. No consumer may skip this. The cost (a few seconds of cache checks + selective refresh) is always worth it vs generating from stale signals.
 8. **Does this module appear in the admin Data Sources panel?** Every registered module must have: a `refreshEndpoint` (so users can manually refresh), a display name that matches Signal Quality names, and `recordOutcome()` called after every refresh so "Last checked" updates. If a module is invisible to the admin panel, it's invisible to the user — they can't diagnose or fix stale data.
+9. **Does every signal carry a source URL?** (#479) Every signal that references a source document, case, opportunity, partner solution, or article MUST populate the `url` field with a clickable link to the source. Intelligence without traceability is noise — users need one-click drill-down from recommendations to full details.
+10. **Is this module ingesting ALL available data from its source?** (#478) If a module reads from a cache file or API, it must emit signals for the complete dataset, not a truncated subset. Content caps for Gemini prompts are the Gemini call's concern — the signal itself must carry the full record. Budget caps in the registry control what consumers see; modules must not pre-truncate their signal output.
+11. **Does this callGemini() use the default model tier?** (#472) Never hardcode `model: 'lite'` or `model: 'full'` in callGemini options. Use the project default (set in ai-config.ts). Hardcoded tiers create invisible tech debt that persists across model migrations. Enforced by `test/unit/architecture-compliance.test.ts`.
 
 ## Consumer → ensureFresh Contract
 
@@ -228,6 +231,10 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
 - ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
 - ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
+- ❌ Truncating source data inside a module before emitting signals — content caps for Gemini prompts are the Gemini call's concern, not the signal's. Budget caps in the registry handle consumer-side limits. (#478)
+- ❌ Hardcoding `model: 'lite'` or `model: 'full'` in callGemini() — use project defaults from ai-config.ts. Only `model: 'pro'` is an allowed override, and only when justified. (#472)
+- ❌ Emitting signals without a `url` field — every signal must be traceable to its source for one-click drill-down. (#479)
+- ❌ Using wrong field names when reading cache data — verify field names against actual cache structure (e.g., `productDescription` not `productName`). (#473)
 
 ## Enforcement: architecture-compliance.test.ts
 
