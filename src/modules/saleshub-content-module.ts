@@ -7,6 +7,7 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadSalesHubContent, getKnowledgeMtime, resetContentCache, type SalesHubDocument } from '../lib/saleshub-content.ts'
 import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
+import { loadCustomerContext, matchesSubscriptionProducts } from '../lib/customer-context-loader.ts'
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // weekly — content updates ~monthly
 
@@ -105,13 +106,35 @@ FeatureModuleRegistry.register({
     })
   },
 
-  async signals(_customerSlug: string): Promise<Signal[]> {
+  async signals(customerSlug: string): Promise<Signal[]> {
     const docs = loadSalesHubContent()
     if (docs.length === 0) return []
+
+    // Load customer context for filtering (#486)
+    const customerCtx = loadCustomerContext(customerSlug)
 
     const signals: Signal[] = []
 
     for (const doc of docs) {
+      // Check if document's product/tdp matches customer subscriptions (#486)
+      const matchTargets = [doc.product, doc.tdp].filter((t): t is string => !!t && t.length > 0)
+      const isCustomerMatch = matchesSubscriptionProducts(matchTargets, customerCtx.products)
+
+      const metadata: Record<string, unknown> = {
+        documentName: doc.name,
+        contentType: doc.contentType,
+        tdp: doc.tdp,
+        salesPlay: doc.salesPlay,
+        product: doc.product,
+        distributionTerms: doc.distributionTerms,
+        salesStage: doc.salesStage,
+        driveUrl: doc.driveUrl,
+      }
+
+      if (isCustomerMatch) {
+        metadata.customerSlug = customerSlug
+      }
+
       signals.push({
         source: 'SalesHub Content',
         type: 'intelligence',
@@ -119,17 +142,8 @@ FeatureModuleRegistry.register({
         detail: formatDocumentDetail(doc),
         timestamp: doc.versionCreated || new Date().toISOString(),
         url: doc.driveUrl,
-        rawRelevance: 0.4, // general-scope, not customer-specific
-        metadata: {
-          documentName: doc.name,
-          contentType: doc.contentType,
-          tdp: doc.tdp,
-          salesPlay: doc.salesPlay,
-          product: doc.product,
-          distributionTerms: doc.distributionTerms,
-          salesStage: doc.salesStage,
-          driveUrl: doc.driveUrl,
-        },
+        rawRelevance: 0.4, // general-scope baseline; customer match raises via scoring
+        metadata,
       })
     }
 

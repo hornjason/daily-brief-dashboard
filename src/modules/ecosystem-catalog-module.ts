@@ -6,6 +6,7 @@
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadAllEcosystemPartners, getEcosystemCacheDir, type EcosystemSolution, type EcosystemResource } from '../lib/ecosystem-catalog.ts'
+import { loadCustomerContext, matchesTechStack } from '../lib/customer-context-loader.ts'
 import { statSync } from 'fs'
 import { resolve } from 'path'
 
@@ -93,9 +94,12 @@ FeatureModuleRegistry.register({
     })
   },
 
-  async signals(_customerSlug: string): Promise<Signal[]> {
+  async signals(customerSlug: string): Promise<Signal[]> {
     const partners = loadAllEcosystemPartners()
     if (partners.length === 0) return []
+
+    // Load customer context for filtering (#475)
+    const customerCtx = loadCustomerContext(customerSlug)
 
     const signals: Signal[] = []
 
@@ -120,6 +124,24 @@ FeatureModuleRegistry.register({
         const collectionBlock = formatCollections(solution.collections)
         if (collectionBlock) detailParts.push(collectionBlock)
 
+        // Check if solution matches customer tech stack (#475)
+        const matchTargets = [solution.platform, ...solution.categories]
+        const isCustomerMatch = matchesTechStack(matchTargets, customerCtx.techs)
+
+        const metadata: Record<string, unknown> = {
+          partnerName: solution.partnerName,
+          platform: solution.platform, // backward compat
+          product: solution.platform, // signal routing to Product Alignment section
+          categories: solution.categories,
+          coSell: solution.coSell ?? false,
+          resourceTypes,
+          solutionName: solution.name,
+        }
+
+        if (isCustomerMatch) {
+          metadata.customerSlug = customerSlug
+        }
+
         signals.push({
           source: 'ecosystem-catalog',
           type: 'intelligence',
@@ -128,15 +150,7 @@ FeatureModuleRegistry.register({
           timestamp: solution.publishedAt ?? partnerCache.scrapedAt,
           url: solution.url,
           rawRelevance: 0.5, // Medium — customer-level boosting when partner matches tech stack
-          metadata: {
-            partnerName: solution.partnerName,
-            platform: solution.platform, // backward compat
-            product: solution.platform, // signal routing to Product Alignment section
-            categories: solution.categories,
-            coSell: solution.coSell ?? false,
-            resourceTypes,
-            solutionName: solution.name,
-          },
+          metadata,
         })
       }
     }
