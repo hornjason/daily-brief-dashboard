@@ -174,6 +174,71 @@ const EMPTY_CLASSIFICATION: DocClassification = {
   strategic_signals: [],
 }
 
+// ── Pattern-based document classification (#489) ────────────────────────────
+
+/**
+ * Classify document by MIME type and filename pattern.
+ * Returns null when the document needs Gemini's contextual judgment.
+ *
+ * Pattern coverage:
+ * - Google Sheets → OTHER (skip Gemini entirely)
+ * - "Account Plan" → ACCOUNT_PLAN
+ * - "Meeting Notes", "Meeting Minutes" → MEETING_NOTES
+ * - "Company Brief", "Executive Summary", "Company Intelligence", "Account Overview" → COMPANY_INTELLIGENCE
+ * - "Industry Analysis", "Market Brief", "Vertical Overview", "Industry Report" → INDUSTRY_ANALYSIS
+ * - "Proposal", "Statement of Work", "SOW" → PROPOSAL
+ * - "Technical", "Architecture", "Design Doc" → TECHNICAL_DOC
+ */
+export function classifyByPattern(docName: string, mimeType?: string): DocClassification['type'] | null {
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+    return 'OTHER'
+  }
+
+  const lowerName = docName.toLowerCase()
+
+  if (lowerName.includes('account plan')) return 'ACCOUNT_PLAN'
+
+  if (lowerName.includes('meeting notes') || lowerName.includes('meeting minutes')) {
+    return 'MEETING_NOTES'
+  }
+
+  if (
+    lowerName.includes('company brief') ||
+    lowerName.includes('executive summary') ||
+    lowerName.includes('company intelligence') ||
+    lowerName.includes('account overview')
+  ) {
+    return 'COMPANY_INTELLIGENCE'
+  }
+
+  if (
+    lowerName.includes('industry analysis') ||
+    lowerName.includes('market brief') ||
+    lowerName.includes('vertical overview') ||
+    lowerName.includes('industry report')
+  ) {
+    return 'INDUSTRY_ANALYSIS'
+  }
+
+  if (
+    lowerName.includes('proposal') ||
+    lowerName.includes('statement of work') ||
+    lowerName.includes('sow')
+  ) {
+    return 'PROPOSAL'
+  }
+
+  if (
+    lowerName.includes('technical') ||
+    lowerName.includes('architecture') ||
+    lowerName.includes('design doc')
+  ) {
+    return 'TECHNICAL_DOC'
+  }
+
+  return null
+}
+
 // ── Gemini structured call (replicated from customer.ts — not exported there) ─
 
 export async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
@@ -195,7 +260,7 @@ export async function callGeminiStructured(systemPrompt: string, userPrompt: str
 // ── Single document classification ───────────────────────────────────────────
 
 export async function classifyAndExtract(
-  doc: { fileId?: string; name: string; modifiedTime?: string; content?: string },
+  doc: { fileId?: string; name: string; modifiedTime?: string; content?: string; mimeType?: string },
 ): Promise<DocClassification> {
   if (!doc.content || doc.content.trim().length < 50) {
     return { ...EMPTY_CLASSIFICATION }
@@ -220,6 +285,14 @@ export async function classifyAndExtract(
   if (doc.fileId && doc.modifiedTime) {
     const cached = readDocClassCache(doc.fileId, doc.modifiedTime)
     if (cached) return cached
+  }
+
+  // Pattern-based classification: skip Gemini for obvious types
+  const patternType = classifyByPattern(doc.name, doc.mimeType)
+  if (patternType === 'OTHER') {
+    const result = { ...EMPTY_CLASSIFICATION, type: patternType }
+    if (doc.fileId && doc.modifiedTime) writeDocClassCache(doc.fileId, doc.modifiedTime, result)
+    return result
   }
 
   const prompt = DOC_CLASSIFICATION_PROMPT
