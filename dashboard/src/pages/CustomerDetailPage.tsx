@@ -66,6 +66,7 @@ import { MeetingPrepContent } from './MeetingPrepPage'
 import { TechStackTab } from '../components/tabs/TechStackTab'
 import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 import { IntelligenceInsightsCard } from '../components/RecommendationCard'
+import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1561,6 +1562,14 @@ export function CustomerDetailPage() {
           <HealthScoreHero score={healthScore.score} status={healthScore.status} breakdown={healthScore.breakdown as any} />
         </div>
       )}
+
+      {/* Strategic Motion Hero (#517) */}
+      <div className="px-6 pt-4">
+        <ExpansionMotionSection
+          customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+          customerName={customerName}
+        />
+      </div>
 
       {/* Tab content area */}
       {activeTab === 'overview' ? (
