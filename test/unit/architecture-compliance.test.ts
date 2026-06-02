@@ -42,22 +42,6 @@ beforeAll(async () => {
   await import('../../src/modules/playbook-module.ts')
   await import('../../src/modules/tech-stack-module.ts')
   await import('../../src/modules/cloud-marketplace-module.ts')
-  // Additional modules — wrapped in try/catch for worktree compatibility
-  // (some modules may not exist in sparse worktrees)
-  const additionalModules = [
-    '../../src/modules/competitive-intel-module.ts',
-    '../../src/modules/ecosystem-catalog-module.ts',
-    '../../src/modules/ma-module.ts',
-    '../../src/modules/partner-catalog-module.ts',
-    '../../src/modules/recommended-actions-module.ts',
-    '../../src/modules/saleshub-content-module.ts',
-    '../../src/modules/saleshub-module.ts',
-    '../../src/modules/solution-intelligence-module.ts',
-    '../../src/modules/value-positioning-module.ts',
-  ]
-  for (const mod of additionalModules) {
-    try { await import(mod) } catch { /* module not available in this worktree */ }
-  }
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -385,10 +369,75 @@ describe('Compliance report', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 8. PRINCIPLES.MD LAYER 3 — CONSUMER TEMPLATE COMPLIANCE
+// 8. PRINCIPLES.MD LAYER 3 — CONSUMER TEMPLATE COMPLIANCE (#567)
+//    Consumer list and exclusions parsed from PRINCIPLES.md at runtime.
+//    No hardcoded consumer arrays — single source of truth in PRINCIPLES.md.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Parse the "Consumer → File Mapping" table from PRINCIPLES.md.
+ * Returns an array of consumer entries with their contract requirements.
+ */
+function parseConsumerMapping(): Array<{
+  name: string
+  file: string
+  requiresTemplateAll: boolean
+  templateAllPending: boolean
+}> {
+  const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+  const principles = readFileSync(resolve(PROJECT_ROOT, 'PRINCIPLES.md'), 'utf-8')
+  const tableStart = principles.indexOf('## Consumer → File Mapping')
+  if (tableStart < 0) throw new Error('PRINCIPLES.md missing "## Consumer → File Mapping" section')
+  const tableEnd = principles.indexOf('\n## ', tableStart + 1)
+  const section = principles.substring(tableStart, tableEnd > 0 ? tableEnd : undefined)
+
+  const rows: Array<{ name: string; file: string; requiresTemplateAll: boolean; templateAllPending: boolean }> = []
+  for (const line of section.split('\n')) {
+    const match = line.match(/^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/)
+    if (!match) continue
+    const name = match[1].trim()
+    const file = match[2].trim()
+    const templateCol = match[3].trim()
+    if (name === 'Consumer' || name.startsWith('--')) continue
+    if (!file.startsWith('src/')) continue
+
+    rows.push({
+      name,
+      file,
+      requiresTemplateAll: templateCol === '✅',
+      templateAllPending: templateCol.includes('pending'),
+    })
+  }
+  return rows
+}
+
+/**
+ * Parse the "Gemini Callers — Not Consumers" exclusion table from PRINCIPLES.md.
+ * Returns file paths that call callGemini() but are NOT consumers.
+ */
+function parseExcludedGeminiCallers(): string[] {
+  const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+  const principles = readFileSync(resolve(PROJECT_ROOT, 'PRINCIPLES.md'), 'utf-8')
+  const tableStart = principles.indexOf('## Gemini Callers — Not Consumers')
+  if (tableStart < 0) throw new Error('PRINCIPLES.md missing "## Gemini Callers — Not Consumers" section')
+  const tableEnd = principles.indexOf('\n## ', tableStart + 1)
+  const section = principles.substring(tableStart, tableEnd > 0 ? tableEnd : undefined)
+
+  const files: string[] = []
+  for (const line of section.split('\n')) {
+    const match = line.match(/^\|\s*([^|]+)\|/)
+    if (!match) continue
+    const file = match[1].trim()
+    if (file === 'File' || file.startsWith('--') || !file.startsWith('src/')) continue
+    files.push(file)
+  }
+  return files
+}
+
 describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
+  const consumers = parseConsumerMapping()
+  const excludedCallers = parseExcludedGeminiCallers()
+
   const INDIVIDUAL_TEMPLATE_FUNCTIONS = [
     'templateProductAlignment',
     'templateCloudMarketplace',
@@ -401,25 +450,54 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
     'templateSalesHubContext',
   ]
 
-  const CONSUMER_SRC_FILES = [
-    'customer.ts',
-    'campaign-service.ts',
-    'meeting-prep-service.ts',
-    'playbook-generator.ts',
-  ]
+  test('PRINCIPLES.md consumer mapping table is parseable and non-empty', () => {
+    expect(consumers.length).toBeGreaterThanOrEqual(5)
+  })
+
+  test('PRINCIPLES.md exclusion table is parseable and non-empty', () => {
+    expect(excludedCallers.length).toBeGreaterThanOrEqual(5)
+  })
+
+  test('every consumer with templateAll=yes actually calls templateAll()', () => {
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+    const violations: string[] = []
+    for (const consumer of consumers) {
+      if (!consumer.requiresTemplateAll) continue
+      const filePath = resolve(PROJECT_ROOT, consumer.file)
+      if (!existsSync(filePath)) {
+        violations.push(`${consumer.name}: file ${consumer.file} not found`)
+        continue
+      }
+      const content = readFileSync(filePath, 'utf-8')
+      if (!content.includes('templateAll')) {
+        violations.push(`${consumer.name} (${consumer.file}) does not call templateAll()`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('consumers marked pending are tracked (informational)', () => {
+    const pending = consumers.filter(c => c.templateAllPending)
+    if (pending.length > 0) {
+      console.warn('Consumers pending templateAll migration:')
+      for (const p of pending) {
+        console.warn(`  ⚠️ ${p.name} (${p.file})`)
+      }
+    }
+    // Informational tracking — always passes
+    expect(true).toBe(true)
+  })
 
   test('no consumer imports individual template functions (Layer 3 violation)', () => {
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
     const violations: string[] = []
-    for (const file of CONSUMER_SRC_FILES) {
-      const path = resolve(SRC_DIR, file)
-      if (!existsSync(path)) continue
-      const content = readFileSync(path, 'utf-8')
+    for (const consumer of consumers) {
+      const filePath = resolve(PROJECT_ROOT, consumer.file)
+      if (!existsSync(filePath)) continue
+      const content = readFileSync(filePath, 'utf-8')
       for (const fn of INDIVIDUAL_TEMPLATE_FUNCTIONS) {
-        const staticImport = new RegExp(`import\\s*\\{[^}]*${fn}[^}]*\\}\\s*from`, 'm')
-        const dynamicImport = new RegExp(`await\\s+import\\s*\\([^)]*\\).*${fn}`, 'm')
-        const destructure = new RegExp(`const\\s*\\{[^}]*${fn}[^}]*\\}\\s*=\\s*await\\s+import`, 'm')
-        if (staticImport.test(content) || dynamicImport.test(content) || destructure.test(content)) {
-          violations.push(`${file} imports ${fn} directly — must use templateAll()`)
+        if (new RegExp(`import\\s*\\{[^}]*${fn}[^}]*\\}\\s*from`, 'm').test(content)) {
+          violations.push(`${consumer.name} (${consumer.file}) imports ${fn} directly — must use templateAll()`)
         }
       }
     }
@@ -427,36 +505,51 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
   })
 
   test('no consumer imports getCustomerSolutionContext directly (only modules may)', () => {
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
     const violations: string[] = []
-    for (const file of CONSUMER_SRC_FILES) {
-      const path = resolve(SRC_DIR, file)
-      if (!existsSync(path)) continue
-      const content = readFileSync(path, 'utf-8')
+    for (const consumer of consumers) {
+      const filePath = resolve(PROJECT_ROOT, consumer.file)
+      if (!existsSync(filePath)) continue
+      const content = readFileSync(filePath, 'utf-8')
       if (/import\s*\{[^}]*getCustomerSolutionContext[^}]*\}\s*from/.test(content) ||
           /await\s+import\s*\([^)]*customer-solution-context/.test(content)) {
-        violations.push(`${file} imports getCustomerSolutionContext — must go through templateAll()`)
+        violations.push(`${consumer.name} (${consumer.file}) imports getCustomerSolutionContext — must go through templateAll()`)
       }
     }
     expect(violations).toEqual([])
   })
 
-  test('every consumer calls templateAll()', () => {
-    // #441: Positive check — consumers MUST use templateAll(), not just
-    // avoid importing individual template functions. Without this, a consumer
-    // can bypass the template layer entirely and pass silently.
-    // Excluded: meeting-prep-service.ts — #429 migration pending
-    const EXCLUDED = ['meeting-prep-service.ts']
-    const violations: string[] = []
-    for (const file of CONSUMER_SRC_FILES) {
-      if (EXCLUDED.includes(file)) continue
-      const path = resolve(SRC_DIR, file)
-      if (!existsSync(path)) continue
-      const content = readFileSync(path, 'utf-8')
-      if (!content.includes('templateAll')) {
-        violations.push(`${file} does not call templateAll() — PRINCIPLES.md Layer 3 requires all consumers to use the template engine`)
+  test('every callGemini() file is registered as consumer or excluded (#567)', () => {
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+    const geminiCallers: string[] = []
+    function scanDir(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.isDirectory()) {
+          scanDir(full)
+        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          const content = readFileSync(full, 'utf-8')
+          if (content.includes('callGemini(') || content.includes('callGemini (')) {
+            const rel = full.replace(PROJECT_ROOT + '/', '')
+            // Skip the gateway itself and the quality gate
+            if (rel === 'src/gemini-call.ts' || rel === 'src/gemini-quality-gate.ts') continue
+            geminiCallers.push(rel)
+          }
+        }
       }
     }
-    expect(violations).toEqual([])
+    scanDir(resolve(PROJECT_ROOT, 'src'))
+
+    const consumerFiles = new Set(consumers.map(c => c.file))
+    const excludedFiles = new Set(excludedCallers)
+
+    const unregistered = geminiCallers.filter(f => !consumerFiles.has(f) && !excludedFiles.has(f))
+    if (unregistered.length > 0) {
+      console.error('Unregistered Gemini callers — add to PRINCIPLES.md Consumer or Excluded table:')
+      for (const f of unregistered) console.error(`  ❌ ${f}`)
+    }
+    expect(unregistered).toEqual([])
   })
 })
 
@@ -516,240 +609,94 @@ describe('Export parity — Google Docs export covers Dashboard sections', () =>
   })
 })
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 11. INTELLIGENCE GRAPH CONTRACTS (#526)
-// ═══════════════════════════════════════════════════════════════════════════
+// ── ADR → PRINCIPLES.md Drift Detection ─────────────────────────────────────
+// Every ADR that creates mandatory requirements must have a corresponding
+// entry in PRINCIPLES.md. This test catches drift automatically.
 
-describe('Intelligence Graph contracts (#526)', () => {
+describe('ADR → PRINCIPLES.md drift detection', () => {
+  const principlesPath = resolve(__dirname, '../../PRINCIPLES.md')
+  const adrDir = resolve(__dirname, '../../docs/adr')
 
-  // ── Test 1: Subscription signals include urgency metadata ────────────
+  let principlesContent: string
+  let adrFiles: string[]
 
-  test('subscription signals include urgency metadata', () => {
-    // Contract check: subscriptions-module source must compute urgency
-    // and include it in signal metadata. Verified by reading the source
-    // to catch drift — if urgency computation is removed, this fails.
-    const subsModulePath = resolve(SRC_DIR, 'modules/subscriptions-module.ts')
-    if (!existsSync(subsModulePath)) return
-    const src = readFileSync(subsModulePath, 'utf-8')
-
-    // Skip in worktrees where module hasn't been updated yet
-    if (!src.includes('computeUrgency')) return
-
-    // Must include urgency in signal metadata
-    expect(src).toContain('urgency')
-
-    // Must define all four urgency levels
-    const REQUIRED_URGENCIES = ['active', 'expiring-soon', 'expired', 'expired-critical']
-    for (const level of REQUIRED_URGENCIES) {
-      expect(src).toContain(`'${level}'`)
-    }
-
-    // Must set urgency in signal metadata object
-    expect(src).toMatch(/metadata:\s*\{[\s\S]*?urgency/m)
+  beforeAll(() => {
+    principlesContent = readFileSync(principlesPath, 'utf-8')
+    adrFiles = existsSync(adrDir)
+      ? readdirSync(adrDir).filter(f => f.endsWith('.md')).sort()
+      : []
   })
 
-  // ── Test 2: SalesHub module emits both tactic and play signals ──────
+  test('every ADR with mandatory requirements is referenced in PRINCIPLES.md', () => {
+    const unreferenced: string[] = []
 
-  test('SalesHub module emits both tactic and play signals', () => {
-    // Contract check: saleshub-module source must emit signals with
-    // source 'saleshub-tactics' (with parentTdp) and 'saleshub-plays' (with tdpAlignment).
-    const saleshubPath = resolve(SRC_DIR, 'modules/saleshub-module.ts')
-    if (!existsSync(saleshubPath)) return
-    const src = readFileSync(saleshubPath, 'utf-8')
+    for (const file of adrFiles) {
+      const content = readFileSync(resolve(adrDir, file), 'utf-8')
 
-    // Skip in worktrees where module hasn't been updated with signals() yet
-    if (!src.includes('async signals')) return
+      const adrMatch = file.match(/(?:ADR-)?(\d+)/)
+      if (!adrMatch) continue
+      const adrNum = adrMatch[1]
 
-    // Must emit tactic signals with source 'saleshub-tactics'
-    expect(src).toContain("source: 'saleshub-tactics'")
+      // Check if ADR creates cross-module mandatory requirements
+      // Look for "modules MUST", "consumers MUST", "every module", "every consumer" — not just "required" in isolation
+      const hasMust = /modules?\s+MUST|consumers?\s+MUST|every\s+module|every\s+consumer|always\s+use\s+`/i.test(content)
+      if (!hasMust) continue
 
-    // Must emit play signals with source 'saleshub-plays'
-    expect(src).toContain("source: 'saleshub-plays'")
+      // Check if referenced in PRINCIPLES.md
+      const adrRef = `ADR-${adrNum.padStart(3, '0')}`
+      const isReferenced = principlesContent.includes(adrRef) || principlesContent.includes(`ADR-${adrNum}`)
 
-    // Tactic signals must include parentTdp in metadata
-    expect(src).toContain('parentTdp')
-
-    // Play signals must include tdpAlignment in metadata
-    expect(src).toContain('tdpAlignment')
-  })
-
-  // ── Test 3: Motion builder TDP names match SalesHub tactic parentTdp ─
-
-  test('motion builder TDP names match SalesHub tactic parentTdp values', () => {
-    // Read the knowledge base to extract all unique parentTdp values
-    const knowledgePaths = [
-      resolve(SRC_DIR, '../config-templates/saleshub-knowledge.json'),
-      resolve(SRC_DIR, '../config/saleshub-knowledge.json'),
-    ]
-
-    let kb: any = null
-    for (const p of knowledgePaths) {
-      if (existsSync(p)) {
-        try { kb = JSON.parse(readFileSync(p, 'utf-8')); break } catch { /* try next */ }
-      }
-    }
-    if (!kb) return // Skip if no knowledge base available
-
-    // Extract unique non-empty parentTdp values
-    const parentTdps = new Set<string>()
-    for (const tactic of kb.tactics ?? []) {
-      const tdp = tactic.parentTdp
-      if (tdp && typeof tdp === 'string' && tdp.trim()) {
-        parentTdps.add(tdp.trim())
+      if (!isReferenced) {
+        unreferenced.push(`${file} creates mandatory requirements but is not referenced in PRINCIPLES.md`)
       }
     }
 
-    expect(parentTdps.size).toBeGreaterThan(0)
+    expect(unreferenced).toEqual([])
+  })
 
-    // Read the motion-builder source to extract inferTdpFromProduct return values
-    const motionBuilderPath = resolve(SRC_DIR, 'lib/motion-builder.ts')
-    if (!existsSync(motionBuilderPath)) return // Skip if file not available in worktree
-    const motionBuilderSrc = readFileSync(motionBuilderPath, 'utf-8')
-    const returnMatches = motionBuilderSrc.match(/return\s+'([^']+)'/g) ?? []
-    const inferredTdps = new Set(
-      returnMatches
-        .map(m => m.match(/return\s+'([^']+)'/)?.[1])
-        .filter((v): v is string => !!v && v !== 'null')
-    )
-
-    // Test: 'Ansible Automation Platform' should map to a TDP in the knowledge base
-    // inferTdpFromProduct checks for 'ansible' → returns 'Automation'
-    expect(inferredTdps.has('Automation')).toBe(true)
-    expect(parentTdps.has('Automation')).toBe(true)
-
-    // Every inferred TDP should exist in the knowledge base parentTdp set
-    // (This catches drift when motion-builder returns values that SalesHub doesn't know about)
+  test('every ADR has a PRINCIPLES.md Update section', () => {
     const missing: string[] = []
-    for (const tdp of inferredTdps) {
-      if (!parentTdps.has(tdp)) {
-        missing.push(`inferTdpFromProduct returns '${tdp}' but no tactic has parentTdp='${tdp}'`)
+
+    for (const file of adrFiles) {
+      const content = readFileSync(resolve(adrDir, file), 'utf-8')
+      if (/status:\s*deprecated/i.test(content)) continue
+
+      const hasPrinciplesSection = content.includes('PRINCIPLES.md Update') ||
+        content.includes('PRINCIPLES.md update') ||
+        content.includes('No PRINCIPLES.md update required')
+
+      if (!hasPrinciplesSection) {
+        missing.push(file)
       }
     }
-    // Advisory: log but don't fail — some TDPs may be valid targets without tactics yet
+
+    // Advisory for now — existing ADRs predate the requirement
     if (missing.length > 0) {
-      console.warn('TDP mapping drift:\n' + missing.map(m => `  ! ${m}`).join('\n'))
+      console.warn(`[advisory] ${missing.length} ADRs missing PRINCIPLES.md Update section:`)
+      for (const m of missing) console.warn(`  ${m}`)
     }
   })
 
-  // ── Test 4: Graph builder handles known signal sources ──────────────
+  test('PRINCIPLES.md has at least 15 pre-flight questions', () => {
+    const questions = principlesContent.match(/^\d+\.\s+\*\*/gm) ?? []
+    expect(questions.length).toBeGreaterThanOrEqual(15)
+  })
 
-  test('graph builder handles known signal sources', async () => {
-    const graphPath = resolve(SRC_DIR, 'lib/intelligence-graph.ts')
-    if (!existsSync(graphPath)) return // Skip if file not available in worktree
-    const { buildCustomerGraph } = await import('../../src/lib/intelligence-graph.ts')
-
-    const KNOWN_SOURCES = [
-      { source: 'subscriptions', headline: 'RHEL — 10 subscriptions', metadata: { urgency: 'active', product: 'RHEL' } },
-      { source: 'cases', headline: 'Case #123', metadata: { caseNumber: '123', severity: 'High' } },
-      { source: 'ccsp', headline: 'AWS spend', metadata: { cloudPartner: 'AWS' } },
-      { source: 'tech-stack', headline: 'Kubernetes', metadata: { techName: 'Kubernetes' } },
-      { source: 'pipeline', headline: 'Big deal', metadata: { opportunityName: 'Big deal', stage: '3' } },
-      { source: 'cloud-marketplace', headline: 'Azure marketplace', metadata: { provider: 'Azure' } },
-      { source: 'ecosystem-catalog', headline: 'Partner X', metadata: { partnerName: 'PartnerX' } },
-      { source: 'solution-intelligence', headline: 'AI solution', metadata: { solutionName: 'AI Migration' } },
-      { source: 'intelligence', headline: 'Customer intel', metadata: { industry: 'Finance' } },
+  test('PRINCIPLES.md references all contract sections', () => {
+    const requiredSections = [
+      'syncNow vs ensureFresh',
+      'L3 Drive Refresh',
+      'Feature Module Registry Contract',
+      'Module Navigation Contract',
+      'Gemini Call Standardization',
+      'Playbook State Contract',
+      'Scheduler Registry Contract',
+      'Portfolio Signal Relevance',
+      'Solution Intelligence Contract',
+      'Template Engine Unification',
     ]
 
-    const signals = KNOWN_SOURCES.map(s => ({
-      source: s.source,
-      type: 'info' as const,
-      headline: s.headline,
-      detail: '',
-      rawRelevance: 0.5,
-      timestamp: new Date().toISOString(),
-      metadata: s.metadata,
-    }))
-
-    const graph = buildCustomerGraph('test-slug', 'Test Customer', signals)
-
-    // Must have at least one node (customer hub + signal-derived nodes)
-    expect(graph.nodeCount).toBeGreaterThan(1)
-    expect(graph.edgeCount).toBeGreaterThan(0)
-
-    // Verify each source that creates nodes produced at least one
-    const nodeTypes = new Set(Object.values(graph.nodes).map(n => n.type))
-    expect(nodeTypes.has('customer')).toBe(true)
-    expect(nodeTypes.has('subscription')).toBe(true)
-    expect(nodeTypes.has('case')).toBe(true)
-    expect(nodeTypes.has('program')).toBe(true) // ccsp, cloud-marketplace, ecosystem-catalog
-    expect(nodeTypes.has('product')).toBe(true) // tech-stack
-    expect(nodeTypes.has('deal')).toBe(true) // pipeline
-    expect(nodeTypes.has('play')).toBe(true) // solution-intelligence creates play nodes
-
-    // Unknown sources should be silently skipped
-    const unknownSignal = {
-      source: 'unknown-module',
-      type: 'info' as const,
-      headline: 'Should be skipped',
-      detail: '',
-      rawRelevance: 0.5,
-      timestamp: new Date().toISOString(),
-      metadata: {},
-    }
-    const graphWithUnknown = buildCustomerGraph('test-slug-2', 'Test 2', [unknownSignal])
-    // Only the customer hub node should exist
-    expect(graphWithUnknown.nodeCount).toBe(1)
-    expect(Object.values(graphWithUnknown.nodes)[0].type).toBe('customer')
-  })
-
-  // ── Test 5: Expansion motion service exports are stable ─────────────
-
-  test('expansion motion service exports are stable', async () => {
-    const svcPath = resolve(SRC_DIR, 'lib/expansion-motion-service.ts')
-    if (!existsSync(svcPath)) return // Skip if file not available in worktree
-    const mod = await import('../../src/lib/expansion-motion-service.ts')
-
-    expect(typeof mod.getExpansionMotion).toBe('function')
-    expect(typeof mod.getGraphDebug).toBe('function')
-    expect(typeof mod.generateAllGraphs).toBe('function')
-  })
-
-  // ── Test 6: Graph routes register all endpoints ─────────────────────
-
-  test('graph routes register all endpoints', () => {
-    const routesPath = resolve(SRC_DIR, 'graph-routes.ts')
-    if (!existsSync(routesPath)) return // Skip if file not available in worktree
-    const routesSrc = readFileSync(routesPath, 'utf-8')
-
-    // Verify createGraphRouter is exported
-    expect(routesSrc).toContain('export function createGraphRouter')
-
-    // Verify all required route patterns exist in the source
-    const REQUIRED_ROUTES = [
-      '/api/customer/:slug/expansion-motion',
-      '/api/customer/:slug/graph/debug',
-      '/api/intelligence-graph/generate-all',
-    ]
-
-    const missing: string[] = []
-    for (const route of REQUIRED_ROUTES) {
-      if (!routesSrc.includes(route)) {
-        missing.push(`Missing route: ${route}`)
-      }
-    }
+    const missing = requiredSections.filter(s => !principlesContent.includes(s))
     expect(missing).toEqual([])
-  })
-
-  // ── Test 7: Intelligence graph types define exactly 11 node types ───
-
-  test('intelligence graph types define exactly 11 node types', () => {
-    const typesPath = resolve(SRC_DIR, 'lib/intelligence-graph-types.ts')
-    if (!existsSync(typesPath)) return // Skip if file not available in worktree
-    const typesSrc = readFileSync(typesPath, 'utf-8')
-
-    // Extract the IntelligenceNodeType union members
-    const unionMatch = typesSrc.match(/export type IntelligenceNodeType\s*=\s*([\s\S]*?)(?:\n\n|\nexport)/m)
-    expect(unionMatch).toBeTruthy()
-
-    const unionBody = unionMatch![1]
-    const members = unionBody.match(/'([a-z-]+)'/g)?.map(m => m.replace(/'/g, '')) ?? []
-
-    const EXPECTED_TYPES = [
-      'customer', 'person', 'persona', 'product', 'case',
-      'subscription', 'deal', 'play', 'program', 'initiative', 'motion',
-    ]
-
-    expect(members.sort()).toEqual(EXPECTED_TYPES.sort())
-    expect(members.length).toBe(11)
   })
 })

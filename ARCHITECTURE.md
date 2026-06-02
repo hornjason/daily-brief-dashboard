@@ -1547,7 +1547,7 @@ The registry examines metadata to classify each signal:
 `redHatProducts` non-empty (+0.10), `acvPlus`/`amount` > 0 (+0.10), `confidence: HIGH` (+0.05), `context: evaluating/migrating_from` (+0.10), `severity` 1 (+0.15) / 2 (+0.10), `endDate` within 90 days (+0.10), `hasCloudSpend` (+0.10), `confidence: LOW` (-0.10).
 
 ### Per-source budget caps
-Applied in `collectAllSignals()` after scoring. pipeline=10, ccsp=8, cases=8, cloud-marketplace=10, tech-stack=8, rh-rss=5, subscriptions=5, intelligence=5, value-maps=3, news-radar=5, default=5.
+Applied in `collectAllSignals()` after scoring. pipeline=10, ccsp=8, cases=8, cloud-marketplace=10, tech-stack=50, rh-rss=5, subscriptions=5, intelligence=5, value-maps=3, news-radar=5, default=5. Tech-stack uncapped (#454) — all detected technologies surface.
 
 ### Signal debug
 `GET /api/customer/:name/signals/debug` returns every signal with score, tier, rawRelevance, metadata, and tier classification (Critical/High/Medium/Low/Noise).
@@ -1668,8 +1668,12 @@ Two-layer enforcement of the three-layer architecture (scoring → templates →
 - **Consumer template usage:** All consumer files must import from `signal-templates.ts`
 - **Consumer pre-flight:** All consumers must use `loadCustomerSignals({ ensureFresh: true })` or `ensureSignalsCurrent()`
 - **Module coverage report:** Advisory listing of modules with `signals()` but missing `ensureFresh`/`cacheTtlMs`
+- **ADR → PRINCIPLES.md drift detection:** Every ADR with cross-module mandatory requirements (`modules MUST`, `consumers MUST`, `every module`, etc.) must be referenced in PRINCIPLES.md. Fails the build if a new ADR creates requirements without updating PRINCIPLES.md.
+- **ADR template compliance:** Advisory check that every ADR has a `## PRINCIPLES.md Update` section (warns for existing ADRs, will promote to failing once all are updated).
+- **Pre-flight question count:** PRINCIPLES.md must have ≥15 pre-flight questions — prevents accidental deletion.
+- **Contract section presence:** PRINCIPLES.md must contain all 10 named contract sections (syncNow/ensureFresh, L3 Drive Refresh, Feature Module Registry, Module Navigation, Gemini Call, Playbook State, Scheduler Registry, Portfolio Signal Relevance, Solution Intelligence, Template Engine Unification).
 
-All checks use auto-discovery from the registry and file system — no hardcoded lists. New modules and consumers are automatically checked.
+All checks use auto-discovery from the registry and file system — no hardcoded lists. New modules, consumers, and ADRs are automatically checked.
 
 ### Runtime compliance
 
@@ -1687,6 +1691,45 @@ All checks use auto-discovery from the registry and file system — no hardcoded
 ```
 
 Admin page Feature Modules section shows compliance warnings per module.
+
+## §26a. Ship Workflow & Doc Cascade (2026-05-30)
+
+Every implementation task follows the `ship` skill: SCOPE → BUILD → VERIFY → DURABILITY. No inline fixes, no skipping steps.
+
+### Mid-session fix rule
+
+When testing or verifying reveals a new bug, do NOT fix inline. If >1 line of logic change → log it, write ACs, send to Marcus through ship. The only exemption is single-character typos or config value swaps.
+
+### Doc cascade matrix (fires in DURABILITY step)
+
+After every VERIFY, check which files need updating:
+
+| What changed | Update these files |
+|-------------|-------------------|
+| New ADR or contract | PRINCIPLES.md + ARCHITECTURE.md |
+| New module | ARCHITECTURE.md + PROJECT-STATE.md |
+| New endpoint | PROJECT-STATE.md |
+| New UI page or tab | PROJECT-STATE.md |
+| Structural pattern change | CONTEXT.md + ARCHITECTURE.md |
+| Agent workflow change | `~/.claude/PAI/BRIEF-TEMPLATES.md` |
+| Skill workflow change | `skills/{skill}/SKILL.md` |
+| Every deployment | PROJECT-STATE.md (last-updated line) |
+
+**Core 4 files** (always ask "does this need updating?"):
+1. `PRINCIPLES.md` — contracts and enforcement
+2. `ARCHITECTURE.md` — how things work
+3. `PROJECT-STATE.md` — what exists right now
+4. `CONTEXT.md` — domain language
+
+Most changes touch 1-2 files, not all 4. The matrix tells you which ones.
+
+### Three-layer drift prevention
+
+| Layer | What it catches | When it fires |
+|-------|----------------|---------------|
+| Convention | ADR template requires "PRINCIPLES.md Update" section | When Serena writes an ADR (Step 6 in architecture-and-adr skill) |
+| Workflow | Ship DURABILITY doc cascade matrix | After every VERIFY in the ship skill |
+| Test | `architecture-compliance.test.ts` drift detection | Every `bun test` run — fails the build |
 
 ## §27. Solution Intelligence Engine (ADR-030, 2026-05-21)
 

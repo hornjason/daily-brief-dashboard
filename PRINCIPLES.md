@@ -2,27 +2,10 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-20
+updated: 2026-05-30
 ---
 
 # Design Principles — Deep Module Architecture
-
-## Mission & Vision
-
-**This system exists to open opportunities, close bigger deals, and make customers successful** — by pulling together every signal Red Hat has about a customer and connecting it to actionable solutions, programs, and plays.
-
-Red Hat has signals scattered everywhere — cases, subscriptions, cloud spend, pipeline, tech stack, partner ecosystems, sales plays, marketplace programs — and nobody is pulling them together intelligently to drive action for customers. This system does that.
-
-**Every design decision must answer:** "Does this help surface what Red Hat can do for a specific customer based on their signals?" If it doesn't connect signals to actions, it's not serving the goal.
-
-**Three capabilities this system must deliver:**
-1. **Cross-reference engine** — Given a customer's signals, surface matching solutions from ecosystem catalog, marketplace programs, saleshub plays, partner demos, free trials, and interactive labs.
-2. **AI-driven recommendation** — Signal-to-action mapping is inferred by AI from the full signal profile + solution portfolio. Not manually curated.
-3. **Accumulation over time** — Historical signals compound. Trajectories matter. Nothing is lost on regeneration.
-
-**This system scales with its data.** More signals, more history, more intelligence. Every module, contract, and consumer should be designed to grow with the product.
-
----
 
 Every feature in this project follows three architectural layers. Violating these principles creates one-off gaps that require manual discovery and surgical fixes. Design for least complexity from the start.
 
@@ -84,10 +67,45 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
 7. **If this is a consumer that generates output, does it call `ensureFresh: true`?** Any consumer that produces user-facing content (campaigns, meeting prep, playbooks, account plans, email outreach) MUST call `loadCustomerSignals(slug, name, { ensureFresh: true })` before generation. This guarantees all signal modules are current before the output is built. Without this, consumers generate from empty or stale data — producing low-quality output that damages trust. No consumer may skip this. The cost (a few seconds of cache checks + selective refresh) is always worth it vs generating from stale signals.
 8. **Does this module appear in the admin Data Sources panel?** Every registered module must have: a `refreshEndpoint` (so users can manually refresh), a display name that matches Signal Quality names, and `recordOutcome()` called after every refresh so "Last checked" updates. If a module is invisible to the admin panel, it's invisible to the user — they can't diagnose or fix stale data.
-9. **Does every signal carry a source URL?** (#479) Every signal that references a source document, case, opportunity, partner solution, or article MUST populate the `url` field with a clickable link to the source. Intelligence without traceability is noise — users need one-click drill-down from recommendations to full details.
-10. **Is this module ingesting ALL available data from its source?** (#478) If a module reads from a cache file or API, it must emit signals for the complete dataset, not a truncated subset. Content caps for Gemini prompts are the Gemini call's concern — the signal itself must carry the full record. Budget caps in the registry control what consumers see; modules must not pre-truncate their signal output.
-11. **Does this callGemini() use the default model tier?** (#472) Never hardcode `model: 'lite'` or `model: 'full'` in callGemini options. Use the project default (set in ai-config.ts). Hardcoded tiers create invisible tech debt that persists across model migrations. Enforced by `test/unit/architecture-compliance.test.ts`.
-12. **If this module cross-references other modules' signals, does it use `collectAllSignalsUnbudgeted()`?** (#482, ADR-032) Cross-referencing modules need the full signal set to avoid missing corroborating signals that were budget-capped out. Only `collectAllSignalsUnbudgeted()` provides the complete picture. Using `collectAllSignals()` for cross-referencing produces incomplete recommendations.
+9. **If this module calls Gemini, does it have a quality validator?** (ADR-024) Every module that generates content via Gemini MUST have a quality validator in `src/quality-validators/`. The validator checks the output for completeness, specificity, and structural correctness before caching. Quality scorecard is saved alongside the output. No Gemini-generated content may be cached without validation. Existing validators: `campaign-validator.ts`, `meeting-prep-validator.ts`, `intelligence-validator.ts`, `account-plan-validator.ts`, `playbook-validator.ts`, `tech-stack-validator.ts`. Reference: `docs/adr/ADR-024-gemini-output-quality-gate.md`.
+10. **Does this module register with `FeatureModuleRegistry` with all required fields?** (ADR-020) Every feature module MUST implement: `name`, `cachePaths(slug)`, `fetch(customerName)`, `cleanup(customerName)`, `syncNow(customerName)`. Optional but expected: `refreshInterval` (for scheduled execution), `signals(customerSlug)` (if producing signals), `displayName` (for admin UI), `scope` ('customer'|'portfolio'|'both'), `nav` (sidebar entry), `accountTab` (customer detail tab). TypeScript enforces the interface at compile time, but incomplete implementations (empty methods, missing recordOutcome) slip through. Reference: `docs/adr/ADR-020-feature-module-registry.md`.
+11. **If this module produces signals, do metadata fields map to ADR-027 scoring boosters?** (ADR-021) Every `signals()` implementation should emit metadata that maps to the scoring system: `customerSlug` (→ customer-tier, floor 0.50), `redHatProducts` (→ +0.10 booster), `confidence` (HIGH → +0.05), `context` (evaluating/migrating → +0.10), `severity` (1 → +0.15, 2 → +0.10), `endDate` within 90 days (→ +0.10), `hasCloudSpend` (→ +0.10), `acvPlus`/`amount` (→ +0.10). Missing `customerSlug` = scores as general (ceiling 0.35 = Noise). Reference: `docs/adr/ADR-021-signal-contract-auto-discovery.md`.
+12. **If this module calls Gemini, does it use `callGemini()`?** (ADR-023) Every Gemini API call MUST go through `callGemini()` in `src/gemini-call.ts`. This wrapper provides: retry with backoff (429/503), cost tracking via `recordGeminiUsage()`, timeout tiers (fast/standard/long), input-hash delta caching via `deltaKey`, and model selection. Modules that bypass `callGemini()` lose retry, cost visibility, and timeout management. Exception: `account-intelligence.ts` uses `callGeminiGrounded()` (ADR-023 Phase 2 migration pending). Reference: `docs/adr/ADR-023-gemini-call-standardization.md`.
+13. **If this module's signals feed playbook generation, do they support attribution?** (ADR-026) Modules whose signals are consumed by the playbook generator MUST include `sourceNoteId` in signal metadata for provenance tracking. When meeting notes are merged with existing playbook state, the merge prompt receives all contributing signals — each must be attributable. Modules that don't support attribution produce playbook sections that can't trace back to their source. Reference: `docs/adr/ADR-026-customer-engagement-playbook.md`.
+14. **Does this module need scheduled execution?** (ADR-028) If a module needs to run on a timer (daily, weekly, interval), it MUST call `SchedulerRegistry.register()` instead of using `setInterval`/`setTimeout` directly. The registry provides: timer lifecycle management, enabled-check-at-fire-time, `primaryOnly` flag (skip on hero installs), status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`. Reference: `docs/adr/ADR-028-unified-scheduler-registry.md`.
+15. **Does this module produce portfolio-level data?** (ADR-029) Modules that emit signals about Red Hat products (not customer-specific data) MUST cross-reference against customer subscriptions/interests using `getCustomerProductContext(customerSlug)`. Without this, portfolio signals score as general tier (ceiling 0.35 = Noise) even when directly relevant to a customer who owns that product. With the cross-reference, matching signals get `customerSlug` set → customer tier (floor 0.50). Reference: `docs/adr/ADR-029-signal-scoring-evolution.md`.
+
+## Consumer → File Mapping (Compliance-Enforced)
+
+<!-- PARSED BY test/unit/architecture-compliance.test.ts — keep format exact -->
+
+| Consumer | Source File | templateAll | getExpansionMotion | ensureFresh |
+|----------|-----------|:-----------:|:------------------:|:-----------:|
+| Customer Detail | src/customer.ts | ✅ | — | — |
+| Brief Pipeline | src/brief-pipeline.ts | ✅ | — | — |
+| Campaign (standard) | src/campaign-service.ts | ✅ | — | ✅ |
+| Meeting Prep | src/meeting-prep-service.ts | ✅ | — | ✅ |
+| Playbook | src/playbook-generator.ts | ✅ | — | ✅ |
+| Account Plan | src/account-plan.ts | ⚠️ pending | — | — |
+| Morning Summary | src/dashboard-service.ts | ⚠️ pending | — | — |
+| Value Positioning | src/value-positioning.ts | ⚠️ pending | — | — |
+
+## Gemini Callers — Not Consumers (Excluded from templateAll check)
+
+<!-- PARSED BY test/unit/architecture-compliance.test.ts — keep format exact -->
+
+| File | Role | Why excluded |
+|------|------|-------------|
+| src/account-intelligence.ts | Producer | Extracts company/industry intel from web |
+| src/ae-voice.ts | Internal | Generates AE voice profile |
+| src/doc-extraction.ts | Producer | Extracts content from documents |
+| src/event-enricher.ts | Producer | Enriches events with descriptions |
+| src/material-extraction.ts | Producer | Extracts content from sales materials |
+| src/modules/cloud-marketplace-module.ts | Producer | Extracts cloud marketplace data |
+| src/modules/competitive-intel-module.ts | Producer | Extracts competitive intelligence |
+| src/news-provider.ts | Producer | Generates news summaries |
+| src/product-intel-service.ts | Producer | Product intelligence extraction |
+| src/product-intelligence.ts | Producer | Product intelligence extraction |
 
 ## Consumer → ensureFresh Contract
 
@@ -116,46 +134,6 @@ This is enforced by requiring Gemini prompts for all consumers to:
 
 If no business objective is known for the customer, the consumer should flag this as a data gap — not fall back to generic positioning.
 
-## Gemini Gateway Contract (MANDATORY — C7)
-
-All Gemini calls MUST go through `callGemini()` from `src/gemini-call.ts`. No direct URL construction, no hardcoded model names, no inline `thinkingConfig` or `temperature`. The gateway handles:
-
-- **Model resolution** — `'lite'` / `'full'` / `'pro'` → actual model ID from `ai-config.ts`
-- **Endpoint routing** — Gemini 3.x → US multi-region (`aiplatform.us.rep.googleapis.com`), 2.x → regional
-- **Thinking config** — 3.x: `thinkingLevel: 'minimal'`, 2.x: `thinkingBudget: 0` for Flash
-- **Temperature gating** — 3.x models do not accept temperature/top_p/top_k
-- **Output token budget** — 3.x: 16384 (thinking tokens consume budget), 2.x: model default
-- **Cost tracking, delta caching, retry logic** — centralized, not duplicated per consumer
-
-**Why:** When migrating from gemini-2.5-flash-lite to gemini-3.5-flash, only modules using `callGemini()` worked. The 10 modules with direct Vertex AI calls all hit 404 errors and required individual patching. Every future model migration has the same risk. One gateway, zero direct calls.
-
-**Violation indicator:** `grep -rn 'aiplatform.googleapis.com' src/ | grep -v gemini-call.ts` — any matches are violations.
-
-## Gemini Output Quality Gate Contract (MANDATORY — ADR-024)
-
-Every module that calls Gemini for content extraction or generation MUST wrap the output with `validateAndRetry()` from `src/gemini-quality-gate.ts`. No exceptions — this was a hard-learned rule after cloud marketplace shipped extraction without validation and produced empty/degraded cache that replaced good data.
-
-### The contract
-
-1. **Create a validator** in `src/quality-validators/{module}-validator.ts` implementing `QualityValidator`
-2. **Define checks** specific to the content type (minimum item counts, required fields populated, structural completeness)
-3. **Wire `validateAndRetry()`** around the Gemini call in `syncNow()`
-4. **Stale-overwrite guard** — if validated output scores lower than existing cache, keep existing cache
-5. **Scorecard persistence** — save `.qualityScorecard` alongside the cached output
-
-### Minimum checks for extraction modules (like cloud-marketplace, competitive-intel, tech-stack)
-
-- Minimum record count (e.g., >= 3 cloud providers, >= 5 total offerings)
-- Required fields populated (not empty strings)
-- Output not smaller than existing cache without explanation
-- No duplicate/repeated entries
-
-### Anti-patterns
-
-- ❌ Calling Gemini for extraction without `validateAndRetry()` — produces silent quality degradation
-- ❌ Caching empty/degraded extraction output without comparing to existing cache — overwrites good data with bad
-- ❌ Relying solely on `responseSchema` for quality — schema enforces structure, not content completeness
-
 ## syncNow vs ensureFresh Contract (MANDATORY)
 
 Every registered module implements two refresh methods with distinct purposes:
@@ -173,13 +151,13 @@ Every registered module implements two refresh methods with distinct purposes:
 
 Every module that produces portfolio-wide data (not per-customer) MUST support pulling fresh data from Google Drive — not just re-reading a local file baked into the container image.
 
-**Why:** Hero installs bootstrap from a container image that may be days old. The producing instance (Mac Mini for saleshub, hero install for cloud-marketplace) scrapes fresh data and writes to Drive. Without L3 refresh, other instances serve stale data until a rebuild. The Refresh button should always pull from the live source.
+**Why:** Hero installs bootstrap from a container image that may be days old. The Mac Mini scrapes fresh data and writes to Drive. Without L3 refresh, hero instances serve stale data until a rebuild. The Refresh button should always pull from the live source.
 
 ### The contract
 
 | Field | Required | Purpose |
 |-------|----------|---------|
-| `driveFolderId` | Yes | Shared Drive folder where the producing instance writes the source file |
+| `driveFolderId` | Yes | Shared Drive folder where the Mac Mini writes the source file |
 | `driveFileName` | Yes | Filename to download (e.g., `saleshub-knowledge.json`) |
 | `localCachePath` | Yes | Where to write the downloaded file locally |
 | `syncNow()` | Yes | Downloads fresh file from Drive, replaces local cache, reloads data |
@@ -211,20 +189,137 @@ async ensureFresh(customerSlug: string): Promise<void> {
 |--------|-----------|--------|
 | `saleshub-content` | `saleshub-knowledge.json` | ✅ Implemented (#460) — syncNow + ensureFresh download from Drive |
 | `saleshub` | `saleshub-knowledge.json` | ✅ Implemented (#442) — syncNow downloads from Drive |
-| `cloud-marketplace` | `cloud-marketplace/latest.json` | ✅ Implemented (#462) — syncNow + ensureFresh download from Drive |
-| `ecosystem-catalog` | `ecosystem-catalog/*.json` | ✅ Implemented (#462) — syncNow + ensureFresh download from Drive |
+| `cloud-marketplace` | `cloud-marketplace/latest.json` | ❌ **TODO** — reads local cache only |
+| `ecosystem-catalog` | `ecosystem-catalog/*.json` | ❌ **TODO** — reads local cache only |
 | `product-intel` | Product corpus files | ✅ Has its own scraper (not Drive-dependent) |
 
 ### Bootstrap integration
 
 During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh data before the first customer brief is generated. This ensures the hero install has current portfolio intelligence from day one.
 
+## Feature Module Registry Contract (ADR-020)
+
+Every feature module registers with `FeatureModuleRegistry.register()`. The interface:
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `name` | Yes | Unique identifier (e.g., 'tech-stack', 'news-radar') |
+| `displayName` | Yes | Human-readable label for admin UI |
+| `cachePaths(slug)` | Yes | Returns cache file paths for cleanup |
+| `refreshEndpoint` | Yes | API endpoint for manual refresh (admin panel button) |
+| `refreshInterval` | No | If set, module is scheduled for automatic catch-up |
+| `scope` | No | 'customer' (per-customer data) / 'portfolio' (Red Hat-wide) / 'both' |
+| `fetch(customerName)` | Yes | Pull fresh data |
+| `cleanup(customerName)` | Yes | Remove data on customer archive |
+| `syncNow(customerName)` | Yes | Manual refresh — always re-fetches from source |
+| `ensureFresh(customerSlug)` | No | Pre-flight cache check — may skip via TTL/hash |
+| `cacheTtlMs` | No | How long cached data is fresh (used by ensureFresh) |
+| `signals(customerSlug)` | No | If set, module contributes to the signal stack (ADR-021) |
+| `nav` | No | Sidebar entry: `{ group, label, icon }` — auto-discovered by frontend |
+| `accountTab` | No | Customer detail tab: `{ label, icon, order }` — auto-discovered |
+
+## Module Navigation Contract (ADR-022)
+
+Modules with `nav` and `accountTab` declarations are auto-discovered by the frontend via `GET /api/feature-modules/nav`. No hardcoded routing.
+
+| Declaration | Effect |
+|-------------|--------|
+| `nav.group` | Sidebar category ('actions' or 'intelligence') |
+| `nav.label` | Human-readable sidebar menu entry |
+| `nav.icon` | Lucide icon name for sidebar |
+| `accountTab.label` | Tab label on customer detail page |
+| `accountTab.order` | Tab sort order (lower = further left) |
+| `scope` | Controls visibility: 'portfolio' (no customer picker) / 'customer' (picker required) / 'both' |
+
+## Gemini Call Standardization Contract (ADR-023)
+
+All Gemini API calls MUST go through `callGemini()` in `src/gemini-call.ts`:
+
+| Feature | What callGemini provides |
+|---------|-------------------------|
+| Retry | Automatic retry with backoff on 429/503 |
+| Cost tracking | Records input/output tokens via `recordGeminiUsage()` |
+| Timeout tiers | `fast` (30s), `standard` (60s), `long` (180s) |
+| Delta caching | `deltaKey` parameter — skips Gemini call if input hash unchanged |
+| Model selection | Respects `getGeminiModel()` / `getGeminiModelLite()` |
+| Error sanitization | Strips sensitive data from error messages |
+
+Exception: `account-intelligence.ts` uses `callGeminiGrounded()` (Phase 2 migration pending).
+
+## Playbook State Contract (ADR-026)
+
+Playbooks persist at `data/cache/playbooks/{slug}.json` with versioned state:
+
+| Field | Purpose |
+|-------|---------|
+| `version` | Schema version (currently 1) for future migration |
+| `sections` | 8 named sections (strategicPosition, keyRelationships, currentPriorities, productAlignment, openActionItems, engagementHistory, expansionOpportunities, renewalsAndRisk) |
+| `deterministic` | Injected post-Gemini: subscriptions, cases, lifecycle, teamMembers, solutionPlays |
+| `sources` | Provenance array — which meeting notes/signals contributed to each section |
+
+Modules contributing to playbook generation MUST support `sourceNoteId` attribution in signal metadata. When Gemini merges old playbook state with new meeting notes, all contributing signals are included — each must be traceable.
+
+## Scheduler Registry Contract (ADR-028)
+
+Every scheduled task MUST call `SchedulerRegistry.register()` instead of creating its own timers:
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `name` | Yes | Unique task identifier |
+| `schedule.type` | Yes | 'daily' (hour+minute ET), 'weekly' (day+hour+minute), 'interval' (ms), 'heartbeat' (on 15-min tick) |
+| `run` | Yes | Async callback — the work to execute |
+| `enabled` | Yes | Function re-checked at fire time — skip if returns false |
+| `primaryOnly` | No | If true, skip on hero installs (only Mac Mini primary node runs it) |
+
+The registry owns timer lifecycle, status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`.
+
+## Portfolio Signal Relevance Contract (ADR-029)
+
+Portfolio-level modules (product lifecycle, RSS, events, value maps) MUST cross-reference customer data before emitting signals. Call `getCustomerProductContext(customerSlug)` in `signals()`:
+
+| Match type | Action | Scoring effect |
+|------------|--------|---------------|
+| Subscription match | Set `metadata.customerSlug` + `matchType: 'subscription'` | Customer tier (floor 0.50) |
+| Interest match | Set `metadata.customerSlug` + `context: 'evaluating'` | Customer tier + evaluating booster (+0.10) |
+| No match | Omit `customerSlug` | General tier (ceiling 0.35 = Noise) |
+
+Without this, a "RHEL 9.5 EOL" signal scores as Noise even for customers with 500 RHEL subscriptions.
+
+## Solution Intelligence Contract (ADR-030)
+
+Modules that produce cross-referenced intelligence MUST call `getCustomerSolutionContext(customerSlug)`:
+
+| Output field | Source | Template routing |
+|-------------|--------|-----------------|
+| `activeSolutionPlays[]` | Tech stack × solution-plays.json | Strategic Opportunities section |
+| `marketplaceOpportunities[]` | Cloud spend × marketplace programs | Cloud & Marketplace section |
+| `versionCorrelations[]` | Cases × product lifecycle | Cases section (amplified) |
+| `crossSellSignals[]` | Pipeline × tech stack × ecosystem catalog | Expansion Opportunities narrative |
+
+Modules add to signal metadata: `solutionPlayId`, `solutionPlayName`, `solutionTdp`, `matchedTechnologies`, `privateOfferEligible` (→ +0.10 booster), `cloudAmplifier`.
+
+## Template Engine Unification Contract (ADR-031)
+
+Every consumer MUST call `templateAll(signals, team, options)` as the single data path:
+
+| Output field | Use for |
+|-------------|---------|
+| `deterministic` | Markdown document body (playbook, account plan) |
+| `narrativeContext` | Gemini prompt input (narrative sections only) |
+| `sections.{name}` | Individual section access (string or null) |
+| `structured.solutionPlays` | React/HTML component rendering |
+
+Consumers select which section groups they need via options. They MUST NOT:
+- Call individual template functions (`templateSalesAlignment()`, `templateStrategicOpportunities()`)
+- Import `getCustomerSolutionContext()` directly
+- Assemble their own signal context from registry signals
+
 ## Anti-patterns
 
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
 - ❌ Adding signal type to a Gemini prompt instruction — template it, don't prompt-engineer it
 - ❌ Building a consumer that assembles its own signal context — use `templateAll()`
-- ❌ Creating a feature without answering the 5 pre-flight questions
+- ❌ Creating a feature without answering the 15 pre-flight questions
 - ❌ Shipping without checking the signal debug endpoint for the new data
 - ❌ Building a module with cached data but no `ensureFresh()` — consumers will generate with stale/missing data
 - ❌ Hardcoding refresh sources in signal-loader — use the registry auto-discovery pattern
@@ -232,38 +327,51 @@ During bootstrap (Setup Wizard step 1), ALL L3 Drive modules should pull fresh d
 - ❌ Registering a module without `refreshEndpoint` — invisible in admin panel, users can't diagnose or fix
 - ❌ Refresh endpoint that doesn't call `recordOutcome()` — "Last checked" never updates, appears broken
 - ❌ Content hash check in `syncNow()` — hash checks belong in `ensureFresh()` only. `syncNow()` always re-fetches from source.
-- ❌ Truncating source data inside a module before emitting signals — content caps for Gemini prompts are the Gemini call's concern, not the signal's. Budget caps in the registry handle consumer-side limits. (#478)
-- ❌ Hardcoding `model: 'lite'` or `model: 'full'` in callGemini() — use project defaults from ai-config.ts. Only `model: 'pro'` is an allowed override, and only when justified. (#472)
-- ❌ Emitting signals without a `url` field — every signal must be traceable to its source for one-click drill-down. (#479)
-- ❌ Using wrong field names when reading cache data — verify field names against actual cache structure (e.g., `productDescription` not `productName`). (#473)
-- ❌ Using `collectAllSignals()` (budgeted) for cross-referencing logic — budget caps may remove signals that are corroborating inputs to a recommendation. Use `collectAllSignalsUnbudgeted()` for cross-reference computation; let the registry budget-cap the recommendation module's output. (#482, ADR-032)
+- ❌ Caching Gemini output without a quality validator (ADR-024) — every Gemini-generated output must be validated before caching. No validator = no quality visibility = silent degradation.
+- ❌ Calling Gemini directly instead of through `callGemini()` (ADR-023) — bypasses retry, cost tracking, timeout tiers, and delta caching.
+- ❌ Using `setInterval`/`setTimeout` for scheduled work instead of `SchedulerRegistry.register()` (ADR-028) — hides schedule visibility, duplicates timer boilerplate, no `primaryOnly` gating.
+- ❌ Portfolio-level signals without `customerSlug` cross-reference (ADR-029) — they score as general (ceiling 0.35 = Noise) even when directly relevant to customers who own the product.
+- ❌ Consumers calling individual template functions (`templateSalesAlignment()`, etc.) instead of `templateAll()` (ADR-031) — bypasses the single data path, produces inconsistent coverage across consumers.
+- ❌ Soft-deleting customers with `inactive: true` flag instead of binary active/archived model (ADR-018) — accumulates stale data, confuses cleanup logic, inflates metrics.
+- ❌ Reading L3 CSV data via static sheet IDs instead of `discoverL3Csv()` (ADR-019) — becomes stale when source files change, skips change detection, breaks on sheet re-creation.
 
-## Cross-Referencing Module Contract (MANDATORY — ADR-032)
+## ADR → PRINCIPLES.md Enforcement (MANDATORY)
 
-Any module that reads OTHER modules' signals to produce composite outputs (recommendations, correlations, intelligence graphs) MUST:
+Every ADR that creates a mandatory requirement MUST have a corresponding update in this file. ADRs are decisions; PRINCIPLES.md is enforcement. An ADR without a pre-flight question or anti-pattern entry is a rule nobody checks.
 
-1. Use `collectAllSignalsUnbudgeted()` — never the budgeted variant
-2. Register as a feature module (not a standalone utility) — so its output is budget-capped, debuggable, and visible in admin
-3. Set `rawRelevance` based on composite confidence (signal corroboration count + freshness + specificity) — never hardcode `score`
-4. Use Gemini only for narrative synthesis (`narrative` field), never for decision logic (which signals match which solutions)
-5. Cap its own output via registry budget (recommended: 5 per customer for composite recommendations)
+**When creating or updating an ADR, answer these:**
 
-The query helper's outputs flow through `templateAll()` like any other signal. Consumers never call the query helper directly.
+1. **Does this ADR create a mandatory requirement for modules?** If yes → add a pre-flight question above.
+2. **Does this ADR define something modules must NOT do?** If yes → add to the Anti-patterns list above.
+3. **Does this ADR define a new contract between components?** If yes → add a contract section (like syncNow/ensureFresh, L3 Drive Refresh) above.
 
-## Enforcement: architecture-compliance.test.ts
+**ADR template — mandatory sections:**
 
-**Every rule in this file is enforced by `test/unit/architecture-compliance.test.ts`.** This test runs on every `bun test` (Gate 1, pre-push). Failing tests block push. The test auto-discovers modules from the registry and filesystem — no hardcoded lists.
+Every ADR in `docs/adr/` must include these sections:
+- `## Status` — Proposed | Accepted | Deprecated
+- `## Context` — why this decision is needed
+- `## Decision` — what was decided
+- `## Consequences` — positive, negative, risks
+- `## PRINCIPLES.md Update` — **NEW (mandatory)**: state which pre-flight question, anti-pattern, or contract section was added/updated. If none needed, explicitly state "No PRINCIPLES.md update required — this ADR does not create mandatory module requirements." This section prevents drift between decisions and enforcement.
 
-What it enforces:
-- ADR-027: no hardcoded scores in modules (must use rawRelevance)
-- Module contract: ensureFresh, cacheTtlMs, refreshEndpoint, displayName
-- Consumer contract: must use templateAll(), must call ensureFresh=true
-- Service extraction: route files thin, services have zero Hono imports
-- ADR↔PRINCIPLES drift: new ADRs with mandatory requirements must update this file
-- Pre-flight question count: cannot drop below current count
-- Contract section integrity: all named sections must exist
+**Automated enforcement:** `test/unit/architecture-compliance.test.ts` includes 4 drift detection tests that run on every `bun test`. If a new ADR creates mandatory requirements without updating this file, the build fails. This is the final safety net — convention + test + cross-reference index.
 
-**When adding a new contract or pre-flight question:** add the enforcement check to architecture-compliance.test.ts in the same PR. A contract without a test is a suggestion, not a rule.
+**Cross-reference index — ADRs that created pre-flight questions:**
+
+| Pre-flight # | ADR | Question |
+|---|---|---|
+| 1-3 | ADR-027 | Signal scoring: rawRelevance, metadata, template routing |
+| 4 | ADR-021 | Signal auto-discovery: consumer visibility |
+| 5-6 | ADR-020, #328 | Module registration: ensureFresh, cacheTtlMs |
+| 7 | ADR-021 | Consumer ensureFresh contract |
+| 8 | ADR-020 | Admin panel visibility: refreshEndpoint, recordOutcome |
+| 9 | ADR-024 | Quality validator for Gemini output |
+| 10 | ADR-020 | Full FeatureModule contract registration |
+| 11 | ADR-021, ADR-027 | Signal metadata maps to scoring boosters |
+| 12 | ADR-023 | Use callGemini() wrapper for all Gemini calls |
+| 13 | ADR-026 | Playbook signal attribution + merge support |
+| 14 | ADR-028 | Use SchedulerRegistry for scheduled work |
+| 15 | ADR-029 | Portfolio modules cross-ref customer context |
 
 ## Signal Scoring Quick Reference (ADR-027)
 

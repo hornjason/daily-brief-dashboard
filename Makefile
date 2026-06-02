@@ -136,7 +136,24 @@ login-ghcr: ## Re-authenticate to GHCR using GITHUB_TOKEN from .env
 	if [ -z "$$TOKEN" ]; then echo "GITHUB_TOKEN not set in .env"; exit 1; fi; \
 	podman login ghcr.io -u hornjason --password "$$TOKEN" && echo "Login succeeded"
 
-rebuild: build push up smoke
+REBUILD_LOCK := /tmp/pai-rebuild.lock
+
+rebuild:
+	@if [ -f $(REBUILD_LOCK) ]; then \
+	  LOCK_PID=$$(cat $(REBUILD_LOCK)); \
+	  LOCK_AGE=$$(( ($$(date +%s) - $$(stat -f%m $(REBUILD_LOCK) 2>/dev/null || stat -c%Y $(REBUILD_LOCK) 2>/dev/null)) )); \
+	  if kill -0 $$LOCK_PID 2>/dev/null && [ $$LOCK_AGE -lt 600 ]; then \
+	    echo "❌  Another rebuild is running (PID $$LOCK_PID, started $${LOCK_AGE}s ago)"; \
+	    echo "   If stale, remove $(REBUILD_LOCK) and retry"; \
+	    exit 1; \
+	  else \
+	    echo "⚠️  Stale lock (PID $$LOCK_PID dead or >10m old) — removing"; \
+	    rm -f $(REBUILD_LOCK); \
+	  fi; \
+	fi
+	@echo $$PPID > $(REBUILD_LOCK)
+	@trap 'rm -f $(REBUILD_LOCK)' EXIT; $(MAKE) build push up smoke
+	@rm -f $(REBUILD_LOCK)
 
 ps:
 	podman ps --filter name=pai-dashboard --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

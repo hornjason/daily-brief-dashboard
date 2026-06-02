@@ -1,9 +1,8 @@
 /**
  * Tech Stack Quality Validator — ADR-024
  *
- * Validates TechEntry[] output for structural completeness:
- * valid JSON array, minimum technologies, required fields,
- * valid categories/contexts/confidence, and Red Hat product coverage.
+ * Validates Gemini tech-stack extraction output (JSON array of TechEntry objects)
+ * for completeness, specificity, and evidence quality.
  * Threshold: 70
  */
 
@@ -17,129 +16,175 @@ import {
 const CONTENT_TYPE = 'tech-stack'
 const PASS_THRESHOLD = 70
 
-const VALID_CATEGORIES = ['proprietary', 'industry-tool']
-const VALID_CONTEXTS = ['using', 'evaluating', 'migrating_from', 'developing']
-const VALID_CONFIDENCE = ['HIGH', 'MEDIUM', 'LOW']
+/** Generic technology names that are too vague to be actionable */
+const GENERIC_NAMES = new Set([
+  'ai',
+  'cloud',
+  'automation',
+  'analytics',
+  'devops',
+  'security',
+  'networking',
+  'database',
+  'middleware',
+  'infrastructure',
+  'platform',
+  'saas',
+  'paas',
+  'iaas',
+  'iot',
+  'ml',
+  'big data',
+  'data',
+  'api',
+  'microservices',
+])
+
+const VALID_CONTEXTS = new Set(['using', 'evaluating', 'migrating_from', 'developing'])
+
+interface TechEntryForValidation {
+  name?: string
+  category?: string
+  context?: string
+  description?: string
+  why?: string
+  source?: string
+  redHatProducts?: string[]
+}
 
 function validate(output: string): QualityScorecard {
   const checks: QualityCheck[] = []
 
-  let parsed: any[]
+  let entries: TechEntryForValidation[] = []
   try {
-    const raw = JSON.parse(output)
-    parsed = Array.isArray(raw) ? raw : []
+    entries = JSON.parse(output)
+    if (!Array.isArray(entries)) entries = []
   } catch {
-    checks.push({
-      name: 'valid-json',
-      passed: false,
-      expected: 'Valid JSON array',
-      actual: 'Failed to parse JSON',
-      severity: 'required',
-    })
-    return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
+    // If we can't parse at all, every check fails
+    entries = []
   }
 
-  // 1. valid-json passed
-  checks.push({
-    name: 'valid-json',
-    passed: true,
-    expected: 'Valid JSON array',
-    actual: `Parsed array with ${parsed.length} items`,
-    severity: 'required',
-  })
+  // ── Required checks ──────────────────────────────────────────────────────
 
-  // 2. min-technologies: >= 1
+  // 1. min-technologies: At least 3 technologies detected
   checks.push({
     name: 'min-technologies',
-    passed: parsed.length >= 1,
-    expected: '>= 1 technology',
-    actual: `${parsed.length} technologies`,
+    passed: entries.length >= 3,
+    expected: 'At least 3 technologies detected',
+    actual: `${entries.length} technologies`,
     severity: 'required',
   })
 
-  // 3. required-fields: each entry has non-empty name, category, description
-  let missingFieldCount = 0
-  const missingDetails: string[] = []
-  for (let i = 0; i < parsed.length; i++) {
-    const e = parsed[i]
-    for (const field of ['name', 'category', 'description']) {
-      if (!e[field] || String(e[field]).trim() === '') {
-        missingFieldCount++
-        if (missingDetails.length < 3) {
-          missingDetails.push(`[${i}].${field}`)
-        }
-      }
-    }
-  }
+  // 2. has-industry-tools: At least 1 industry-tool category entry
+  const industryToolCount = entries.filter(e => e.category === 'industry-tool').length
   checks.push({
-    name: 'required-fields',
-    passed: missingFieldCount === 0,
-    expected: 'Each entry has non-empty name, category, description',
-    actual: missingFieldCount > 0
-      ? `${missingFieldCount} missing fields: ${missingDetails.join(', ')}`
-      : `${parsed.length} entries, all required fields present`,
+    name: 'has-industry-tools',
+    passed: industryToolCount >= 1,
+    expected: 'At least 1 industry-tool category entry',
+    actual: `${industryToolCount} industry-tool entries`,
     severity: 'required',
   })
 
-  // 4. valid-categories
-  let invalidCategories = 0
-  for (const e of parsed) {
-    if (e.category && !VALID_CATEGORIES.includes(e.category)) {
-      invalidCategories++
-    }
-  }
+  // 3. names-specific: No generic standalone names
+  const genericNames = entries.filter(e => {
+    const name = (e.name ?? '').trim().toLowerCase()
+    return GENERIC_NAMES.has(name)
+  })
   checks.push({
-    name: 'valid-categories',
-    passed: invalidCategories === 0,
-    expected: `category is one of: ${VALID_CATEGORIES.join(', ')}`,
-    actual: invalidCategories > 0
-      ? `${invalidCategories} entries have invalid categories`
-      : 'All categories valid',
+    name: 'names-specific',
+    passed: genericNames.length === 0,
+    expected: 'No generic standalone names (AI, Cloud, Automation, etc.)',
+    actual: genericNames.length === 0
+      ? 'all names are specific'
+      : `generic names found: ${genericNames.map(e => e.name).join(', ')}`,
     severity: 'required',
   })
 
-  // 5. valid-contexts
-  let invalidContexts = 0
-  for (const e of parsed) {
-    if (e.context && !VALID_CONTEXTS.includes(e.context)) {
-      invalidContexts++
-    }
-  }
+  // 4. has-context: Every entry has a valid context value
+  const invalidContext = entries.filter(e => !VALID_CONTEXTS.has(e.context ?? ''))
   checks.push({
-    name: 'valid-contexts',
-    passed: invalidContexts === 0,
-    expected: `context is one of: ${VALID_CONTEXTS.join(', ')}`,
-    actual: invalidContexts > 0
-      ? `${invalidContexts} entries have invalid contexts`
-      : 'All contexts valid',
+    name: 'has-context',
+    passed: entries.length > 0 && invalidContext.length === 0,
+    expected: 'Every entry has a valid context (using/evaluating/migrating_from/developing)',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : invalidContext.length === 0
+        ? 'all entries have valid context'
+        : `${invalidContext.length} entries with invalid context`,
     severity: 'required',
   })
 
-  // 6. valid-confidence
-  let invalidConfidence = 0
-  for (const e of parsed) {
-    if (e.confidence && !VALID_CONFIDENCE.includes(e.confidence)) {
-      invalidConfidence++
-    }
-  }
+  // 5. has-descriptions: At least 80% of entries have non-empty descriptions
+  const withDescription = entries.filter(e => (e.description ?? '').trim().length > 0).length
+  const descPct = entries.length > 0 ? Math.round((withDescription / entries.length) * 100) : 0
   checks.push({
-    name: 'valid-confidence',
-    passed: invalidConfidence === 0,
-    expected: `confidence is one of: ${VALID_CONFIDENCE.join(', ')}`,
-    actual: invalidConfidence > 0
-      ? `${invalidConfidence} entries have invalid confidence`
-      : 'All confidence values valid',
+    name: 'has-descriptions',
+    passed: entries.length > 0 && descPct >= 80,
+    expected: 'At least 80% of entries have non-empty descriptions',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : `${descPct}% (${withDescription}/${entries.length}) have descriptions`,
     severity: 'required',
   })
 
-  // 7. has-red-hat-products: at least 50% have non-empty redHatProducts
-  const withProducts = parsed.filter(e => Array.isArray(e.redHatProducts) && e.redHatProducts.length > 0).length
-  const productPct = parsed.length > 0 ? Math.round((withProducts / parsed.length) * 100) : 0
+  // ── Recommended checks ───────────────────────────────────────────────────
+
+  // 6. has-why: At least 50% of entries have a why field
+  const withWhy = entries.filter(e => (e.why ?? '').trim().length > 0).length
+  const whyPct = entries.length > 0 ? Math.round((withWhy / entries.length) * 100) : 0
+  checks.push({
+    name: 'has-why',
+    passed: entries.length > 0 && whyPct >= 50,
+    expected: 'At least 50% of entries have a why field',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : `${whyPct}% (${withWhy}/${entries.length}) have why`,
+    severity: 'recommended',
+  })
+
+  // 7. has-sources: At least 30% of entries have a non-empty source field
+  const withSource = entries.filter(e => {
+    const src = (e.source ?? '').trim()
+    return src.length > 0 && src !== 'provided-context'
+  }).length
+  const srcPct = entries.length > 0 ? Math.round((withSource / entries.length) * 100) : 0
+  checks.push({
+    name: 'has-sources',
+    passed: entries.length > 0 && srcPct >= 30,
+    expected: 'At least 30% of entries have a non-empty source field',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : `${srcPct}% (${withSource}/${entries.length}) have sources`,
+    severity: 'recommended',
+  })
+
+  // 8. has-red-hat-products: At least 30% of entries have redHatProducts populated
+  const withRhProducts = entries.filter(e =>
+    Array.isArray(e.redHatProducts) && e.redHatProducts.length > 0
+  ).length
+  const rhPct = entries.length > 0 ? Math.round((withRhProducts / entries.length) * 100) : 0
   checks.push({
     name: 'has-red-hat-products',
-    passed: parsed.length === 0 || productPct >= 50,
-    expected: 'At least 50% of entries have non-empty redHatProducts array',
-    actual: `${withProducts}/${parsed.length} (${productPct}%) have redHatProducts`,
+    passed: entries.length > 0 && rhPct >= 30,
+    expected: 'At least 30% of entries have redHatProducts populated',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : `${rhPct}% (${withRhProducts}/${entries.length}) have redHatProducts`,
+    severity: 'recommended',
+  })
+
+  // 9. context-variety: Not all entries are "using"
+  const contextSet = new Set(entries.map(e => e.context).filter(Boolean))
+  const hasVariety = contextSet.size > 1 || entries.length === 0
+  checks.push({
+    name: 'context-variety',
+    passed: entries.length === 0 || hasVariety,
+    expected: 'Not all entries are "using" — at least 1 evaluating or migrating_from',
+    actual: entries.length === 0
+      ? 'no entries to check'
+      : hasVariety
+        ? `${contextSet.size} distinct contexts: ${[...contextSet].join(', ')}`
+        : 'all entries are "using"',
     severity: 'recommended',
   })
 

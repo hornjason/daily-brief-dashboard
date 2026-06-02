@@ -12,6 +12,8 @@ import { toSlug } from '../cache-layer.ts'
 import { callGemini } from '../gemini-call.ts'
 import { sanitizeErr } from '../utils.ts'
 import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
+import type { QualityScorecard } from '../gemini-quality-gate.ts'
+import { techStackValidator } from '../quality-validators/tech-stack-validator.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,7 @@ interface TechStackCache {
   contentHash: string
   technologies: TechEntry[]
   cachedAt: string
+  qualityScorecard?: QualityScorecard
 }
 
 interface TechPositioningEntry {
@@ -553,7 +556,7 @@ FeatureModuleRegistry.register({
       console.log(`[tech-stack] no technologies detected for ${customerSlug}`)
       const cache: TechStackCache = { contentHash, technologies: [], cachedAt: new Date().toISOString() }
       writeFileSync(resolve(TECH_CACHE_DIR, `${customerSlug}.json`), JSON.stringify(cache, null, 2), { mode: 0o600 })
-      FeatureModuleRegistry.recordOutcome('tech-stack', { success: true, recordCount: 0 })
+      FeatureModuleRegistry.recordOutcome('tech-stack', { success: true, dataChanged: false, recordCount: 0 })
       return
     }
 
@@ -587,14 +590,19 @@ FeatureModuleRegistry.register({
       }
     }
 
-    // 7. Write cache
+    // 7. Quality validation
+    const scorecard = techStackValidator.validate(JSON.stringify(technologies))
+    console.log(`[tech-stack] quality score for ${customerName}: ${scorecard.score}/100 (${scorecard.passed ? 'PASS' : 'FAIL'})`)
+
+    // 8. Write cache
     const cache: TechStackCache = {
       contentHash,
       technologies,
       cachedAt: new Date().toISOString(),
+      qualityScorecard: scorecard,
     }
     writeFileSync(resolve(TECH_CACHE_DIR, `${customerSlug}.json`), JSON.stringify(cache, null, 2), { mode: 0o600 })
-    FeatureModuleRegistry.recordOutcome('tech-stack', { success: true, recordCount: technologies.length })
+    FeatureModuleRegistry.recordOutcome('tech-stack', { success: true, dataChanged: true, recordCount: technologies.length })
     console.log(`[tech-stack] cached ${technologies.length} technologies for ${customerSlug}`)
   },
 

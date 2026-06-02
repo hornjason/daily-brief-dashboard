@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-28
+updated: 2026-05-30
 ---
 
 # DailyBriefDashboard — Project State
@@ -11,7 +11,7 @@ updated: 2026-05-28
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-29 — SalesHub DocCenter shipped (#448): 225 files downloaded, 67 with extracted text (2.7M chars), signal module live. L3 Drive Refresh (#460): admin refresh pulls from Drive. Scraper merge resilience (#461): Drive fallback + name mapping. Coverage 81%. L3 refresh contract in PRINCIPLES.md. 2147 unit tests passing.
+Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship workflow hardened: mid-session fix rule (no inline fixes >1 line), doc cascade matrix in DURABILITY step, 3-layer drift prevention (convention + workflow + test). PRINCIPLES.md: 15 pre-flight questions, 19 anti-patterns, 10 contract sections. 2155 unit tests passing (33 architecture compliance tests including 4 drift detectors).
 
 ---
 
@@ -126,6 +126,20 @@ Last updated: 2026-05-29 — SalesHub DocCenter shipped (#448): 225 files downlo
 - Cache: `data/cache/cloud-marketplace/latest.json` — per-cloud offerings, programs, incentives
 - Source: Gmail search for Cloud Marketplaces newsletter → Google Slides/Docs export → Gemini structured extraction
 - Signals: cross-referenced with CCSP cloud spend per customer (EDP, CPPO, Cloud Commit, MACC)
+
+### Tech Stack (#386, #454, #455, #456)
+- `POST /api/refresh/tech-stack` — Gemini grounded search for ALL customers' technology stacks
+- `POST /api/customer/:name/modules/tech-stack/sync` — Per-customer tech stack extraction
+- Cache: `data/cache/tech-stack/{slug}.json` — per-customer technologies with quality scorecard
+- Source: Gemini grounded search (job postings, case studies, partner announcements, engineering blogs)
+- Features: context classification (using/evaluating/migrating_from/developing), `why` field (business purpose), source URLs (grounding redirect resolution + Google search fallback)
+- Signals: per-technology with metadata (category, context, why, infrastructure, redHatProducts, confidence, source, solutionPlayId)
+- Template: `templateTechStack()` renders grouped table — migration/evaluating first with visual markers
+- UI: Tech Stack tab with expandable industry tool rows showing why, source link, Red Hat products
+- Quality: `tech-stack-validator.ts` (9 checks, threshold 70) — validates before caching
+- Budget: uncapped (50) — all detected technologies surface to consumers
+- Enrichment: Tier 1 (static lookup from tech-positioning.json), Tier 2 (Gemini grounded search for proprietary tech)
+- Contract: syncNow always re-fetches (no hash skip), ensureFresh checks TTL + hash
 
 ### SalesHub Content (#448)
 - `POST /api/refresh/saleshub-content` — Re-read saleshub-knowledge.json and re-emit document signals
