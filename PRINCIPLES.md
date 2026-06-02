@@ -75,6 +75,38 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 14. **Does this module need scheduled execution?** (ADR-028) If a module needs to run on a timer (daily, weekly, interval), it MUST call `SchedulerRegistry.register()` instead of using `setInterval`/`setTimeout` directly. The registry provides: timer lifecycle management, enabled-check-at-fire-time, `primaryOnly` flag (skip on hero installs), status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`. Reference: `docs/adr/ADR-028-unified-scheduler-registry.md`.
 15. **Does this module produce portfolio-level data?** (ADR-029) Modules that emit signals about Red Hat products (not customer-specific data) MUST cross-reference against customer subscriptions/interests using `getCustomerProductContext(customerSlug)`. Without this, portfolio signals score as general tier (ceiling 0.35 = Noise) even when directly relevant to a customer who owns that product. With the cross-reference, matching signals get `customerSlug` set → customer tier (floor 0.50). Reference: `docs/adr/ADR-029-signal-scoring-evolution.md`.
 
+## Consumer → File Mapping (Compliance-Enforced)
+
+<!-- PARSED BY test/unit/architecture-compliance.test.ts — keep format exact -->
+
+| Consumer | Source File | templateAll | getExpansionMotion | ensureFresh |
+|----------|-----------|:-----------:|:------------------:|:-----------:|
+| Customer Detail | src/customer.ts | ✅ | — | — |
+| Brief Pipeline | src/brief-pipeline.ts | ✅ | — | — |
+| Campaign (standard) | src/campaign-service.ts | ✅ | — | ✅ |
+| Meeting Prep | src/meeting-prep-service.ts | ✅ | — | ✅ |
+| Playbook | src/playbook-generator.ts | ✅ | — | ✅ |
+| Account Plan | src/account-plan.ts | ⚠️ pending | — | — |
+| Morning Summary | src/dashboard-service.ts | ⚠️ pending | — | — |
+| Value Positioning | src/value-positioning.ts | ⚠️ pending | — | — |
+
+## Gemini Callers — Not Consumers (Excluded from templateAll check)
+
+<!-- PARSED BY test/unit/architecture-compliance.test.ts — keep format exact -->
+
+| File | Role | Why excluded |
+|------|------|-------------|
+| src/account-intelligence.ts | Producer | Extracts company/industry intel from web |
+| src/ae-voice.ts | Internal | Generates AE voice profile |
+| src/doc-extraction.ts | Producer | Extracts content from documents |
+| src/event-enricher.ts | Producer | Enriches events with descriptions |
+| src/material-extraction.ts | Producer | Extracts content from sales materials |
+| src/modules/cloud-marketplace-module.ts | Producer | Extracts cloud marketplace data |
+| src/modules/competitive-intel-module.ts | Producer | Extracts competitive intelligence |
+| src/news-provider.ts | Producer | Generates news summaries |
+| src/product-intel-service.ts | Producer | Product intelligence extraction |
+| src/product-intelligence.ts | Producer | Product intelligence extraction |
+
 ## Consumer → ensureFresh Contract
 
 | Consumer | Must call `ensureFresh: true`? | Current status |
