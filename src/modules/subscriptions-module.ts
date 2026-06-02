@@ -6,11 +6,56 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { customers, aes } from '../server-state.ts'
+import { toSlug } from '../cache-layer.ts'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+const EXPIRING_SOON_DAYS = 90
 
 function normalizeProductName(raw: string): string {
   return raw.replace(/^Red Hat\s+/i, '').replace(/,\s.*$/, '').trim() || raw
+}
+
+function baseProductName(desc: string): string {
+  return desc.replace(/,\s.*$/, '').replace(/\s*\(.*\)/, '').trim()
+}
+
+function hasMatchingCase(productDesc: string, customerSlug: string): boolean {
+  const casesPath = resolve(CACHE_DIR, 'cases.json')
+  if (!existsSync(casesPath)) return false
+  try {
+    const data = JSON.parse(readFileSync(casesPath, 'utf-8'))
+    const cases = data.cases ?? (Array.isArray(data) ? data : [])
+    const baseName = baseProductName(productDesc).toLowerCase()
+    return cases.some((c: any) => {
+      const caseProduct = (c.product ?? '').toLowerCase()
+      return caseProduct && baseName.startsWith(caseProduct) || caseProduct.startsWith(baseName)
+    })
+  } catch { return false }
+}
+
+function computeUrgency(endDate: string | undefined, productDesc: string, customerSlug: string): 'active' | 'expiring-soon' | 'expired' | 'expired-critical' {
+  if (!endDate) return 'active'
+  const end = new Date(endDate)
+  const now = new Date()
+  const daysUntilEnd = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (daysUntilEnd > EXPIRING_SOON_DAYS) return 'active'
+  if (daysUntilEnd > 0) return 'expiring-soon'
+  if (daysUntilEnd === 0) return 'expiring-soon'
+  // Expired — check for active cases on this product
+  if (hasMatchingCase(productDesc, customerSlug)) return 'expired-critical'
+  return 'expired'
+}
+
+/** Look up the subscription sheet Drive URL for a customer slug. */
+function getSubscriptionSheetUrl(customerSlug: string): string | undefined {
+  const customer = customers.find(c => toSlug(c.name) === customerSlug)
+  if (!customer?.ae) return undefined
+  const ae = aes.find(a => a.name === customer.ae)
+  const sheetId = (ae as any)?.subscriptionSheetId
+  if (!sheetId) return undefined
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
 }
 
 FeatureModuleRegistry.register({
@@ -49,6 +94,7 @@ FeatureModuleRegistry.register({
     if (rows.length === 0) return []
 
     const signals: Signal[] = []
+    const sheetUrl = getSubscriptionSheetUrl(customerSlug)
     const products = new Map<string, any[]>()
 
     for (const row of rows) {
@@ -63,18 +109,23 @@ FeatureModuleRegistry.register({
       const endDates = subs.map((r: any) => r.endDate ?? r.expirationDate).filter(Boolean).sort()
       const nearestEnd = endDates[0]
 
+      const rawProduct = subs[0]?.productDescription ?? subs[0]?.productName ?? product
+      const urgency = computeUrgency(nearestEnd, rawProduct, customerSlug)
+
       signals.push({
         source: 'subscriptions',
         type: 'subscription',
         headline: `${product} — ${qty} subscription${qty !== 1 ? 's' : ''}`,
         detail: nearestEnd ? `Earliest renewal: ${nearestEnd}` : 'Active subscription',
-        rawRelevance: 0.5,  // ADR-027: default relevance
+        rawRelevance: urgency === 'expired-critical' ? 0.95 : urgency === 'expired' ? 0.85 : urgency === 'expiring-soon' ? 0.7 : 0.5,
         timestamp: data.cachedAt ?? new Date().toISOString(),
+        url: sheetUrl,  // #523: link to SF bookings sheet in Drive
         metadata: {
-          customerSlug,  // ADR-027: Mark as customer-specific
+          customerSlug,
           product,
           quantity: qty,
-          endDate: nearestEnd,  // ADR-027: endDate for renewal urgency booster
+          endDate: nearestEnd,
+          urgency,
         },
       })
     }

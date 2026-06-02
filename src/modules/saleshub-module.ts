@@ -9,14 +9,49 @@
  * On primary/Mac Mini nodes, the existing scrape trigger path is preserved.
  */
 
-import { FeatureModuleRegistry } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { resetKnowledgeCache, getKnowledgeStats } from '../lib/saleshub-knowledge-loader.ts'
 import { downloadSaleshubFromDrive } from '../lib/saleshub-drive-sync.ts'
 import { resolve } from 'path'
-import { statSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
+}
+
+function getCacheDir(): string {
+  return process.env.CACHE_DIR ?? 'data/cache'
+}
+
+function normalizeForMatch(name: string): string {
+  return name.toLowerCase().replace(/\.(pdf|pptx|docx|xlsx)$/i, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function buildDriveLookup(): Map<string, { name: string; driveUrl: string; textLen: number }> {
+  const lookup = new Map<string, { name: string; driveUrl: string; textLen: number }>()
+  const drivePath = resolve(getCacheDir(), 'saleshub', 'drive-content.json')
+  if (!existsSync(drivePath)) return lookup
+  try {
+    const data = JSON.parse(readFileSync(drivePath, 'utf-8'))
+    for (const f of data.files ?? []) {
+      if (f.driveUrl) {
+        const key = normalizeForMatch(f.name ?? '')
+        lookup.set(key, { name: f.name, driveUrl: f.driveUrl, textLen: (f.extractedText ?? '').length })
+      }
+    }
+  } catch { /* ignore */ }
+  return lookup
+}
+
+function loadKnowledgeForSignals(): any {
+  const paths = [resolve(getConfigDir(), 'saleshub-knowledge.json')]
+  if (!process.env.CONFIG_DIR) paths.push(resolve('config-templates', 'saleshub-knowledge.json'))
+  for (const p of paths) {
+    try {
+      if (existsSync(p)) return JSON.parse(readFileSync(p, 'utf-8'))
+    } catch { /* try next */ }
+  }
+  return null
 }
 
 FeatureModuleRegistry.register({
@@ -58,6 +93,71 @@ FeatureModuleRegistry.register({
       success: true,
       recordCount: stats.tdpCount + stats.salesPlayCount + stats.tacticCount,
     })
+  },
+
+  async signals(_customerSlug: string): Promise<Signal[]> {
+    const kb = loadKnowledgeForSignals()
+    if (!kb) return []
+
+    const driveLookup = buildDriveLookup()
+    const signals: Signal[] = []
+
+    // Emit one signal per tactic (25 tactics)
+    for (const tactic of kb.tactics ?? []) {
+      const assets: Array<{ name: string; url: string; type: string }> = []
+      for (const item of tactic.whatToShare ?? []) {
+        if (item.name) assets.push({ name: item.name, url: item.url ?? '', type: 'share' })
+      }
+      signals.push({
+        source: 'saleshub-tactics',
+        type: 'recommendation',
+        headline: tactic.name ?? 'Unknown Tactic',
+        detail: `TDP: ${tactic.parentTdp ?? 'Unknown'}`,
+        rawRelevance: 0.3,
+        timestamp: kb.scrapedAt ?? new Date().toISOString(),
+        metadata: {
+          parentTdp: tactic.parentTdp ?? '',
+          playType: 'tactic',
+          assets,
+        },
+      })
+    }
+
+    // Emit one signal per sales play (5 plays)
+    for (const play of kb.salesPlays ?? []) {
+      const persona = play.personaSection ?? {}
+      const docs = (play.documents ?? []).map((doc: any) => {
+        const docName = doc.name ?? doc.title ?? ''
+        const key = normalizeForMatch(docName)
+        const driveMatch = driveLookup.get(key)
+        return {
+          name: docName,
+          driveUrl: doc.driveUrl ?? doc.url ?? driveMatch?.driveUrl ?? '',
+        }
+      })
+
+      signals.push({
+        source: 'saleshub-plays',
+        type: 'recommendation',
+        headline: play.name ?? 'Unknown Play',
+        detail: play.description ?? '',
+        rawRelevance: 0.4,
+        timestamp: kb.scrapedAt ?? new Date().toISOString(),
+        metadata: {
+          tdpAlignment: play.tdpAlignment ?? [],
+          playType: 'strategic',
+          personaRoles: persona.roles ?? [],
+          painPoints: persona.painPoints ?? [],
+          discoveryQuestions: persona.discoveryQuestions ?? [],
+          valueProps: persona.valueProps ?? [],
+          whatWinsThemOver: persona.whatWinsThemOver ?? [],
+          documents: docs,
+          regionalCampaigns: play.regionalCampaigns ?? [],
+        },
+      })
+    }
+
+    return signals
   },
 
   async cleanup(_customerName: string): Promise<void> {

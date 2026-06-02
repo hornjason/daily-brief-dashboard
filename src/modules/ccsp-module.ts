@@ -8,13 +8,23 @@
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { readCCSPCache } from '../cache-layer.ts'
-import { toSlug } from '../cache-layer.ts'
+import { readCCSPCache, toSlug } from '../cache-layer.ts'
+import { customers, aes } from '../server-state.ts'
 import { statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CCSP_CACHE_PATH = resolve(CACHE_DIR, 'ccsp-data.json')
+
+/** Look up the CCSP sheet Drive URL for a customer slug. */
+function getCcspSheetUrl(customerSlug: string): string | undefined {
+  const customer = customers.find(c => toSlug(c.name) === customerSlug)
+  if (!customer?.ae) return undefined
+  const ae = aes.find(a => a.name === customer.ae)
+  const sheetId = (ae as any)?.ccspSheetId
+  if (!sheetId) return undefined
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
+}
 
 FeatureModuleRegistry.register({
   name: 'ccsp',
@@ -54,6 +64,7 @@ FeatureModuleRegistry.register({
     if (customerRecords.length === 0) return []
 
     const signals: Signal[] = []
+    const sheetUrl = getCcspSheetUrl(customerSlug)
 
     // Cloud platform signals
     const clouds = [...new Set(customerRecords.map(r => r.cloudPartner).filter(Boolean))]
@@ -82,6 +93,7 @@ FeatureModuleRegistry.register({
         detail: `Products: ${products.join(', ') || 'unspecified'}. ${cloudToProduct[cloud] ? `Managed service opportunity: ${cloudToProduct[cloud]}` : ''}`,
         rawRelevance,
         timestamp: cache.cachedAt,
+        url: sheetUrl,  // #523: link to CCSP data sheet in Drive
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           cloudPartner: cloud,
@@ -102,6 +114,7 @@ FeatureModuleRegistry.register({
         detail: `Customer is active on ${clouds.length} cloud platform${clouds.length > 1 ? 's' : ''}. Consider cross-cloud consistency positioning with OpenShift.`,
         rawRelevance: 0.8,
         timestamp: cache.cachedAt,
+        url: sheetUrl,  // #523: link to CCSP data sheet in Drive
         metadata: {
           customerSlug,  // ADR-027: Mark as customer-specific
           acvPlus: totalACV,

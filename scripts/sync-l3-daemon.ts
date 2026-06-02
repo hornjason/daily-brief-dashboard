@@ -48,6 +48,9 @@ const RSS_THRESHOLD_BYTES = 3 * 1024 * 1024 * 1024  // 3 GB
 // #447: Recycle mutex timeout — if proactiveRecycle() doesn't finish within this window,
 // the mutex is released and a container restart is recommended via alert email.
 const RECYCLE_TIMEOUT_MS = 90_000  // 90 seconds
+// #497: Hard timeout for keepalive — if doKeepalive() hangs on a dead browser
+// (ctx.newPage() or page.close() never resolves), the mutex is released after this window.
+const KEEPALIVE_TIMEOUT_MS = 120_000  // 120 seconds
 
 // ── #447: Cross-timer recycle mutex ──────────────────────────────────────────
 // Prevents concurrent proactiveRecycle() / recoverScrapeContext() calls from
@@ -128,6 +131,8 @@ async function doKeepalive(): Promise<void> {
   }
 
   const page = await ctx.newPage()
+  // #497 AC-4: Track whether keepalive succeeded — only do VNC observation delay on success
+  let succeeded = false
   try {
     // Tableau keepalive — hit the actual viz page (/t/ embed URL) not the dashboard shell
     console.log('[sync-daemon] keepalive: navigating Tableau viz…')
@@ -281,6 +286,9 @@ async function doKeepalive(): Promise<void> {
       }
     }
 
+    // #497 AC-4: Mark keepalive as succeeded — VNC observation delay will only fire on success
+    succeeded = true
+
     // Verify RH SSO session is actually authenticated (not just browser alive)
     // Re-fetch context — recovery may have replaced it
     const verifyCtx = getScrapeContext()
@@ -323,10 +331,18 @@ async function doKeepalive(): Promise<void> {
 
     console.log('[sync-daemon] keepalive: OK (Tableau viz + SF home + RH SSO all verified)')
   } finally {
-    // VNC observation delay — wait 15s before closing so you can watch the navigation
-    console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')
-    await new Promise(resolve => setTimeout(resolve, 15_000))
-    await page.close().catch(() => {})
+    // #497 AC-4: Only wait for VNC observation on success — skip delay when keepalive failed
+    if (succeeded) {
+      console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')
+      await new Promise(resolve => setTimeout(resolve, 15_000))
+    } else {
+      console.log('[sync-daemon] keepalive: skipping VNC delay (keepalive failed)')
+    }
+    // #497 AC-3: Wrap page.close() in 5s timeout — dead browsers can hang on close()
+    await Promise.race([
+      page.close().catch(() => {}),
+      new Promise<void>(r => setTimeout(r, 5_000)),
+    ])
   }
 }
 
@@ -598,7 +614,21 @@ async function main(): Promise<void> {
     }
     keepaliveRunning = true
     try {
-      await doKeepalive()
+      // #497 AC-1: Wrap doKeepalive() in Promise.race with hard timeout.
+      // When the browser is dead, ctx.newPage() or page.close() can hang forever —
+      // the await never settles, so the finally block never fires and keepaliveRunning
+      // stays true forever. This pattern matches proactiveRecycle() (lines 351-423).
+      const keepaliveTimeout = new Promise<'timeout'>(resolve =>
+        setTimeout(() => resolve('timeout'), KEEPALIVE_TIMEOUT_MS)
+      )
+      const result = await Promise.race([
+        doKeepalive().then(() => 'done' as const),
+        keepaliveTimeout,
+      ])
+      if (result === 'timeout') {
+        // #497 AC-2: Timeout fired — browser is likely dead/unresponsive
+        throw new Error(`keepalive timed out after ${KEEPALIVE_TIMEOUT_MS / 1000}s — browser may be dead`)
+      }
       // AC-2/AC-3: If previous keepalive failed, auth was restored (likely via VNC re-auth).
       // Write the sync trigger file to kick off an immediate sync.
       if (!lastKeepaliveOk) {
