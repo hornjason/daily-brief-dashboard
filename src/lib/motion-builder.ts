@@ -27,6 +27,7 @@ import { findNodesByType } from './graph-utils.ts'
 import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
+import { scoreTactics } from './tactic-scorer.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -431,11 +432,13 @@ function buildAnchorPhase(
   // Filter to top 3 per TDP domain by relevance to expired products
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
+  // #591: Rank tactics using full graph intelligence (engagement, intel, lifecycle, etc.)
+  const scored = scoreTactics(graph, tactics)
+  scored.sort((a, b) => b.compositeScore - a.compositeScore)
+
   // #577: Cap total tactics per phase
   const MAX_TACTICS_PER_PHASE = 3
-  if (tactics.length > MAX_TACTICS_PER_PHASE) {
-    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
-  }
+  tactics = scored.slice(0, MAX_TACTICS_PER_PHASE)
 
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
@@ -551,11 +554,13 @@ function buildExpandPhase(
   // Filter to top 3 per TDP domain
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
+  // #591: Rank tactics using full graph intelligence
+  const scored = scoreTactics(graph, tactics)
+  scored.sort((a, b) => b.compositeScore - a.compositeScore)
+
   // #577: Cap total tactics per phase
   const MAX_TACTICS_PER_PHASE = 3
-  if (tactics.length > MAX_TACTICS_PER_PHASE) {
-    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
-  }
+  tactics = scored.slice(0, MAX_TACTICS_PER_PHASE)
 
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
@@ -645,11 +650,13 @@ function buildTransformPhase(
   // Filter to top 3 per TDP domain
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
+  // #591: Rank tactics using full graph intelligence
+  const scored = scoreTactics(graph, tactics)
+  scored.sort((a, b) => b.compositeScore - a.compositeScore)
+
   // #577: Cap total tactics per phase
   const MAX_TACTICS_PER_PHASE = 3
-  if (tactics.length > MAX_TACTICS_PER_PHASE) {
-    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
-  }
+  tactics = scored.slice(0, MAX_TACTICS_PER_PHASE)
 
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
@@ -915,10 +922,13 @@ function buildDisplacementPhase(
   ])
 
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+
+  // #591: Rank tactics using full graph intelligence
+  const scored = scoreTactics(graph, tactics)
+  scored.sort((a, b) => b.compositeScore - a.compositeScore)
+
   const MAX_TACTICS_PER_PHASE = 3
-  if (tactics.length > MAX_TACTICS_PER_PHASE) {
-    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
-  }
+  tactics = scored.slice(0, MAX_TACTICS_PER_PHASE)
 
   if (tactics.length === 0) return null
 
