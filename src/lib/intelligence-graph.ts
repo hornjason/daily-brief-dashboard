@@ -55,15 +55,24 @@ function nowIso(): string {
   return new Date().toISOString()
 }
 
-// ── Signal-to-Node Mapping ────────────────────────────────────────────────────
+// ── Signal Node Config ───────────────────────────────────────────────────────
 
-function signalToNode(signal: Signal): IntelligenceNode | null {
-  const m = signal.metadata ?? {}
-  const hash = computeContentHash(JSON.stringify(signal))
-  const ts = nowIso()
+interface SignalNodeConfig {
+  nodeType: string
+  buildNode: (signal: Signal, m: Record<string, any>, hash: string, ts: string) => IntelligenceNode | null
+}
 
-  switch (signal.source) {
-    case 'subscriptions': {
+/**
+ * Config-driven signal-to-node mapping (#580).
+ * Adding a new signal source = adding a config entry. No switch statement.
+ * Sources that return null create derived edges only or enrich the customer node.
+ */
+const SIGNAL_CONFIGS: Record<string, SignalNodeConfig> = {
+  // ── Original 9 sources ─────────────────────────────────────────────────────
+
+  'subscriptions': {
+    nodeType: 'subscription',
+    buildNode: (signal, m, hash, ts) => {
       const desc = String(m.productDescription ?? m.product ?? signal.headline)
       return {
         id: makeNodeId('subscription', desc),
@@ -83,28 +92,31 @@ function signalToNode(signal: Signal): IntelligenceNode | null {
         contentHash: hash,
         updatedAt: ts,
       }
-    }
+    },
+  },
 
-    case 'cases': {
-      const caseNum = String(m.caseNumber ?? 'unknown')
-      return {
-        id: makeNodeId('case', caseNum),
-        type: 'case',
-        name: signal.headline,
-        properties: {
-          caseNumber: m.caseNumber,
-          severity: m.severity,
-          status: m.status,
-          product: m.product,
-          url: signal.url,
-        },
-        sourceModule: signal.source,
-        contentHash: hash,
-        updatedAt: ts,
-      }
-    }
+  'cases': {
+    nodeType: 'case',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('case', String(m.caseNumber ?? 'unknown')),
+      type: 'case',
+      name: signal.headline,
+      properties: {
+        caseNumber: m.caseNumber,
+        severity: m.severity,
+        status: m.status,
+        product: m.product,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
 
-    case 'ccsp': {
+  'ccsp': {
+    nodeType: 'program',
+    buildNode: (signal, m, hash, ts) => {
       const partner = String(m.cloudPartner ?? 'unknown')
       return {
         id: makeNodeId('program', `ccsp-${partner}`),
@@ -120,44 +132,47 @@ function signalToNode(signal: Signal): IntelligenceNode | null {
         contentHash: hash,
         updatedAt: ts,
       }
-    }
+    },
+  },
 
-    case 'tech-stack': {
-      const techName = String(m.techName ?? signal.headline)
-      return {
-        id: makeNodeId('product', techName),
-        type: 'product',
-        name: techName,
-        properties: {
-          techName: m.techName,
-          category: m.category,
-          context: m.context,
-          isRedHat: false,
-        },
-        sourceModule: signal.source,
-        contentHash: hash,
-        updatedAt: ts,
-      }
-    }
+  'tech-stack': {
+    nodeType: 'product',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('product', String(m.techName ?? signal.headline)),
+      type: 'product',
+      name: String(m.techName ?? signal.headline),
+      properties: {
+        techName: m.techName,
+        category: m.category,
+        context: m.context,
+        isRedHat: false,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
 
-    case 'pipeline': {
-      const opp = String(m.opportunityName ?? signal.headline)
-      return {
-        id: makeNodeId('deal', opp),
-        type: 'deal',
-        name: opp,
-        properties: {
-          stage: m.stage,
-          amount: m.amount,
-          closeDate: m.closeDate,
-        },
-        sourceModule: signal.source,
-        contentHash: hash,
-        updatedAt: ts,
-      }
-    }
+  'pipeline': {
+    nodeType: 'deal',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('deal', String(m.opportunityName ?? signal.headline)),
+      type: 'deal',
+      name: String(m.opportunityName ?? signal.headline),
+      properties: {
+        stage: m.stage,
+        amount: m.amount,
+        closeDate: m.closeDate,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
 
-    case 'cloud-marketplace': {
+  'cloud-marketplace': {
+    nodeType: 'program',
+    buildNode: (signal, m, hash, ts) => {
       const provider = String(m.provider ?? 'unknown')
       return {
         id: makeNodeId('program', `marketplace-${provider}`),
@@ -173,9 +188,12 @@ function signalToNode(signal: Signal): IntelligenceNode | null {
         contentHash: hash,
         updatedAt: ts,
       }
-    }
+    },
+  },
 
-    case 'ecosystem-catalog': {
+  'ecosystem-catalog': {
+    nodeType: 'program',
+    buildNode: (signal, m, hash, ts) => {
       const partnerName = String(m.partnerName ?? signal.headline)
       return {
         id: makeNodeId('program', `ecosystem-${partnerName}`),
@@ -190,20 +208,278 @@ function signalToNode(signal: Signal): IntelligenceNode | null {
         contentHash: hash,
         updatedAt: ts,
       }
-    }
+    },
+  },
 
-    case 'solution-intelligence':
-      // Does not create a node — creates derived edges instead
-      return null
+  'solution-intelligence': {
+    nodeType: 'none',
+    buildNode: () => null, // creates derived edges only
+  },
 
-    case 'intelligence':
-      // Enriches the Customer node — handled separately
-      return null
+  'intelligence': {
+    nodeType: 'none',
+    buildNode: () => null, // enriches customer node
+  },
 
-    default:
-      // Other sources are skipped
-      return null
-  }
+  // ── New sources (#580) — engagement, intel, lifecycle, events, evidence ──
+
+  'emails': {
+    nodeType: 'engagement',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('engagement', `email-${String(m.threadId ?? signal.headline).slice(0, 30)}`),
+      type: 'engagement',
+      name: signal.headline,
+      properties: {
+        channel: 'email',
+        techMentions: m.techMentions,
+        classification: m.classification,
+        from: m.from,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'competitive-intel': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `competitive-${String(m.competitor ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'competitive',
+        competitor: m.competitor,
+        product: m.product,
+        threatLevel: m.threatLevel,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'product-lifecycle': {
+    nodeType: 'lifecycle',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('lifecycle', String(m.product ?? signal.headline).slice(0, 40)),
+      type: 'lifecycle',
+      name: signal.headline,
+      properties: {
+        eolDate: m.eolDate,
+        currentVersion: m.currentVersion,
+        nextVersion: m.nextVersion,
+        product: m.product,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'product-intel': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `product-${String(m.product ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'product',
+        product: m.product,
+        category: m.category,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'account-plan': {
+    nodeType: 'none',
+    buildNode: () => null, // enriches customer node, like intelligence
+  },
+
+  'news-radar': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `news-${String(m.title ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'news',
+        source: m.source,
+        publishedAt: m.publishedAt,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'rh-events': {
+    nodeType: 'event',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('event', String(m.eventName ?? signal.headline).slice(0, 40)),
+      type: 'event',
+      name: signal.headline,
+      properties: {
+        eventType: m.eventType,
+        date: m.date,
+        url: signal.url,
+        location: m.location,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'mergers-acquisitions': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `ma-${String(m.target ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'ma',
+        target: m.target,
+        acquirer: m.acquirer,
+        dealValue: m.dealValue,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'customer-docs': {
+    nodeType: 'evidence',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('evidence', `doc-${String(m.docTitle ?? signal.headline).slice(0, 30)}`),
+      type: 'evidence',
+      name: signal.headline,
+      properties: {
+        docType: m.docType,
+        url: signal.url,
+        summary: m.summary,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'customer-product-intel': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `cpi-${String(m.product ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'product-customer',
+        product: m.product,
+        usage: m.usage,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'rh-rss': {
+    nodeType: 'intel',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('intel', `rss-${String(m.title ?? signal.headline).slice(0, 30)}`),
+      type: 'intel',
+      name: signal.headline,
+      properties: {
+        intelType: 'rss',
+        feedSource: m.feedSource,
+        publishedAt: m.publishedAt,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'saleshub-plays': {
+    nodeType: 'none',
+    buildNode: () => null, // feeds through solution-intelligence
+  },
+
+  'saleshub-tactics': {
+    nodeType: 'none',
+    buildNode: () => null, // feeds through solution-intelligence
+  },
+
+  'value-maps': {
+    nodeType: 'evidence',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('evidence', `value-${String(m.mapName ?? signal.headline).slice(0, 30)}`),
+      type: 'evidence',
+      name: signal.headline,
+      properties: {
+        intelType: 'value',
+        mapName: m.mapName,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'partner-catalog': {
+    nodeType: 'partner',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('partner', String(m.partnerName ?? signal.headline).slice(0, 40)),
+      type: 'partner',
+      name: String(m.partnerName ?? signal.headline),
+      properties: {
+        partnerName: m.partnerName,
+        specializations: m.specializations,
+        tier: m.tier,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
+
+  'recommended-actions': {
+    nodeType: 'none',
+    buildNode: () => null, // output of graph, not input
+  },
+
+  'playbook': {
+    nodeType: 'none',
+    buildNode: () => null, // output, not input
+  },
+
+  'SalesHub Content': {
+    nodeType: 'none',
+    buildNode: () => null, // used via saleshub module
+  },
+}
+
+// ── Signal-to-Node Mapping ────────────────────────────────────────────────────
+
+function signalToNode(signal: Signal): IntelligenceNode | null {
+  const config = SIGNAL_CONFIGS[signal.source]
+  if (!config) return null
+  const m = signal.metadata ?? {}
+  const hash = computeContentHash(JSON.stringify(signal))
+  const ts = nowIso()
+  return config.buildNode(signal, m, hash, ts)
 }
 
 // ── Edge Creation ─────────────────────────────────────────────────────────────
@@ -219,6 +495,12 @@ function createFactualEdge(
     product: 'USES_PRODUCT',
     deal: 'HAS_DEAL',
     program: 'PARTICIPATES_IN',
+    engagement: 'HAS_ENGAGEMENT',
+    intel: 'HAS_INTEL',
+    lifecycle: 'HAS_LIFECYCLE',
+    event: 'ATTENDED_EVENT',
+    evidence: 'HAS_EVIDENCE',
+    partner: 'HAS_PARTNER',
   }
 
   return {
@@ -231,6 +513,29 @@ function createFactualEdge(
     sourceUrl: signal.url,
     scoredAt: nowIso(),
   }
+}
+
+// ── Subscription → Play Mapping (#573) ───────────────────────────────────────
+
+const TDP_TO_PLAY: Record<string, string> = {
+  'Automation': 'Build and Run Applications',
+  'Container Mgmt': 'Build and Run Applications',
+  'Server/Cloud OS': 'Server and Cloud Computing',
+  'Management': 'Server and Cloud Computing',
+  'AI Platform': 'Server and Cloud Computing',
+  'Virtualization': 'Server and Cloud Computing',
+}
+
+function inferTdpFromSubscription(productName: string): string | null {
+  const lower = productName.toLowerCase()
+  if (lower.includes('ansible') || lower.includes('automation')) return 'Automation'
+  if (lower.includes('openshift') || lower.includes('container') || lower.includes('kubernetes')) return 'Container Mgmt'
+  if (lower.includes('rhel') || lower.includes('enterprise linux') || lower.includes('server')) return 'Server/Cloud OS'
+  if (lower.includes('virtualization') || lower.includes('virt')) return 'Virtualization'
+  if (lower.includes('satellite')) return 'Management'
+  if (lower.includes('ai') || lower.includes('rhoai')) return 'AI Platform'
+  if (lower.includes('runtime')) return 'Container Mgmt'
+  return null
 }
 
 function createDerivedEdges(
@@ -287,6 +592,117 @@ function createDerivedEdges(
           strength: 0.8,
           evidence: [signal.headline],
           sourceUrl: signal.url,
+          scoredAt: nowIso(),
+        })
+      }
+    }
+  }
+
+  // Emails with techMentions → MENTIONED_IN edges to matching Product/Play nodes (#580)
+  if (signal.source === 'emails') {
+    const techMentions = (m.techMentions as string[]) ?? []
+    for (const tech of techMentions) {
+      // Check for matching product nodes
+      const productNodeId = makeNodeId('product', tech)
+      if (existingNodes[productNodeId]) {
+        edges.push({
+          from: existingNodes[productNodeId].id,
+          to: makeNodeId('engagement', `email-${String(m.threadId ?? signal.headline).slice(0, 30)}`),
+          relation: 'MENTIONED_IN',
+          tier: 'derived',
+          strength: 0.6,
+          evidence: [signal.headline],
+          sourceUrl: signal.url,
+          scoredAt: nowIso(),
+        })
+      }
+      // Check for matching play nodes
+      const playNodeId = makeNodeId('play', tech)
+      if (existingNodes[playNodeId]) {
+        edges.push({
+          from: existingNodes[playNodeId].id,
+          to: makeNodeId('engagement', `email-${String(m.threadId ?? signal.headline).slice(0, 30)}`),
+          relation: 'MENTIONED_IN',
+          tier: 'derived',
+          strength: 0.6,
+          evidence: [signal.headline],
+          sourceUrl: signal.url,
+          scoredAt: nowIso(),
+        })
+      }
+    }
+  }
+
+  // Competitive intel → COMPETITIVE_PRESSURE edges (#580)
+  if (signal.source === 'competitive-intel') {
+    const competitor = String(m.competitor ?? signal.headline).slice(0, 30)
+    const competitorNodeId = makeNodeId('intel', `competitive-${competitor}`)
+    // Link competitor intel to any matching product nodes
+    const product = m.product as string | undefined
+    if (product) {
+      const productNodeId = makeNodeId('product', product)
+      if (existingNodes[productNodeId]) {
+        edges.push({
+          from: competitorNodeId,
+          to: productNodeId,
+          relation: 'COMPETITIVE_PRESSURE',
+          tier: 'derived',
+          strength: signal.score ?? 0.7,
+          evidence: [signal.headline],
+          sourceUrl: signal.url,
+          scoredAt: nowIso(),
+        })
+      }
+    }
+  }
+
+  // Product lifecycle → enrich existing Subscription nodes with EOL data (#580)
+  if (signal.source === 'product-lifecycle') {
+    const productName = String(m.product ?? signal.headline)
+    // Find subscription nodes that match this product
+    for (const [nodeId, node] of Object.entries(existingNodes)) {
+      if (node.type === 'subscription') {
+        const subProduct = String(node.properties.productDescription ?? node.name ?? '')
+        if (subProduct.toLowerCase().includes(productName.toLowerCase())) {
+          // Enrich the subscription node with lifecycle data
+          node.properties.eolDate = m.eolDate
+          node.properties.currentVersion = m.currentVersion
+          node.properties.nextVersion = m.nextVersion
+        }
+      }
+    }
+  }
+
+  // Subscriptions → MATCHES_PLAY (derived from product → TDP mapping)
+  // Ensures customers with subscriptions but no tech-stack get play matches (#573)
+  if (signal.source === 'subscriptions') {
+    const productDesc = String(m.productDescription ?? signal.headline ?? '')
+    const tdp = inferTdpFromSubscription(productDesc)
+    if (tdp) {
+      const playName = TDP_TO_PLAY[tdp]
+      if (playName) {
+        const playNodeId = makeNodeId('play', playName)
+        if (!existingNodes[playNodeId]) {
+          existingNodes[playNodeId] = {
+            id: playNodeId,
+            type: 'play',
+            name: playName,
+            properties: {
+              tdp,
+              source: 'subscription-derived',
+            },
+            sourceModule: 'subscriptions',
+            contentHash: computeContentHash(productDesc),
+            updatedAt: nowIso(),
+          }
+        }
+        edges.push({
+          from: customerNodeId,
+          to: playNodeId,
+          relation: 'MATCHES_PLAY',
+          tier: 'derived',
+          strength: 0.8,
+          evidence: [`Active subscription: ${productDesc}`],
           scoredAt: nowIso(),
         })
       }

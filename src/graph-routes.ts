@@ -230,5 +230,26 @@ export function createGraphRouter(): Hono {
     }
   })
 
+  // ── Usage tracking (#586) ──────────────────────────────────────────────
+
+  router.post('/api/usage/track', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const { trackUsage } = await import('./lib/usage-tracker.ts')
+    trackUsage({
+      type: body.type ?? 'material_click',
+      materialUrl: body.materialUrl,
+      materialTitle: body.materialTitle,
+      customerSlug: body.customerSlug ?? 'unknown',
+      context: body.context,
+      timestamp: new Date().toISOString(),
+    })
+    return c.json({ ok: true })
+  })
+
+  router.get('/api/admin/usage-summary', async (c) => {
+    const { getUsageSummary } = await import('./lib/usage-tracker.ts')
+    return c.json(getUsageSummary())
+  })
+
   return router
 }

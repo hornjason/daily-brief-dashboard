@@ -245,6 +245,46 @@ async function saveMotionCampaignToDrive(
   }
 }
 
+// ── Post-process: replace generic redhat.com URLs with real asset URLs ──────
+
+function replaceGenericUrls(body: string, phase: MotionPhase): string {
+  const allAssets = phase.tactics.flatMap(t => t.assets)
+  if (allAssets.length === 0) {
+    // No assets — strip markdown links but keep text
+    return body.replace(/\[([^\]]+)\]\([^)]+redhat\.com\/en\/(?:technologies|products)[^)]*\)/g, '$1')
+  }
+
+  return body.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    (match, text, url) => {
+      // Only replace generic redhat.com URLs
+      if (!url.includes('redhat.com/en/technologies') && !url.includes('redhat.com/en/products')) {
+        return match // keep non-generic links as-is
+      }
+
+      // Try to match link text against asset names
+      const textLower = text.toLowerCase()
+      const bestMatch = allAssets.find(a =>
+        textLower.includes(a.name.toLowerCase().split(' ').slice(0, 2).join(' ')) ||
+        a.name.toLowerCase().includes(textLower.split(' ').slice(0, 2).join(' '))
+      )
+
+      if (bestMatch?.url) {
+        return `[${text}](${bestMatch.url})`
+      }
+
+      // Fallback: use first asset with a valid URL
+      const fallback = allAssets.find(a => a.url && a.url.startsWith('http'))
+      if (fallback) {
+        return `[${text}](${fallback.url})`
+      }
+
+      // No valid URLs at all — keep text, drop link
+      return text
+    }
+  )
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateMotionCampaigns(
@@ -271,7 +311,8 @@ export async function generateMotionCampaigns(
         temperature: 0.7,
       })
 
-      const { subject, body } = parseEmailResponse(result.text)
+      const { subject, body: rawBody } = parseEmailResponse(result.text)
+      const body = replaceGenericUrls(rawBody, phase)
 
       emails.push({
         phaseId: phase.id,

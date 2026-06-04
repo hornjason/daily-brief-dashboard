@@ -138,9 +138,11 @@ describe('Intelligence Graph — buildCustomerGraph', () => {
     // 2 Tech products (Falcon SIEM, Charlotte AI)
     // 1 Solution play (AI/ML Platform) — created by solution-intelligence derived edges
     // 1 Marketplace program (AWS)
-    // Total: 12
-    expect(graph.nodeCount).toBe(12)
-    expect(Object.keys(graph.nodes).length).toBe(12)
+    // 2 Subscription-derived plays (#573): "Server and Cloud Computing" (RHEL),
+    //   "Build and Run Applications" (Ansible + OpenShift share this play)
+    // Total: 14
+    expect(graph.nodeCount).toBe(14)
+    expect(Object.keys(graph.nodes).length).toBe(14)
   })
 
   it('has correct edge types — factual and derived', () => {
@@ -342,7 +344,8 @@ describe('Intelligence Graph — utility functions', () => {
     expect(programs.length).toBe(3)
 
     const plays = findNodesByType(graph, 'play')
-    expect(plays.length).toBe(1)
+    // 1 from solution-intelligence + 2 from subscription-derived (#573)
+    expect(plays.length).toBe(3)
 
     const customers = findNodesByType(graph, 'customer')
     expect(customers.length).toBe(1)

@@ -25,7 +25,9 @@ interface MotionPhase {
   tactics: Array<{
     name: string
     parentTdp: string
+    tdpUrl?: string
     assets: Array<{ name: string; url: string; type: string }>
+    materials?: Array<{ title: string; url: string; type: string }>
     brief?: string
   }>
   targetPersonas: string[]
@@ -424,11 +426,40 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
                 {phase.tactics.map((tactic, i) => (
                   <div key={i} className="bg-bg-secondary/30 rounded-lg p-3 border border-border/30">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-text-primary">{tactic.name}</span>
-                      <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
-                        TDP: {tactic.parentTdp}
-                      </span>
+                      {tactic.tdpUrl ? (
+                        <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-accent hover:underline">
+                          {tactic.name} <ExternalLink className="w-3 h-3 inline" />
+                        </a>
+                      ) : (
+                        <span className="text-sm font-medium text-text-primary">{tactic.name}</span>
+                      )}
+                      {tactic.tdpUrl ? (
+                        <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 hover:bg-accent/20">
+                          TDP: {tactic.parentTdp} <ExternalLink className="w-2.5 h-2.5 inline" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
+                          TDP: {tactic.parentTdp}
+                        </span>
+                      )}
                     </div>
+                    {tactic.materials && tactic.materials.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {tactic.materials.map((mat, j) => (
+                          <a
+                            key={j}
+                            href={mat.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+                          >
+                            {mat.type === 'cheatsheet' ? '📄' : mat.type === 'deck' ? '📊' : mat.type === 'lab' ? '🔬' : '📎'}
+                            <span>{mat.title.length > 30 ? mat.title.slice(0, 28) + '…' : mat.title}</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {tactic.brief && (
                       <p className="text-xs text-text-secondary leading-relaxed">{tactic.brief}</p>
                     )}
@@ -443,32 +474,21 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
             <AssetsSection tactics={phase.tactics} totalAssets={totalAssets} />
           )}
 
-          {/* WHO WE'RE TARGETING */}
-          {phase.targetPersonas.length > 0 && (
+          {/* Only show Target Personas if we have identified contacts */}
+          {enrichedContacts && enrichedContacts.filter(c => c.name).length > 0 && (
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">
-                Target Personas
+                Identified Contacts
               </h4>
               <div className="space-y-1.5">
-                {phase.targetPersonas.map((persona, i) => {
-                  const match = enrichedContacts?.find(c => c.persona === persona)
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 text-xs px-2 py-1 rounded-lg bg-bg-secondary/50 border border-border/40 text-text-primary"
-                    >
-                      <Users className="w-3 h-3 text-text-secondary shrink-0" />
-                      <span>{persona}</span>
-                      {match ? (
-                        <span className="text-accent ml-1">
-                          &rarr; {match.name}{match.source ? ` (via ${match.source})` : ''}
-                        </span>
-                      ) : (
-                        <span className="text-text-secondary ml-1 italic">(not identified)</span>
-                      )}
-                    </div>
-                  )
-                })}
+                {enrichedContacts.filter(c => c.name).map((contact, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <Users className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                    <span className="text-text-primary">{contact.name}</span>
+                    {contact.title && <span className="text-text-secondary">— {contact.title}</span>}
+                    {contact.source && <span className="text-xs text-text-secondary bg-border/40 px-1 py-0.5 rounded">{contact.source}</span>}
+                  </div>
+                ))}
               </div>
             </div>
           )}

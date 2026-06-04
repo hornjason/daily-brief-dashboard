@@ -24,6 +24,9 @@ import type {
   IntelligenceNode,
 } from './intelligence-graph-types.ts'
 import { findNodesByType } from './graph-utils.ts'
+import { getTdpByName } from './saleshub-knowledge-loader.ts'
+import { resolve as resolveMaterials } from './material-index.ts'
+import type { MaterialLink } from './material-index.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +38,9 @@ export interface MotionPhase {
   tactics: Array<{
     name: string
     parentTdp: string
+    tdpUrl?: string
     assets: Array<{ name: string; url: string; type: string }>
+    materials?: MaterialLink[]
     brief?: string
   }>
   targetPersonas: string[]
@@ -380,9 +385,11 @@ function buildAnchorPhase(
     const m = sig.metadata ?? {}
     const parentTdp = String(m.parentTdp ?? '')
     if (expiredTdps.has(parentTdp)) {
+      const tdpInfo = getTdpByName(parentTdp)
       allMatchingTactics.push({
         name: sig.headline,
         parentTdp,
+        tdpUrl: tdpInfo?.cheatsheetUrl || undefined,
         assets: (m.assets as Array<{ name: string; url: string; type: string }>)?.filter(a => a.url && a.url.trim() && !a.url.startsWith('/')) ?? [],
       })
     }
@@ -421,7 +428,16 @@ function buildAnchorPhase(
   }
 
   // Filter to top 3 per TDP domain by relevance to expired products
-  const tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+  let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+
+  // #577: Cap total tactics per phase
+  const MAX_TACTICS_PER_PHASE = 3
+  if (tactics.length > MAX_TACTICS_PER_PHASE) {
+    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
+  }
+
+  // Attach materials to tactics (#576)
+  attachMaterials(tactics)
 
   // Build evidence from expired subs and related cases
   const evidence: MotionPhase['evidence'] = []
@@ -503,9 +519,11 @@ function buildExpandPhase(
     const parentTdp = String(m.parentTdp ?? '')
     if (parentTdp.toLowerCase().includes('server') || parentTdp.toLowerCase().includes('cloud')) {
       if (!anchorTdps.has(parentTdp)) {
+        const tdpInfo = getTdpByName(parentTdp)
         allMatchingTactics.push({
           name: sig.headline,
           parentTdp,
+          tdpUrl: tdpInfo?.cheatsheetUrl || undefined,
           assets: (m.assets as Array<{ name: string; url: string; type: string }>)?.filter(a => a.url && a.url.trim() && !a.url.startsWith('/')) ?? [],
         })
       }
@@ -530,7 +548,16 @@ function buildExpandPhase(
   }
 
   // Filter to top 3 per TDP domain
-  const tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+  let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+
+  // #577: Cap total tactics per phase
+  const MAX_TACTICS_PER_PHASE = 3
+  if (tactics.length > MAX_TACTICS_PER_PHASE) {
+    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
+  }
+
+  // Attach materials to tactics (#576)
+  attachMaterials(tactics)
 
   // Evidence from cloud spend
   const evidence: MotionPhase['evidence'] = []
@@ -588,9 +615,11 @@ function buildTransformPhase(
     const m = sig.metadata ?? {}
     const parentTdp = String(m.parentTdp ?? '')
     if (!usedTdps.has(parentTdp)) {
+      const tdpInfo = getTdpByName(parentTdp)
       allMatchingTactics.push({
         name: sig.headline,
         parentTdp,
+        tdpUrl: tdpInfo?.cheatsheetUrl || undefined,
         assets: (m.assets as Array<{ name: string; url: string; type: string }>)?.filter(a => a.url && a.url.trim() && !a.url.startsWith('/')) ?? [],
       })
     }
@@ -613,7 +642,16 @@ function buildTransformPhase(
   }
 
   // Filter to top 3 per TDP domain
-  const tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+  let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+
+  // #577: Cap total tactics per phase
+  const MAX_TACTICS_PER_PHASE = 3
+  if (tactics.length > MAX_TACTICS_PER_PHASE) {
+    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
+  }
+
+  // Attach materials to tactics (#576)
+  attachMaterials(tactics)
 
   // Evidence from plays and tech stack
   const evidence: MotionPhase['evidence'] = []
@@ -650,6 +688,118 @@ function buildTransformPhase(
   }
 }
 
+/**
+ * Attach material links to each tactic based on its parentTdp.
+ * Resolves up to 3 materials per tactic from the MaterialIndex (#576).
+ */
+function attachMaterials(tactics: MotionPhase['tactics']): void {
+  for (const tactic of tactics) {
+    tactic.materials = resolveMaterials(tactic.parentTdp).slice(0, 3)
+  }
+}
+
+// ── Displacement Detection (#579) ──────────────────────────────────────────
+
+const DISPLACEMENT_KEYWORDS: Record<string, { redHat: string; tdp: string }> = {
+  'vmware': { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'splunk': { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'datadog': { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'puppet': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'chef': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'tanzu': { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'terraform': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+}
+
+/**
+ * Build displacement phase from non-Red-Hat product nodes in the graph.
+ * Matches competitor product names against DISPLACEMENT_KEYWORDS.
+ */
+function buildDisplacementPhase(
+  graph: CustomerGraph,
+  tacticSignals: Signal[],
+  usedTdps: Set<string>,
+): MotionPhase | null {
+  const products = findNodesByType(graph, 'product')
+  const nonRedHatProducts = products.filter(p => {
+    const isRedHat = p.properties.isRedHat === true || p.properties.isRedHat === 'true'
+    return !isRedHat
+  })
+
+  if (nonRedHatProducts.length === 0) return null
+
+  // Find displacement matches
+  const matches: Array<{ competitor: string; redHat: string; tdp: string; nodeName: string }> = []
+  const matchedTdps = new Set<string>()
+
+  for (const product of nonRedHatProducts) {
+    const name = String(product.properties.techName ?? product.name ?? '').toLowerCase()
+    for (const [keyword, mapping] of Object.entries(DISPLACEMENT_KEYWORDS)) {
+      if (name.includes(keyword) && !usedTdps.has(mapping.tdp) && !matchedTdps.has(mapping.tdp)) {
+        matches.push({
+          competitor: String(product.properties.techName ?? product.name ?? ''),
+          redHat: mapping.redHat,
+          tdp: mapping.tdp,
+          nodeName: product.name,
+        })
+        matchedTdps.add(mapping.tdp)
+      }
+    }
+  }
+
+  if (matches.length === 0) return null
+
+  // Find tactics for displacement TDPs
+  const displacementTdps = new Set(matches.map(m => m.tdp))
+  const allMatchingTactics: MotionPhase['tactics'] = []
+  for (const sig of tacticSignals) {
+    const m = sig.metadata ?? {}
+    const parentTdp = String(m.parentTdp ?? '')
+    if (displacementTdps.has(parentTdp)) {
+      const tdpInfo = getTdpByName(parentTdp)
+      allMatchingTactics.push({
+        name: sig.headline,
+        parentTdp,
+        tdpUrl: tdpInfo?.cheatsheetUrl || undefined,
+        assets: (m.assets as Array<{ name: string; url: string; type: string }>)?.filter(a => a.url && a.url.trim() && !a.url.startsWith('/')) ?? [],
+      })
+    }
+  }
+
+  // Context keywords from competitor names
+  const contextKeywords = matches.flatMap(m => [
+    ...extractKeywords(m.competitor),
+    ...extractKeywords(m.redHat),
+    'migrate', 'displace', 'replace',
+  ])
+
+  let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
+  const MAX_TACTICS_PER_PHASE = 3
+  if (tactics.length > MAX_TACTICS_PER_PHASE) {
+    tactics = tactics.slice(0, MAX_TACTICS_PER_PHASE)
+  }
+
+  if (tactics.length === 0) return null
+
+  // Attach materials
+  attachMaterials(tactics)
+
+  // Build evidence from displacement matches
+  const evidence: MotionPhase['evidence'] = matches.map(m => ({
+    module: 'tech-stack',
+    fact: `Customer uses ${m.competitor} — opportunity to displace with ${m.redHat}`,
+  }))
+
+  return {
+    id: 'phase-displacement',
+    name: buildPhaseName('Displace', tactics),
+    category: 'expand',
+    urgency: 'high',
+    tactics,
+    targetPersonas: [],
+    evidence: capEvidence(evidence),
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -671,9 +821,9 @@ export async function buildMotion(
   playSignals: Signal[],
   tacticSignals: Signal[],
 ): Promise<StrategicMotion | null> {
-  // Guard: need at least 2 play nodes for a meaningful motion
+  // Guard: need at least 1 play node for a meaningful motion (#573)
   const playNodes = findNodesByType(graph, 'play')
-  if (playNodes.length < 2) return null
+  if (playNodes.length < 1) return null
 
   // Step 1: Extract customer TDP domains from graph
   const customerTdps = extractCustomerTdpDomains(graph)
@@ -708,6 +858,15 @@ export async function buildMotion(
   const transformPhase = buildTransformPhase(graph, tacticSignals, usedTdps)
   if (transformPhase) {
     phases.push(transformPhase)
+    for (const t of transformPhase.tactics) {
+      usedTdps.add(t.parentTdp)
+    }
+  }
+
+  // Displacement phase — competitor product displacement (#579)
+  const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps)
+  if (displacementPhase) {
+    phases.push(displacementPhase)
   }
 
   // Guard: need at least 1 phase

@@ -46,6 +46,7 @@ import { initCustomerRoutes, createCustomerRouter } from './src/customer-routes.
 import { createProductIntelRouter } from './src/product-intel-routes.ts'
 import { initRestoreRoutes, createRestoreRouter } from './src/restore-routes.ts'
 import { createBackupRouter } from './src/backup-routes.ts'
+import { createGraphRouter } from './src/graph-routes.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 // ── BKL-ARCH-14: SSE event routes ─────────────────────────────────────────
 import { createEventsRouter } from './src/events-routes.ts'
@@ -334,6 +335,7 @@ app.route('/', createIntelligenceRouter())
 app.route('/', createPlaybookRouter())
 // ── GitHub #327: People data layer ─────────────────────────────────────────
 app.route('/', createPeopleRouter())
+app.route('/', createGraphRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))

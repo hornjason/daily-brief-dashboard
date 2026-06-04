@@ -82,6 +82,14 @@ export async function getExpansionMotion(
 ): Promise<StrategicMotion | null> {
   const dataDir = CACHE_DIR
 
+  // #585: Ensure signal data is current before graph building
+  try {
+    const { ensureSignalsCurrent } = await import('../lib/signal-loader.ts')
+    await ensureSignalsCurrent(customerSlug, customerName)
+  } catch (e: any) {
+    console.warn(`[expansion-motion] Pre-flight refresh failed for ${customerSlug}:`, e?.message)
+  }
+
   // Step 1: Try loading existing graph
   let graph = loadGraph(customerSlug, dataDir)
 

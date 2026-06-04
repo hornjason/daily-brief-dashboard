@@ -29,6 +29,12 @@ export type IntelligenceNodeType =
   | 'program'
   | 'initiative'
   | 'motion'
+  | 'engagement'
+  | 'intel'
+  | 'lifecycle'
+  | 'event'
+  | 'evidence'
+  | 'partner'
 
 // ── Node ──────────────────────────────────────────────────────────────────────
 

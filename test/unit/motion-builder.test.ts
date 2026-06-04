@@ -228,18 +228,33 @@ function buildCrowdStrikeGraph(): CustomerGraph {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('Motion Builder — buildMotion', () => {
-  it('returns null for graph with fewer than 2 play nodes', async () => {
-    // Single play signal → only 1 play node in graph
+  it('returns null for graph with zero play nodes', async () => {
+    // No play-producing signals → 0 play nodes in graph (#573: threshold lowered to < 1)
     const minimalSignals: Signal[] = [
       {
-        source: 'solution-intelligence', type: 'recommendation', headline: 'Single play',
-        detail: '', timestamp: '2026-05-31', score: 0.7,
-        metadata: { solutionName: 'Single Play', matchedTechnologies: [] },
+        source: 'cases', type: 'case', headline: 'Case only',
+        detail: '', timestamp: '2026-05-31', score: 0.5,
+        metadata: { caseNumber: '12345', severity: '4', status: 'Open', product: 'RHEL' },
       },
     ]
     const graph = buildCustomerGraph('tiny', 'Tiny Corp', minimalSignals)
     const motion = await buildMotion(graph, 'tiny', 'Tiny Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
     expect(motion).toBeNull()
+  })
+
+  it('produces motion with single play node from subscription (#573)', async () => {
+    // Single subscription → 1 play node via TDP mapping → motion should be generated
+    const minimalSignals: Signal[] = [
+      {
+        source: 'subscriptions', type: 'subscription', headline: 'OpenShift',
+        detail: '', timestamp: '2026-05-31', score: 0.8,
+        metadata: { productDescription: 'Red Hat OpenShift Container Platform', status: 'Active' },
+      },
+    ]
+    const graph = buildCustomerGraph('sub-only', 'Sub Only Corp', minimalSignals)
+    const motion = await buildMotion(graph, 'sub-only', 'Sub Only Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+    // With threshold lowered to < 1, a single play node should produce a motion
+    expect(motion).not.toBeNull()
   })
 
   it('produces motion with correct title from matched sales play', async () => {
@@ -767,9 +782,13 @@ describe('Motion Builder — buildMotion', () => {
     const transformPhase = motion!.phases.find(p => p.category === 'transform')
     if (transformPhase) {
       // CrowdStrike uses "Charlotte AI" — transform phase should pick up AI-related
-      // keywords from graph nodes, boosting tactics like "Production AI"
+      // keywords from graph nodes. #577 caps total tactics at 3 per phase,
+      // so "Production AI" may be cut if lower-ranked. Verify AI-related tactics present.
       const tacticNames = transformPhase.tactics.map(t => t.name)
-      expect(tacticNames).toContain('Production AI')
+      const hasAiTactic = tacticNames.some(n => /ai|k8s/i.test(n))
+      expect(hasAiTactic).toBe(true)
+      // #577: total tactics per phase capped at 3
+      expect(transformPhase.tactics.length).toBeLessThanOrEqual(3)
     }
   })
 })

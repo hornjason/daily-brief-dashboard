@@ -271,7 +271,9 @@ describe('expansion-motion-service', () => {
       expect(result).toBeNull()
     })
 
-    it('returns null when signals are insufficient for motion (< 2 plays)', async () => {
+    it('returns motion when subscription maps to a play (#573)', async () => {
+      // Minimal signals (single RHEL subscription) now produce a play node
+      // via subscription→TDP mapping, so motion should be generated
       const result = await getExpansionMotion(
         'test-customer',
         'Test Corp',
@@ -281,8 +283,9 @@ describe('expansion-motion-service', () => {
           tacticSignals: makeTacticSignals(),
         },
       )
-      // Minimal signals don't produce 2+ play nodes → motion is null
-      expect(result).toBeNull()
+      // With #573 fix: RHEL subscription → Server/Cloud OS TDP → play node → motion
+      expect(result).not.toBeNull()
+      expect(result!.customerSlug).toBe('test-customer')
     })
 
     it('returns StrategicMotion when signals are sufficient', async () => {
