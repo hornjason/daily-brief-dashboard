@@ -16,6 +16,7 @@ export interface AccountInfo {
   products: ProductSubscription[]
   productCount: number
   totalLicenses: number
+  onDemandUnits?: number  // #616: on-demand (HR/MO) SKU quantities, separated from totalLicenses
   cachedAt: string | null
   confidenceScore?: number | null
   attentionScore?: number

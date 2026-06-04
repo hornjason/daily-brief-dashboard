@@ -1,6 +1,23 @@
 import type { AccountInfo } from '../types'
 
 /**
+ * On-demand SKU suffixes — these represent hourly/monthly consumption-based
+ * subscriptions (e.g., vCPU-hours) whose quantities are not comparable to
+ * committed license counts and must be displayed separately.
+ */
+export const ON_DEMAND_SKU_SUFFIXES = ['HR', 'MO'] as const
+
+/**
+ * Returns true if a SKU represents an on-demand (consumption-based) subscription.
+ * Checks whether the SKU ends with any suffix in ON_DEMAND_SKU_SUFFIXES.
+ */
+export function isOnDemandSku(sku: string): boolean {
+  if (!sku) return false
+  const upper = sku.toUpperCase()
+  return ON_DEMAND_SKU_SUFFIXES.some(suffix => upper.endsWith(suffix))
+}
+
+/**
  * Strip "Red Hat " prefix + everything after first comma (packaging qualifiers).
  * "Red Hat Ansible Automation Platform, Standard (100 Managed Nodes)" -> "Ansible Automation Platform"
  * "Red Hat Enterprise Linux Extended Life Cycle Support (Physical or Virtual Nodes)" -> "Enterprise Linux Extended Life Cycle Support"

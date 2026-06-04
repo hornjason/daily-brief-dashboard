@@ -12,6 +12,15 @@ import { readPodConfig, getAeNamesForPod } from './pod-config.ts'
 import { computeAllAttentionScores } from './attention-score.ts'
 import { sanitizeErr } from './utils.ts'
 
+// #616: On-demand SKU detection — mirrors dashboard/src/utils/productName.ts constants.
+// Server tsconfig excludes dashboard/, so we duplicate the small check here.
+const ON_DEMAND_SKU_SUFFIXES = ['HR', 'MO'] as const
+function isOnDemandSku(sku: string): boolean {
+  if (!sku) return false
+  const upper = sku.toUpperCase()
+  return ON_DEMAND_SKU_SUFFIXES.some(suffix => upper.endsWith(suffix))
+}
+
 function getDataSourcesPath(): string {
   return process.env.CONFIG_DIR
     ? resolve(process.env.CONFIG_DIR, 'data-sources.json')
@@ -79,7 +88,16 @@ export function createTerritoryRouter(): Hono {
       const cached = readSheetCache(customer.name)
       const products = cached?.rows ?? []
       const distinctProducts = new Set(products.map((p) => p.productDescription)).size
-      const totalLicenses = products.reduce((sum, p) => sum + p.quantity, 0)
+      // #616: Partition committed vs on-demand (HR/MO) license counts
+      let committedLicenses = 0
+      let onDemandUnits = 0
+      for (const p of products) {
+        if (isOnDemandSku(p.sku)) {
+          onDemandUnits += p.quantity
+        } else {
+          committedLicenses += p.quantity
+        }
+      }
       const attention = attentionScores.get(customer.name)
 
       return {
@@ -90,7 +108,8 @@ export function createTerritoryRouter(): Hono {
         segment: customer.segment ?? '',
         products,
         productCount: distinctProducts,
-        totalLicenses,
+        totalLicenses: committedLicenses,
+        onDemandUnits,
         cachedAt: cached?.cachedAt ?? null,
         ccspCustomer: customer.ccspCustomer ?? false,
         attentionScore: attention?.attentionScore ?? 0,

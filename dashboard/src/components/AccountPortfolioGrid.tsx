@@ -5,7 +5,7 @@ import { formatDate, formatRelTime } from '../lib/format'
 import HealthDot from './HealthDot'
 import PriorityActionRow from './PriorityActionRow'
 import { AEGroupedList } from './AEGroupedList'
-import { stripProductName } from '../utils/productName'
+import { stripProductName, isOnDemandSku } from '../utils/productName'
 import { Grid } from 'react-window'
 
 // BKL-REG-19: Shared helper to get cases for an account, with name-match fallback
@@ -72,6 +72,13 @@ function getNextMeeting(account: AccountInfo, events: CalendarEvent[]): Calendar
   )
 }
 
+// #616: Format large on-demand numbers compactly (e.g., 3402841 → "3.4M")
+function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return n.toLocaleString()
+}
+
 // ── Products Modal ────────────────────────────────────────────────────────────
 
 type SortKey = 'productDescription' | 'quantity' | 'endDate'
@@ -99,7 +106,18 @@ function ProductsModal({
     return sortAsc ? cmp : -cmp
   })
 
-  const totalLicenses = account.products.reduce((s, p) => s + (p.quantity ?? 0), 0)
+  // #616: Partition committed vs on-demand license totals
+  const { committedTotal, onDemandTotal } = useMemo(() => {
+    let committed = 0, onDemand = 0
+    for (const p of account.products) {
+      if (isOnDemandSku(p.sku)) {
+        onDemand += (p.quantity ?? 0)
+      } else {
+        committed += (p.quantity ?? 0)
+      }
+    }
+    return { committedTotal: committed, onDemandTotal: onDemand }
+  }, [account.products])
 
   function SortIcon({ col }: { col: SortKey }) {
     if (sortKey !== col) return <ChevronUp className="w-3 h-3 opacity-20" />
@@ -130,7 +148,9 @@ function ProductsModal({
           <div>
             <h3 className="text-sm font-semibold text-text-primary">{account.name}</h3>
             <p className="text-xs text-text-secondary mt-0.5">
-              {account.productCount} product{account.productCount !== 1 ? 's' : ''} · {totalLicenses.toLocaleString()} total licenses
+              {account.productCount} product{account.productCount !== 1 ? 's' : ''} · {onDemandTotal > 0
+                ? `${committedTotal.toLocaleString()} committed licenses · ${formatCompact(onDemandTotal)} on-demand`
+                : `${committedTotal.toLocaleString()} total licenses`}
             </p>
           </div>
           <button
@@ -197,12 +217,23 @@ function ProductsModal({
               </tbody>
               <tfoot>
                 <tr className="border-t border-border bg-bg/50">
-                  <td className="px-5 py-2.5 text-text-secondary font-medium">Total</td>
+                  <td className="px-5 py-2.5 text-text-secondary font-medium">
+                    {onDemandTotal > 0 ? 'Committed Total' : 'Total'}
+                  </td>
                   <td className="px-3 py-2.5 text-center text-text-primary font-bold">
-                    {totalLicenses.toLocaleString()}
+                    {committedTotal.toLocaleString()}
                   </td>
                   <td />
                 </tr>
+                {onDemandTotal > 0 && (
+                  <tr className="bg-bg/50">
+                    <td className="px-5 py-2.5 text-text-secondary font-medium">On-demand Total</td>
+                    <td className="px-3 py-2.5 text-center text-text-secondary font-bold">
+                      {formatCompact(onDemandTotal)}
+                    </td>
+                    <td />
+                  </tr>
+                )}
               </tfoot>
             </table>
           )}
@@ -496,6 +527,11 @@ function AccountCard({
             {(account.totalLicenses ?? 0).toLocaleString()}
           </div>
           <div className="text-xs text-text-secondary">Licenses</div>
+          {(account.onDemandUnits ?? 0) > 0 && (
+            <div className="text-xs text-text-secondary/70 mt-0.5">
+              {formatCompact(account.onDemandUnits!)} on-demand
+            </div>
+          )}
         </button>
       </div>
 
