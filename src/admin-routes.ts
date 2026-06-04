@@ -34,6 +34,7 @@ import { syncTerritorySheet } from './territory-sync.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { getAccountTeam, persistTeamCache } from './account-team.ts'
 import { toSlug } from './cache-layer.ts'
+import { loadGraph } from './lib/intelligence-graph.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -362,6 +363,65 @@ export function createAdminRouter(): Hono {
     const filter = productsParam ? { products: productsParam.split(',').map(p => p.trim()) } : undefined
     const team = getAccountTeam(customer, filter)
     return c.json({ customer: customer.name, ae: customer.ae, team })
+  })
+
+  // GET /api/admin/graph/density — Signal population audit (#597)
+  r.get('/api/admin/graph/density', (c) => {
+    const results: Array<{
+      slug: string
+      name: string
+      nodeCount: number
+      edgeCount: number
+      nodeTypeBreakdown: Record<string, number>
+      populatedTypes: number
+      totalTypes: number
+    }> = []
+
+    for (const customer of customers) {
+      const slug = toSlug(customer.name)
+      const graph = loadGraph(slug, CACHE_DIR)
+
+      if (!graph) {
+        // Customer has no persisted graph yet
+        continue
+      }
+
+      // Count nodes per type
+      const nodeTypeBreakdown: Record<string, number> = {}
+      for (const node of Object.values(graph.nodes)) {
+        nodeTypeBreakdown[node.type] = (nodeTypeBreakdown[node.type] || 0) + 1
+      }
+
+      // Compute populated types (excluding 'customer' which is always present)
+      const populatedTypes = Object.keys(nodeTypeBreakdown).filter(t => t !== 'customer').length
+
+      // Total possible types (from intelligence-graph-types.ts)
+      // customer, person, persona, product, case, subscription, deal, play, program,
+      // initiative, motion, engagement, intel, lifecycle, event, evidence, partner = 17 types
+      const totalTypes = 17
+
+      results.push({
+        slug,
+        name: customer.name,
+        nodeCount: graph.nodeCount,
+        edgeCount: graph.edgeCount,
+        nodeTypeBreakdown,
+        populatedTypes,
+        totalTypes,
+      })
+    }
+
+    // Compute summary stats
+    const populatedTypeCounts = results.map(r => r.populatedTypes)
+    const summary = {
+      avg: populatedTypeCounts.length > 0
+        ? Math.round((populatedTypeCounts.reduce((a, b) => a + b, 0) / populatedTypeCounts.length) * 10) / 10
+        : 0,
+      min: populatedTypeCounts.length > 0 ? Math.min(...populatedTypeCounts) : 0,
+      max: populatedTypeCounts.length > 0 ? Math.max(...populatedTypeCounts) : 0,
+    }
+
+    return c.json({ customers: results, summary })
   })
 
   return r
