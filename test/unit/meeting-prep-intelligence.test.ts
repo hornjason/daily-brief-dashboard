@@ -81,9 +81,9 @@ function makeGraph(
 }
 
 function setupTestGraph(dataDir: string, customerSlug: string, graph: CustomerGraph) {
-  const graphDir = join(dataDir, 'intelligence-graphs')
-  mkdirSync(graphDir, { recursive: true })
-  const graphPath = join(graphDir, `${customerSlug}.json`)
+  const customerDir = join(dataDir, customerSlug)
+  mkdirSync(customerDir, { recursive: true })
+  const graphPath = join(customerDir, 'intelligence-graph.json')
   writeFileSync(graphPath, JSON.stringify(graph, null, 2), { mode: 0o600 })
 }
 
