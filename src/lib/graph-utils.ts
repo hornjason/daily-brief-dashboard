@@ -79,6 +79,19 @@ export function findNodesByType(
 }
 
 /**
+ * Filter nodes by type, excluding historical nodes (#601).
+ * Use this in scoring/query logic that should only consider active signals.
+ */
+export function findActiveNodesByType(
+  graph: CustomerGraph,
+  type: IntelligenceNodeType,
+): IntelligenceNode[] {
+  return Object.values(graph.nodes).filter(
+    n => n.type === type && n.history?.status !== 'historical',
+  )
+}
+
+/**
  * All edges originating FROM a node.
  */
 export function getEdgesFrom(

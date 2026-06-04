@@ -53,6 +53,8 @@ export interface IntelligenceNode {
   contentHash: string
   /** ISO timestamp of last update */
   updatedAt: string
+  /** Temporal lifecycle tracking — optional for backward compat with persisted graphs (#601) */
+  history?: SignalHistory
 }
 
 // ── Edge ──────────────────────────────────────────────────────────────────────
@@ -80,6 +82,21 @@ export interface IntelligenceEdge {
   sourceType: string
   /** Provenance of the createdAt timestamp — optional for backward compat with persisted graphs (#596) */
   timestampSource?: 'signal' | 'inferred' | 'ingestion'
+}
+
+// ── Signal History (#601) ────────────────────────────────────────────────────
+
+/**
+ * Tracks a node's temporal lifecycle across graph rebuilds.
+ * Nodes that disappear from the signal feed persist as 'historical'.
+ */
+export interface SignalHistory {
+  /** ISO timestamp when node first appeared in a graph build */
+  appeared: string
+  /** ISO timestamp when node was last seen in a rebuild */
+  lastSeen: string
+  /** active = in current signals, historical = disappeared from feed */
+  status: 'active' | 'historical'
 }
 
 // ── Motion History ────────────────────────────────────────────────────────────

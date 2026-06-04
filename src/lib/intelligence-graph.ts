@@ -29,6 +29,7 @@ import type {
   IntelligenceNode,
   IntelligenceEdge,
   MotionHistoryEntry,
+  SignalHistory,
 } from './intelligence-graph-types.ts'
 import { computeContentHash, bfsTraverse, rankByEdgeStrength } from './graph-utils.ts'
 import { writeJsonAtomic } from './atomic-write.ts'
@@ -875,13 +876,60 @@ export function buildCustomerGraph(
     edges.push(...derivedEdges)
   }
 
+  // ── Temporal signal persistence (#601) ────────────────────────────────────
+  // Set history on all new/active nodes, carry forward historical nodes from existing graph
+
+  // Mark all nodes in the new graph as active with history
+  for (const node of Object.values(nodes)) {
+    const existingNode = existingGraph?.nodes[node.id]
+    node.history = {
+      appeared: existingNode?.history?.appeared ?? ts,
+      lastSeen: ts,
+      status: 'active',
+    }
+  }
+
+  // Carry forward historical nodes — nodes that existed in the previous graph but not in the new one
+  if (existingGraph) {
+    for (const [nodeId, existingNode] of Object.entries(existingGraph.nodes)) {
+      if (!nodes[nodeId]) {
+        // This node disappeared from the current signal feed — mark as historical
+        nodes[nodeId] = {
+          ...existingNode,
+          history: {
+            appeared: existingNode.history?.appeared ?? existingNode.updatedAt,
+            lastSeen: existingNode.history?.lastSeen ?? existingNode.updatedAt,
+            status: 'historical',
+          },
+        }
+        // Carry forward existing edges for this historical node (don't generate new ones)
+        const existingEdgesForNode = existingGraph.edges.filter(
+          e => e.from === nodeId || e.to === nodeId,
+        )
+        edges.push(...existingEdgesForNode)
+      }
+    }
+  }
+
+  // Count only active nodes/edges for denormalized counts
+  const activeNodeCount = Object.values(nodes).filter(
+    n => n.history?.status !== 'historical',
+  ).length
+  const activeEdgeCount = edges.filter(e => {
+    const fromNode = nodes[e.from]
+    const toNode = nodes[e.to]
+    // An edge is active if both endpoints are active (or have no history = legacy)
+    return (fromNode?.history?.status !== 'historical') &&
+           (toNode?.history?.status !== 'historical')
+  }).length
+
   const graph: CustomerGraph = {
     customerId: customerSlug,
     customerName,
     version: GRAPH_VERSION,
     builtAt: ts,
-    nodeCount: Object.keys(nodes).length,
-    edgeCount: edges.length,
+    nodeCount: activeNodeCount,
+    edgeCount: activeEdgeCount,
     nodes,
     edges,
   }

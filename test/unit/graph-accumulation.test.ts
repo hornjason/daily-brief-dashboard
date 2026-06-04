@@ -30,6 +30,9 @@ let loadGraph: typeof import('../../src/lib/intelligence-graph.ts').loadGraph
 let mergeHistory: typeof import('../../src/lib/intelligence-graph.ts').mergeHistory
 let pruneHistory: typeof import('../../src/lib/intelligence-graph.ts').pruneHistory
 let filterStaleEdges: typeof import('../../src/lib/intelligence-graph.ts').filterStaleEdges
+let findNodesByType: typeof import('../../src/lib/graph-utils.ts').findNodesByType
+let findActiveNodesByType: typeof import('../../src/lib/graph-utils.ts').findActiveNodesByType
+let scoreTactics: typeof import('../../src/lib/tactic-scorer.ts').scoreTactics
 
 beforeAll(async () => {
   const graphModule = await import('../../src/lib/intelligence-graph.ts')
@@ -39,6 +42,13 @@ beforeAll(async () => {
   mergeHistory = graphModule.mergeHistory
   pruneHistory = graphModule.pruneHistory
   filterStaleEdges = graphModule.filterStaleEdges
+
+  const utilsModule = await import('../../src/lib/graph-utils.ts')
+  findNodesByType = utilsModule.findNodesByType
+  findActiveNodesByType = utilsModule.findActiveNodesByType
+
+  const tacticModule = await import('../../src/lib/tactic-scorer.ts')
+  scoreTactics = tacticModule.scoreTactics
 })
 
 // ── Test Data Dir ─────────────────────────────────────────────────────────────
@@ -321,5 +331,221 @@ describe('Graph Accumulation — history pruning', () => {
     const sizeBytes = Buffer.byteLength(raw, 'utf-8')
 
     expect(sizeBytes).toBeLessThan(50 * 1024) // Must stay under 50KB
+  })
+})
+
+// ── Reduced fixture (without case signal) ────────────────────────────────────
+
+const REDUCED_SIGNALS: Signal[] = [
+  BASE_SIGNALS[0], // RHEL subscription
+  BASE_SIGNALS[2], // CCSP
+]
+
+// ── Tests: Temporal Signal Persistence (#601) ─────────────────────────────────
+
+describe('Temporal Signal Persistence — new nodes get history (#601)', () => {
+  it('new nodes get appeared + lastSeen + status:active', () => {
+    const graph = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+
+    for (const node of Object.values(graph.nodes)) {
+      expect(node.history).toBeDefined()
+      expect(node.history!.status).toBe('active')
+      expect(node.history!.appeared.length).toBeGreaterThan(0)
+      expect(node.history!.lastSeen.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('appeared and lastSeen are same on first build', () => {
+    const graph = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+
+    for (const node of Object.values(graph.nodes)) {
+      expect(node.history!.appeared).toBe(node.history!.lastSeen)
+    }
+  })
+})
+
+describe('Temporal Signal Persistence — rebuild preserves appeared (#601)', () => {
+  it('rebuilding with same signals keeps appeared unchanged', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+
+    const originalAppeared: Record<string, string> = {}
+    for (const [id, node] of Object.entries(graph1.nodes)) {
+      originalAppeared[id] = node.history!.appeared
+    }
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS, graph1)
+
+    for (const [id, node] of Object.entries(graph2.nodes)) {
+      if (originalAppeared[id]) {
+        expect(node.history!.appeared).toBe(originalAppeared[id])
+      }
+    }
+
+    for (const node of Object.values(graph2.nodes)) {
+      expect(node.history!.status).toBe('active')
+    }
+  })
+})
+
+describe('Temporal Signal Persistence — disappeared signals (#601)', () => {
+  it('rebuilding WITHOUT a signal marks it historical', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+
+    const caseNodeId = Object.entries(graph1.nodes).find(([, n]) => n.type === 'case')?.[0]
+    expect(caseNodeId).toBeDefined()
+    expect(graph1.nodes[caseNodeId!].history!.status).toBe('active')
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+
+    expect(graph2.nodes[caseNodeId!]).toBeDefined()
+    expect(graph2.nodes[caseNodeId!].history!.status).toBe('historical')
+
+    // Other nodes still active
+    const subNode = Object.values(graph2.nodes).find(n => n.type === 'subscription')
+    expect(subNode!.history!.status).toBe('active')
+  })
+
+  it('historical nodes persist across multiple rebuilds', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+    const caseNodeId = Object.entries(graph1.nodes).find(([, n]) => n.type === 'case')?.[0]!
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+    expect(graph2.nodes[caseNodeId].history!.status).toBe('historical')
+
+    const graph3 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph2)
+    expect(graph3.nodes[caseNodeId]).toBeDefined()
+    expect(graph3.nodes[caseNodeId].history!.status).toBe('historical')
+
+    const graph4 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph3)
+    expect(graph4.nodes[caseNodeId]).toBeDefined()
+    expect(graph4.nodes[caseNodeId].history!.status).toBe('historical')
+  })
+
+  it('historical node becomes active again if signal reappears', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+    const caseNodeId = Object.entries(graph1.nodes).find(([, n]) => n.type === 'case')?.[0]!
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+    expect(graph2.nodes[caseNodeId].history!.status).toBe('historical')
+
+    const graph3 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS, graph2)
+    expect(graph3.nodes[caseNodeId].history!.status).toBe('active')
+  })
+})
+
+describe('Temporal Signal Persistence — node counts (#601)', () => {
+  it('nodeCount excludes historical nodes', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+    const originalCount = graph1.nodeCount
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+
+    const totalNodes = Object.keys(graph2.nodes).length
+    expect(totalNodes).toBeGreaterThan(graph2.nodeCount)
+    expect(graph2.nodeCount).toBeLessThan(originalCount)
+  })
+
+  it('edgeCount excludes edges connected to historical nodes', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+
+    expect(graph2.edgeCount).toBeLessThan(graph2.edges.length)
+  })
+})
+
+describe('Temporal Signal Persistence — findActiveNodesByType (#601)', () => {
+  it('findNodesByType includes historical nodes', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+
+    const allCases = findNodesByType(graph2, 'case')
+    expect(allCases.length).toBe(1)
+    expect(allCases[0].history!.status).toBe('historical')
+  })
+
+  it('findActiveNodesByType excludes historical nodes', () => {
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS)
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', REDUCED_SIGNALS, graph1)
+
+    const activeCases = findActiveNodesByType(graph2, 'case')
+    expect(activeCases.length).toBe(0)
+  })
+})
+
+describe('Temporal Signal Persistence — TacticScorer ignores historical (#601)', () => {
+  it('TacticScorer does not score historical nodes', () => {
+    const signalsWithEngagement: Signal[] = [
+      ...BASE_SIGNALS,
+      {
+        source: 'emails', type: 'email',
+        headline: 'RE: Ansible Automation discussion',
+        detail: '', timestamp: '2026-05-31', score: 0.5,
+        metadata: { threadId: 'ansible-thread', techMentions: ['ansible'], from: 'test@co.com' },
+      },
+    ]
+
+    const graph1 = buildCustomerGraph('temporal-test', 'Temporal Test', signalsWithEngagement)
+    const scored1 = scoreTactics(graph1, [{
+      name: 'AAP Upsell', parentTdp: 'Automation', assets: [],
+    }])
+
+    const graph2 = buildCustomerGraph('temporal-test', 'Temporal Test', BASE_SIGNALS, graph1)
+
+    const historicalEngagements = Object.values(graph2.nodes).filter(
+      n => n.type === 'engagement' && n.history?.status === 'historical'
+    )
+    expect(historicalEngagements.length).toBe(1)
+
+    const scored2 = scoreTactics(graph2, [{
+      name: 'AAP Upsell', parentTdp: 'Automation', assets: [],
+    }])
+
+    expect(scored2[0].compositeScore).toBeLessThanOrEqual(scored1[0].compositeScore)
+  })
+})
+
+describe('Temporal Signal Persistence — backward compatibility (#601)', () => {
+  it('graphs without history fields treat all nodes as active', () => {
+    const legacyGraph: CustomerGraph = {
+      customerId: 'legacy',
+      customerName: 'Legacy Co',
+      version: '1.0',
+      builtAt: new Date().toISOString(),
+      nodeCount: 2,
+      edgeCount: 1,
+      nodes: {
+        'customer:legacy': {
+          id: 'customer:legacy', type: 'customer', name: 'Legacy Co',
+          properties: {}, sourceModule: 'test', contentHash: 'abc', updatedAt: new Date().toISOString(),
+        },
+        'subscription:rhel': {
+          id: 'subscription:rhel', type: 'subscription', name: 'RHEL',
+          properties: {}, sourceModule: 'test', contentHash: 'def', updatedAt: new Date().toISOString(),
+        },
+      },
+      edges: [{
+        from: 'customer:legacy', to: 'subscription:rhel',
+        relation: 'HAS_SUBSCRIPTION', tier: 'factual', strength: 0.7,
+        evidence: ['RHEL'], scoredAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(), sourceType: 'subscriptions',
+      }],
+    }
+
+    const subs = findActiveNodesByType(legacyGraph, 'subscription')
+    expect(subs.length).toBe(1)
+
+    const rebuilt = buildCustomerGraph('legacy', 'Legacy Co', [
+      {
+        source: 'subscriptions', type: 'subscription', headline: 'RHEL',
+        detail: '', timestamp: '2026-05-31', score: 0.7,
+        metadata: { productDescription: 'RHEL' },
+      },
+    ], legacyGraph)
+
+    for (const node of Object.values(rebuilt.nodes)) {
+      expect(node.history).toBeDefined()
+      expect(node.history!.status).toBe('active')
+    }
   })
 })

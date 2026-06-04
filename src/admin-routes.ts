@@ -387,6 +387,7 @@ export function createAdminRouter(): Hono {
       nodeCount: number
       edgeCount: number
       nodeTypeBreakdown: Record<string, number>
+      historicalNodes: number
       populatedTypes: number
       achievableTypes: number
       missingTypes: string[]
@@ -403,9 +404,14 @@ export function createAdminRouter(): Hono {
 
       customersWithGraphs++
 
-      // Count nodes per type
+      // Count nodes per type (only active nodes for breakdown; count historical separately)
       const nodeTypeBreakdown: Record<string, number> = {}
+      let historicalNodes = 0
       for (const node of Object.values(graph.nodes)) {
+        if (node.history?.status === 'historical') {
+          historicalNodes++
+          continue
+        }
         nodeTypeBreakdown[node.type] = (nodeTypeBreakdown[node.type] || 0) + 1
       }
 
@@ -431,6 +437,7 @@ export function createAdminRouter(): Hono {
         nodeCount: graph.nodeCount,
         edgeCount: graph.edgeCount,
         nodeTypeBreakdown,
+        historicalNodes,
         populatedTypes,
         achievableTypes: achievableTotal,
         missingTypes: [...missingTypes],

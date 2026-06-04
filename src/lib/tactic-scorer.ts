@@ -18,7 +18,7 @@ import type {
   CustomerGraph,
   IntelligenceNode,
 } from './intelligence-graph-types.ts'
-import { findNodesByType, recencyWeight } from './graph-utils.ts'
+import { findActiveNodesByType, recencyWeight } from './graph-utils.ts'
 import type { MaterialLink } from './material-index.ts'
 
 /** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
@@ -119,7 +119,7 @@ function extractBaseKeywords(graph: CustomerGraph): Map<string, string[]> {
   const tdpKeywords = new Map<string, string[]>()
 
   // Subscriptions → TDP keywords
-  const subs = findNodesByType(graph, 'subscription')
+  const subs = findActiveNodesByType(graph, 'subscription')
   for (const sub of subs) {
     const desc = String(sub.properties.productDescription ?? sub.name ?? '').toLowerCase()
     if (desc.includes('ansible') || desc.includes('automation')) {
@@ -161,7 +161,7 @@ function extractBaseKeywords(graph: CustomerGraph): Map<string, string[]> {
   }
 
   // Cases → keywords for their product domain
-  const cases = findNodesByType(graph, 'case')
+  const cases = findActiveNodesByType(graph, 'case')
   for (const c of cases) {
     const product = String(c.properties.product ?? '').toLowerCase()
     if (product.includes('ansible')) {
@@ -180,7 +180,7 @@ function extractBaseKeywords(graph: CustomerGraph): Map<string, string[]> {
   }
 
   // Play nodes → keyword from productAlignment
-  const plays = findNodesByType(graph, 'play')
+  const plays = findActiveNodesByType(graph, 'play')
   for (const play of plays) {
     const alignment = String(play.properties.productAlignment ?? '').toLowerCase()
     if (alignment.includes('ansible') || alignment.includes('automation')) {
@@ -223,7 +223,7 @@ function computeRecencyBoost(
   tdp: string,
   allEvidence: EvidenceItem[],
 ): number {
-  const engagements = findNodesByType(graph, 'engagement')
+  const engagements = findActiveNodesByType(graph, 'engagement')
   let maxBoost = 0
 
   for (const eng of engagements) {
@@ -256,7 +256,7 @@ function computeUrgencyBoost(
   tdp: string,
   allEvidence: EvidenceItem[],
 ): number {
-  const lifecycles = findNodesByType(graph, 'lifecycle')
+  const lifecycles = findActiveNodesByType(graph, 'lifecycle')
   let maxBoost = 0
 
   for (const lc of lifecycles) {
@@ -296,7 +296,7 @@ function computeCompetitiveBoost(
   tdp: string,
   allEvidence: EvidenceItem[],
 ): number {
-  const intels = findNodesByType(graph, 'intel')
+  const intels = findActiveNodesByType(graph, 'intel')
   let totalBoost = 0
 
   for (const intel of intels) {
@@ -332,7 +332,7 @@ function computeEvidenceBoost(
   let count = 0
 
   // Evidence nodes
-  const evidenceNodes = findNodesByType(graph, 'evidence')
+  const evidenceNodes = findActiveNodesByType(graph, 'evidence')
   for (const ev of evidenceNodes) {
     if (!nodeMatchesTdp(ev, tdp)) continue
     count++
@@ -349,7 +349,7 @@ function computeEvidenceBoost(
   }
 
   // Intel nodes (non-competitive — general intel corroborates domain)
-  const intels = findNodesByType(graph, 'intel')
+  const intels = findActiveNodesByType(graph, 'intel')
   for (const intel of intels) {
     if (String(intel.properties.intelType ?? '') === 'competitive') continue
     if (!nodeMatchesTdp(intel, tdp)) continue
@@ -367,7 +367,7 @@ function computeEvidenceBoost(
   }
 
   // Event nodes
-  const events = findNodesByType(graph, 'event')
+  const events = findActiveNodesByType(graph, 'event')
   for (const ev of events) {
     if (!nodeMatchesTdp(ev, tdp)) continue
     count++
@@ -384,7 +384,7 @@ function computeEvidenceBoost(
   }
 
   // Deal nodes — active pipeline corroborates domain urgency
-  const deals = findNodesByType(graph, 'deal')
+  const deals = findActiveNodesByType(graph, 'deal')
   for (const deal of deals) {
     if (!nodeMatchesTdp(deal, tdp)) continue
     count++
@@ -412,7 +412,7 @@ function computePartnerBoost(
   tdp: string,
   allEvidence: EvidenceItem[],
 ): number {
-  const partners = findNodesByType(graph, 'partner')
+  const partners = findActiveNodesByType(graph, 'partner')
   let totalBoost = 0
 
   for (const partner of partners) {
@@ -462,9 +462,12 @@ export function scoreTactics(
 ): ScoredTactic[] {
   const baseKeywords = extractBaseKeywords(graph)
 
-  // Compute signal density once per call — same for all tactics in this customer's graph
+  // Compute signal density once per call — only count active nodes (#601)
   const nodeTypes = new Set(
-    Object.values(graph.nodes).map(n => n.type).filter(t => t !== 'customer')
+    Object.values(graph.nodes)
+      .filter(n => n.history?.status !== 'historical')
+      .map(n => n.type)
+      .filter(t => t !== 'customer')
   )
   const density: SignalDensity = { populated: nodeTypes.size, total: TOTAL_SIGNAL_TYPES }
 
