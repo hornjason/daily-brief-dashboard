@@ -848,7 +848,7 @@ Register: ${event.registrationUrl}` : ''}`
                 {similarCustomers.slice(0, 5).map((sim) => (
                   <a
                     key={sim.slug}
-                    href={`/customer/${encodeURIComponent(sim.name)}`}
+                    href={`/dashboard/customer/${encodeURIComponent(sim.name)}`}
                     className="block bg-surface border border-border rounded-lg p-4 hover:border-accent/50 transition-colors"
                   >
                     <div className="flex items-start justify-between mb-2">
