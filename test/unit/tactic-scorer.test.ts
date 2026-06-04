@@ -13,6 +13,8 @@ import type { CustomerGraph, IntelligenceNode, IntelligenceEdge } from '../../sr
 let scoreTactics: typeof import('../../src/lib/tactic-scorer.ts').scoreTactics
 let formatRecency: typeof import('../../src/lib/tactic-scorer.ts').formatRecency
 let TOTAL_SIGNAL_TYPES: typeof import('../../src/lib/tactic-scorer.ts').TOTAL_SIGNAL_TYPES
+let DIVERSITY_WEIGHT: typeof import('../../src/lib/tactic-scorer.ts').DIVERSITY_WEIGHT
+let computePortfolioFrequency: typeof import('../../src/lib/tactic-scorer.ts').computePortfolioFrequency
 type ScoredTactic = import('../../src/lib/tactic-scorer.ts').ScoredTactic
 type EvidenceItem = import('../../src/lib/tactic-scorer.ts').EvidenceItem
 type SignalDensity = import('../../src/lib/tactic-scorer.ts').SignalDensity
@@ -22,6 +24,8 @@ beforeAll(async () => {
   scoreTactics = mod.scoreTactics
   formatRecency = mod.formatRecency
   TOTAL_SIGNAL_TYPES = mod.TOTAL_SIGNAL_TYPES
+  DIVERSITY_WEIGHT = mod.DIVERSITY_WEIGHT
+  computePortfolioFrequency = mod.computePortfolioFrequency
 })
 
 // ── Test Helpers ────────────────────────────────────────────────────────────
@@ -524,5 +528,203 @@ describe('scoreTactics — signal density (#595)', () => {
     const result = scoreTactics(graph, CANDIDATE_TACTICS)
     expect(result[0].signalDensity.populated).toBe(12)
     expect(result[0].signalDensity.total).toBe(12)
+  })
+})
+
+// ── #618: Diversity penalty ─────────────────────────────────────────────────
+
+describe('scoreTactics — diversity penalty (#618)', () => {
+  // Helper: graph with Ansible subscription so Automation tactic has a base score
+  function makeAutomationGraph(): CustomerGraph {
+    return makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('subscription:ansible', 'subscription', 'Ansible Automation Platform', {
+          productDescription: 'Red Hat Ansible Automation Platform',
+          status: 'Active',
+        }),
+      ],
+      [makeEdge('customer:test', 'subscription:ansible', 'HAS_SUBSCRIPTION')],
+    )
+  }
+
+  it('DIVERSITY_WEIGHT defaults to 0.5', () => {
+    expect(DIVERSITY_WEIGHT).toBe(0.5)
+  })
+
+  it('tactic with 90% frequency gets ~45% penalty', () => {
+    const graph = makeAutomationGraph()
+    const freq = new Map<string, number>([['Automate at Scale', 0.9]])
+
+    const withPenalty = scoreTactics(graph, CANDIDATE_TACTICS, freq)
+    const withoutPenalty = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withPenalty.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutPenalty.find(t => t.name === 'Automate at Scale')!
+
+    // diversityFactor = 1 - (0.9 * 0.5) = 0.55, so score should be ~55% of original
+    const expectedScore = automateWithout.compositeScore * 0.55
+    expect(automateWith.compositeScore).toBeCloseTo(expectedScore, 2)
+  })
+
+  it('tactic with 0% frequency gets no penalty', () => {
+    const graph = makeAutomationGraph()
+    const freq = new Map<string, number>([['Automate at Scale', 0.0]])
+
+    const withPenalty = scoreTactics(graph, CANDIDATE_TACTICS, freq)
+    const withoutPenalty = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withPenalty.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutPenalty.find(t => t.name === 'Automate at Scale')!
+
+    expect(automateWith.compositeScore).toBe(automateWithout.compositeScore)
+  })
+
+  it('portfolioFrequency=undefined → no penalty (backward compat)', () => {
+    const graph = makeAutomationGraph()
+
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    const resultExplicitUndefined = scoreTactics(graph, CANDIDATE_TACTICS, undefined)
+
+    const automate1 = result.find(t => t.name === 'Automate at Scale')!
+    const automate2 = resultExplicitUndefined.find(t => t.name === 'Automate at Scale')!
+
+    expect(automate1.compositeScore).toBe(automate2.compositeScore)
+  })
+
+  it('evidence trail includes diversity penalty item', () => {
+    const graph = makeAutomationGraph()
+    const freq = new Map<string, number>([['Automate at Scale', 0.8]])
+
+    const result = scoreTactics(graph, CANDIDATE_TACTICS, freq)
+    const automate = result.find(t => t.name === 'Automate at Scale')!
+
+    const diversityEvidence = automate.evidenceTrail.find(e => e.module === 'diversity')
+    expect(diversityEvidence).toBeDefined()
+    expect(diversityEvidence!.fact).toContain('80%')
+    expect(diversityEvidence!.weight).toBeLessThan(0)
+  })
+
+  it('tactic not in frequency map gets no penalty', () => {
+    const graph = makeAutomationGraph()
+    // Only penalize 'Production AI', not 'Automate at Scale'
+    const freq = new Map<string, number>([['Production AI', 0.9]])
+
+    const withFreq = scoreTactics(graph, CANDIDATE_TACTICS, freq)
+    const withoutFreq = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withFreq.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutFreq.find(t => t.name === 'Automate at Scale')!
+
+    expect(automateWith.compositeScore).toBe(automateWithout.compositeScore)
+  })
+})
+
+// ── #618: computePortfolioFrequency ─────────────────────────────────────────
+
+describe('computePortfolioFrequency (#618)', () => {
+  it('computes correct frequencies across 3 customers', () => {
+    // Customer A: has Ansible subscription → Automation tactic scores high
+    const graphA = makeGraph(
+      [
+        makeNode('customer:a', 'customer', 'Customer A'),
+        makeNode('sub:ansible', 'subscription', 'Ansible Automation Platform', {
+          productDescription: 'Red Hat Ansible Automation Platform',
+        }),
+      ],
+      [makeEdge('customer:a', 'sub:ansible', 'HAS_SUBSCRIPTION')],
+    )
+
+    // Customer B: has Ansible subscription → same top tactics
+    const graphB = makeGraph(
+      [
+        makeNode('customer:b', 'customer', 'Customer B'),
+        makeNode('sub:ansible', 'subscription', 'Ansible Automation Platform', {
+          productDescription: 'Red Hat Ansible Automation Platform',
+        }),
+      ],
+      [makeEdge('customer:b', 'sub:ansible', 'HAS_SUBSCRIPTION')],
+    )
+
+    // Customer C: has OpenShift subscription → Container Mgmt scores high
+    const graphC = makeGraph(
+      [
+        makeNode('customer:c', 'customer', 'Customer C'),
+        makeNode('sub:ocp', 'subscription', 'OpenShift Container Platform', {
+          productDescription: 'Red Hat OpenShift Container Platform',
+        }),
+      ],
+      [makeEdge('customer:c', 'sub:ocp', 'HAS_SUBSCRIPTION')],
+    )
+
+    const allGraphs = new Map<string, CustomerGraph>([
+      ['customer-a', graphA],
+      ['customer-b', graphB],
+      ['customer-c', graphC],
+    ])
+
+    const freq = computePortfolioFrequency(allGraphs, CANDIDATE_TACTICS, 5)
+
+    // 'Automate at Scale' should appear in top-5 for customers A and B (2/3 = 0.667)
+    expect(freq.has('Automate at Scale')).toBe(true)
+    const automateFreq = freq.get('Automate at Scale')!
+    expect(automateFreq).toBeCloseTo(2 / 3, 2)
+  })
+
+  it('end-to-end: diversity penalty differentiates top-3 across customers', () => {
+    // All 3 customers have AI subscriptions → without penalty, all get same top tactic
+    const makeAiGraph = (id: string): CustomerGraph => makeGraph(
+      [
+        makeNode(`customer:${id}`, 'customer', `Customer ${id}`),
+        makeNode(`sub:ai-${id}`, 'subscription', 'OpenShift AI', {
+          productDescription: 'Red Hat OpenShift AI data science gpu inference',
+        }),
+      ],
+      [makeEdge(`customer:${id}`, `sub:ai-${id}`, 'HAS_SUBSCRIPTION')],
+    )
+
+    const graphA = makeAiGraph('a')
+    const graphB = makeAiGraph('b')
+    const graphC = makeAiGraph('c')
+
+    // Without diversity penalty, all customers get same ranking
+    const resultsNoPenalty = [
+      scoreTactics(graphA, CANDIDATE_TACTICS),
+      scoreTactics(graphB, CANDIDATE_TACTICS),
+      scoreTactics(graphC, CANDIDATE_TACTICS),
+    ]
+
+    const topNoPenalty = resultsNoPenalty.map(r =>
+      [...r].sort((a, b) => b.compositeScore - a.compositeScore)[0].name
+    )
+    // All should have the same top tactic (proving the problem)
+    expect(topNoPenalty[0]).toBe(topNoPenalty[1])
+    expect(topNoPenalty[1]).toBe(topNoPenalty[2])
+
+    // Now compute portfolio frequency and apply it
+    const allGraphs = new Map<string, CustomerGraph>([
+      ['a', graphA], ['b', graphB], ['c', graphC],
+    ])
+    const freq = computePortfolioFrequency(allGraphs, CANDIDATE_TACTICS, 3)
+
+    // The tactic that appears in all 3 top-3s gets frequency 1.0
+    // With penalty, its score drops by 50%, allowing others to surface
+    const resultsWithPenalty = [
+      scoreTactics(graphA, CANDIDATE_TACTICS, freq),
+      scoreTactics(graphB, CANDIDATE_TACTICS, freq),
+      scoreTactics(graphC, CANDIDATE_TACTICS, freq),
+    ]
+
+    // The top tactic's score should be lower with penalty applied
+    const topWithPenalty = resultsWithPenalty[0]
+      .sort((a, b) => b.compositeScore - a.compositeScore)
+    const topNoPenaltyResult = resultsNoPenalty[0]
+      .sort((a, b) => b.compositeScore - a.compositeScore)
+
+    // The universally-appearing tactic should have a lower score
+    const universalTactic = topNoPenalty[0]
+    const penalizedScore = topWithPenalty.find(t => t.name === universalTactic)!.compositeScore
+    const originalScore = topNoPenaltyResult.find(t => t.name === universalTactic)!.compositeScore
+    expect(penalizedScore).toBeLessThan(originalScore)
   })
 })
