@@ -482,12 +482,77 @@ function signalToNode(signal: Signal): IntelligenceNode | null {
   return config.buildNode(signal, m, hash, ts)
 }
 
+// ── Timestamp Extraction (#596) ──────────────────────────────────────────────
+
+/**
+ * Source-specific timestamp field mapping.
+ * Each signal source knows which metadata fields carry real timestamps.
+ * This eliminates the generic fallback chain that produced nowIso() for most signals.
+ */
+const SOURCE_TIMESTAMP_FIELDS: Record<string, string[]> = {
+  'subscriptions': ['startDate', 'endDate'],
+  'cases': ['createdDate', 'lastModifiedDate', 'created'],
+  'emails': ['date', 'receivedAt', 'sentAt'],
+  'pipeline': ['closeDate', 'createdDate'],
+  'ccsp': ['reportDate'],
+  'news-radar': ['publishedAt', 'date'],
+  'rh-events': ['date', 'eventDate'],
+  'product-lifecycle': ['eolDate'],
+  'competitive-intel': ['detectedAt', 'date'],
+  'mergers-acquisitions': ['announcedAt', 'date'],
+  'rh-rss': ['publishedAt', 'date'],
+  'cloud-marketplace': ['date'],
+  'ecosystem-catalog': ['date'],
+  'tech-stack': ['date'],
+  'customer-docs': ['date'],
+  'customer-product-intel': ['date'],
+  'product-intel': ['date'],
+  'partner-catalog': ['date'],
+  'value-maps': ['date'],
+}
+
+/**
+ * Extract the best available timestamp from a signal's metadata.
+ * Tries source-specific fields first, then generic fields, then signal.timestamp.
+ * Returns { ts, source } where source indicates provenance.
+ */
+export function extractSignalTimestamp(
+  signal: Signal,
+  m: Record<string, any>,
+): { ts: string; source: 'signal' | 'ingestion' } {
+  // Try source-specific fields first
+  const fields = SOURCE_TIMESTAMP_FIELDS[signal.source] ?? []
+  for (const field of fields) {
+    const val = m[field]
+    if (val && typeof val === 'string' && !isNaN(Date.parse(val))) {
+      return { ts: val, source: 'signal' }
+    }
+  }
+
+  // Try generic fields
+  for (const field of ['startDate', 'createdAt', 'date', 'timestamp', 'createdDate']) {
+    const val = m[field]
+    if (val && typeof val === 'string' && !isNaN(Date.parse(val))) {
+      return { ts: val, source: 'signal' }
+    }
+  }
+
+  // Try signal-level timestamp
+  if (signal.timestamp && typeof signal.timestamp === 'string' && !isNaN(Date.parse(signal.timestamp))) {
+    return { ts: signal.timestamp, source: 'signal' }
+  }
+
+  // No real timestamp found — caller should use graph builtAt
+  return { ts: '', source: 'ingestion' }
+}
+
 // ── Edge Creation ─────────────────────────────────────────────────────────────
 
 function createFactualEdge(
   customerNodeId: string,
   node: IntelligenceNode,
   signal: Signal,
+  graphBuiltAt: string,
 ): IntelligenceEdge {
   const relationMap: Record<string, string> = {
     subscription: 'HAS_SUBSCRIPTION',
@@ -504,9 +569,8 @@ function createFactualEdge(
   }
 
   const m = signal.metadata ?? {}
-  const createdAt = String(
-    m.startDate ?? m.createdAt ?? m.date ?? signal.timestamp ?? nowIso()
-  )
+  const { ts, source: timestampSource } = extractSignalTimestamp(signal, m)
+  const createdAt = ts || graphBuiltAt
 
   return {
     from: customerNodeId,
@@ -519,6 +583,7 @@ function createFactualEdge(
     scoredAt: nowIso(),
     createdAt,
     sourceType: signal.source,
+    timestampSource,
   }
 }
 
@@ -549,12 +614,12 @@ function createDerivedEdges(
   customerNodeId: string,
   signal: Signal,
   existingNodes: Record<string, IntelligenceNode>,
+  graphBuiltAt: string,
 ): IntelligenceEdge[] {
   const edges: IntelligenceEdge[] = []
   const m = signal.metadata ?? {}
-  const derivedCreatedAt = String(
-    m.startDate ?? m.createdAt ?? m.date ?? signal.timestamp ?? nowIso()
-  )
+  const { ts, source: timestampSource } = extractSignalTimestamp(signal, m)
+  const derivedCreatedAt = ts || graphBuiltAt
 
   if (signal.source === 'solution-intelligence') {
     const solutionName = String(m.solutionName ?? signal.headline)
@@ -589,6 +654,7 @@ function createDerivedEdges(
       scoredAt: nowIso(),
       createdAt: derivedCreatedAt,
       sourceType: signal.source,
+      timestampSource,
     })
 
     // If matched technologies reference existing product nodes, link play → product
@@ -607,6 +673,7 @@ function createDerivedEdges(
           scoredAt: nowIso(),
           createdAt: derivedCreatedAt,
           sourceType: signal.source,
+          timestampSource,
         })
       }
     }
@@ -630,6 +697,7 @@ function createDerivedEdges(
           scoredAt: nowIso(),
           createdAt: derivedCreatedAt,
           sourceType: signal.source,
+          timestampSource,
         })
       }
       // Check for matching play nodes
@@ -646,6 +714,7 @@ function createDerivedEdges(
           scoredAt: nowIso(),
           createdAt: derivedCreatedAt,
           sourceType: signal.source,
+          timestampSource,
         })
       }
     }
@@ -671,6 +740,7 @@ function createDerivedEdges(
           scoredAt: nowIso(),
           createdAt: derivedCreatedAt,
           sourceType: signal.source,
+          timestampSource,
         })
       }
     }
@@ -726,6 +796,7 @@ function createDerivedEdges(
           scoredAt: nowIso(),
           createdAt: derivedCreatedAt,
           sourceType: signal.source,
+          timestampSource,
         })
       }
     }
@@ -796,11 +867,11 @@ export function buildCustomerGraph(
       }
 
       // Create factual edge from customer → node
-      edges.push(createFactualEdge(customerNodeId, node, signal))
+      edges.push(createFactualEdge(customerNodeId, node, signal, ts))
     }
 
     // Create derived edges (e.g., solution-intelligence → MATCHES_PLAY)
-    const derivedEdges = createDerivedEdges(customerNodeId, signal, nodes)
+    const derivedEdges = createDerivedEdges(customerNodeId, signal, nodes, ts)
     edges.push(...derivedEdges)
   }
 

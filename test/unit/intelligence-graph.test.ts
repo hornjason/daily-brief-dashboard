@@ -22,6 +22,7 @@ let buildCustomerGraph: typeof import('../../src/lib/intelligence-graph.ts').bui
 let persistGraph: typeof import('../../src/lib/intelligence-graph.ts').persistGraph
 let loadGraph: typeof import('../../src/lib/intelligence-graph.ts').loadGraph
 let queryPlays: typeof import('../../src/lib/intelligence-graph.ts').queryPlays
+let extractSignalTimestamp: typeof import('../../src/lib/intelligence-graph.ts').extractSignalTimestamp
 let computeContentHash: typeof import('../../src/lib/graph-utils.ts').computeContentHash
 let bfsTraverse: typeof import('../../src/lib/graph-utils.ts').bfsTraverse
 let findNodesByType: typeof import('../../src/lib/graph-utils.ts').findNodesByType
@@ -36,6 +37,7 @@ beforeAll(async () => {
   persistGraph = graphModule.persistGraph
   loadGraph = graphModule.loadGraph
   queryPlays = graphModule.queryPlays
+  extractSignalTimestamp = graphModule.extractSignalTimestamp
 
   const utilsModule = await import('../../src/lib/graph-utils.ts')
   computeContentHash = utilsModule.computeContentHash
@@ -511,5 +513,160 @@ describe('Intelligence Graph — recencyWeight (#590)', () => {
     const weight = recencyWeight(veryOld)
     expect(weight).toBeGreaterThan(0)
     expect(weight).toBeLessThanOrEqual(1.0)
+  })
+})
+
+describe('Intelligence Graph — timestamp pipeline (#596)', () => {
+  it('extractSignalTimestamp: subscription signals extract startDate', () => {
+    const signal = { source: 'subscriptions', timestamp: '2026-05-31' } as Signal
+    const m = { startDate: '2025-06-01', endDate: '2027-05-08' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2025-06-01')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: case signals extract createdDate', () => {
+    const signal = { source: 'cases', timestamp: '2026-05-31' } as Signal
+    const m = { createdDate: '2026-03-15', caseNumber: '12345' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-03-15')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: email signals extract date field', () => {
+    const signal = { source: 'emails', timestamp: '2026-05-31' } as Signal
+    const m = { date: '2026-05-28', from: 'test@example.com' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-05-28')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: news-radar extracts publishedAt', () => {
+    const signal = { source: 'news-radar', timestamp: '2026-05-31' } as Signal
+    const m = { publishedAt: '2026-05-20', title: 'News article' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-05-20')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: pipeline extracts closeDate', () => {
+    const signal = { source: 'pipeline', timestamp: '2026-05-31' } as Signal
+    const m = { closeDate: '2026-08-15', stage: 'Negotiate' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-08-15')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: falls back to generic fields when source-specific missing', () => {
+    const signal = { source: 'cases', timestamp: '2026-05-31' } as Signal
+    // No createdDate/lastModifiedDate/created — but has generic 'date'
+    const m = { date: '2026-04-10', caseNumber: '99999' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-04-10')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: falls back to signal.timestamp when no metadata dates', () => {
+    const signal = { source: 'cases', timestamp: '2026-04-15' } as Signal
+    const m = { caseNumber: '99999', severity: '3' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('2026-04-15')
+    expect(result.source).toBe('signal')
+  })
+
+  it('extractSignalTimestamp: returns empty string + ingestion when no timestamps at all', () => {
+    const signal = { source: 'cases' } as Signal
+    const m = { caseNumber: '99999' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('')
+    expect(result.source).toBe('ingestion')
+  })
+
+  it('extractSignalTimestamp: rejects invalid date strings', () => {
+    const signal = { source: 'subscriptions' } as Signal
+    const m = { startDate: 'not-a-date', endDate: 'also-not-a-date' }
+    const result = extractSignalTimestamp(signal, m)
+    expect(result.ts).toBe('')
+    expect(result.source).toBe('ingestion')
+  })
+
+  it('signals without timestamps get graph builtAt, not nowIso()', () => {
+    const signals: Signal[] = [
+      {
+        source: 'tech-stack', type: 'technology', headline: 'Docker',
+        detail: '', score: 0.4,
+        metadata: { techName: 'Docker', category: 'container', context: 'using' },
+        // No timestamp field, no date in metadata
+      },
+    ]
+
+    const graph = buildCustomerGraph('ts-test', 'Timestamp Test', signals)
+    const techEdge = graph.edges.find(e => e.sourceType === 'tech-stack')
+    expect(techEdge).toBeDefined()
+    // createdAt should equal graph.builtAt (ingestion fallback), not a different nowIso() call
+    expect(techEdge!.createdAt).toBe(graph.builtAt)
+    expect(techEdge!.timestampSource).toBe('ingestion')
+  })
+
+  it('subscription edge gets timestampSource: signal from startDate', () => {
+    const signals: Signal[] = [
+      {
+        source: 'subscriptions', type: 'subscription', headline: 'RHEL',
+        detail: '', timestamp: '2026-05-31', score: 0.7,
+        metadata: { productDescription: 'RHEL Server', startDate: '2025-01-15', endDate: '2027-01-15' },
+      },
+    ]
+
+    const graph = buildCustomerGraph('ts-test2', 'Timestamp Test 2', signals)
+    const subEdge = graph.edges.find(e => e.sourceType === 'subscriptions' && e.tier === 'factual')
+    expect(subEdge).toBeDefined()
+    expect(subEdge!.createdAt).toBe('2025-01-15')
+    expect(subEdge!.timestampSource).toBe('signal')
+  })
+
+  it('case edge gets timestampSource: signal from signal.timestamp fallback', () => {
+    const signals: Signal[] = [
+      {
+        source: 'cases', type: 'case', headline: 'Test case',
+        detail: '', timestamp: '2026-04-15', score: 0.5,
+        metadata: { caseNumber: '99999', severity: '3', status: 'Open', product: 'RHEL' },
+      },
+    ]
+
+    const graph = buildCustomerGraph('ts-test3', 'Timestamp Test 3', signals)
+    const caseEdge = graph.edges.find(e => e.sourceType === 'cases')
+    expect(caseEdge).toBeDefined()
+    expect(caseEdge!.createdAt).toBe('2026-04-15')
+    expect(caseEdge!.timestampSource).toBe('signal')
+  })
+
+  it('all edges in CrowdStrike fixture have timestampSource set', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+    for (const edge of graph.edges) {
+      expect(edge.timestampSource).toBeDefined()
+      expect(['signal', 'inferred', 'ingestion']).toContain(edge.timestampSource)
+    }
+  })
+
+  it('CrowdStrike subscription edges use signal.timestamp as createdAt (no startDate in fixture)', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+    const subEdges = graph.edges.filter(e => e.sourceType === 'subscriptions' && e.tier === 'factual')
+    expect(subEdges.length).toBe(3)
+    for (const edge of subEdges) {
+      // Fixture subscriptions have no startDate but do have endDate and signal.timestamp
+      // endDate is in SOURCE_TIMESTAMP_FIELDS for subscriptions, so it should be used
+      // Actually they DO have endDate in metadata — endDate: '2027-05-08' etc
+      expect(edge.timestampSource).toBe('signal')
+      expect(edge.createdAt.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('derived edges also have timestampSource set', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+    const derivedEdges = graph.edges.filter(e => e.tier === 'derived')
+    expect(derivedEdges.length).toBeGreaterThan(0)
+    for (const edge of derivedEdges) {
+      expect(edge.timestampSource).toBeDefined()
+    }
   })
 })

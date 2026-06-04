@@ -78,6 +78,8 @@ export interface IntelligenceEdge {
   createdAt: string
   /** Which signal module created this edge (e.g., 'subscriptions', 'cases') */
   sourceType: string
+  /** Provenance of the createdAt timestamp — optional for backward compat with persisted graphs (#596) */
+  timestampSource?: 'signal' | 'inferred' | 'ingestion'
 }
 
 // ── Motion History ────────────────────────────────────────────────────────────
