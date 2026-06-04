@@ -13,6 +13,7 @@ import {
   Wrench,
   Package,
   Target,
+  AlertTriangle,
 } from 'lucide-react'
 
 // Core navigation pages (hardcoded, always present)
@@ -21,6 +22,7 @@ const corePages = [
   { icon: Users,           label: 'Accounts',         path: '/dashboard/accounts' },
   { icon: Calendar,        label: 'Calendar',         path: '/dashboard/calendar' },
   { icon: TrendingUp,      label: 'Book of Business', path: '/dashboard/book-of-business' },
+  { icon: AlertTriangle,   label: 'Triage',           path: '/dashboard/triage' },
   { icon: Settings,        label: 'Admin',            path: '/dashboard/admin' },
 ]
 

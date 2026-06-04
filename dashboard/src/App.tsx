@@ -28,6 +28,7 @@ import { AccountsPage } from './pages/AccountsPage'
 import { CalendarPage } from './pages/CalendarPage'
 import { BookOfBusinessPage } from './pages/BookOfBusinessPage'
 import { MeetingPrepPage } from './pages/MeetingPrepPage'
+import { PortfolioTriagePage } from './pages/PortfolioTriagePage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
 import type { AccountInfo, SupportCase, PodInfo, CCSPSummary, PipelineSummary } from './types'
@@ -146,6 +147,7 @@ function Dashboard() {
       '/dashboard/tools': 'Tools | ASA Command Center',
       '/dashboard/events': 'Events | ASA Command Center',
       '/dashboard/rh-news': 'Red Hat News | ASA Command Center',
+      '/dashboard/triage': 'Portfolio Triage | ASA Command Center',
     }
     document.title = pathToTitle[location.pathname] || 'ASA Command Center'
   }, [location.pathname])
@@ -542,6 +544,7 @@ function Dashboard() {
           <Route path="/events" element={<EventsPage />} />
           <Route path="/rh-news" element={<RedHatNewsPage />} />
           <Route path="/meeting-prep" element={<MeetingPrepPage />} />
+          <Route path="/triage" element={<PortfolioTriagePage />} />
           <Route path="/settings" element={
             <main className="flex-1 overflow-y-auto p-6">
               <div className="max-w-lg">

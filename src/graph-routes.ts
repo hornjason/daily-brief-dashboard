@@ -334,5 +334,129 @@ export function createGraphRouter(): Hono {
     }
   })
 
+  // ── GET /api/portfolio/triage (#623) ──────────────────────────────────────
+
+  router.get('/api/portfolio/triage', async (c) => {
+    try {
+      const { CACHE_DIR } = await import('./lib/paths.ts')
+      const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3 } as const
+      type UrgencyLevel = keyof typeof urgencyOrder
+
+      interface TriageEntry {
+        customerName: string
+        customerSlug: string
+        topMotion: { title: string; urgency: UrgencyLevel; phaseCount: number; confidence: number } | null
+        signalChangeCount: number
+        graphNodeCount: number
+      }
+
+      const entries: TriageEntry[] = []
+
+      for (const customer of customers) {
+        const slug = toSlug(customer.name)
+        const graph = loadGraph(slug, CACHE_DIR)
+
+        if (!graph) continue
+
+        // Derive urgency from graph signals without calling Gemini
+        let urgency: UrgencyLevel = 'low'
+        let confidence = 0.3
+        let motionTitle = ''
+
+        // Check motion history for the latest active/pinned motion
+        const activeMotions = (graph.history ?? [])
+          .filter(h => h.status === 'active' || h.status === 'pinned')
+          .sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
+        const latestMotion = activeMotions[0]
+
+        if (latestMotion) {
+          motionTitle = latestMotion.title
+          confidence = 0.7
+        }
+
+        // Count urgency-driving signals from graph nodes
+        let criticalCaseCount = 0
+        let highSevCaseCount = 0
+        let expiredSubCount = 0
+        let dealCount = 0
+        const nodeValues = Object.values(graph.nodes)
+
+        for (const node of nodeValues) {
+          if (node.type === 'case') {
+            const sev = String(node.properties?.severity ?? '')
+            if (sev === '1' || sev === 'Urgent') criticalCaseCount++
+            else if (sev === '2' || sev === 'High') highSevCaseCount++
+          }
+          if (node.type === 'subscription') {
+            const status = String(node.properties?.status ?? '').toLowerCase()
+            if (status === 'expired' || status === 'expiring') expiredSubCount++
+          }
+          if (node.type === 'deal') {
+            dealCount++
+          }
+        }
+
+        // Compute urgency from signal indicators
+        if (criticalCaseCount > 0) {
+          urgency = 'critical'
+          confidence = 0.9
+        } else if (highSevCaseCount >= 2 || expiredSubCount >= 3) {
+          urgency = 'high'
+          confidence = 0.8
+        } else if (highSevCaseCount > 0 || expiredSubCount > 0 || dealCount > 0) {
+          urgency = 'medium'
+          confidence = 0.6
+        }
+
+        if (!motionTitle) {
+          motionTitle = urgency === 'critical' ? 'Critical support escalation'
+            : urgency === 'high' ? 'Renewal risk or escalation'
+            : urgency === 'medium' ? 'Active engagement opportunity'
+            : 'Monitoring'
+        }
+
+        // Count signal changes — nodes that appeared in the last 7 days
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+        let signalChangeCount = 0
+        for (const node of nodeValues) {
+          if (node.history?.appeared) {
+            const appeared = new Date(node.history.appeared).getTime()
+            if (appeared > sevenDaysAgo) signalChangeCount++
+          }
+        }
+
+        entries.push({
+          customerName: customer.name,
+          customerSlug: slug,
+          topMotion: {
+            title: motionTitle,
+            urgency,
+            phaseCount: latestMotion?.phaseCount ?? 0,
+            confidence,
+          },
+          signalChangeCount,
+          graphNodeCount: graph.nodeCount,
+        })
+      }
+
+      // Sort by urgency (critical first), then by signal change count descending
+      entries.sort((a, b) => {
+        const aUrg = a.topMotion ? urgencyOrder[a.topMotion.urgency] : 4
+        const bUrg = b.topMotion ? urgencyOrder[b.topMotion.urgency] : 4
+        if (aUrg !== bUrg) return aUrg - bUrg
+        return b.signalChangeCount - a.signalChangeCount
+      })
+
+      return c.json({
+        entries,
+        total: entries.length,
+        computedAt: new Date().toISOString(),
+      })
+    } catch (e: any) {
+      console.error('[graph-routes] Portfolio triage failed:', e?.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   return router
 }
