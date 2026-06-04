@@ -16,7 +16,10 @@ process.env.CACHE_DIR = TEST_CACHE_DIR
 process.env.CONFIG_DIR = resolve(TEST_CACHE_DIR, 'config')
 
 import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
-import { resetContentCache } from '../../src/lib/saleshub-content.ts'
+
+// Dynamic import for saleshub-content to ensure CACHE_DIR env var is set first
+// (ESM hoists static imports before module-level code)
+let resetDriveContentCache: typeof import('../../src/lib/saleshub-content.ts').resetDriveContentCache
 
 // Reset and register modules
 FeatureModuleRegistry._resetForTesting()
@@ -116,51 +119,46 @@ beforeAll(async () => {
     ])
   )
 
-  // SalesHub knowledge JSON for saleshub-content module
-  // Must follow SalesHubKnowledgeJson structure: tdps, salesPlays, tactics, products
+  // SalesHub Drive content cache — saleshub-content module reads from
+  // {CACHE_DIR}/saleshub/drive-content.json (#507 migration to Drive listing)
+  mkdirSync(resolve(TEST_CACHE_DIR, 'saleshub'), { recursive: true })
   writeFileSync(
-    resolve(TEST_CACHE_DIR, 'config', 'saleshub-knowledge.json'),
+    resolve(TEST_CACHE_DIR, 'saleshub', 'drive-content.json'),
     JSON.stringify({
-      version: 1,
-      scrapedAt: '2026-01-01T00:00:00Z',
-      tdps: [
+      files: [
         {
-          name: 'RHEL',
-          documents: [
-            {
-              name: 'RHEL Migration Guide',
-              contentType: 'Solution Brief',
-              product: 'Red Hat Enterprise Linux',
-              distributionTerms: 'Public',
-              salesStage: 'Discovery',
-              versionCreated: '2026-01-01T00:00:00Z',
-              driveUrl: 'https://drive.google.com/doc1',
-            },
-          ],
+          name: 'RHEL Migration Guide',
+          mimeType: 'application/vnd.google-apps.document',
+          driveUrl: 'https://drive.google.com/doc1',
+          driveId: 'doc1-id',
+          size: 1024,
+          modifiedTime: '2026-01-01T00:00:00Z',
+          parentFolder: 'RHEL',
+          extractedText: 'Guide for migrating to RHEL 9.',
         },
         {
-          name: 'Satellite',
-          documents: [
-            {
-              name: 'Satellite Admin Guide',
-              contentType: 'Technical Guide',
-              product: 'Red Hat Satellite',
-              distributionTerms: 'NDA',
-              salesStage: 'Consideration',
-              versionCreated: '2026-01-01T00:00:00Z',
-              driveUrl: 'https://drive.google.com/doc2',
-            },
-          ],
+          name: 'Satellite Admin Guide',
+          mimeType: 'application/vnd.google-apps.document',
+          driveUrl: 'https://drive.google.com/doc2',
+          driveId: 'doc2-id',
+          size: 2048,
+          modifiedTime: '2026-01-01T00:00:00Z',
+          parentFolder: 'Satellite',
+          extractedText: 'Satellite administration guide.',
         },
       ],
-      salesPlays: [],
-      tactics: [],
-      products: [],
+      lastSynced: '2026-01-01T00:00:00Z',
+      totalFiles: 2,
+      withText: 2,
     })
   )
 
-  // Reset saleshub content cache so it picks up our test data
-  resetContentCache()
+  // Dynamically import saleshub-content so it picks up our CACHE_DIR env var
+  const saleshubMod = await import('../../src/lib/saleshub-content.ts')
+  resetDriveContentCache = saleshubMod.resetDriveContentCache
+
+  // Reset saleshub Drive content cache so it picks up our test data
+  resetDriveContentCache()
 
   // Import modules (side-effect registration)
   await import('../../src/modules/ecosystem-catalog-module.ts')
@@ -211,7 +209,7 @@ describe('saleshub-content customer filtering (#486)', () => {
     expect(mod).toBeDefined()
     const signals = await mod!.signals!('test-customer')
 
-    // Customer has RHEL subscription → RHEL doc should match
+    // Customer has RHEL subscription → RHEL doc should match (headline format: "Document: Name")
     const rhelDoc = signals.find(s => s.headline.includes('RHEL Migration Guide'))
     expect(rhelDoc).toBeDefined()
     expect(rhelDoc!.metadata?.customerSlug).toBe('test-customer')

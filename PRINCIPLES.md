@@ -106,6 +106,18 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 | src/news-provider.ts | Producer | Generates news summaries |
 | src/product-intel-service.ts | Producer | Product intelligence extraction |
 | src/product-intelligence.ts | Producer | Product intelligence extraction |
+| src/customer-product-intel.ts | Producer | Extracts customer-specific product intelligence |
+| src/product-release-radar.ts | Producer | Monitors product release updates |
+| src/expansion-opportunities.ts | Producer | Identifies expansion opportunities |
+| src/domain-waterfall.ts | Producer | Domain waterfall intelligence extraction |
+| src/lib/motion-builder.ts | Internal | Builds strategic motion from graph |
+| src/lib/motion-campaign-service.ts | Internal | Generates motion-based campaign content |
+| src/lib/gemini-tactic-recommender.ts | Internal | Scores and recommends tactics |
+| src/lib/meeting-prep-intelligence.ts | Consumer | Generates meeting prep talking points |
+| src/lib/initiative-extractor.ts | Producer | Extracts customer initiatives |
+| src/product-feature-radar.ts | Producer | Tracks product feature updates |
+| src/modules/tech-stack-module.ts | Producer | Extracts customer tech stack |
+| src/customer/doc-extractors.ts | Producer | Extracts content from customer documents |
 
 ## Consumer → ensureFresh Contract
 

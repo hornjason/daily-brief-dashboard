@@ -291,9 +291,10 @@ describe('expansion-motion-service', () => {
       expect(result).toBeNull()
     })
 
-    it('returns motion when subscription maps to a play (#573)', async () => {
-      // Minimal signals (single RHEL subscription) now produce a play node
-      // via subscription→TDP mapping, so motion should be generated
+    it('returns null for minimal signals with sparse graph (#573, #595)', async () => {
+      // Minimal signals (single RHEL subscription + 1 play node) produce < 3
+      // distinct node types. #595 phase suppression kills sparse graphs,
+      // so motion is null even though #573 creates a play node.
       const result = await getExpansionMotion(
         'test-customer',
         'Test Corp',
@@ -303,9 +304,8 @@ describe('expansion-motion-service', () => {
           tacticSignals: makeTacticSignals(),
         },
       )
-      // With #573 fix: RHEL subscription → Server/Cloud OS TDP → play node → motion
-      expect(result).not.toBeNull()
-      expect(result!.customerSlug).toBe('test-customer')
+      // Graph too sparse (< 3 distinct signal source types) → phases suppressed → null
+      expect(result).toBeNull()
     })
 
     it('returns StrategicMotion when signals are sufficient', async () => {
