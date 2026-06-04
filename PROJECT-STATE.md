@@ -36,6 +36,7 @@ Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship work
 | `/dashboard/news` | NewsPage | ✅ Working | News aggregation from RSS feeds |
 | `/dashboard/tools` | ToolsPage | ✅ Working | Utility tools |
 | `/dashboard/book-of-business` | BookOfBusinessPage | ✅ Working | Book of business overview |
+| `/dashboard/triage` | PortfolioTriagePage | ✅ Working | Cross-customer urgency ranking from cached intelligence graphs. Urgency filter. No Gemini calls. |
 
 **SPA catch-all:** Unknown routes fall through to the main dashboard (no 404 page).
 
@@ -83,6 +84,9 @@ Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship work
 - `GET /api/customer/:name/account-plan` — Account plan markdown
 - `POST /api/customer/:name/account-plan/generate` — Trigger generation
 - `GET /api/customer/:name/team` — Resolved account team (AE, ASA, SSP/SSA specialists)
+
+### Portfolio Triage (#623)
+- `GET /api/portfolio/triage` — Cross-customer urgency ranking from cached intelligence graphs. Returns entries sorted by urgency (critical > high > medium > low), each with topMotion, signalChangeCount, graphNodeCount. No Gemini calls.
 
 ### Account Team & Territory
 - `POST /api/admin/territory-sync` — Manual territory sync trigger (populates team cache)
