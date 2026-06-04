@@ -6,8 +6,8 @@
  *
  * Endpoints:
  * - GET  /api/customer/:name/meetings              — calendar events for this customer
- * - GET  /api/customer/:name/meeting-prep-brief     — instant pre-meeting intelligence brief (#600)
  * - POST /api/customer/:name/meeting-prep/generate  — generate a meeting prep doc
+ * - POST /api/customer/:name/meeting-prep-email     — draft email from talking points (#610)
  * - GET  /api/customer/:name/meeting-prep/history   — previously generated prep docs
  * - DELETE /api/customer/:name/meeting-prep/:index  — delete a prep doc from history
  */
@@ -29,8 +29,7 @@ import {
   type MeetingPrepRequest,
 } from './meeting-prep-service.ts'
 import { runProactivePrepScan, readAttendeeCache } from './proactive-meeting-prep.ts'
-import { generateMeetingPrepBrief } from './lib/meeting-prep-intelligence.ts'
-import { CACHE_DIR } from './lib/paths.ts'
+import { callGemini } from './gemini-call.ts'
 
 // ── In-flight guard ──────────────────────────────────────────────────────────
 
@@ -74,35 +73,6 @@ export function createMeetingPrepRouter() {
     }
   })
 
-  // ── GET /api/customer/:name/meeting-prep-brief ──────────────────────────
-  // Returns instant pre-meeting intelligence brief from the graph (#600)
-  router.get('/api/customer/:name/meeting-prep-brief', async (c) => {
-    const customerName = decodeURIComponent(c.req.param('name'))
-    const customer = findCustomerByNameOrSlug(customerName)
-
-    if (!customer) {
-      return c.json({ error: `Customer "${customerName}" not found` }, 404)
-    }
-
-    const slug = toSlug(customer.name)
-
-    try {
-      const brief = await generateMeetingPrepBrief(slug, CACHE_DIR)
-
-      if (!brief) {
-        return c.json({
-          error: 'No intelligence graph available for this customer. Run intelligence pipeline first.',
-          customerName: customer.name,
-        }, 404)
-      }
-
-      return c.json(brief)
-    } catch (e: any) {
-      console.error(`[meeting-prep-brief] Failed for ${customerName}:`, e.message)
-      return c.json({ error: sanitizeErr(e) }, 500)
-    }
-  })
-
   // ── POST /api/customer/:name/meeting-prep/generate ──────────────────────
   router.post('/api/customer/:name/meeting-prep/generate', async (c) => {
     const customerName = decodeURIComponent(c.req.param('name'))
@@ -135,6 +105,59 @@ export function createMeetingPrepRouter() {
       return c.json({ error: sanitizeErr(e) }, 500)
     } finally {
       _prepInFlight.delete(guardKey)
+    }
+  })
+
+  // ── POST /api/customer/:name/meeting-prep-email ─────────────────────────
+  // Draft a pre-meeting outreach email from talking points + evidence (#610)
+  router.post('/api/customer/:name/meeting-prep-email', async (c) => {
+    const customerName = decodeURIComponent(c.req.param('name'))
+    const customer = findCustomerByNameOrSlug(customerName)
+
+    if (!customer) {
+      return c.json({ error: `Customer "${customerName}" not found` }, 404)
+    }
+
+    const body = await c.req.json<{
+      talkingPoints: string[]
+      evidence: string[]
+      customerName: string
+    }>()
+
+    if (!body.talkingPoints?.length) {
+      return c.json({ error: 'talkingPoints array is required and must not be empty' }, 400)
+    }
+
+    const systemPrompt = `You are a sales professional writing a brief pre-meeting email to a customer contact.
+Reference specific facts from the evidence provided. Professional but warm tone. Under 150 words.
+Do NOT include a subject line — just the email body.
+Start with a greeting, reference 1-2 specific points that show you've done your homework, and end with a clear ask or next step.`
+
+    const userPrompt = `## Customer: ${body.customerName || customer.name}
+
+## Talking Points:
+${body.talkingPoints.map((tp, i) => `${i + 1}. ${tp}`).join('\n')}
+
+## Evidence to Reference:
+${(body.evidence ?? []).map((ev, i) => `- ${ev}`).join('\n') || 'No specific evidence provided.'}
+
+Write a concise pre-meeting outreach email for this customer contact.`
+
+    try {
+      const result = await callGemini(systemPrompt, userPrompt, {
+        callType: 'meeting-prep-email',
+        customerName: customer.name,
+        temperature: 0.7,
+      })
+
+      if (!result.text) {
+        return c.json({ error: 'Gemini returned empty response' }, 500)
+      }
+
+      return c.json({ email: result.text })
+    } catch (e: any) {
+      console.error(`[meeting-prep-email] Failed for ${customerName}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

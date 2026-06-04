@@ -5,7 +5,11 @@
  * customer's intelligence graph. Shows talking points, recent changes,
  * evidence to cite, and relevant materials.
  *
+ * Draft Email (#610): "Draft Email" button generates a pre-meeting
+ * outreach email from talking points + evidence via Gemini.
+ *
  * Data source: GET /api/customer/:slug/meeting-prep-brief
+ * Email draft: POST /api/customer/:slug/meeting-prep-email
  */
 
 import { useState, useEffect } from 'react'
@@ -20,6 +24,10 @@ import {
   AlertTriangle,
   ExternalLink,
   X,
+  Mail,
+  Check,
+  Copy,
+  Loader2,
 } from 'lucide-react'
 
 interface MeetingPrepBrief {
@@ -93,6 +101,153 @@ function DensityBar({ populated, total, pct }: { populated: number; total: numbe
       <span className="text-xs text-text-secondary tabular-nums whitespace-nowrap">
         {populated}/{total} ({pct}%)
       </span>
+    </div>
+  )
+}
+
+/** Draft Email panel — generates and displays a pre-meeting email */
+function DraftEmailPanel({
+  customerName,
+  talkingPoints,
+  evidence,
+}: {
+  customerName: string
+  talkingPoints: string[]
+  evidence: Array<{ fact: string; recency: string }>
+}) {
+  const [email, setEmail] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const generateEmail = async () => {
+    setLoading(true)
+    setError(null)
+    setEmail(null)
+    try {
+      const res = await fetch(
+        `/api/customer/${encodeURIComponent(customerName)}/meeting-prep-email`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            talkingPoints,
+            evidence: evidence.map(e => e.fact),
+            customerName,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? `Failed to generate email (${res.status})`)
+        return
+      }
+      const data = await res.json()
+      setEmail(data.email)
+    } catch (e: any) {
+      setError(e.message ?? 'Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyToClipboard = async () => {
+    if (!email) return
+    try {
+      await navigator.clipboard.writeText(email)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea')
+      textarea.value = email
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  // Not yet generated — show the button
+  if (!email && !loading && !error) {
+    return (
+      <button
+        onClick={generateEmail}
+        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-accent/30 bg-accent/5 text-accent hover:bg-accent/10 transition-colors"
+      >
+        <Mail className="w-4 h-4" />
+        Draft Email
+      </button>
+    )
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border bg-surface-alt/50">
+        <Loader2 className="w-4 h-4 animate-spin text-accent" />
+        <span className="text-sm text-text-secondary">Drafting email...</span>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-critical/20 bg-critical/5">
+        <AlertTriangle className="w-4 h-4 text-critical" />
+        <span className="text-sm text-critical flex-1">{error}</span>
+        <button
+          onClick={generateEmail}
+          className="text-xs text-accent hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  // Email generated — show preview with copy button
+  return (
+    <div className="rounded-lg border border-accent/20 bg-accent/5 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-accent/15 bg-accent/10">
+        <div className="flex items-center gap-2">
+          <Mail className="w-4 h-4 text-accent" />
+          <span className="text-sm font-medium text-accent">Draft Email</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyToClipboard}
+            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded border border-accent/30 bg-white/80 text-accent hover:bg-white transition-colors"
+          >
+            {copied ? (
+              <>
+                <Check className="w-3 h-3" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3" />
+                Copy
+              </>
+            )}
+          </button>
+          <button
+            onClick={generateEmail}
+            className="p-1 rounded hover:bg-accent/10 transition-colors"
+            title="Regenerate"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-accent" />
+          </button>
+        </div>
+      </div>
+      <div className="px-4 py-3">
+        <pre className="text-sm text-text-primary whitespace-pre-wrap font-sans leading-relaxed">
+          {email}
+        </pre>
+      </div>
     </div>
   )
 }
@@ -226,6 +381,16 @@ export function MeetingPrepView({
             </div>
           ))}
         </div>
+        {/* Draft Email button — after talking points (#610) */}
+        {brief.talkingPoints.length > 0 && (
+          <div className="mt-4">
+            <DraftEmailPanel
+              customerName={brief.customerName}
+              talkingPoints={brief.talkingPoints}
+              evidence={brief.topEvidence}
+            />
+          </div>
+        )}
       </section>
 
       {/* Recent Changes */}
