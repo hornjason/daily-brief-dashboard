@@ -361,6 +361,31 @@ describe('Intelligence Routes', () => {
   test('GET /api/customer/:name/intelligence/roadmap - returns global products for any valid customer name', async () => {
     const app = createIntelligenceRouter()
 
+    const MAIN_CACHE_DIR = resolve(import.meta.dir, '../../data/cache')
+    const lifecyclePath = resolve(MAIN_CACHE_DIR, 'product-lifecycle.json')
+
+    if (!existsSync(MAIN_CACHE_DIR)) {
+      mkdirSync(MAIN_CACHE_DIR, { recursive: true })
+    }
+
+    // Set up fixture — route reads from product-lifecycle.json cache
+    writeFileSync(
+      lifecyclePath,
+      JSON.stringify({
+        products: [
+          {
+            slug: 'ocp',
+            displayName: 'Red Hat OpenShift Container Platform',
+            currentVersion: '4.17',
+            gaDate: '2025-03-01',
+            eolDate: '2025-03-26',
+          },
+        ],
+        fetchedAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 }
+    )
+
     // Route now serves global product intelligence regardless of customer existence
     const res = await app.request('/api/customer/NonExistent/intelligence/roadmap')
     expect(res.status).toBe(200)
@@ -370,6 +395,11 @@ describe('Intelligence Routes', () => {
     expect(Array.isArray(json.products)).toBe(true)
     expect(json.products.length).toBeGreaterThan(0)
     expect(json.cachedAt).toBeDefined()
+
+    // Cleanup
+    if (existsSync(lifecyclePath)) {
+      unlinkSync(lifecyclePath)
+    }
   })
 
   test('GET /api/customer/:name/intelligence/roadmap - handles invalid slug gracefully', async () => {
