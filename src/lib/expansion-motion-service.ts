@@ -18,9 +18,10 @@ import type { StrategicMotion } from './motion-builder.ts'
 import { buildCustomerGraph, loadGraph, persistGraph, filterStaleEdges } from './intelligence-graph.ts'
 import { buildMotion } from './motion-builder.ts'
 import { computePortfolioFrequency } from './tactic-scorer.ts'
+import { loadOutcomeHistory } from './deal-outcome-history.ts'
+import { getSimilarCustomers } from './customer-similarity.ts'
 import { enrichPersonas } from './persona-enrichment.ts'
 import { CACHE_DIR } from './paths.ts'
-import { getAccountTeam } from '../account-team.ts'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -148,30 +149,30 @@ export async function getExpansionMotion(
     console.warn('[expansion-motion] Portfolio frequency computation failed:', e?.message)
   }
 
-  // Step 3c: Build team context for tactic scoring (#621)
-  let teamContext: Array<{ name: string; role: string; products: string[] }> | undefined
+  // Step 3c: Load deal outcome history for tactic scoring (#622)
+  let outcomeHistory: import('./deal-outcome-history.ts').TacticOutcome[] | undefined
+  let similarCustomerSlugs: Set<string> | undefined
   try {
-    const { customers: allCustomers } = await import('../server-state.ts')
-    const customer = allCustomers.find(c => c.name === customerName)
-    if (customer) {
-      const team = getAccountTeam(customer)
-      // Map to the simple shape scoreTactics expects; specialists have product in title
-      const mapped = team
-        .filter(m => m.role === 'ssp' || m.role === 'ssa')
-        .map(m => {
-          // SSP/SSA titles are formatted as "[Product] SSP/SSA"
-          const productMatch = m.title.replace(/\s+(SSP|SSA)$/i, '').trim()
-          return {
-            name: m.name,
-            role: m.title,
-            products: productMatch ? [productMatch] : [],
-          }
-        })
-        .filter(m => m.products.length > 0)
-      if (mapped.length > 0) teamContext = mapped
+    outcomeHistory = loadOutcomeHistory(CACHE_DIR)
+    if (outcomeHistory.length > 0) {
+      // Find similar customers to boost outcomes from comparable accounts
+      const { customers: allCustomers } = await import('../server-state.ts')
+      const { toSlug } = await import('../cache-layer.ts')
+      const allGraphs = new Map<string, CustomerGraph>()
+      for (const c of allCustomers) {
+        const s = toSlug(c.name)
+        const g = loadGraph(s, CACHE_DIR)
+        if (g) allGraphs.set(s, g)
+      }
+      if (allGraphs.size >= 2) {
+        const similar = getSimilarCustomers(customerSlug, allGraphs, 10)
+        if (similar.length > 0) {
+          similarCustomerSlugs = new Set(similar.map(s => s.slug))
+        }
+      }
     }
   } catch (e: any) {
-    console.warn('[expansion-motion] Team context lookup failed:', e?.message)
+    console.warn('[expansion-motion] Outcome history loading failed:', e?.message)
   }
 
   // Step 4: Build motion from filtered graph + play/tactic signals
@@ -182,7 +183,9 @@ export async function getExpansionMotion(
     deps.playSignals,
     deps.tacticSignals,
     portfolioFrequency,
-    teamContext,
+    undefined, // teamContext — loaded by caller when available
+    outcomeHistory,
+    similarCustomerSlugs,
   )
 
   // Step 5: Enrich target personas with real contacts (#533)

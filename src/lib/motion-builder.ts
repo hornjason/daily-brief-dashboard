@@ -28,6 +28,7 @@ import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
 import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
+import type { TacticOutcome } from './deal-outcome-history.ts'
 import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -371,6 +372,8 @@ function buildAnchorPhase(
   tacticSignals: Signal[],
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): MotionPhase | null {
   const subs = findNodesByType(graph, 'subscription')
   const expiredSubs = subs.filter(s => {
@@ -439,7 +442,7 @@ function buildAnchorPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence (engagement, intel, lifecycle, etc.)
-  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -515,6 +518,8 @@ function buildExpandPhase(
   anchorTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): MotionPhase | null {
   const programs = findNodesByType(graph, 'program')
   const cloudPrograms = programs.filter(p =>
@@ -563,7 +568,7 @@ function buildExpandPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -622,6 +627,8 @@ function buildTransformPhase(
   usedTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): MotionPhase | null {
   const plays = findNodesByType(graph, 'play')
 
@@ -661,7 +668,7 @@ function buildTransformPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -869,6 +876,8 @@ function buildDisplacementPhase(
   usedTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): MotionPhase | null {
   const products = findNodesByType(graph, 'product')
   const nonRedHatProducts = products.filter(p => {
@@ -936,7 +945,7 @@ function buildDisplacementPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   const MAX_TACTICS_PER_PHASE = 3
@@ -987,6 +996,8 @@ export async function buildMotion(
   tacticSignals: Signal[],
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): Promise<StrategicMotion | null> {
   // Guard: need at least 1 play node for a meaningful motion (#573)
   const playNodes = findNodesByType(graph, 'play')
@@ -1002,7 +1013,7 @@ export async function buildMotion(
   const phases: MotionPhase[] = []
 
   // Anchor phase — expired subscriptions
-  const anchorPhase = buildAnchorPhase(graph, tacticSignals, portfolioFrequency, teamContext)
+  const anchorPhase = buildAnchorPhase(graph, tacticSignals, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   const anchorTdps = new Set<string>()
   if (anchorPhase) {
     phases.push(anchorPhase)
@@ -1012,7 +1023,7 @@ export async function buildMotion(
   }
 
   // Expand phase — cloud/cross-sell opportunities
-  const expandPhase = buildExpandPhase(graph, tacticSignals, anchorTdps, portfolioFrequency, teamContext)
+  const expandPhase = buildExpandPhase(graph, tacticSignals, anchorTdps, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   const usedTdps = new Set([...anchorTdps])
   if (expandPhase) {
     phases.push(expandPhase)
@@ -1022,7 +1033,7 @@ export async function buildMotion(
   }
 
   // Transform phase — strategic/AI plays
-  const transformPhase = buildTransformPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext)
+  const transformPhase = buildTransformPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   if (transformPhase) {
     phases.push(transformPhase)
     for (const t of transformPhase.tactics) {
@@ -1031,7 +1042,7 @@ export async function buildMotion(
   }
 
   // Displacement phase — competitor displacement opportunities (#579, #589)
-  const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext)
+  const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext, outcomeHistory, similarCustomerSlugs)
   if (displacementPhase) {
     phases.push(displacementPhase)
   }

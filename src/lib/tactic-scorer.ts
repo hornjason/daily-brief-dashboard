@@ -20,6 +20,7 @@ import type {
 } from './intelligence-graph-types.ts'
 import { findActiveNodesByType, recencyWeight } from './graph-utils.ts'
 import type { MaterialLink } from './material-index.ts'
+import type { TacticOutcome } from './deal-outcome-history.ts'
 
 /** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
 /** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
@@ -395,6 +396,15 @@ function computePartnerBoost(
  *   diversityFactor = 1 - (frequency * DIVERSITY_WEIGHT)
  *   finalScore = compositeScore * diversityFactor
  * A tactic in 90% of customers' top-5 gets a 45% penalty; one in 20% gets 10%.
+ *
+ * Optional teamContext (#621): Account team specialists — boosts tactics
+ * matching a specialist's product domain by +0.1.
+ *
+ * Optional outcomeHistory (#622): Past deal outcomes attributed to tactics.
+ * Boosts tactics that correlated with won deals:
+ *   - Any customer in last 12 months: +0.15
+ *   - Similar customer (via similarCustomerSlugs): +0.25 instead
+ * Capped at one outcome boost per tactic (uses highest match).
  */
 export function scoreTactics(
   graph: CustomerGraph,
@@ -407,6 +417,8 @@ export function scoreTactics(
   }>,
   portfolioFrequency?: Map<string, number>,
   teamContext?: Array<{ name: string; role: string; products: string[] }>,
+  outcomeHistory?: TacticOutcome[],
+  similarCustomerSlugs?: Set<string>,
 ): ScoredTactic[] {
   const baseKeywords = extractBaseKeywords(graph)
 
@@ -467,14 +479,11 @@ export function scoreTactics(
       for (const member of teamContext) {
         if (teamBoosted) break
         for (const product of member.products) {
-          // Case-insensitive substring: does the team member's product match
-          // the tactic's parentTdp or name?
           const productLower = product.toLowerCase()
           const tdpLower = tactic.parentTdp.toLowerCase()
           const nameLower = tactic.name.toLowerCase()
           if (tdpLower.includes(productLower) || nameLower.includes(productLower) ||
               productLower.includes(tdpLower) || productLower.includes(nameLower)) {
-            // Check TDP_KEYWORDS as well for broader matching (e.g. "OpenShift" → "Container Mgmt")
             compositeScore += 0.1
             allEvidence.push({
               fact: `Team alignment: ${member.name} (${member.role}) covers ${product}`,
@@ -485,7 +494,7 @@ export function scoreTactics(
             teamBoosted = true
             break
           }
-          // Also check via TDP_KEYWORDS — e.g. product "Ansible" should match TDP "Automation"
+          // Also check via TDP_KEYWORDS
           const keywords = TDP_KEYWORDS[tactic.parentTdp]
           if (keywords && keywords.some(kw => productLower.includes(kw))) {
             compositeScore += 0.1
@@ -499,6 +508,42 @@ export function scoreTactics(
             break
           }
         }
+      }
+    }
+
+    // 9. Deal outcome boost (#622) — tactics that correlated with won deals
+    if (outcomeHistory && outcomeHistory.length > 0) {
+      const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000
+      const now = Date.now()
+      let bestBoost = 0
+      let bestOutcome: TacticOutcome | null = null
+      let isSimilarMatch = false
+
+      for (const outcome of outcomeHistory) {
+        if (outcome.tacticName !== tactic.name) continue
+
+        const closedMs = new Date(outcome.closedAt).getTime()
+        if (now - closedMs > TWELVE_MONTHS_MS) continue
+
+        const isSimilar = similarCustomerSlugs?.has(outcome.customerSlug) ?? false
+        const boost = isSimilar ? 0.25 : 0.15
+
+        if (boost > bestBoost) {
+          bestBoost = boost
+          bestOutcome = outcome
+          isSimilarMatch = isSimilar
+        }
+      }
+
+      if (bestBoost > 0 && bestOutcome) {
+        compositeScore += bestBoost
+        const prefix = isSimilarMatch ? 'Similar customer outcome' : 'Proven outcome'
+        allEvidence.push({
+          fact: `${prefix}: ${bestOutcome.customerName} closed $${bestOutcome.dealAmount.toLocaleString()} deal using this tactic`,
+          module: 'outcome',
+          recency: '',
+          weight: bestBoost,
+        })
       }
     }
 
