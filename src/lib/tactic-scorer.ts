@@ -112,91 +112,26 @@ function nodeMatchesTdp(node: IntelligenceNode, tdp: string): boolean {
 }
 
 /**
- * Extract base-score keywords from subscription, case, program, and play nodes.
- * Reuses the same keyword extraction logic as motion-builder.ts scoreTacticRelevance.
+ * Extract base-score keywords from subscription, case, and play nodes.
+ * Uses TDP_KEYWORDS as single source of truth — adding a new TDP domain
+ * requires only one dict entry, not duplicate if/else chains (#604).
  */
 function extractBaseKeywords(graph: CustomerGraph): Map<string, string[]> {
   const tdpKeywords = new Map<string, string[]>()
 
-  // Subscriptions → TDP keywords
-  const subs = findActiveNodesByType(graph, 'subscription')
-  for (const sub of subs) {
-    const desc = String(sub.properties.productDescription ?? sub.name ?? '').toLowerCase()
-    if (desc.includes('ansible') || desc.includes('automation')) {
-      const existing = tdpKeywords.get('Automation') ?? []
-      existing.push('ansible', 'automation', 'automate')
-      tdpKeywords.set('Automation', existing)
-    }
-    if (desc.includes('openshift') || desc.includes('container')) {
-      const existing = tdpKeywords.get('Container Mgmt') ?? []
-      existing.push('openshift', 'container', 'kubernetes')
-      tdpKeywords.set('Container Mgmt', existing)
-      const existing2 = tdpKeywords.get('Container Management') ?? []
-      existing2.push('openshift', 'container', 'kubernetes')
-      tdpKeywords.set('Container Management', existing2)
-    }
-    if (desc.includes('rhel') || desc.includes('enterprise linux') || desc.includes('server')) {
-      const existing = tdpKeywords.get('Server and Cloud Computing') ?? []
-      existing.push('rhel', 'linux', 'server')
-      tdpKeywords.set('Server and Cloud Computing', existing)
-    }
-    if (desc.includes('virtualization') || desc.includes('virt')) {
-      const existing = tdpKeywords.get('Virtualization') ?? []
-      existing.push('virtualization', 'virt')
-      tdpKeywords.set('Virtualization', existing)
-    }
-    if (desc.includes('satellite')) {
-      const existing = tdpKeywords.get('Management') ?? []
-      existing.push('satellite', 'management')
-      tdpKeywords.set('Management', existing)
-    }
-    if (desc.includes('ai') || desc.includes('rhoai')) {
-      const existing = tdpKeywords.get('AI') ?? []
-      existing.push('ai', 'ml')
-      tdpKeywords.set('AI', existing)
-      const existing2 = tdpKeywords.get('AI Platform') ?? []
-      existing2.push('ai', 'ml')
-      tdpKeywords.set('AI Platform', existing2)
-    }
-  }
+  const candidateNodes = [
+    ...findActiveNodesByType(graph, 'subscription'),
+    ...findActiveNodesByType(graph, 'case'),
+    ...findActiveNodesByType(graph, 'play'),
+  ]
 
-  // Cases → keywords for their product domain
-  const cases = findActiveNodesByType(graph, 'case')
-  for (const c of cases) {
-    const product = String(c.properties.product ?? '').toLowerCase()
-    if (product.includes('ansible')) {
-      const existing = tdpKeywords.get('Automation') ?? []
-      existing.push('ansible')
-      tdpKeywords.set('Automation', existing)
-    }
-    if (product.includes('openshift')) {
-      const existing = tdpKeywords.get('Container Mgmt') ?? []
-      existing.push('openshift')
-      tdpKeywords.set('Container Mgmt', existing)
-      const existing2 = tdpKeywords.get('Container Management') ?? []
-      existing2.push('openshift')
-      tdpKeywords.set('Container Management', existing2)
-    }
-  }
-
-  // Play nodes → keyword from productAlignment
-  const plays = findActiveNodesByType(graph, 'play')
-  for (const play of plays) {
-    const alignment = String(play.properties.productAlignment ?? '').toLowerCase()
-    if (alignment.includes('ansible') || alignment.includes('automation')) {
-      const existing = tdpKeywords.get('Automation') ?? []
-      existing.push('automation')
-      tdpKeywords.set('Automation', existing)
-    }
-    if (alignment.includes('openshift') || alignment.includes('container')) {
-      const existing = tdpKeywords.get('Container Mgmt') ?? []
-      existing.push('openshift', 'container')
-      tdpKeywords.set('Container Mgmt', existing)
-    }
-    if (alignment.includes('ai')) {
-      const existing = tdpKeywords.get('AI') ?? []
-      existing.push('ai')
-      tdpKeywords.set('AI', existing)
+  for (const node of candidateNodes) {
+    for (const [tdp, keywords] of Object.entries(TDP_KEYWORDS)) {
+      if (nodeMatchesTdp(node, tdp)) {
+        const existing = tdpKeywords.get(tdp) ?? []
+        existing.push(...keywords.slice(0, 3))
+        tdpKeywords.set(tdp, existing)
+      }
     }
   }
 
