@@ -21,6 +21,13 @@ import type {
 import { findNodesByType, recencyWeight } from './graph-utils.ts'
 import type { MaterialLink } from './material-index.ts'
 
+/** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
+/** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
+export const TACTIC_SCORER_HANDLED_TYPES = [
+  'customer', 'subscription', 'case', 'deal', 'play', 'program', 'product',
+  'engagement', 'intel', 'lifecycle', 'event', 'evidence', 'partner',
+] as const
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface EvidenceItem {
@@ -364,6 +371,23 @@ function computeEvidenceBoost(
       module: 'event',
       recency: formatRecency(edgeDate),
       weight: 0.1,
+    })
+  }
+
+  // Deal nodes — active pipeline corroborates domain urgency
+  const deals = findNodesByType(graph, 'deal')
+  for (const deal of deals) {
+    if (!nodeMatchesTdp(deal, tdp)) continue
+    count++
+
+    const edgesForNode = graph.edges.filter(e => e.from === deal.id || e.to === deal.id)
+    const edgeDate = edgesForNode[0]?.createdAt ?? new Date().toISOString()
+
+    allEvidence.push({
+      fact: `Pipeline: ${deal.name}`,
+      module: 'pipeline',
+      recency: formatRecency(edgeDate),
+      weight: 0.15,
     })
   }
 

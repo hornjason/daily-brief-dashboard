@@ -700,3 +700,36 @@ describe('ADR → PRINCIPLES.md drift detection', () => {
     expect(missing).toEqual([])
   })
 })
+
+// ── ADR-033: No Storage Without Action (#594) ─────────────────────────────────
+
+describe('ADR-033: No Storage Without Action gate', () => {
+  test('every node-creating SIGNAL_CONFIGS entry has a TacticScorer handler', async () => {
+    const { TACTIC_SCORER_HANDLED_TYPES } = await import('../../src/lib/tactic-scorer.ts')
+
+    const graphSource = readFileSync(resolve(SRC_DIR, 'lib/intelligence-graph.ts'), 'utf-8')
+
+    // Parse SIGNAL_CONFIGS entries — find nodeType values that aren't 'none'
+    const nodeTypeMatches = graphSource.matchAll(/nodeType:\s*'([^']+)'/g)
+    const nodeCreatingTypes = new Set<string>()
+    for (const match of nodeTypeMatches) {
+      if (match[1] !== 'none') {
+        nodeCreatingTypes.add(match[1])
+      }
+    }
+
+    expect(nodeCreatingTypes.size).toBeGreaterThan(0)
+
+    const unhandled: string[] = []
+    for (const nodeType of nodeCreatingTypes) {
+      if (!TACTIC_SCORER_HANDLED_TYPES.includes(nodeType)) {
+        unhandled.push(nodeType)
+      }
+    }
+
+    expect(
+      unhandled,
+      `Node types without TacticScorer handlers: ${unhandled.join(', ')}. Add handlers per ADR-033.`
+    ).toEqual([])
+  })
+})
