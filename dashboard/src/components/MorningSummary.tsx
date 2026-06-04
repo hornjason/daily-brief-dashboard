@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText, Lightbulb } from 'lucide-react'
+import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText, Lightbulb, Calendar, ArrowRight } from 'lucide-react'
 import { RecommendationCard, signalToRecommendation, type RecommendationCardProps } from './RecommendationCard'
 
 /** Lightweight inline markdown renderer for constrained AI output.
@@ -90,12 +90,23 @@ interface RedHatIntelligence {
   }>
 }
 
+interface TodaysMeeting {
+  customerName: string
+  customerSlug: string
+  meetingTitle: string
+  meetingStart: string
+  densityLevel: 'high' | 'medium' | 'limited'
+  densityDetail: { populated: number; total: number }
+  meetingPrepUrl: string
+}
+
 interface MorningSummaryData {
   signals: Signal[]
   summary: string
   customerCount: number
   synthesis?: string
   redHatIntelligence?: RedHatIntelligence
+  todaysMeetings?: TodaysMeeting[]
 }
 
 interface MorningSummaryProps {
@@ -346,16 +357,66 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
           <div className="p-5">
             {/* Today Tab */}
             {activeTab === 'today' && (
-              <div>
+              <div className="space-y-4">
+                {/* #609: Today's Meetings with signal density */}
+                {data.todaysMeetings && data.todaysMeetings.length > 0 && (
+                  <div className="bg-surface-hover border border-border rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-4 h-4 text-accent" />
+                      <h4 className="text-sm font-semibold text-text-primary">
+                        Today's Meetings ({data.todaysMeetings.length})
+                      </h4>
+                    </div>
+                    <div className="space-y-2">
+                      {data.todaysMeetings.map((meeting, i) => {
+                        const densityColors: Record<string, string> = {
+                          high: 'bg-emerald-500/20 text-emerald-400',
+                          medium: 'bg-amber-500/20 text-amber-400',
+                          limited: 'bg-zinc-500/20 text-zinc-400',
+                        }
+                        const densityLabels: Record<string, string> = {
+                          high: 'high signals',
+                          medium: 'medium signals',
+                          limited: 'limited data',
+                        }
+                        const time = new Date(meeting.meetingStart).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => navigate(meeting.meetingPrepUrl)}
+                            className="w-full flex items-center justify-between text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors group"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-text-primary">{meeting.customerName}</span>
+                                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${densityColors[meeting.densityLevel]}`}>
+                                  {densityLabels[meeting.densityLevel]}
+                                </span>
+                              </div>
+                              <div className="text-xs text-text-secondary mt-0.5">
+                                {time} — {meeting.meetingTitle}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2" />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {data.synthesis ? (
                   <div className="p-3 bg-surface-hover border border-border rounded-lg leading-relaxed">
                     <RenderMarkdown text={data.synthesis} />
                   </div>
-                ) : (
+                ) : !data.todaysMeetings?.length ? (
                   <p className="text-sm text-text-secondary text-center py-4">
                     No priority items today
                   </p>
-                )}
+                ) : null}
               </div>
             )}
 

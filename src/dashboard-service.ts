@@ -25,6 +25,8 @@ import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
+import { buildTodaysMeetings } from './lib/todays-meetings.ts'
+import { loadGraph } from './lib/intelligence-graph.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -566,9 +568,17 @@ export async function buildMorningSummary(customers: Customer[]) {
   // BKL-INTEL-204: Red Hat Intelligence section
   const redHatIntelligence = await buildRedHatIntelligenceForMorningBrief(customers, calendarEvents)
 
+  // #609: Today's Meetings with signal density
+  const todaysMeetings = buildTodaysMeetings(
+    calendarEvents,
+    customers,
+    (slug: string) => loadGraph(slug, CACHE_DIR),
+  )
+
   const response: Record<string, unknown> = { signals, summary, customerCount: customers.length }
   if (synthesis) response.synthesis = synthesis
   if (redHatIntelligence) response.redHatIntelligence = redHatIntelligence
+  if (todaysMeetings.length > 0) response.todaysMeetings = todaysMeetings
   return response
 }
 
