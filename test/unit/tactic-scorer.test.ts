@@ -19,6 +19,9 @@ type ScoredTactic = import('../../src/lib/tactic-scorer.ts').ScoredTactic
 type EvidenceItem = import('../../src/lib/tactic-scorer.ts').EvidenceItem
 type SignalDensity = import('../../src/lib/tactic-scorer.ts').SignalDensity
 
+let loadOutcomeHistory: typeof import('../../src/lib/deal-outcome-history.ts').loadOutcomeHistory
+type TacticOutcome = import('../../src/lib/deal-outcome-history.ts').TacticOutcome
+
 beforeAll(async () => {
   const mod = await import('../../src/lib/tactic-scorer.ts')
   scoreTactics = mod.scoreTactics
@@ -26,6 +29,8 @@ beforeAll(async () => {
   TOTAL_SIGNAL_TYPES = mod.TOTAL_SIGNAL_TYPES
   DIVERSITY_WEIGHT = mod.DIVERSITY_WEIGHT
   computePortfolioFrequency = mod.computePortfolioFrequency
+  const historyMod = await import('../../src/lib/deal-outcome-history.ts')
+  loadOutcomeHistory = historyMod.loadOutcomeHistory
 })
 
 // ── Test Helpers ────────────────────────────────────────────────────────────
@@ -726,5 +731,157 @@ describe('computePortfolioFrequency (#618)', () => {
     const penalizedScore = topWithPenalty.find(t => t.name === universalTactic)!.compositeScore
     const originalScore = topNoPenaltyResult.find(t => t.name === universalTactic)!.compositeScore
     expect(penalizedScore).toBeLessThan(originalScore)
+  })
+})
+
+// ── #622: Deal outcome feedback loop ──────────────────────────────────────────
+
+describe('scoreTactics — deal outcome boost (#622)', () => {
+  function makeAutomationGraph(): CustomerGraph {
+    return makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('subscription:ansible', 'subscription', 'Ansible Automation Platform', {
+          productDescription: 'Red Hat Ansible Automation Platform',
+          status: 'Active',
+        }),
+      ],
+      [makeEdge('customer:test', 'subscription:ansible', 'HAS_SUBSCRIPTION')],
+    )
+  }
+
+  // Recent outcome — within last 12 months
+  const recentOutcome: TacticOutcome = {
+    tacticName: 'Automate at Scale',
+    customerSlug: 'other-customer',
+    customerName: 'Other Customer',
+    dealAmount: 150000,
+    closedAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 days ago
+    attributionScore: 0.8,
+  }
+
+  // Old outcome — older than 12 months
+  const oldOutcome: TacticOutcome = {
+    tacticName: 'Automate at Scale',
+    customerSlug: 'old-customer',
+    customerName: 'Old Customer',
+    dealAmount: 200000,
+    closedAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), // 400 days ago
+    attributionScore: 0.9,
+  }
+
+  it('tactic with won deal in history gets +0.15 boost', () => {
+    const graph = makeAutomationGraph()
+
+    const withOutcome = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined, [recentOutcome])
+    const withoutOutcome = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withOutcome.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutOutcome.find(t => t.name === 'Automate at Scale')!
+
+    // Should get at least +0.15 boost (non-similar customer)
+    expect(automateWith.compositeScore).toBeGreaterThan(automateWithout.compositeScore)
+    expect(automateWith.compositeScore).toBeCloseTo(automateWithout.compositeScore + 0.15, 5)
+  })
+
+  it('tactic with won deal in similar customer gets +0.25 boost instead', () => {
+    const graph = makeAutomationGraph()
+
+    // Pass similar customer slugs that match the outcome's customer
+    const similarCustomerSlugs = new Set(['other-customer'])
+
+    const withSimilarOutcome = scoreTactics(
+      graph, CANDIDATE_TACTICS, undefined, undefined,
+      [recentOutcome], similarCustomerSlugs,
+    )
+    const withoutOutcome = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withSimilarOutcome.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutOutcome.find(t => t.name === 'Automate at Scale')!
+
+    // Should get +0.25 (similar customer boost, not +0.15)
+    expect(automateWith.compositeScore).toBeCloseTo(automateWithout.compositeScore + 0.25, 5)
+  })
+
+  it('no outcome history gives no boost (backward compatible)', () => {
+    const graph = makeAutomationGraph()
+
+    const result1 = scoreTactics(graph, CANDIDATE_TACTICS)
+    const result2 = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined, undefined)
+    const result3 = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined, [])
+
+    for (const tactic of CANDIDATE_TACTICS) {
+      const s1 = result1.find(t => t.name === tactic.name)!.compositeScore
+      const s2 = result2.find(t => t.name === tactic.name)!.compositeScore
+      const s3 = result3.find(t => t.name === tactic.name)!.compositeScore
+      expect(s1).toBe(s2)
+      expect(s2).toBe(s3)
+    }
+  })
+
+  it('evidence trail includes outcome reference', () => {
+    const graph = makeAutomationGraph()
+
+    const result = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined, [recentOutcome])
+    const automate = result.find(t => t.name === 'Automate at Scale')!
+
+    const outcomeEvidence = automate.evidenceTrail.find(e => e.module === 'outcome')
+    expect(outcomeEvidence).toBeDefined()
+    expect(outcomeEvidence!.fact).toContain('Other Customer')
+    expect(outcomeEvidence!.fact).toContain('$150,000')
+  })
+
+  it('only outcomes from last 12 months count', () => {
+    const graph = makeAutomationGraph()
+
+    const withOldOutcome = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined, [oldOutcome])
+    const withoutOutcome = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    // Old outcome (400 days ago) should NOT produce a boost
+    for (const tactic of CANDIDATE_TACTICS) {
+      const scoreWith = withOldOutcome.find(t => t.name === tactic.name)!.compositeScore
+      const scoreWithout = withoutOutcome.find(t => t.name === tactic.name)!.compositeScore
+      expect(scoreWith).toBe(scoreWithout)
+    }
+  })
+
+  it('caps at one outcome boost per tactic using highest match', () => {
+    const graph = makeAutomationGraph()
+
+    // Two outcomes: one from similar customer (+0.25), one from non-similar (+0.15)
+    const similarOutcome: TacticOutcome = {
+      ...recentOutcome,
+      customerSlug: 'similar-co',
+      customerName: 'Similar Co',
+      dealAmount: 300000,
+    }
+    const regularOutcome: TacticOutcome = {
+      ...recentOutcome,
+      customerSlug: 'regular-co',
+      customerName: 'Regular Co',
+      dealAmount: 100000,
+    }
+
+    const similarSlugs = new Set(['similar-co'])
+    const withBoth = scoreTactics(
+      graph, CANDIDATE_TACTICS, undefined, undefined,
+      [similarOutcome, regularOutcome], similarSlugs,
+    )
+    const withoutOutcome = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    const automateWith = withBoth.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutOutcome.find(t => t.name === 'Automate at Scale')!
+
+    // Should get +0.25 (highest match), NOT +0.40 (stacking)
+    expect(automateWith.compositeScore).toBeCloseTo(automateWithout.compositeScore + 0.25, 5)
+  })
+})
+
+// ── #622: loadOutcomeHistory ──────────────────────────────────────────────────
+
+describe('loadOutcomeHistory (#622)', () => {
+  it('returns empty array for non-existent directory', () => {
+    const result = loadOutcomeHistory('/tmp/nonexistent-dir-test-622')
+    expect(result).toEqual([])
   })
 })

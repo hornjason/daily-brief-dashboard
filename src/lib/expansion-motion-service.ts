@@ -18,6 +18,8 @@ import type { StrategicMotion } from './motion-builder.ts'
 import { buildCustomerGraph, loadGraph, persistGraph, filterStaleEdges } from './intelligence-graph.ts'
 import { buildMotion } from './motion-builder.ts'
 import { computePortfolioFrequency } from './tactic-scorer.ts'
+import { loadOutcomeHistory } from './deal-outcome-history.ts'
+import { getSimilarCustomers } from './customer-similarity.ts'
 import { enrichPersonas } from './persona-enrichment.ts'
 import { CACHE_DIR } from './paths.ts'
 
@@ -147,6 +149,32 @@ export async function getExpansionMotion(
     console.warn('[expansion-motion] Portfolio frequency computation failed:', e?.message)
   }
 
+  // Step 3c: Load deal outcome history for tactic scoring (#622)
+  let outcomeHistory: import('./deal-outcome-history.ts').TacticOutcome[] | undefined
+  let similarCustomerSlugs: Set<string> | undefined
+  try {
+    outcomeHistory = loadOutcomeHistory(CACHE_DIR)
+    if (outcomeHistory.length > 0) {
+      // Find similar customers to boost outcomes from comparable accounts
+      const { customers: allCustomers } = await import('../server-state.ts')
+      const { toSlug } = await import('../cache-layer.ts')
+      const allGraphs = new Map<string, CustomerGraph>()
+      for (const c of allCustomers) {
+        const s = toSlug(c.name)
+        const g = loadGraph(s, CACHE_DIR)
+        if (g) allGraphs.set(s, g)
+      }
+      if (allGraphs.size >= 2) {
+        const similar = getSimilarCustomers(customerSlug, allGraphs, 10)
+        if (similar.length > 0) {
+          similarCustomerSlugs = new Set(similar.map(s => s.slug))
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[expansion-motion] Outcome history loading failed:', e?.message)
+  }
+
   // Step 4: Build motion from filtered graph + play/tactic signals
   const motion = await buildMotion(
     filteredGraph,
@@ -155,6 +183,9 @@ export async function getExpansionMotion(
     deps.playSignals,
     deps.tacticSignals,
     portfolioFrequency,
+    undefined, // teamContext — loaded by caller when available
+    outcomeHistory,
+    similarCustomerSlugs,
   )
 
   // Step 5: Enrich target personas with real contacts (#533)
