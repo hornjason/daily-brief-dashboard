@@ -69,7 +69,9 @@ export default function KPITechWinsModal({ open, onClose, opps }: KPITechWinsMod
   function renderOpp(opp: PipelineOpp) {
     const stageColor = TW_STAGE_COLORS[opp.forecastCategory] ?? TW_STAGE_COLORS.Omitted
     const stageLabel = opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory
-    const sfUrl = `https://redhatcrm.lightning.force.com/_ui/search/ui/UnifiedSearchResults?str=${encodeURIComponent(opp.oppNumber)}`
+    const sfUrl = opp.oppId
+      ? `https://redhatcrm.lightning.force.com/lightning/r/Opportunity/${opp.oppId}/view`
+      : `https://redhatcrm.lightning.force.com/_ui/search/ui/UnifiedSearchResults?str=${encodeURIComponent(opp.oppName)}`
     return (
       <a
         key={opp.oppNumber}
