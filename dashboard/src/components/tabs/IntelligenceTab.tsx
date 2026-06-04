@@ -5,7 +5,7 @@
  * Feature: Red Hat intelligence surfaces — news, product lifecycle, events
  */
 
-import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
+import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp, MapPin, Users } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import SignalWithAging from '../SignalWithAging'
 
@@ -50,6 +50,16 @@ interface RHEvent {
   enrichedDescription?: string | null
 }
 
+interface SimilarCustomer {
+  slug: string
+  name: string
+  overlapScore: number
+  sharedProducts: string[]
+  sharedCasePatterns: string[]
+  sharedNodeTypes: string[]
+  totalSharedNodes: number
+}
+
 export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [articles, setArticles] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,10 +78,15 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [copiedEventIndex, setCopiedEventIndex] = useState<number | null>(null)
 
+  const [similarCustomers, setSimilarCustomers] = useState<SimilarCustomer[]>([])
+  const [similarLoading, setSimilarLoading] = useState(true)
+  const [similarError, setSimilarError] = useState<string | null>(null)
+
   // Collapsible section state
   const [newsExpanded, setNewsExpanded] = useState(true)
   const [roadmapExpanded, setRoadmapExpanded] = useState(false)
   const [eventsExpanded, setEventsExpanded] = useState(false)
+  const [similarExpanded, setSimilarExpanded] = useState(false)
 
   const fetchArticles = async () => {
     try {
@@ -130,10 +145,29 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
     }
   }
 
+  const fetchSimilarCustomers = async () => {
+    try {
+      const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      const res = await fetch(`/api/customer/${encodeURIComponent(slug)}/similar`)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch similar customers' }))
+        throw new Error(errorData.error || 'Failed to fetch similar customers')
+      }
+      const data = await res.json()
+      setSimilarCustomers(data.similar || [])
+      setSimilarError(null)
+    } catch (e: any) {
+      setSimilarError(e.message || 'Failed to fetch similar customers')
+    } finally {
+      setSimilarLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchArticles()
     fetchRoadmap()
     fetchEvents()
+    fetchSimilarCustomers()
   }, [customerName])
 
   // Auto-expand news section when articles arrive
@@ -741,6 +775,113 @@ Register: ${event.registrationUrl}` : ''}`
               ))}
             </div>
           )}
+          </div>
+        )}
+      </div>
+
+      {/* Similar Customers Section (#612) */}
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        {/* Header */}
+        <div
+          className="px-6 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between"
+          onClick={() => setSimilarExpanded(!similarExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-accent" />
+            <h2 className="text-xl font-semibold text-text-primary">Similar Customers</h2>
+            {!similarLoading && !similarError && similarCustomers.length > 0 && (
+              <span className="bg-accent/10 text-accent text-xs px-2 py-0.5 rounded-full font-medium">
+                {similarCustomers.length}
+              </span>
+            )}
+          </div>
+          {similarExpanded ? (
+            <ChevronUp className="w-5 h-5 text-text-secondary" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-text-secondary" />
+          )}
+        </div>
+
+        {/* Collapsed preview */}
+        {!similarExpanded && !similarLoading && !similarError && similarCustomers.length > 0 && (
+          <div className="px-6 py-4 border-t border-border/60">
+            <div className="text-sm text-text-secondary">
+              {similarCustomers.length} similar customer{similarCustomers.length !== 1 ? 's' : ''} found
+            </div>
+          </div>
+        )}
+
+        {similarExpanded && (
+          <div className="p-6">
+            {/* Loading state */}
+            {similarLoading && (
+              <div className="py-12 text-center space-y-4">
+                <Loader2 className="w-12 h-12 text-accent mx-auto animate-spin" />
+                <p className="text-sm text-text-secondary">Analyzing customer similarity...</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!similarLoading && similarError && (
+              <div className="bg-surface border border-red-500/50 rounded-xl p-6 space-y-3">
+                <p className="text-sm font-medium text-red-400">Error loading similar customers</p>
+                <p className="text-xs text-text-secondary">{similarError}</p>
+                <button
+                  onClick={fetchSimilarCustomers}
+                  className="px-4 py-2 rounded-lg border border-border text-xs text-accent hover:border-accent/50 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!similarLoading && !similarError && similarCustomers.length === 0 && (
+              <div className="py-8 text-center">
+                <p className="text-sm text-text-secondary">No similar customers found</p>
+              </div>
+            )}
+
+            {/* Similar customer cards */}
+            {!similarLoading && !similarError && similarCustomers.length > 0 && (
+              <div className="space-y-3">
+                {similarCustomers.slice(0, 5).map((sim) => (
+                  <a
+                    key={sim.slug}
+                    href={`/customer/${encodeURIComponent(sim.name)}`}
+                    className="block bg-surface border border-border rounded-lg p-4 hover:border-accent/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-text-primary">{sim.name}</h3>
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/10 text-accent">
+                        {Math.round(sim.overlapScore * 100)}% match
+                      </span>
+                    </div>
+                    {sim.sharedProducts.length > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap mt-2">
+                        <span className="text-xs text-text-secondary mr-1">Shared:</span>
+                        {sim.sharedProducts.slice(0, 4).map((product, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-400"
+                          >
+                            {product}
+                          </span>
+                        ))}
+                        {sim.sharedProducts.length > 4 && (
+                          <span className="text-xs text-text-secondary">
+                            +{sim.sharedProducts.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="text-xs text-text-secondary mt-2">
+                      {sim.totalSharedNodes} shared signal{sim.totalSharedNodes !== 1 ? 's' : ''} across {sim.sharedNodeTypes.join(', ')}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

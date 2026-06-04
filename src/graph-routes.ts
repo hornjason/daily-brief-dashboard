@@ -15,6 +15,7 @@ import { generateMotionCampaigns } from './lib/motion-campaign-service.ts'
 import { detectActionTriggers } from './lib/motion-action-triggers.ts'
 import { computeGraphDiff } from './lib/graph-diff.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
+import { getSimilarCustomers } from './lib/customer-similarity.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import type { Signal } from './feature-module-registry.ts'
 import { customers } from './server-state.ts'
@@ -295,6 +296,42 @@ export function createGraphRouter(): Hono {
   router.get('/api/admin/usage-summary', async (c) => {
     const { getUsageSummary } = await import('./lib/usage-tracker.ts')
     return c.json(getUsageSummary())
+  })
+
+  // ── GET /api/customer/:slug/similar (#612) ───────────────────────────────
+
+  router.get('/api/customer/:slug/similar', async (c) => {
+    const slug = c.req.param('slug')
+    const customer = findCustomerBySlug(slug)
+
+    if (!customer) {
+      return c.json({ error: `Customer "${slug}" not found` }, 404)
+    }
+
+    try {
+      const { CACHE_DIR } = await import('./lib/paths.ts')
+
+      // Load all customer graphs from cache
+      const allGraphs = new Map<string, import('./lib/intelligence-graph-types.ts').CustomerGraph>()
+      for (const c of customers) {
+        const customerSlug = toSlug(c.name)
+        const graph = loadGraph(customerSlug, CACHE_DIR)
+        if (graph) {
+          allGraphs.set(customerSlug, graph)
+        }
+      }
+
+      const similar = getSimilarCustomers(slug, allGraphs)
+
+      return c.json({
+        customer: customer.name,
+        similar,
+        computedAt: new Date().toISOString(),
+      })
+    } catch (e: any) {
+      console.error(`[graph-routes] Similar customers failed for ${slug}:`, e?.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   return router
