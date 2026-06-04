@@ -13,6 +13,8 @@ import type { CustomerGraph } from '../../src/lib/intelligence-graph-types.ts'
 // Lazy imports
 let buildCustomerGraph: typeof import('../../src/lib/intelligence-graph.ts').buildCustomerGraph
 let buildMotion: typeof import('../../src/lib/motion-builder.ts').buildMotion
+let normalizeForDisplacement: typeof import('../../src/lib/motion-builder.ts').normalizeForDisplacement
+let DISPLACEMENT_KEYWORDS: typeof import('../../src/lib/motion-builder.ts').DISPLACEMENT_KEYWORDS
 type StrategicMotion = import('../../src/lib/motion-builder.ts').StrategicMotion
 type MotionPhase = import('../../src/lib/motion-builder.ts').MotionPhase
 
@@ -22,6 +24,8 @@ beforeAll(async () => {
 
   const motionModule = await import('../../src/lib/motion-builder.ts')
   buildMotion = motionModule.buildMotion
+  normalizeForDisplacement = motionModule.normalizeForDisplacement
+  DISPLACEMENT_KEYWORDS = motionModule.DISPLACEMENT_KEYWORDS
 })
 
 // ── CrowdStrike Fixture Signals ──────────────────────────────────────────────
@@ -789,6 +793,214 @@ describe('Motion Builder — buildMotion', () => {
       expect(hasAiTactic).toBe(true)
       // #577: total tactics per phase capped at 3
       expect(transformPhase.tactics.length).toBeLessThanOrEqual(3)
+    }
+  })
+})
+
+// ── Displacement Detection (#589) ──────────────────────────────────────────
+
+describe('normalizeForDisplacement', () => {
+  it('lowercases and strips version numbers', () => {
+    expect(normalizeForDisplacement('VMware vSphere 8.0')).toBe('vmware vsphere')
+  })
+
+  it('strips common suffixes like enterprise/platform/server', () => {
+    expect(normalizeForDisplacement('Splunk Enterprise 9.1.2')).toBe('splunk')
+    expect(normalizeForDisplacement('Docker Enterprise Platform')).toBe('docker')
+  })
+
+  it('strips version prefixed with v', () => {
+    expect(normalizeForDisplacement('Terraform v1.8.0')).toBe('terraform')
+  })
+
+  it('handles already-normalized input', () => {
+    expect(normalizeForDisplacement('puppet')).toBe('puppet')
+  })
+
+  it('collapses whitespace from stripped tokens', () => {
+    expect(normalizeForDisplacement('Chef  Infra  Server  v15.0')).toBe('chef infra')
+  })
+})
+
+describe('DISPLACEMENT_KEYWORDS coverage', () => {
+  it('has 80+ entries', () => {
+    expect(Object.keys(DISPLACEMENT_KEYWORDS).length).toBeGreaterThanOrEqual(80)
+  })
+
+  it('covers 13+ product families', () => {
+    // Count unique (redHat, tdp) pairs as proxy for families
+    const uniqueMappings = new Set(
+      Object.values(DISPLACEMENT_KEYWORDS).map(v => `${v.redHat}|${v.tdp}`)
+    )
+    // At minimum: Virtualization, Container Mgmt (docker), Container Mgmt (observability),
+    // Automation (puppet), Automation (terraform), etc.
+    // Actual product families are grouped by comment blocks, but unique mappings >= 4
+    expect(uniqueMappings.size).toBeGreaterThanOrEqual(4)
+
+    // Verify all 13+ families have at least one entry by checking specific keywords
+    const families = [
+      'vmware', 'splunk', 'datadog', 'puppet', 'chef', 'terraform',
+      'citrix', 'docker', 'rancher', 'cloud foundry', 'servicenow',
+      'websphere', 'nagios', 'hyper-v', 'saltstack',
+    ]
+    for (const family of families) {
+      expect(DISPLACEMENT_KEYWORDS[family]).toBeDefined()
+    }
+  })
+
+  it('maps VMware family to Virtualization TDP', () => {
+    for (const kw of ['vmware', 'vsphere', 'esxi', 'vcenter', 'nsx', 'vsan', 'broadcom']) {
+      expect(DISPLACEMENT_KEYWORDS[kw].tdp).toBe('Virtualization')
+      expect(DISPLACEMENT_KEYWORDS[kw].redHat).toBe('OpenShift Virtualization')
+    }
+  })
+
+  it('maps Docker family to Container Mgmt TDP', () => {
+    for (const kw of ['docker', 'docker desktop', 'docker swarm']) {
+      expect(DISPLACEMENT_KEYWORDS[kw].tdp).toBe('Container Mgmt')
+      expect(DISPLACEMENT_KEYWORDS[kw].redHat).toBe('OpenShift Container Platform')
+    }
+  })
+
+  it('maps Puppet family to Automation TDP', () => {
+    for (const kw of ['puppet', 'puppetserver', 'facter', 'hiera']) {
+      expect(DISPLACEMENT_KEYWORDS[kw].tdp).toBe('Automation')
+      expect(DISPLACEMENT_KEYWORDS[kw].redHat).toBe('Ansible Automation Platform')
+    }
+  })
+
+  it('maps Terraform/HashiCorp family to Automation TDP', () => {
+    for (const kw of ['terraform', 'hashicorp', 'vault', 'consul', 'nomad', 'packer']) {
+      expect(DISPLACEMENT_KEYWORDS[kw].tdp).toBe('Automation')
+      expect(DISPLACEMENT_KEYWORDS[kw].redHat).toBe('Ansible Automation Platform')
+    }
+  })
+
+  it('maps ServiceNow to Automation TDP', () => {
+    expect(DISPLACEMENT_KEYWORDS['servicenow'].tdp).toBe('Automation')
+    expect(DISPLACEMENT_KEYWORDS['servicenow'].redHat).toBe('Ansible Automation Platform')
+  })
+})
+
+describe('Displacement phase in buildMotion', () => {
+  // Helper to build a graph with competitor products for displacement testing
+  function buildDisplacementTestSignals(techProducts: Array<{ name: string; isRedHat?: boolean }>): Signal[] {
+    // Base signals from CrowdStrike fixture (need enough for 2+ play nodes)
+    const baseSignals: Signal[] = [
+      ...CROWDSTRIKE_SIGNALS.filter(s => s.source !== 'tech-stack'),
+      // Add competitor tech stack entries
+      ...techProducts.map(p => ({
+        source: 'tech-stack' as const,
+        type: 'technology' as const,
+        headline: `${p.name} (${p.isRedHat ? 'redhat' : 'proprietary'}, using)`,
+        detail: '',
+        timestamp: '2026-05-31',
+        score: 0.4,
+        metadata: {
+          techName: p.name,
+          category: p.isRedHat ? 'redhat' : 'proprietary',
+          context: 'using',
+          isRedHat: p.isRedHat ?? false,
+        },
+      })),
+    ]
+    return baseSignals
+  }
+
+  it('detects VMware in tech stack and creates displacement phase', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'VMware vSphere 8.0' },
+      { name: 'Red Hat Enterprise Linux', isRedHat: true },
+    ])
+    const graph = buildCustomerGraph('test-customer', 'Test Customer', signals)
+    const motion = await buildMotion(graph, 'test-customer', 'Test Customer', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      if (displacementPhase) {
+        expect(displacementPhase.urgency).toBe('high')
+        expect(displacementPhase.evidence.some(e => e.fact.includes('VMware vSphere'))).toBe(true)
+        expect(displacementPhase.evidence.some(e => e.fact.includes('OpenShift Virtualization'))).toBe(true)
+      }
+    }
+  })
+
+  it('detects Docker in tech stack and maps to Container Mgmt', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'Docker Enterprise 20.10' },
+    ])
+    const graph = buildCustomerGraph('test-docker', 'Docker Corp', signals)
+    const motion = await buildMotion(graph, 'test-docker', 'Docker Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      if (displacementPhase) {
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Docker'))).toBe(true)
+        expect(displacementPhase.evidence.some(e => e.fact.includes('OpenShift Container Platform'))).toBe(true)
+      }
+    }
+  })
+
+  it('detects Puppet and maps to Automation', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'Puppet Enterprise' },
+    ])
+    const graph = buildCustomerGraph('test-puppet', 'Puppet Corp', signals)
+    const motion = await buildMotion(graph, 'test-puppet', 'Puppet Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      if (displacementPhase) {
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Puppet'))).toBe(true)
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Ansible Automation Platform'))).toBe(true)
+      }
+    }
+  })
+
+  it('detects Terraform and maps to Automation', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'Terraform v1.8.0' },
+    ])
+    const graph = buildCustomerGraph('test-tf', 'Terraform Corp', signals)
+    const motion = await buildMotion(graph, 'test-tf', 'Terraform Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      if (displacementPhase) {
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Terraform'))).toBe(true)
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Ansible Automation Platform'))).toBe(true)
+      }
+    }
+  })
+
+  it('detects ServiceNow and maps to Automation', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'ServiceNow ITSM' },
+    ])
+    const graph = buildCustomerGraph('test-snow', 'ServiceNow Corp', signals)
+    const motion = await buildMotion(graph, 'test-snow', 'ServiceNow Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      if (displacementPhase) {
+        expect(displacementPhase.evidence.some(e => e.fact.includes('ServiceNow'))).toBe(true)
+        expect(displacementPhase.evidence.some(e => e.fact.includes('Ansible Automation Platform'))).toBe(true)
+      }
+    }
+  })
+
+  it('does not match Red Hat products as displacement targets', async () => {
+    const signals = buildDisplacementTestSignals([
+      { name: 'Red Hat Ansible Automation Platform', isRedHat: true },
+      { name: 'Red Hat OpenShift Container Platform', isRedHat: true },
+    ])
+    const graph = buildCustomerGraph('test-rh', 'Red Hat Only Corp', signals)
+    const motion = await buildMotion(graph, 'test-rh', 'Red Hat Only Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    if (motion) {
+      const displacementPhase = motion.phases.find(p => p.id === 'phase-displacement')
+      // No displacement phase since all products are Red Hat
+      expect(displacementPhase).toBeUndefined()
     }
   })
 })

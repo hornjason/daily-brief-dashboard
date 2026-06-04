@@ -698,21 +698,152 @@ function attachMaterials(tactics: MotionPhase['tactics']): void {
   }
 }
 
-// ── Displacement Detection (#579) ──────────────────────────────────────────
 
-const DISPLACEMENT_KEYWORDS: Record<string, { redHat: string; tdp: string }> = {
-  'vmware': { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
-  'splunk': { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
-  'datadog': { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
-  'puppet': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
-  'chef': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
-  'tanzu': { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
-  'terraform': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+// ── Displacement Detection (#589) ──────────────────────────────────────────
+
+/**
+ * Normalize a tech-stack product name for displacement matching.
+ * Lowercases, strips version numbers (e.g. "8.0", "v2.1.3"), and removes
+ * common suffixes like "enterprise", "platform", "server", "cloud".
+ */
+export function normalizeForDisplacement(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\bv?\d+(\.\d+)*\b/g, '')       // strip version numbers
+    .replace(/\b(enterprise|platform|server|cloud|standard|premium|professional|community|edition)\b/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')            // non-alpha to space
+    .replace(/\s+/g, ' ')                      // collapse whitespace
+    .trim()
+}
+
+/** Map of competitor keywords → Red Hat displacement target + TDP domain */
+export const DISPLACEMENT_KEYWORDS: Record<string, { redHat: string; tdp: string }> = {
+  // ── VMware family ────────────────────────────────────────────────────────
+  'vmware':      { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'vsphere':     { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'esxi':        { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'vcenter':     { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'nsx':         { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'vsan':        { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'tanzu':       { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'broadcom':    { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'workstation': { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'fusion':      { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+
+  // ── Splunk family ────────────────────────────────────────────────────────
+  'splunk':      { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+
+  // ── Datadog family ───────────────────────────────────────────────────────
+  'datadog':     { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'dd-agent':    { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+
+  // ── Puppet family ────────────────────────────────────────────────────────
+  'puppet':       { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'puppetserver': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'facter':       { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'hiera':        { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+
+  // ── Chef family ──────────────────────────────────────────────────────────
+  'chef':          { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'chef infra':    { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'chef automate': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'inspec':        { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'habitat':       { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+
+  // ── Terraform / HashiCorp family ─────────────────────────────────────────
+  'terraform':  { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'hashicorp':  { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'vault':      { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'consul':     { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'nomad':      { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'packer':     { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+
+  // ── Citrix family ────────────────────────────────────────────────────────
+  'citrix':     { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'xenserver':  { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'xenapp':     { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'netscaler':  { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+
+  // ── Docker family (NOT kubernetes) ───────────────────────────────────────
+  'docker':          { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'docker desktop':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'docker swarm':    { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+
+  // ── Rancher / SUSE ───────────────────────────────────────────────────────
+  'rancher':       { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'suse rancher':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'harvester':     { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+
+  // ── CloudFoundry / Pivotal ───────────────────────────────────────────────
+  'cloud foundry':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'pivotal':        { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'pcf':            { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'tas':            { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+
+  // ── ServiceNow ───────────────────────────────────────────────────────────
+  'servicenow':  { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+
+  // ── IBM family ───────────────────────────────────────────────────────────
+  'ibm cloud pak':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'websphere':      { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'liberty':        { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+
+  // ── Monitoring ───────────────────────────────────────────────────────────
+  'nagios':       { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'zabbix':       { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'new relic':    { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'dynatrace':    { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'appdynamics':  { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+
+  // ── Legacy virtualization ────────────────────────────────────────────────
+  'hyper-v':   { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'hyperv':    { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'proxmox':   { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'nutanix':   { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+
+  // ── Config management ────────────────────────────────────────────────────
+  'saltstack':  { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'salt':       { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'cfengine':   { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+
+  // ── Additional VMware variants ───────────────────────────────────────────
+  'vrealize':     { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'aria':         { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'horizon':      { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'vsphere ha':   { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+  'vmotion':      { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
+
+  // ── Additional container / PaaS ──────────────────────────────────────────
+  'mesos':       { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'marathon':    { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'mesosphere':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'docker compose': { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'podman':      { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'containerd':  { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+  'cri-o':       { redHat: 'OpenShift Container Platform', tdp: 'Container Mgmt' },
+
+  // ── Additional monitoring / observability ────────────────────────────────
+  'prometheus':    { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'grafana':       { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'elastic':       { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'elasticsearch': { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'kibana':        { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'logstash':      { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'sumo logic':    { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'icinga':        { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+  'pagerduty':     { redHat: 'OpenShift Observability', tdp: 'Container Mgmt' },
+
+  // ── Additional automation / IaC ──────────────────────────────────────────
+  'ansible tower': { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'awx':           { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'pulumi':        { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
+  'crossplane':    { redHat: 'Ansible Automation Platform', tdp: 'Automation' },
 }
 
 /**
  * Build displacement phase from non-Red-Hat product nodes in the graph.
- * Matches competitor product names against DISPLACEMENT_KEYWORDS.
+ * Matches competitor product names against DISPLACEMENT_KEYWORDS using
+ * fuzzy/normalized matching (word boundaries, stripped versions).
  */
 function buildDisplacementPhase(
   graph: CustomerGraph,
@@ -727,16 +858,26 @@ function buildDisplacementPhase(
 
   if (nonRedHatProducts.length === 0) return null
 
-  // Find displacement matches
+  // Find displacement matches using normalized fuzzy matching
   const matches: Array<{ competitor: string; redHat: string; tdp: string; nodeName: string }> = []
   const matchedTdps = new Set<string>()
 
+  // Sort keywords longest-first so multi-word keywords match before single-word
+  const sortedKeywords = Object.entries(DISPLACEMENT_KEYWORDS)
+    .sort((a, b) => b[0].length - a[0].length)
+
   for (const product of nonRedHatProducts) {
-    const name = String(product.properties.techName ?? product.name ?? '').toLowerCase()
-    for (const [keyword, mapping] of Object.entries(DISPLACEMENT_KEYWORDS)) {
-      if (name.includes(keyword) && !usedTdps.has(mapping.tdp) && !matchedTdps.has(mapping.tdp)) {
+    const rawName = String(product.properties.techName ?? product.name ?? '')
+    const normalized = normalizeForDisplacement(rawName)
+
+    for (const [keyword, mapping] of sortedKeywords) {
+      if (usedTdps.has(mapping.tdp) || matchedTdps.has(mapping.tdp)) continue
+
+      const escapedKw = keyword.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
+      const wordBoundaryRe = new RegExp(`(^|\\s)${escapedKw}(\\s|$)`)
+      if (wordBoundaryRe.test(normalized)) {
         matches.push({
-          competitor: String(product.properties.techName ?? product.name ?? ''),
+          competitor: rawName,
           redHat: mapping.redHat,
           tdp: mapping.tdp,
           nodeName: product.name,
@@ -782,6 +923,7 @@ function buildDisplacementPhase(
 
   // Attach materials
   attachMaterials(tactics)
+
 
   // Build evidence from displacement matches
   const evidence: MotionPhase['evidence'] = matches.map(m => ({
@@ -863,7 +1005,7 @@ export async function buildMotion(
     }
   }
 
-  // Displacement phase — competitor product displacement (#579)
+  // Displacement phase — competitor displacement opportunities (#579, #589)
   const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps)
   if (displacementPhase) {
     phases.push(displacementPhase)
