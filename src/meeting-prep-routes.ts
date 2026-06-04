@@ -5,10 +5,11 @@
  * All domain logic in meeting-prep-service.ts (following campaign-service.ts pattern).
  *
  * Endpoints:
- * - GET  /api/customer/:name/meetings          — calendar events for this customer
- * - POST /api/customer/:name/meeting-prep/generate — generate a meeting prep doc
- * - GET  /api/customer/:name/meeting-prep/history  — previously generated prep docs
- * - DELETE /api/customer/:name/meeting-prep/:index — delete a prep doc from history
+ * - GET  /api/customer/:name/meetings              — calendar events for this customer
+ * - GET  /api/customer/:name/meeting-prep-brief     — instant pre-meeting intelligence brief (#600)
+ * - POST /api/customer/:name/meeting-prep/generate  — generate a meeting prep doc
+ * - GET  /api/customer/:name/meeting-prep/history   — previously generated prep docs
+ * - DELETE /api/customer/:name/meeting-prep/:index  — delete a prep doc from history
  */
 
 import { Hono } from 'hono'
@@ -28,6 +29,8 @@ import {
   type MeetingPrepRequest,
 } from './meeting-prep-service.ts'
 import { runProactivePrepScan, readAttendeeCache } from './proactive-meeting-prep.ts'
+import { generateMeetingPrepBrief } from './lib/meeting-prep-intelligence.ts'
+import { CACHE_DIR } from './lib/paths.ts'
 
 // ── In-flight guard ──────────────────────────────────────────────────────────
 
@@ -68,6 +71,35 @@ export function createMeetingPrepRouter() {
     } catch (e: any) {
       console.error(`[meeting-prep] Failed to fetch meetings for ${customerName}:`, e.message)
       return c.json({ meetings: [], allMeetings: [], error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/customer/:name/meeting-prep-brief ──────────────────────────
+  // Returns instant pre-meeting intelligence brief from the graph (#600)
+  router.get('/api/customer/:name/meeting-prep-brief', async (c) => {
+    const customerName = decodeURIComponent(c.req.param('name'))
+    const customer = findCustomerByNameOrSlug(customerName)
+
+    if (!customer) {
+      return c.json({ error: `Customer "${customerName}" not found` }, 404)
+    }
+
+    const slug = toSlug(customer.name)
+
+    try {
+      const brief = await generateMeetingPrepBrief(slug, CACHE_DIR)
+
+      if (!brief) {
+        return c.json({
+          error: 'No intelligence graph available for this customer. Run intelligence pipeline first.',
+          customerName: customer.name,
+        }, 404)
+      }
+
+      return c.json(brief)
+    } catch (e: any) {
+      console.error(`[meeting-prep-brief] Failed for ${customerName}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

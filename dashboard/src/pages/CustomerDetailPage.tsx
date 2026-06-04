@@ -64,6 +64,7 @@ import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
 import { ToolsTab } from '../components/tabs/ToolsTab'
 import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
+import { MeetingPrepView } from '../components/MeetingPrepView'
 import { TechStackTab } from '../components/tabs/TechStackTab'
 import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 import { IntelligenceInsightsCard } from '../components/RecommendationCard'
@@ -1029,6 +1030,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType<{ customerName: string 
   campaigns: CampaignsTab,
   'news-radar': NewsTab,
   'meeting-prep': ({ customerName }: { customerName: string }) => <MeetingPrepContent customerName={customerName} />,
+  'meeting-prep-brief': ({ customerName }: { customerName: string }) => <MeetingPrepView customerName={customerName} />,
   tools: ToolsTab,
   intelligence: IntelligenceTab,
   playbook: PlaybookTab,
@@ -1504,6 +1506,14 @@ export function CustomerDetailPage() {
               {meta?.ae && (
                 <span className="text-sm text-text-secondary">{meta.ae}</span>
               )}
+              <button
+                onClick={() => setActiveTab('meeting-prep-brief' as any)}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+                title="Open pre-meeting intelligence brief"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Meeting Prep
+              </button>
               {notebookUrl && (
                 <a
                   href={notebookUrl}
