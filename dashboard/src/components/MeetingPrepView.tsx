@@ -5,11 +5,7 @@
  * customer's intelligence graph. Shows talking points, recent changes,
  * evidence to cite, and relevant materials.
  *
- * Draft Email (#610): "Draft Email" button generates a pre-meeting
- * outreach email from talking points + evidence via Gemini.
- *
  * Data source: GET /api/customer/:slug/meeting-prep-brief
- * Email draft: POST /api/customer/:slug/meeting-prep-email
  */
 
 import { useState, useEffect } from 'react'
@@ -24,10 +20,10 @@ import {
   AlertTriangle,
   ExternalLink,
   X,
-  Mail,
-  Check,
-  Copy,
-  Loader2,
+  NotebookPen,
+  CheckCircle2,
+  Clock,
+  Send,
 } from 'lucide-react'
 
 interface MeetingPrepBrief {
@@ -42,7 +38,20 @@ interface MeetingPrepBrief {
   }>
   topEvidence: Array<{ fact: string; recency: string }>
   materials: Array<{ title: string; url: string; type: string }>
+  lastDebrief?: {
+    notes: string
+    nextSteps?: string
+    createdAt: string
+  }
   generatedAt: string
+}
+
+interface MeetingDebrief {
+  customerSlug: string
+  notes: string
+  talkingPointsUsed?: string[]
+  nextSteps?: string
+  createdAt: string
 }
 
 function formatRelativeTime(iso: string): string {
@@ -105,153 +114,6 @@ function DensityBar({ populated, total, pct }: { populated: number; total: numbe
   )
 }
 
-/** Draft Email panel — generates and displays a pre-meeting email */
-function DraftEmailPanel({
-  customerName,
-  talkingPoints,
-  evidence,
-}: {
-  customerName: string
-  talkingPoints: string[]
-  evidence: Array<{ fact: string; recency: string }>
-}) {
-  const [email, setEmail] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  const generateEmail = async () => {
-    setLoading(true)
-    setError(null)
-    setEmail(null)
-    try {
-      const res = await fetch(
-        `/api/customer/${encodeURIComponent(customerName)}/meeting-prep-email`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            talkingPoints,
-            evidence: evidence.map(e => e.fact),
-            customerName,
-          }),
-        },
-      )
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setError(body.error ?? `Failed to generate email (${res.status})`)
-        return
-      }
-      const data = await res.json()
-      setEmail(data.email)
-    } catch (e: any) {
-      setError(e.message ?? 'Network error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const copyToClipboard = async () => {
-    if (!email) return
-    try {
-      await navigator.clipboard.writeText(email)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea')
-      textarea.value = email
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  // Not yet generated — show the button
-  if (!email && !loading && !error) {
-    return (
-      <button
-        onClick={generateEmail}
-        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-accent/30 bg-accent/5 text-accent hover:bg-accent/10 transition-colors"
-      >
-        <Mail className="w-4 h-4" />
-        Draft Email
-      </button>
-    )
-  }
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-border bg-surface-alt/50">
-        <Loader2 className="w-4 h-4 animate-spin text-accent" />
-        <span className="text-sm text-text-secondary">Drafting email...</span>
-      </div>
-    )
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-critical/20 bg-critical/5">
-        <AlertTriangle className="w-4 h-4 text-critical" />
-        <span className="text-sm text-critical flex-1">{error}</span>
-        <button
-          onClick={generateEmail}
-          className="text-xs text-accent hover:underline"
-        >
-          Retry
-        </button>
-      </div>
-    )
-  }
-
-  // Email generated — show preview with copy button
-  return (
-    <div className="rounded-lg border border-accent/20 bg-accent/5 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-accent/15 bg-accent/10">
-        <div className="flex items-center gap-2">
-          <Mail className="w-4 h-4 text-accent" />
-          <span className="text-sm font-medium text-accent">Draft Email</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={copyToClipboard}
-            className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded border border-accent/30 bg-white/80 text-accent hover:bg-white transition-colors"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3 h-3" />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy className="w-3 h-3" />
-                Copy
-              </>
-            )}
-          </button>
-          <button
-            onClick={generateEmail}
-            className="p-1 rounded hover:bg-accent/10 transition-colors"
-            title="Regenerate"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-accent" />
-          </button>
-        </div>
-      </div>
-      <div className="px-4 py-3">
-        <pre className="text-sm text-text-primary whitespace-pre-wrap font-sans leading-relaxed">
-          {email}
-        </pre>
-      </div>
-    </div>
-  )
-}
-
 export function MeetingPrepView({
   customerName,
   onClose,
@@ -262,6 +124,61 @@ export function MeetingPrepView({
   const [brief, setBrief] = useState<MeetingPrepBrief | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Debrief form state (#611)
+  const [showDebrief, setShowDebrief] = useState(false)
+  const [debriefNotes, setDebriefNotes] = useState('')
+  const [debriefNextSteps, setDebriefNextSteps] = useState('')
+  const [debriefSubmitting, setDebriefSubmitting] = useState(false)
+  const [debriefSuccess, setDebriefSuccess] = useState(false)
+  const [debriefError, setDebriefError] = useState<string | null>(null)
+  const [previousDebriefs, setPreviousDebriefs] = useState<MeetingDebrief[]>([])
+
+  const fetchDebriefs = async () => {
+    try {
+      const res = await fetch(
+        `/api/customer/${encodeURIComponent(customerName)}/meeting-debriefs`,
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setPreviousDebriefs(data.debriefs ?? [])
+      }
+    } catch {
+      // Non-critical — silently fail
+    }
+  }
+
+  const submitDebrief = async () => {
+    if (!debriefNotes.trim()) return
+    setDebriefSubmitting(true)
+    setDebriefError(null)
+    try {
+      const res = await fetch(
+        `/api/customer/${encodeURIComponent(customerName)}/meeting-debrief`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes: debriefNotes,
+            nextSteps: debriefNextSteps || undefined,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setDebriefError(body.error ?? `Failed to save (${res.status})`)
+        return
+      }
+      setDebriefSuccess(true)
+      setDebriefNotes('')
+      setDebriefNextSteps('')
+      fetchDebriefs()
+    } catch (e: any) {
+      setDebriefError(e.message ?? 'Network error')
+    } finally {
+      setDebriefSubmitting(false)
+    }
+  }
 
   const fetchBrief = async () => {
     setLoading(true)
@@ -286,6 +203,7 @@ export function MeetingPrepView({
 
   useEffect(() => {
     fetchBrief()
+    fetchDebriefs()
   }, [customerName])
 
   if (loading) {
@@ -381,16 +299,6 @@ export function MeetingPrepView({
             </div>
           ))}
         </div>
-        {/* Draft Email button — after talking points (#610) */}
-        {brief.talkingPoints.length > 0 && (
-          <div className="mt-4">
-            <DraftEmailPanel
-              customerName={brief.customerName}
-              talkingPoints={brief.talkingPoints}
-              evidence={brief.topEvidence}
-            />
-          </div>
-        )}
       </section>
 
       {/* Recent Changes */}
@@ -472,6 +380,119 @@ export function MeetingPrepView({
           </div>
         </section>
       )}
+
+      {/* Previous Meeting Notes (#611) */}
+      {(brief.lastDebrief || previousDebriefs.length > 0) && (
+        <section className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-4 h-4 text-text-secondary" />
+            <h3 className="text-sm font-semibold text-text-primary uppercase tracking-wide">
+              Previous Meeting Notes
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {(previousDebriefs.length > 0 ? previousDebriefs : brief.lastDebrief ? [brief.lastDebrief] : []).map((d, i) => (
+              <div
+                key={i}
+                className="bg-surface-alt/50 border border-border rounded-lg px-4 py-3"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-text-secondary">
+                    {formatRelativeTime(d.createdAt)}
+                  </span>
+                </div>
+                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                  {d.notes}
+                </p>
+                {d.nextSteps && (
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <span className="text-xs font-medium text-text-secondary">Next steps: </span>
+                    <span className="text-sm text-text-primary">{d.nextSteps}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Debrief Form (#611) */}
+      <section className="mb-5 border-t border-border pt-5">
+        {!showDebrief ? (
+          <button
+            onClick={() => { setShowDebrief(true); setDebriefSuccess(false) }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-surface hover:bg-hover transition-colors text-sm text-text-primary"
+          >
+            <NotebookPen className="w-4 h-4 text-accent" />
+            How did it go?
+          </button>
+        ) : debriefSuccess ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-success/10 border border-success/20">
+            <CheckCircle2 className="w-4 h-4 text-success" />
+            <span className="text-sm text-success">Debrief saved. It will inform your next meeting prep.</span>
+            <button
+              onClick={() => { setShowDebrief(false); setDebriefSuccess(false) }}
+              className="ml-auto text-xs text-text-secondary hover:underline"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <NotebookPen className="w-4 h-4 text-accent" />
+              <h3 className="text-sm font-semibold text-text-primary">Post-Meeting Debrief</h3>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">
+                What did you learn?
+              </label>
+              <textarea
+                value={debriefNotes}
+                onChange={(e) => setDebriefNotes(e.target.value)}
+                placeholder="Key observations, customer reactions, discovered needs..."
+                rows={3}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 resize-y"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">
+                Next steps (optional)
+              </label>
+              <textarea
+                value={debriefNextSteps}
+                onChange={(e) => setDebriefNextSteps(e.target.value)}
+                placeholder="Follow-up actions, commitments made..."
+                rows={2}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-accent/30 resize-y"
+              />
+            </div>
+            {debriefError && (
+              <div className="text-xs text-critical">{debriefError}</div>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={submitDebrief}
+                disabled={debriefSubmitting || !debriefNotes.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {debriefSubmitting ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                Save Debrief
+              </button>
+              <button
+                onClick={() => setShowDebrief(false)}
+                className="text-xs text-text-secondary hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Footer: generation timestamp */}
       <div className="text-xs text-text-secondary/60 mt-6 text-right">

@@ -21,6 +21,7 @@ import { findActiveNodesByType } from './graph-utils.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import { callGemini } from '../gemini-call.ts'
 import { getAccountTeam, toPromptContext } from '../account-team.ts'
+import { readLatestDebrief, type MeetingDebrief } from '../meeting-debrief-service.ts'
 import { customers } from '../server-state.ts'
 import { toSlug } from '../cache-layer.ts'
 import type { CustomerGraph } from './intelligence-graph-types.ts'
@@ -40,6 +41,11 @@ export interface MeetingPrepBrief {
   }>
   topEvidence: Array<{ fact: string; recency: string }>
   materials: Array<{ title: string; url: string; type: string }>
+  lastDebrief?: {
+    notes: string
+    nextSteps?: string
+    createdAt: string
+  }
   generatedAt: string
 }
 
@@ -79,6 +85,7 @@ async function generateTalkingPoints(
   scoredTactics: ScoredTactic[],
   recentChanges: GraphDiffChange[],
   teamContext: string,
+  lastDebrief?: MeetingDebrief | null,
 ): Promise<string[]> {
   if (scoredTactics.length === 0) {
     return [
@@ -117,6 +124,10 @@ Each talking point should:
 Do NOT use bullet points or numbered lists in your output. Return exactly 3 talking points separated by newlines.
 Each line is one talking point.`
 
+  const debriefBlock = lastDebrief
+    ? `\nLast Meeting Notes (${new Date(lastDebrief.createdAt).toLocaleDateString()}):\n${lastDebrief.notes}${lastDebrief.nextSteps ? `\nNext steps from last meeting: ${lastDebrief.nextSteps}` : ''}\n`
+    : ''
+
   const userPrompt = `Customer: ${customerName}
 ${teamContext}
 
@@ -125,8 +136,8 @@ ${tacticsBlock}
 
 Recent Intelligence Changes:
 ${changesBlock}
-
-Generate 3 talking points that connect the evidence to specific conversation starters.`
+${debriefBlock}
+Generate 3 talking points that connect the evidence to specific conversation starters.${lastDebrief ? ' Reference the last meeting notes where relevant — follow up on next steps or seller observations.' : ''}`
 
   try {
     const result = await callGemini(systemPrompt, userPrompt, {
@@ -200,12 +211,16 @@ export async function generateMeetingPrepBrief(
     : []
   const teamContext = toPromptContext(team)
 
+  // 4b. Read latest debrief for continuity (#611)
+  const lastDebrief = readLatestDebrief(customerSlug)
+
   // 5. Generate talking points via Gemini
   const talkingPoints = await generateTalkingPoints(
     customerName,
     scored,
     diff.changes,
     teamContext,
+    lastDebrief,
   )
 
   // 6. Signal density
@@ -267,6 +282,13 @@ export async function generateMeetingPrepBrief(
     recentChanges,
     topEvidence,
     materials,
+    ...(lastDebrief ? {
+      lastDebrief: {
+        notes: lastDebrief.notes,
+        nextSteps: lastDebrief.nextSteps,
+        createdAt: lastDebrief.createdAt,
+      },
+    } : {}),
     generatedAt: new Date().toISOString(),
   }
 }
