@@ -29,6 +29,12 @@ interface MotionPhase {
     assets: Array<{ name: string; url: string; type: string }>
     materials?: Array<{ title: string; url: string; type: string }>
     brief?: string
+    evidenceTrail?: Array<{
+      fact: string
+      module: string
+      recency: string
+      weight: number
+    }>
   }>
   targetPersonas: string[]
   evidence: Array<{
@@ -487,6 +493,18 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
                     )}
                     {tactic.brief && (
                       <p className="text-xs text-text-secondary leading-relaxed">{tactic.brief}</p>
+                    )}
+                    {tactic.evidenceTrail && tactic.evidenceTrail.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <span className="text-xs text-text-secondary uppercase tracking-wide">Why recommended</span>
+                        {tactic.evidenceTrail.slice(0, 3).map((ev, idx) => (
+                          <div key={idx} className="text-xs text-text-secondary flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
+                            <span>{ev.fact}</span>
+                            {ev.recency && <span className="text-text-secondary/60 ml-1">({ev.recency})</span>}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
