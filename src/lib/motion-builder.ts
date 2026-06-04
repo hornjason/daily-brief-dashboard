@@ -28,6 +28,7 @@ import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
 import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
+import type { GeminiRecommendation } from './gemini-tactic-recommender.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ export interface StrategicMotion {
   generatedAt: string
   status: 'active' | 'dismissed' | 'pinned'
   enrichedContacts?: EnrichedContact[]
+  geminiInsights?: GeminiRecommendation[]
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1061,6 +1063,27 @@ export async function buildMotion(
   // Step 8: Generate Gemini briefs for each phase (parallel, non-blocking)
   await generatePhaseBriefs(phases, customerName)
 
+  // Step 9: Gemini tactic inference (#599) — augmentation, not replacement
+  let geminiInsights: GeminiRecommendation[] | undefined
+  if (process.env.GEMINI_TACTIC_INFERENCE === 'true') {
+    try {
+      const { summarizeGraph } = await import('./graph-summary.ts')
+      const { recommendTactics } = await import('./gemini-tactic-recommender.ts')
+      const graphText = summarizeGraph(graph)
+      const availableTactics = tacticSignals.map(s => ({
+        name: s.headline,
+        parentTdp: String(s.metadata?.parentTdp ?? ''),
+      }))
+      const insights = await recommendTactics(graphText, availableTactics, customerName)
+      // Filter out tactics already in deterministic phases
+      const existingTacticNames = new Set(phases.flatMap(p => p.tactics.map(t => t.name)))
+      geminiInsights = insights.filter(i => !existingTacticNames.has(i.tacticName))
+      if (geminiInsights.length === 0) geminiInsights = undefined
+    } catch (e: any) {
+      console.warn('[motion-builder] Gemini tactic inference failed:', e?.message)
+    }
+  }
+
   return {
     id: `motion:${customerSlug}`,
     customerSlug,
@@ -1072,6 +1095,7 @@ export async function buildMotion(
     totalEstimatedTcv: totalTcv || undefined,
     generatedAt: new Date().toISOString(),
     status: 'active',
+    geminiInsights,
   }
 }
 

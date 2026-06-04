@@ -55,6 +55,14 @@ interface EnrichedContact {
   source?: string
 }
 
+interface GeminiRecommendation {
+  tacticName: string
+  parentTdp: string
+  reasoning: string
+  confidence: 'high' | 'medium' | 'low'
+  signalsUsed: string[]
+}
+
 interface StrategicMotion {
   id: string
   customerSlug: string
@@ -67,6 +75,7 @@ interface StrategicMotion {
   generatedAt: string
   status: 'active' | 'dismissed' | 'pinned'
   enrichedContacts?: EnrichedContact[]
+  geminiInsights?: GeminiRecommendation[]
 }
 
 interface CampaignEmail {
@@ -729,6 +738,36 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
           <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
         ))}
       </div>
+
+      {/* AI Insights — Gemini tactic inference (#599) */}
+      {motion.geminiInsights && motion.geminiInsights.length > 0 && (
+        <div className="mx-5 mb-4 border border-accent/30 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-accent" />
+            <h3 className="text-sm font-semibold text-accent">AI Insights</h3>
+          </div>
+          <div className="space-y-3">
+            {motion.geminiInsights.map((insight, i) => (
+              <div key={i} className="bg-bg-secondary/30 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium text-text-primary">{insight.tacticName}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    insight.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
+                    insight.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>{insight.confidence}</span>
+                </div>
+                <p className="text-xs text-text-secondary">{insight.reasoning}</p>
+                {insight.signalsUsed.length > 0 && (
+                  <div className="mt-1 text-xs text-text-secondary/60">
+                    Signals: {insight.signalsUsed.join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1006,3 +1006,29 @@ describe('Displacement phase in buildMotion', () => {
     }
   })
 })
+
+// ── Gemini Insights (#599) ──────────────────────────────────────────────────
+
+describe('Gemini tactic inference (#599)', () => {
+  it('geminiInsights is undefined when GEMINI_TACTIC_INFERENCE is not set', async () => {
+    // Ensure env var is not set
+    delete process.env.GEMINI_TACTIC_INFERENCE
+    const graph = buildCrowdStrikeGraph()
+    const motion = await buildMotion(graph, 'crowdstrike', 'CrowdStrike', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    expect(motion).not.toBeNull()
+    expect(motion!.geminiInsights).toBeUndefined()
+  })
+
+  it('StrategicMotion type includes optional geminiInsights field', async () => {
+    // Type-level verification: the field exists on StrategicMotion
+    const graph = buildCrowdStrikeGraph()
+    const motion = await buildMotion(graph, 'crowdstrike', 'CrowdStrike', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
+
+    expect(motion).not.toBeNull()
+    // geminiInsights should be either undefined or an array
+    if (motion!.geminiInsights !== undefined) {
+      expect(Array.isArray(motion!.geminiInsights)).toBe(true)
+    }
+  })
+})
