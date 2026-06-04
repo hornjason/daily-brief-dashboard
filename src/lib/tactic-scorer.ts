@@ -406,6 +406,7 @@ export function scoreTactics(
     materials?: MaterialLink[]
   }>,
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): ScoredTactic[] {
   const baseKeywords = extractBaseKeywords(graph)
 
@@ -457,6 +458,47 @@ export function scoreTactics(
         })
 
         compositeScore = compositeScore * diversityFactor
+      }
+    }
+
+    // 8. Team alignment boost (#621) — specialist covering this tactic's domain
+    if (teamContext && teamContext.length > 0) {
+      let teamBoosted = false
+      for (const member of teamContext) {
+        if (teamBoosted) break
+        for (const product of member.products) {
+          // Case-insensitive substring: does the team member's product match
+          // the tactic's parentTdp or name?
+          const productLower = product.toLowerCase()
+          const tdpLower = tactic.parentTdp.toLowerCase()
+          const nameLower = tactic.name.toLowerCase()
+          if (tdpLower.includes(productLower) || nameLower.includes(productLower) ||
+              productLower.includes(tdpLower) || productLower.includes(nameLower)) {
+            // Check TDP_KEYWORDS as well for broader matching (e.g. "OpenShift" → "Container Mgmt")
+            compositeScore += 0.1
+            allEvidence.push({
+              fact: `Team alignment: ${member.name} (${member.role}) covers ${product}`,
+              module: 'team',
+              recency: '',
+              weight: 0.1,
+            })
+            teamBoosted = true
+            break
+          }
+          // Also check via TDP_KEYWORDS — e.g. product "Ansible" should match TDP "Automation"
+          const keywords = TDP_KEYWORDS[tactic.parentTdp]
+          if (keywords && keywords.some(kw => productLower.includes(kw))) {
+            compositeScore += 0.1
+            allEvidence.push({
+              fact: `Team alignment: ${member.name} (${member.role}) covers ${product}`,
+              module: 'team',
+              recency: '',
+              weight: 0.1,
+            })
+            teamBoosted = true
+            break
+          }
+        }
       }
     }
 

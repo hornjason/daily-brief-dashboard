@@ -370,6 +370,7 @@ function buildAnchorPhase(
   graph: CustomerGraph,
   tacticSignals: Signal[],
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): MotionPhase | null {
   const subs = findNodesByType(graph, 'subscription')
   const expiredSubs = subs.filter(s => {
@@ -438,7 +439,7 @@ function buildAnchorPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence (engagement, intel, lifecycle, etc.)
-  const scored = scoreTactics(graph, tactics, portfolioFrequency)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -513,6 +514,7 @@ function buildExpandPhase(
   tacticSignals: Signal[],
   anchorTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): MotionPhase | null {
   const programs = findNodesByType(graph, 'program')
   const cloudPrograms = programs.filter(p =>
@@ -561,7 +563,7 @@ function buildExpandPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -619,6 +621,7 @@ function buildTransformPhase(
   tacticSignals: Signal[],
   usedTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): MotionPhase | null {
   const plays = findNodesByType(graph, 'play')
 
@@ -658,7 +661,7 @@ function buildTransformPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   // #577: Cap total tactics per phase
@@ -865,6 +868,7 @@ function buildDisplacementPhase(
   tacticSignals: Signal[],
   usedTdps: Set<string>,
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): MotionPhase | null {
   const products = findNodesByType(graph, 'product')
   const nonRedHatProducts = products.filter(p => {
@@ -932,7 +936,7 @@ function buildDisplacementPhase(
   let tactics = filterTopTacticsPerTdp(allMatchingTactics, contextKeywords)
 
   // #591: Rank tactics using full graph intelligence
-  const scored = scoreTactics(graph, tactics, portfolioFrequency)
+  const scored = scoreTactics(graph, tactics, portfolioFrequency, teamContext)
   scored.sort((a, b) => b.compositeScore - a.compositeScore)
 
   const MAX_TACTICS_PER_PHASE = 3
@@ -982,6 +986,7 @@ export async function buildMotion(
   playSignals: Signal[],
   tacticSignals: Signal[],
   portfolioFrequency?: Map<string, number>,
+  teamContext?: Array<{ name: string; role: string; products: string[] }>,
 ): Promise<StrategicMotion | null> {
   // Guard: need at least 1 play node for a meaningful motion (#573)
   const playNodes = findNodesByType(graph, 'play')
@@ -997,7 +1002,7 @@ export async function buildMotion(
   const phases: MotionPhase[] = []
 
   // Anchor phase — expired subscriptions
-  const anchorPhase = buildAnchorPhase(graph, tacticSignals, portfolioFrequency)
+  const anchorPhase = buildAnchorPhase(graph, tacticSignals, portfolioFrequency, teamContext)
   const anchorTdps = new Set<string>()
   if (anchorPhase) {
     phases.push(anchorPhase)
@@ -1007,7 +1012,7 @@ export async function buildMotion(
   }
 
   // Expand phase — cloud/cross-sell opportunities
-  const expandPhase = buildExpandPhase(graph, tacticSignals, anchorTdps, portfolioFrequency)
+  const expandPhase = buildExpandPhase(graph, tacticSignals, anchorTdps, portfolioFrequency, teamContext)
   const usedTdps = new Set([...anchorTdps])
   if (expandPhase) {
     phases.push(expandPhase)
@@ -1017,7 +1022,7 @@ export async function buildMotion(
   }
 
   // Transform phase — strategic/AI plays
-  const transformPhase = buildTransformPhase(graph, tacticSignals, usedTdps, portfolioFrequency)
+  const transformPhase = buildTransformPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext)
   if (transformPhase) {
     phases.push(transformPhase)
     for (const t of transformPhase.tactics) {
@@ -1026,7 +1031,7 @@ export async function buildMotion(
   }
 
   // Displacement phase — competitor displacement opportunities (#579, #589)
-  const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps, portfolioFrequency)
+  const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps, portfolioFrequency, teamContext)
   if (displacementPhase) {
     phases.push(displacementPhase)
   }

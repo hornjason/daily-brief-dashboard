@@ -620,6 +620,100 @@ describe('scoreTactics — diversity penalty (#618)', () => {
   })
 })
 
+// ── #621: Team alignment boost ─────────────────────────────────────────────
+
+describe('scoreTactics — team alignment boost (#621)', () => {
+  const teamContext = [
+    { name: 'Jane Smith', role: 'SSP', products: ['OpenShift'] },
+    { name: 'Bob Jones', role: 'SSA', products: ['Ansible'] },
+  ]
+
+  it('team member with matching product adds +0.1 boost', () => {
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const withTeam = scoreTactics(graph, CANDIDATE_TACTICS, undefined, teamContext)
+    const withoutTeam = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    // Automation tactic should get +0.1 from Bob Jones (Ansible matches Automation TDP keywords)
+    const automateWith = withTeam.find(t => t.name === 'Automate at Scale')!
+    const automateWithout = withoutTeam.find(t => t.name === 'Automate at Scale')!
+    expect(automateWith.compositeScore).toBeCloseTo(automateWithout.compositeScore + 0.1, 5)
+  })
+
+  it('team member with non-matching product gives no boost', () => {
+    const nonMatchingTeam = [
+      { name: 'Alice Lee', role: 'SSP', products: ['Storage'] },
+    ]
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const withTeam = scoreTactics(graph, CANDIDATE_TACTICS, undefined, nonMatchingTeam)
+    const withoutTeam = scoreTactics(graph, CANDIDATE_TACTICS)
+
+    // No product matches any tactic — scores should be identical
+    for (const tactic of CANDIDATE_TACTICS) {
+      const scoreWith = withTeam.find(t => t.name === tactic.name)!.compositeScore
+      const scoreWithout = withoutTeam.find(t => t.name === tactic.name)!.compositeScore
+      expect(scoreWith).toBe(scoreWithout)
+    }
+  })
+
+  it('no team context gives no boost (backward compatible)', () => {
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const result1 = scoreTactics(graph, CANDIDATE_TACTICS)
+    const result2 = scoreTactics(graph, CANDIDATE_TACTICS, undefined, undefined)
+    const result3 = scoreTactics(graph, CANDIDATE_TACTICS, undefined, [])
+
+    for (const tactic of CANDIDATE_TACTICS) {
+      const s1 = result1.find(t => t.name === tactic.name)!.compositeScore
+      const s2 = result2.find(t => t.name === tactic.name)!.compositeScore
+      const s3 = result3.find(t => t.name === tactic.name)!.compositeScore
+      expect(s1).toBe(s2)
+      expect(s2).toBe(s3)
+    }
+  })
+
+  it('evidence trail includes team alignment item', () => {
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS, undefined, teamContext)
+    const k8s = result.find(t => t.name === 'K8s for AI Workloads')!
+    // Jane Smith has OpenShift which matches Container Mgmt
+    const teamEvidence = k8s.evidenceTrail.find(e => e.fact.includes('Team alignment'))
+    expect(teamEvidence).toBeDefined()
+    expect(teamEvidence!.fact).toContain('Jane Smith')
+    expect(teamEvidence!.fact).toContain('SSP')
+    expect(teamEvidence!.fact).toContain('OpenShift')
+  })
+
+  it('multiple team members matching same tactic only boost once (+0.1 not stacking)', () => {
+    const multiMatchTeam = [
+      { name: 'Jane Smith', role: 'SSP', products: ['OpenShift'] },
+      { name: 'Tom Davis', role: 'SSA', products: ['Kubernetes', 'OpenShift Container Platform'] },
+    ]
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const withMulti = scoreTactics(graph, CANDIDATE_TACTICS, undefined, multiMatchTeam)
+    const singleTeam = [{ name: 'Jane Smith', role: 'SSP', products: ['OpenShift'] }]
+    const withSingle = scoreTactics(graph, CANDIDATE_TACTICS, undefined, singleTeam)
+
+    const k8sMulti = withMulti.find(t => t.name === 'K8s for AI Workloads')!
+    const k8sSingle = withSingle.find(t => t.name === 'K8s for AI Workloads')!
+    // Both should have exactly +0.1 — no stacking
+    expect(k8sMulti.compositeScore).toBe(k8sSingle.compositeScore)
+  })
+})
+
 // ── #618: computePortfolioFrequency ─────────────────────────────────────────
 
 describe('computePortfolioFrequency (#618)', () => {

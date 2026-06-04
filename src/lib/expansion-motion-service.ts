@@ -20,6 +20,7 @@ import { buildMotion } from './motion-builder.ts'
 import { computePortfolioFrequency } from './tactic-scorer.ts'
 import { enrichPersonas } from './persona-enrichment.ts'
 import { CACHE_DIR } from './paths.ts'
+import { getAccountTeam } from '../account-team.ts'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -147,6 +148,32 @@ export async function getExpansionMotion(
     console.warn('[expansion-motion] Portfolio frequency computation failed:', e?.message)
   }
 
+  // Step 3c: Build team context for tactic scoring (#621)
+  let teamContext: Array<{ name: string; role: string; products: string[] }> | undefined
+  try {
+    const { customers: allCustomers } = await import('../server-state.ts')
+    const customer = allCustomers.find(c => c.name === customerName)
+    if (customer) {
+      const team = getAccountTeam(customer)
+      // Map to the simple shape scoreTactics expects; specialists have product in title
+      const mapped = team
+        .filter(m => m.role === 'ssp' || m.role === 'ssa')
+        .map(m => {
+          // SSP/SSA titles are formatted as "[Product] SSP/SSA"
+          const productMatch = m.title.replace(/\s+(SSP|SSA)$/i, '').trim()
+          return {
+            name: m.name,
+            role: m.title,
+            products: productMatch ? [productMatch] : [],
+          }
+        })
+        .filter(m => m.products.length > 0)
+      if (mapped.length > 0) teamContext = mapped
+    }
+  } catch (e: any) {
+    console.warn('[expansion-motion] Team context lookup failed:', e?.message)
+  }
+
   // Step 4: Build motion from filtered graph + play/tactic signals
   const motion = await buildMotion(
     filteredGraph,
@@ -155,6 +182,7 @@ export async function getExpansionMotion(
     deps.playSignals,
     deps.tacticSignals,
     portfolioFrequency,
+    teamContext,
   )
 
   // Step 5: Enrich target personas with real contacts (#533)
