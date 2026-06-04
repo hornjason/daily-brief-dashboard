@@ -45,6 +45,11 @@ export interface SignalDensity {
 /** Total distinct signal source types in the intelligence graph */
 export const TOTAL_SIGNAL_TYPES = 12
 
+/** Weight applied to portfolio frequency for diversity penalty (#618).
+ *  diversityFactor = 1 - (frequency * DIVERSITY_WEIGHT)
+ *  At 0.5: a tactic in 90% of portfolios gets a 45% penalty. */
+export const DIVERSITY_WEIGHT = 0.5
+
 export interface ScoredTactic {
   name: string
   parentTdp: string
@@ -384,6 +389,12 @@ function computePartnerBoost(
  *   - Partner (0-0.2): partner alignment
  *
  * Each scored tactic includes an evidenceTrail of top 5 items sorted by weight.
+ *
+ * Optional portfolioFrequency (#618): Map of tactic name → frequency (0.0-1.0)
+ * across the portfolio. When provided, applies a diversity penalty:
+ *   diversityFactor = 1 - (frequency * DIVERSITY_WEIGHT)
+ *   finalScore = compositeScore * diversityFactor
+ * A tactic in 90% of customers' top-5 gets a 45% penalty; one in 20% gets 10%.
  */
 export function scoreTactics(
   graph: CustomerGraph,
@@ -394,6 +405,7 @@ export function scoreTactics(
     assets: Array<{ name: string; url: string; type: string }>
     materials?: MaterialLink[]
   }>,
+  portfolioFrequency?: Map<string, number>,
 ): ScoredTactic[] {
   const baseKeywords = extractBaseKeywords(graph)
 
@@ -427,7 +439,26 @@ export function scoreTactics(
     // 6. Partner boost from partner nodes
     const partnerBoost = computePartnerBoost(graph, tactic.parentTdp, allEvidence)
 
-    const compositeScore = baseScore + recencyBoost + urgencyBoost + competitiveBoost + evidenceBoost + partnerBoost
+    let compositeScore = baseScore + recencyBoost + urgencyBoost + competitiveBoost + evidenceBoost + partnerBoost
+
+    // 7. Diversity penalty (#618) — penalize tactics that appear universally across portfolios
+    if (portfolioFrequency) {
+      const frequency = portfolioFrequency.get(tactic.name) ?? 0
+      if (frequency > 0) {
+        const diversityFactor = 1 - (frequency * DIVERSITY_WEIGHT)
+        const penaltyPct = Math.round(frequency * DIVERSITY_WEIGHT * 100)
+        const freqPct = Math.round(frequency * 100)
+
+        allEvidence.push({
+          fact: `Diversity penalty: -${penaltyPct}% (appears in ${freqPct}% of portfolios)`,
+          module: 'diversity',
+          recency: '',
+          weight: -(compositeScore * (1 - diversityFactor)), // negative to show it's a penalty
+        })
+
+        compositeScore = compositeScore * diversityFactor
+      }
+    }
 
     // Cap evidence trail at top 5 sorted by weight descending
     const evidenceTrail = allEvidence
@@ -455,4 +486,55 @@ export function scoreTactics(
       signalDensity: density,
     }
   })
+}
+
+// ── Portfolio Frequency (#618) ──────────────────────────────────────────────
+
+/**
+ * Compute how frequently each tactic appears in the top-N across all customers.
+ *
+ * Pre-scores all customers WITHOUT diversity penalty, counts how often each
+ * tactic lands in a customer's top-N, and returns a frequency map (0.0-1.0).
+ *
+ * The caller (expansion-motion-service or graph-routes) is responsible for
+ * loading all customer graphs and passing them here. This function is pure
+ * computation — no I/O.
+ */
+export function computePortfolioFrequency(
+  allCustomerGraphs: Map<string, CustomerGraph>,
+  allTactics: Array<{
+    name: string
+    parentTdp: string
+    tdpUrl?: string
+    assets: Array<{ name: string; url: string; type: string }>
+    materials?: MaterialLink[]
+  }>,
+  topN: number = 5,
+): Map<string, number> {
+  const totalCustomers = allCustomerGraphs.size
+  if (totalCustomers === 0) return new Map()
+
+  // Count how many customers have each tactic in their top-N
+  const tacticCounts = new Map<string, number>()
+
+  for (const [, graph] of allCustomerGraphs) {
+    // Score without diversity penalty
+    const scored = scoreTactics(graph, allTactics)
+    const sorted = [...scored].sort((a, b) => b.compositeScore - a.compositeScore)
+    const topTactics = sorted.slice(0, topN)
+
+    for (const tactic of topTactics) {
+      if (tactic.compositeScore > 0) {
+        tacticCounts.set(tactic.name, (tacticCounts.get(tactic.name) ?? 0) + 1)
+      }
+    }
+  }
+
+  // Convert counts to frequencies (0.0-1.0)
+  const frequencies = new Map<string, number>()
+  for (const [name, count] of tacticCounts) {
+    frequencies.set(name, count / totalCustomers)
+  }
+
+  return frequencies
 }
