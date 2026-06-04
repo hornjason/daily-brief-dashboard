@@ -6,7 +6,7 @@
  */
 
 import { callGemini } from './gemini-call.ts'
-import { loadNewsConfig } from './news-config.ts'
+import { loadNewsConfig, type NewsConfig } from './news-config.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
