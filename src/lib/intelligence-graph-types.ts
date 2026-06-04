@@ -74,6 +74,10 @@ export interface IntelligenceEdge {
   sourceUrl?: string
   /** ISO timestamp — for staleness protection */
   scoredAt: string
+  /** ISO timestamp of when the source signal was originally generated */
+  createdAt: string
+  /** Which signal module created this edge (e.g., 'subscriptions', 'cases') */
+  sourceType: string
 }
 
 // ── Motion History ────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ let findNodesByType: typeof import('../../src/lib/graph-utils.ts').findNodesByTy
 let getEdgesFrom: typeof import('../../src/lib/graph-utils.ts').getEdgesFrom
 let getEdgesTo: typeof import('../../src/lib/graph-utils.ts').getEdgesTo
 let rankByEdgeStrength: typeof import('../../src/lib/graph-utils.ts').rankByEdgeStrength
+let recencyWeight: typeof import('../../src/lib/graph-utils.ts').recencyWeight
 
 beforeAll(async () => {
   const graphModule = await import('../../src/lib/intelligence-graph.ts')
@@ -43,6 +44,7 @@ beforeAll(async () => {
   getEdgesFrom = utilsModule.getEdgesFrom
   getEdgesTo = utilsModule.getEdgesTo
   rankByEdgeStrength = utilsModule.rankByEdgeStrength
+  recencyWeight = utilsModule.recencyWeight
 })
 
 // ── Test Data Dir ─────────────────────────────────────────────────────────────
@@ -388,14 +390,126 @@ describe('Intelligence Graph — utility functions', () => {
       { id: 'b', type: 'play', name: 'B', properties: {}, sourceModule: 'test', contentHash: '2', updatedAt: '' },
     ]
     const edges: IntelligenceEdge[] = [
-      { from: 'x', to: 'a', relation: 'R', tier: 'factual', strength: 0.3, evidence: [], scoredAt: '' },
-      { from: 'x', to: 'b', relation: 'R', tier: 'factual', strength: 0.9, evidence: [], scoredAt: '' },
-      { from: 'y', to: 'b', relation: 'R', tier: 'factual', strength: 0.5, evidence: [], scoredAt: '' },
+      { from: 'x', to: 'a', relation: 'R', tier: 'factual', strength: 0.3, evidence: [], scoredAt: '', createdAt: '2026-05-31', sourceType: 'test' },
+      { from: 'x', to: 'b', relation: 'R', tier: 'factual', strength: 0.9, evidence: [], scoredAt: '', createdAt: '2026-05-31', sourceType: 'test' },
+      { from: 'y', to: 'b', relation: 'R', tier: 'factual', strength: 0.5, evidence: [], scoredAt: '', createdAt: '2026-05-31', sourceType: 'test' },
     ]
 
     const ranked = rankByEdgeStrength(nodes, edges)
     // B has total 1.4, A has total 0.3
     expect(ranked[0].id).toBe('b')
     expect(ranked[1].id).toBe('a')
+  })
+})
+
+describe('Intelligence Graph — edge metadata (#590)', () => {
+  it('all factual edges have createdAt populated from signal data', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+    const factualEdges = graph.edges.filter(e => e.tier === 'factual')
+
+    expect(factualEdges.length).toBeGreaterThan(0)
+    for (const edge of factualEdges) {
+      expect(edge.createdAt).toBeDefined()
+      expect(typeof edge.createdAt).toBe('string')
+      expect(edge.createdAt.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('all derived edges have createdAt populated', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+    const derivedEdges = graph.edges.filter(e => e.tier === 'derived')
+
+    expect(derivedEdges.length).toBeGreaterThan(0)
+    for (const edge of derivedEdges) {
+      expect(edge.createdAt).toBeDefined()
+      expect(typeof edge.createdAt).toBe('string')
+      expect(edge.createdAt.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('all edges have sourceType matching signal.source', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+
+    for (const edge of graph.edges) {
+      expect(edge.sourceType).toBeDefined()
+      expect(typeof edge.sourceType).toBe('string')
+      expect(edge.sourceType.length).toBeGreaterThan(0)
+    }
+
+    // Verify specific source types
+    const subEdges = graph.edges.filter(e => e.sourceType === 'subscriptions')
+    expect(subEdges.length).toBeGreaterThanOrEqual(3)
+
+    const caseEdges = graph.edges.filter(e => e.sourceType === 'cases')
+    expect(caseEdges.length).toBeGreaterThanOrEqual(2)
+
+    const solutionEdges = graph.edges.filter(e => e.sourceType === 'solution-intelligence')
+    expect(solutionEdges.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('strength is always > 0 on all edges', () => {
+    const graph = buildCustomerGraph('crowdstrike', 'CrowdStrike', CROWDSTRIKE_FIXTURES)
+
+    for (const edge of graph.edges) {
+      expect(edge.strength).toBeGreaterThan(0)
+    }
+  })
+
+  it('factual edge createdAt uses signal timestamp when metadata dates missing', () => {
+    const signals: Signal[] = [
+      {
+        source: 'cases', type: 'case', headline: 'Test case',
+        detail: '', timestamp: '2026-04-15', score: 0.5,
+        metadata: { caseNumber: '99999', severity: '3', status: 'Open', product: 'RHEL' },
+      },
+    ]
+
+    const graph = buildCustomerGraph('ts-test', 'Timestamp Test', signals)
+    const caseEdge = graph.edges.find(e => e.sourceType === 'cases')
+    expect(caseEdge).toBeDefined()
+    // Should use signal.timestamp since metadata has no startDate/createdAt/date
+    expect(caseEdge!.createdAt).toBe('2026-04-15')
+  })
+})
+
+describe('Intelligence Graph — recencyWeight (#590)', () => {
+  it('recencyWeight returns 1.0 for current timestamp', () => {
+    const now = new Date().toISOString()
+    const weight = recencyWeight(now)
+    // Should be very close to 1.0
+    expect(weight).toBeGreaterThan(0.99)
+    expect(weight).toBeLessThanOrEqual(1.0)
+  })
+
+  it('recencyWeight returns ~0.5 at half-life', () => {
+    const halfLifeDays = 90
+    const halfLifeAgo = new Date(Date.now() - halfLifeDays * 24 * 60 * 60 * 1000).toISOString()
+    const weight = recencyWeight(halfLifeAgo, halfLifeDays)
+    // Should be approximately 0.5
+    expect(weight).toBeGreaterThan(0.49)
+    expect(weight).toBeLessThan(0.51)
+  })
+
+  it('recencyWeight returns ~0.25 at two half-lives', () => {
+    const halfLifeDays = 90
+    const twoHalfLives = new Date(Date.now() - 2 * halfLifeDays * 24 * 60 * 60 * 1000).toISOString()
+    const weight = recencyWeight(twoHalfLives, halfLifeDays)
+    expect(weight).toBeGreaterThan(0.24)
+    expect(weight).toBeLessThan(0.26)
+  })
+
+  it('engagement signals use 30-day half-life', () => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const weight = recencyWeight(thirtyDaysAgo, 30)
+    expect(weight).toBeGreaterThan(0.49)
+    expect(weight).toBeLessThan(0.51)
+  })
+
+  it('recencyWeight is always between 0 and 1', () => {
+    // Very old date
+    const veryOld = '2020-01-01T00:00:00.000Z'
+    const weight = recencyWeight(veryOld)
+    expect(weight).toBeGreaterThan(0)
+    expect(weight).toBeLessThanOrEqual(1.0)
   })
 })

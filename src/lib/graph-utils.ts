@@ -99,6 +99,19 @@ export function getEdgesTo(
 }
 
 /**
+ * Exponential decay weight based on age.
+ * Engagement signals (emails, meetings) should use 30-day half-life; others 90-day.
+ * @param createdAt ISO timestamp
+ * @param halfLifeDays Days until weight halves (default 90)
+ * @returns Weight between 0.0 and 1.0
+ */
+export function recencyWeight(createdAt: string, halfLifeDays: number = 90): number {
+  const ageMs = Date.now() - new Date(createdAt).getTime()
+  const ageDays = ageMs / (1000 * 60 * 60 * 24)
+  return Math.pow(0.5, ageDays / halfLifeDays)
+}
+
+/**
  * Sort nodes by the sum of connected edge strengths (descending).
  * Nodes with stronger/more connections rank higher.
  */

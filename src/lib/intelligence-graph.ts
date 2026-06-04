@@ -503,6 +503,11 @@ function createFactualEdge(
     partner: 'HAS_PARTNER',
   }
 
+  const m = signal.metadata ?? {}
+  const createdAt = String(
+    m.startDate ?? m.createdAt ?? m.date ?? signal.timestamp ?? nowIso()
+  )
+
   return {
     from: customerNodeId,
     to: node.id,
@@ -512,6 +517,8 @@ function createFactualEdge(
     evidence: [signal.headline],
     sourceUrl: signal.url,
     scoredAt: nowIso(),
+    createdAt,
+    sourceType: signal.source,
   }
 }
 
@@ -545,6 +552,9 @@ function createDerivedEdges(
 ): IntelligenceEdge[] {
   const edges: IntelligenceEdge[] = []
   const m = signal.metadata ?? {}
+  const derivedCreatedAt = String(
+    m.startDate ?? m.createdAt ?? m.date ?? signal.timestamp ?? nowIso()
+  )
 
   if (signal.source === 'solution-intelligence') {
     const solutionName = String(m.solutionName ?? signal.headline)
@@ -577,6 +587,8 @@ function createDerivedEdges(
       evidence: [signal.headline],
       sourceUrl: signal.url,
       scoredAt: nowIso(),
+      createdAt: derivedCreatedAt,
+      sourceType: signal.source,
     })
 
     // If matched technologies reference existing product nodes, link play → product
@@ -593,6 +605,8 @@ function createDerivedEdges(
           evidence: [signal.headline],
           sourceUrl: signal.url,
           scoredAt: nowIso(),
+          createdAt: derivedCreatedAt,
+          sourceType: signal.source,
         })
       }
     }

@@ -201,6 +201,8 @@ describe('Graph Accumulation — edge staleness', () => {
           strength: 0.7,
           evidence: ['RHEL Server - 8 subs'],
           scoredAt: oldTimestamp, // Edge scored BEFORE node update = stale
+          createdAt: oldTimestamp,
+          sourceType: 'subscriptions',
         },
       ],
     }
@@ -249,6 +251,8 @@ describe('Graph Accumulation — edge staleness', () => {
           strength: 0.8,
           evidence: ['OCP - 2 subs'],
           scoredAt: edgeTimestamp, // Edge scored AFTER node update = fresh
+          createdAt: nodeTimestamp,
+          sourceType: 'subscriptions',
         },
       ],
     }
