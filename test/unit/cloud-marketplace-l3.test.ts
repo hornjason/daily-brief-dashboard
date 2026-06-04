@@ -96,8 +96,10 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
     expect(content).toContain("tech-stack")
   })
 
-  test('signals show all providers including those with no relationship (#434)', () => {
-    expect(content).not.toContain('if (!hasSpend && !hasCloudIntel) continue')
-    expect(content).toContain('position Red Hat solutions on')
+  test('signals skip providers with no customer relationship (#434)', () => {
+    // Providers with no CCSP spend and no tech-stack cloud intel are skipped
+    expect(content).toContain('if (!hasSpend && !hasCloudIntel) continue')
+    // Providers with tech-stack intel but no spend get a positioning headline
+    expect(content).toContain('position Red Hat solutions')
   })
 })

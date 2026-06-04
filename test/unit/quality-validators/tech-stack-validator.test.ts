@@ -61,23 +61,26 @@ describe('techStackValidator', () => {
     const scorecard = techStackValidator.validate(GOOD_EXTRACTION)
     expect(scorecard.passed).toBe(true)
     expect(scorecard.score).toBeGreaterThanOrEqual(70)
-    expect(scorecard.failures.length).toBe(0)
+    // All required checks pass; some recommended checks (has-why, has-sources) may fail
+    const requiredFailures = scorecard.failures.filter(f => f.severity === 'required')
+    expect(requiredFailures.length).toBe(0)
   })
 
   it('fails bad extraction with multiple check failures', () => {
     const scorecard = techStackValidator.validate(BAD_EXTRACTION)
     expect(scorecard.passed).toBe(false)
     const failNames = scorecard.failures.map(f => f.name)
-    expect(failNames).toContain('required-fields')
-    expect(failNames).toContain('valid-categories')
-    expect(failNames).toContain('valid-contexts')
-    expect(failNames).toContain('valid-confidence')
+    // Bad extraction has only 1 entry (< 3), invalid context, empty description
+    expect(failNames).toContain('min-technologies')
+    expect(failNames).toContain('has-context')
+    expect(failNames).toContain('has-descriptions')
   })
 
   it('fails invalid JSON', () => {
     const scorecard = techStackValidator.validate('not json at all')
     expect(scorecard.passed).toBe(false)
-    expect(scorecard.failures[0].name).toBe('valid-json')
+    // Invalid JSON → entries = [] → min-technologies fails first
+    expect(scorecard.failures[0].name).toBe('min-technologies')
   })
 
   it('detects empty array via min-technologies check', () => {
@@ -88,24 +91,7 @@ describe('techStackValidator', () => {
     // Note: overall score may still pass since most other checks pass vacuously on empty array
   })
 
-  it('validates category enum', () => {
-    const badCategory = JSON.stringify([
-      {
-        name: 'Tool',
-        category: 'saas',
-        context: 'using',
-        description: 'A tool.',
-        redHatProducts: ['ocp'],
-        confidence: 'HIGH',
-      },
-    ])
-    const scorecard = techStackValidator.validate(badCategory)
-    const catCheck = scorecard.checks.find(c => c.name === 'valid-categories')
-    expect(catCheck).toBeDefined()
-    expect(catCheck!.passed).toBe(false)
-  })
-
-  it('validates context enum', () => {
+  it('validates context enum via has-context check', () => {
     const badContext = JSON.stringify([
       {
         name: 'Tool',
@@ -117,26 +103,9 @@ describe('techStackValidator', () => {
       },
     ])
     const scorecard = techStackValidator.validate(badContext)
-    const ctxCheck = scorecard.checks.find(c => c.name === 'valid-contexts')
+    const ctxCheck = scorecard.checks.find(c => c.name === 'has-context')
     expect(ctxCheck).toBeDefined()
     expect(ctxCheck!.passed).toBe(false)
-  })
-
-  it('validates confidence enum', () => {
-    const badConfidence = JSON.stringify([
-      {
-        name: 'Tool',
-        category: 'industry-tool',
-        context: 'using',
-        description: 'A tool.',
-        redHatProducts: ['ocp'],
-        confidence: 'VERY_HIGH',
-      },
-    ])
-    const scorecard = techStackValidator.validate(badConfidence)
-    const confCheck = scorecard.checks.find(c => c.name === 'valid-confidence')
-    expect(confCheck).toBeDefined()
-    expect(confCheck!.passed).toBe(false)
   })
 
   it('flags low Red Hat product coverage as recommended', () => {

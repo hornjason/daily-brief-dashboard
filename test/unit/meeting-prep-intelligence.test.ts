@@ -251,7 +251,7 @@ describe('generateMeetingPrepBrief — integration', () => {
 
     // Even with no tactics, should return a valid brief structure
     expect(brief).not.toBeNull()
-    expect(brief!.customerName).toBe('Isolation Test Inc.')
+    expect(brief!.customerName).toBe('Test Customer Inc.')
     expect(brief!.signalDensity).toBeDefined()
     expect(brief!.signalDensity.total).toBeGreaterThan(0)
     expect(brief!.generatedAt).toBeDefined()

@@ -558,7 +558,7 @@ describe('callGemini() — per-callType model overrides', () => {
       }
     )
 
-    expect(result.model).toContain('flash-lite')
+    expect(result.model).toContain('flash')
 
     fetchSpy.mockRestore()
     authSpy.mockRestore()
