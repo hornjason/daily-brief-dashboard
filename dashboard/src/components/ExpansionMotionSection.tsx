@@ -88,6 +88,31 @@ interface ExpansionMotionSectionProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+function FreshnessBadge({ generatedAt }: { generatedAt: string }) {
+  const ageMs = Date.now() - new Date(generatedAt).getTime()
+  const hours = ageMs / (1000 * 60 * 60)
+
+  let color: string, label: string
+  if (hours < 24) {
+    color = 'bg-emerald-500'
+    label = `Updated ${Math.round(hours)}h ago`
+  } else if (hours < 168) { // 7 days
+    const days = Math.round(hours / 24)
+    color = 'bg-yellow-500'
+    label = `Updated ${days}d ago`
+  } else {
+    color = 'bg-red-500'
+    label = 'Updated 7d+ ago'
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+      <span className={`w-2 h-2 rounded-full ${color}`} />
+      {label}
+    </span>
+  )
+}
+
 const CATEGORY_ICON: Record<string, typeof Shield> = {
   anchor: Shield,
   expand: TrendingUp,
@@ -657,6 +682,8 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
           <span className={`text-xs px-2 py-0.5 rounded border font-medium ${confidenceStyle}`}>
             {motion.confidence} confidence
           </span>
+          {/* Freshness indicator */}
+          {motion.generatedAt && <FreshnessBadge generatedAt={motion.generatedAt} />}
           {/* TCV if available */}
           {motion.totalEstimatedTcv != null && motion.totalEstimatedTcv > 0 && (
             <span className="text-xs text-text-secondary">
