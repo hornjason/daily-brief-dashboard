@@ -19,6 +19,8 @@ export interface DocCenterDocumentRef {
   distributionTerms: string
   product: string
   salesStage: string
+  driveFileId?: string
+  driveUrl?: string
   extractedContent?: string
 }
 

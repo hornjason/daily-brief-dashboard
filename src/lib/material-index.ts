@@ -12,6 +12,8 @@ export interface MaterialLink {
   type: 'cheatsheet' | 'deck' | 'lab' | 'demo' | 'doc' | 'service'
 }
 
+const MAX_MATERIALS_PER_RESOLVE = 5
+
 const KEYWORD_TO_TDP: Record<string, string> = {
   'ansible': 'Automation',
   'automation': 'Automation',
@@ -90,11 +92,21 @@ export function resolve(signalKey: string): MaterialLink[] {
     }
   }
 
+  // Documents with driveUrl (#588) — enrich with Google Drive links
+  for (const doc of ((tdp as any).documents ?? [])) {
+    if (doc.driveUrl && doc.name) {
+      materials.push({ title: doc.name, url: doc.driveUrl, type: 'doc' })
+    }
+  }
+
   // Deduplicate by URL
   const seen = new Set<string>()
-  return materials.filter(m => {
+  const deduped = materials.filter(m => {
     if (seen.has(m.url)) return false
     seen.add(m.url)
     return true
   })
+
+  // Cap at MAX_MATERIALS_PER_RESOLVE (#588)
+  return deduped.slice(0, MAX_MATERIALS_PER_RESOLVE)
 }
