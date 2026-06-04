@@ -34,7 +34,7 @@ import { syncTerritorySheet } from './territory-sync.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { getAccountTeam, persistTeamCache } from './account-team.ts'
 import { toSlug } from './cache-layer.ts'
-import { loadGraph } from './lib/intelligence-graph.ts'
+import { computeDealAttribution } from './lib/deal-attribution.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -365,121 +365,33 @@ export function createAdminRouter(): Hono {
     return c.json({ customer: customer.name, ae: customer.ae, team })
   })
 
-  // GET /api/admin/graph/density — Signal population audit (#598)
-  r.get('/api/admin/graph/density', (c) => {
-    // Types achievable from existing SIGNAL_CONFIGS (have signal producers)
-    const ACHIEVABLE_TYPES = [
-      'subscription', 'case', 'product', 'deal', 'play', 'program',
-      'engagement', 'intel', 'lifecycle', 'event', 'evidence', 'partner',
-    ] as const
-    // Types defined in schema but have NO signal producers — outputs or unimplemented
-    const OUTPUT_TYPES = ['person', 'persona', 'initiative', 'motion'] as const
+  // GET /api/admin/deal-attribution — deal outcome tracking (#614)
+  // Returns attribution data across all customers: which deals had prior intelligence activity
+  r.get('/api/admin/deal-attribution', (c) => {
+    const allCustomers = customers
+    const allAttributions = []
+    let dealsWithIntel = 0
 
-    const achievableTotal = ACHIEVABLE_TYPES.length  // 12 (excludes 'customer' hub)
-
-    // Track per-type population across all customers
-    const typePopulationCounts: Record<string, number> = {}
-    for (const t of ACHIEVABLE_TYPES) typePopulationCounts[t] = 0
-
-    const results: Array<{
-      slug: string
-      name: string
-      nodeCount: number
-      edgeCount: number
-      nodeTypeBreakdown: Record<string, number>
-      historicalNodes: number
-      populatedTypes: number
-      achievableTypes: number
-      missingTypes: string[]
-      densityPct: number
-    }> = []
-
-    let customersWithGraphs = 0
-
-    for (const customer of customers) {
+    for (const customer of allCustomers) {
       const slug = toSlug(customer.name)
-      const graph = loadGraph(slug, CACHE_DIR)
-
-      if (!graph) continue
-
-      customersWithGraphs++
-
-      // Count nodes per type (only active nodes for breakdown; count historical separately)
-      const nodeTypeBreakdown: Record<string, number> = {}
-      let historicalNodes = 0
-      for (const node of Object.values(graph.nodes)) {
-        if (node.history?.status === 'historical') {
-          historicalNodes++
-          continue
-        }
-        nodeTypeBreakdown[node.type] = (nodeTypeBreakdown[node.type] || 0) + 1
+      const attributions = computeDealAttribution(slug, CACHE_DIR)
+      for (const attr of attributions) {
+        allAttributions.push(attr)
+        if (attr.attributionScore !== 'none') dealsWithIntel++
       }
-
-      // Compute populated types (only count achievable types, exclude 'customer' hub)
-      const populatedAchievable = ACHIEVABLE_TYPES.filter(t => (nodeTypeBreakdown[t] ?? 0) > 0)
-      const populatedTypes = populatedAchievable.length
-
-      // Track per-type population
-      for (const t of populatedAchievable) {
-        typePopulationCounts[t]++
-      }
-
-      // Missing achievable types
-      const missingTypes = ACHIEVABLE_TYPES.filter(t => !(nodeTypeBreakdown[t] ?? 0))
-
-      const densityPct = achievableTotal > 0
-        ? Math.round((populatedTypes / achievableTotal) * 1000) / 10
-        : 0
-
-      results.push({
-        slug,
-        name: customer.name,
-        nodeCount: graph.nodeCount,
-        edgeCount: graph.edgeCount,
-        nodeTypeBreakdown,
-        historicalNodes,
-        populatedTypes,
-        achievableTypes: achievableTotal,
-        missingTypes: [...missingTypes],
-        densityPct,
-      })
     }
 
-    // Compute summary stats
-    const populatedTypeCounts = results.map(r => r.populatedTypes)
-    const summary = {
-      totalCustomers: customers.length,
-      customersWithGraphs,
-      achievableTypes: achievableTotal,
-      outputTypes: [...OUTPUT_TYPES],
-      avg: populatedTypeCounts.length > 0
-        ? Math.round((populatedTypeCounts.reduce((a, b) => a + b, 0) / populatedTypeCounts.length) * 10) / 10
-        : 0,
-      min: populatedTypeCounts.length > 0 ? Math.min(...populatedTypeCounts) : 0,
-      max: populatedTypeCounts.length > 0 ? Math.max(...populatedTypeCounts) : 0,
-      avgDensityPct: results.length > 0
-        ? Math.round((results.reduce((a, r) => a + r.densityPct, 0) / results.length) * 10) / 10
-        : 0,
-      // Per-type population rates across all customers with graphs
-      typePopulationRates: Object.fromEntries(
-        ACHIEVABLE_TYPES.map(t => [
-          t,
-          {
-            count: typePopulationCounts[t],
-            total: customersWithGraphs,
-            pct: customersWithGraphs > 0
-              ? Math.round((typePopulationCounts[t] / customersWithGraphs) * 1000) / 10
-              : 0,
-            gap: t === 'engagement' ? 'DATA — requires email cache per customer'
-              : t === 'subscription' ? 'DATA — requires subscription sheet in Drive'
-              : t === 'case' ? 'DATA — requires RH Portal account number'
-              : undefined,
-          },
-        ]),
-      ),
+    const breakdown = { strong: 0, moderate: 0, weak: 0, none: 0 }
+    for (const attr of allAttributions) {
+      breakdown[attr.attributionScore]++
     }
 
-    return c.json({ customers: results, summary })
+    return c.json({
+      totalDeals: allAttributions.length,
+      dealsWithPriorIntelligence: dealsWithIntel,
+      attributionBreakdown: breakdown,
+      deals: allAttributions,
+    })
   })
 
   return r
