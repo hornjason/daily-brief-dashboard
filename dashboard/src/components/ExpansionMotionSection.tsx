@@ -377,8 +377,8 @@ function CampaignEmailsDisplay({
 
 // ── Phase Card ──────────────────────────────────────────────────────────────
 
-function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { phase: MotionPhase; enrichedContacts?: EnrichedContact[]; customerSlug: string; customerName: string }) {
-  const [expanded, setExpanded] = useState(false)
+function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaultExpanded = false }: { phase: MotionPhase; enrichedContacts?: EnrichedContact[]; customerSlug: string; customerName: string; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [generating, setGenerating] = useState(false)
   const [generatingPlaybook, setGeneratingPlaybook] = useState(false)
   const [campaignResult, setCampaignResult] = useState<CampaignResult | null>(null)
@@ -725,8 +725,8 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
 
       {/* Phase cards */}
       <div className="px-5 py-4 space-y-2">
-        {motion.phases.map(phase => (
-          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} />
+        {motion.phases.map((phase, idx) => (
+          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
         ))}
       </div>
     </div>
