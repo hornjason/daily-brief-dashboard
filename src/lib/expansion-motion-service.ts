@@ -17,6 +17,7 @@ import type { CustomerGraph } from './intelligence-graph-types.ts'
 import type { StrategicMotion } from './motion-builder.ts'
 import { buildCustomerGraph, loadGraph, persistGraph, filterStaleEdges } from './intelligence-graph.ts'
 import { buildMotion } from './motion-builder.ts'
+import { computePortfolioFrequency } from './tactic-scorer.ts'
 import { enrichPersonas } from './persona-enrichment.ts'
 import { CACHE_DIR } from './paths.ts'
 
@@ -123,6 +124,29 @@ export async function getExpansionMotion(
   const freshEdges = filterStaleEdges(graph)
   const filteredGraph: CustomerGraph = { ...graph, edges: freshEdges, edgeCount: freshEdges.length }
 
+  // Step 3b: Compute portfolio-level tactic frequency for diversity penalty (#618)
+  let portfolioFrequency: Map<string, number> | undefined
+  try {
+    const { customers: allCustomers } = await import('../server-state.ts')
+    const { toSlug } = await import('../cache-layer.ts')
+    const allGraphs = new Map<string, CustomerGraph>()
+    for (const c of allCustomers) {
+      const s = toSlug(c.name)
+      const g = loadGraph(s, CACHE_DIR)
+      if (g) allGraphs.set(s, g)
+    }
+    if (allGraphs.size >= 3) {
+      const tacticList = deps.tacticSignals.map(s => ({
+        name: s.headline,
+        parentTdp: String(s.metadata?.parentTdp ?? ''),
+        assets: [],
+      }))
+      portfolioFrequency = computePortfolioFrequency(allGraphs, tacticList)
+    }
+  } catch (e: any) {
+    console.warn('[expansion-motion] Portfolio frequency computation failed:', e?.message)
+  }
+
   // Step 4: Build motion from filtered graph + play/tactic signals
   const motion = await buildMotion(
     filteredGraph,
@@ -130,6 +154,7 @@ export async function getExpansionMotion(
     customerName,
     deps.playSignals,
     deps.tacticSignals,
+    portfolioFrequency,
   )
 
   // Step 5: Enrich target personas with real contacts (#533)
