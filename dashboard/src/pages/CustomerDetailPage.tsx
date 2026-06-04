@@ -46,6 +46,7 @@ import CitationTooltip from '../components/CitationTooltip'
 import BriefDeltaMarker from '../components/BriefDeltaMarker'
 import { renderMarkdownInline } from '../lib/markdown'
 import TemporalDeltaSection from '../components/TemporalDeltaSection'
+import { IntelligenceChangesCard } from '../components/IntelligenceChangesCard'
 import CompetitiveSignalBadge from '../components/CompetitiveSignalBadge'
 import StakeholderEngagementPanel from '../components/StakeholderEngagementPanel'
 import { StatBadge } from '../components/StatBadge'
@@ -1578,6 +1579,7 @@ export function CustomerDetailPage() {
           {/* Left column — 65% */}
           <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <TemporalDeltaSection customerName={customerName} />
+          <IntelligenceChangesCard customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')} />
           <BriefSection name={customerName} />
           <ProductIntelSection
             customerName={customerName}

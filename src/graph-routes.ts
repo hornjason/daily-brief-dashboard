@@ -13,6 +13,8 @@ import { Hono } from 'hono'
 import { getExpansionMotion, getGraphDebug, generateAllGraphs, type GenerateAllResult } from './lib/expansion-motion-service.ts'
 import { generateMotionCampaigns } from './lib/motion-campaign-service.ts'
 import { detectActionTriggers } from './lib/motion-action-triggers.ts'
+import { computeGraphDiff } from './lib/graph-diff.ts'
+import { loadGraph } from './lib/intelligence-graph.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import type { Signal } from './feature-module-registry.ts'
 import { customers } from './server-state.ts'
@@ -122,6 +124,50 @@ export function createGraphRouter(): Hono {
       return c.json(debug)
     } catch (e: any) {
       console.error(`[graph-routes] Graph debug failed for ${slug}:`, e?.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/customer/:slug/intelligence-changes (#603) ────────────────
+
+  router.get('/api/customer/:slug/intelligence-changes', async (c) => {
+    const slug = c.req.param('slug')
+    const customer = findCustomerBySlug(slug)
+
+    if (!customer) {
+      return c.json({ error: `Customer "${slug}" not found` }, 404)
+    }
+
+    try {
+      const { CACHE_DIR } = await import('./lib/paths.ts')
+      const graph = loadGraph(slug, CACHE_DIR)
+      if (!graph) {
+        return c.json({
+          customerSlug: slug,
+          currentBuiltAt: null,
+          changes: [],
+          summary: 'No intelligence graph available yet',
+        })
+      }
+
+      // Load the previous graph snapshot if it exists
+      // The previous graph state is embedded in the current graph's nodes
+      // via history fields. We can compute the diff from just the current graph
+      // by using null as previousGraph (shows all active as new) or by loading
+      // a separate previous snapshot.
+      //
+      // For now, compute diff from the current graph alone. Nodes with
+      // history.status === 'historical' are surfaced as disappeared.
+      // New nodes are detected by checking if they appeared after the graph's
+      // own builtAt minus a reasonable window (7 days).
+      //
+      // Better approach: use the graph itself as both current and previous
+      // by reading history fields. No separate snapshot needed.
+      const diff = computeGraphDiff(graph)
+
+      return c.json(diff)
+    } catch (e: any) {
+      console.error(`[graph-routes] Intelligence changes failed for ${slug}:`, e?.message)
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
