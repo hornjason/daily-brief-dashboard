@@ -35,6 +35,7 @@ interface MotionPhase {
       recency: string
       weight: number
     }>
+    signalDensity?: { populated: number; total: number }
   }>
   targetPersonas: string[]
   evidence: Array<{
@@ -448,14 +449,17 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
           )}
 
           {/* WHAT WE'RE RECOMMENDING */}
-          {phase.tactics.length > 0 && (
+          {phase.tactics.length > 0 && (() => {
+            const density = phase.tactics[0]?.signalDensity
+            const isLimited = density != null && density.populated < 4
+            return (
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">
-                Recommended Tactics
+                {isLimited ? 'Suggested Tactics (limited data)' : 'Recommended Tactics'}
               </h4>
               <div className="space-y-2">
                 {phase.tactics.map((tactic, i) => (
-                  <div key={i} className="bg-bg-secondary/30 rounded-lg p-3 border border-border/30">
+                  <div key={i} className={`bg-bg-secondary/30 rounded-lg p-3 border border-border/30${isLimited ? ' opacity-70' : ''}`}>
                     <div className="flex items-center gap-2 mb-1">
                       {tactic.tdpUrl ? (
                         <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-accent hover:underline">
@@ -496,8 +500,10 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
                     )}
                     {tactic.evidenceTrail && tactic.evidenceTrail.length > 0 && (
                       <div className="mt-2 space-y-1">
-                        <span className="text-xs text-text-secondary uppercase tracking-wide">Why recommended</span>
-                        {tactic.evidenceTrail.slice(0, 3).map((ev, idx) => (
+                        <span className="text-xs text-text-secondary uppercase tracking-wide">
+                          {isLimited ? 'Why suggested' : 'Why recommended'}
+                        </span>
+                        {tactic.evidenceTrail.filter(ev => ev.module !== 'density').slice(0, 3).map((ev, idx) => (
                           <div key={idx} className="text-xs text-text-secondary flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
                             <span>{ev.fact}</span>
@@ -506,11 +512,17 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName }: { ph
                         ))}
                       </div>
                     )}
+                    {tactic.signalDensity && (
+                      <div className="mt-1.5 text-xs text-text-secondary/60">
+                        Based on {tactic.signalDensity.populated} of {tactic.signalDensity.total} signal sources
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-          )}
+            )
+          })()}
 
           {/* ASSETS — collapsed by default, grouped by tactic */}
           {totalAssets > 0 && (

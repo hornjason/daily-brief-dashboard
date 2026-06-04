@@ -27,7 +27,7 @@ import { findNodesByType } from './graph-utils.ts'
 import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
-import { scoreTactics } from './tactic-scorer.ts'
+import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1020,6 +1020,17 @@ export async function buildMotion(
   const displacementPhase = buildDisplacementPhase(graph, tacticSignals, usedTdps)
   if (displacementPhase) {
     phases.push(displacementPhase)
+  }
+
+  // #595: Phase suppression — if ALL tactics in a phase come from a graph with
+  // fewer than 3 distinct signal source types, suppress that phase entirely.
+  // Density is per-customer (same for all tactics), so compute once from graph.
+  const graphNodeTypes = new Set(
+    Object.values(graph.nodes).map(n => n.type).filter(t => t !== 'customer')
+  )
+  if (graphNodeTypes.size < 3) {
+    // Suppress all phases — graph too sparse for meaningful recommendations
+    phases.length = 0
   }
 
   // Guard: need at least 1 phase

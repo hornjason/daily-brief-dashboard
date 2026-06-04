@@ -12,13 +12,16 @@ import type { CustomerGraph, IntelligenceNode, IntelligenceEdge } from '../../sr
 
 let scoreTactics: typeof import('../../src/lib/tactic-scorer.ts').scoreTactics
 let formatRecency: typeof import('../../src/lib/tactic-scorer.ts').formatRecency
+let TOTAL_SIGNAL_TYPES: typeof import('../../src/lib/tactic-scorer.ts').TOTAL_SIGNAL_TYPES
 type ScoredTactic = import('../../src/lib/tactic-scorer.ts').ScoredTactic
 type EvidenceItem = import('../../src/lib/tactic-scorer.ts').EvidenceItem
+type SignalDensity = import('../../src/lib/tactic-scorer.ts').SignalDensity
 
 beforeAll(async () => {
   const mod = await import('../../src/lib/tactic-scorer.ts')
   scoreTactics = mod.scoreTactics
   formatRecency = mod.formatRecency
+  TOTAL_SIGNAL_TYPES = mod.TOTAL_SIGNAL_TYPES
 })
 
 // ── Test Helpers ────────────────────────────────────────────────────────────
@@ -389,5 +392,137 @@ describe('scoreTactics — composite ordering (AC-7)', () => {
     // Sort by compositeScore descending — Automation should be near top
     const sorted = [...result].sort((a, b) => b.compositeScore - a.compositeScore)
     expect(sorted[0].parentTdp).toBe('Automation')
+  })
+})
+
+// ── AC-1 / AC-5 (#595): Signal density computation ───────────────────────
+
+describe('scoreTactics — signal density (#595)', () => {
+  it('TOTAL_SIGNAL_TYPES is 12', () => {
+    expect(TOTAL_SIGNAL_TYPES).toBe(12)
+  })
+
+  it('returns signalDensity on every ScoredTactic', () => {
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test Customer')],
+      [],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    for (const t of result) {
+      expect(t.signalDensity).toBeDefined()
+      expect(typeof t.signalDensity.populated).toBe('number')
+      expect(t.signalDensity.total).toBe(12)
+    }
+  })
+
+  it('counts 0 populated when graph has only customer node', () => {
+    const graph = makeGraph(
+      [makeNode('customer:test', 'customer', 'Test')],
+      [],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    expect(result[0].signalDensity.populated).toBe(0)
+  })
+
+  it('counts distinct node types excluding customer', () => {
+    const graph = makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('sub:1', 'subscription', 'Ansible', { productDescription: 'Ansible' }),
+        makeNode('sub:2', 'subscription', 'RHEL', { productDescription: 'RHEL' }),
+        makeNode('case:1', 'case', 'Case 1', { product: 'Ansible' }),
+        makeNode('eng:1', 'engagement', 'Email', {}),
+        makeNode('intel:1', 'intel', 'Intel', { intelType: 'general' }),
+      ],
+      [
+        makeEdge('customer:test', 'sub:1', 'HAS_SUBSCRIPTION'),
+        makeEdge('customer:test', 'sub:2', 'HAS_SUBSCRIPTION'),
+        makeEdge('customer:test', 'case:1', 'HAS_CASE'),
+        makeEdge('customer:test', 'eng:1', 'HAS_ENGAGEMENT'),
+        makeEdge('customer:test', 'intel:1', 'HAS_INTEL'),
+      ],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    // 4 distinct types: subscription, case, engagement, intel (2 subscriptions count as 1 type)
+    expect(result[0].signalDensity.populated).toBe(4)
+    expect(result[0].signalDensity.total).toBe(12)
+  })
+
+  it('density is same for all tactics (per-customer, not per-tactic)', () => {
+    const graph = makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('sub:1', 'subscription', 'Ansible', { productDescription: 'Ansible' }),
+        makeNode('partner:1', 'partner', 'AWS', { domain: 'Container Mgmt' }),
+      ],
+      [
+        makeEdge('customer:test', 'sub:1', 'HAS_SUBSCRIPTION'),
+        makeEdge('customer:test', 'partner:1', 'HAS_PARTNER'),
+      ],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    const densities = result.map(t => t.signalDensity)
+    // All should be identical
+    for (const d of densities) {
+      expect(d.populated).toBe(2)
+      expect(d.total).toBe(12)
+    }
+  })
+
+  it('prefixes evidenceTrail with limited data note when populated < 4', () => {
+    const graph = makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('sub:1', 'subscription', 'Ansible', { productDescription: 'Ansible' }),
+      ],
+      [makeEdge('customer:test', 'sub:1', 'HAS_SUBSCRIPTION')],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    const automate = result.find(t => t.name === 'Automate at Scale')!
+    // Should have a density warning in evidence trail
+    const densityNote = automate.evidenceTrail.find(e => e.module === 'density')
+    expect(densityNote).toBeDefined()
+    expect(densityNote!.fact).toContain('1 of 12')
+  })
+
+  it('does NOT prefix evidenceTrail when populated >= 4', () => {
+    const graph = makeGraph(
+      [
+        makeNode('customer:test', 'customer', 'Test'),
+        makeNode('sub:1', 'subscription', 'Ansible', { productDescription: 'Ansible' }),
+        makeNode('case:1', 'case', 'Case', { product: 'Ansible' }),
+        makeNode('eng:1', 'engagement', 'Email', {}),
+        makeNode('intel:1', 'intel', 'Intel', { intelType: 'general' }),
+      ],
+      [
+        makeEdge('customer:test', 'sub:1', 'HAS_SUBSCRIPTION'),
+        makeEdge('customer:test', 'case:1', 'HAS_CASE'),
+        makeEdge('customer:test', 'eng:1', 'HAS_ENGAGEMENT'),
+        makeEdge('customer:test', 'intel:1', 'HAS_INTEL'),
+      ],
+    )
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    for (const t of result) {
+      const densityNote = t.evidenceTrail.find(e => e.module === 'density')
+      expect(densityNote).toBeUndefined()
+    }
+  })
+
+  it('counts all 12 types when fully populated graph', () => {
+    const allTypes = [
+      'subscription', 'case', 'deal', 'play', 'program', 'product',
+      'engagement', 'intel', 'lifecycle', 'event', 'evidence', 'partner',
+    ]
+    const nodes = [makeNode('customer:test', 'customer', 'Test')]
+    const edges: IntelligenceEdge[] = []
+    for (const type of allTypes) {
+      const id = `${type}:1`
+      nodes.push(makeNode(id, type, `Test ${type}`, {}))
+      edges.push(makeEdge('customer:test', id, 'RELATED'))
+    }
+    const graph = makeGraph(nodes, edges)
+    const result = scoreTactics(graph, CANDIDATE_TACTICS)
+    expect(result[0].signalDensity.populated).toBe(12)
+    expect(result[0].signalDensity.total).toBe(12)
   })
 })

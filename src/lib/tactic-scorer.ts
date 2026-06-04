@@ -37,6 +37,14 @@ export interface EvidenceItem {
   weight: number
 }
 
+export interface SignalDensity {
+  populated: number
+  total: number
+}
+
+/** Total distinct signal source types in the intelligence graph */
+export const TOTAL_SIGNAL_TYPES = 12
+
 export interface ScoredTactic {
   name: string
   parentTdp: string
@@ -45,6 +53,7 @@ export interface ScoredTactic {
   materials?: MaterialLink[]
   compositeScore: number
   evidenceTrail: EvidenceItem[]
+  signalDensity: SignalDensity
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -453,6 +462,12 @@ export function scoreTactics(
 ): ScoredTactic[] {
   const baseKeywords = extractBaseKeywords(graph)
 
+  // Compute signal density once per call — same for all tactics in this customer's graph
+  const nodeTypes = new Set(
+    Object.values(graph.nodes).map(n => n.type).filter(t => t !== 'customer')
+  )
+  const density: SignalDensity = { populated: nodeTypes.size, total: TOTAL_SIGNAL_TYPES }
+
   return candidateTactics.map(tactic => {
     const allEvidence: EvidenceItem[] = []
 
@@ -481,6 +496,16 @@ export function scoreTactics(
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 5)
 
+    // When signal sources are sparse, prefix evidence trail with a note
+    if (density.populated < 4) {
+      evidenceTrail.unshift({
+        fact: `Limited data: only ${density.populated} of ${density.total} signal sources available`,
+        module: 'density',
+        recency: '',
+        weight: 0,
+      })
+    }
+
     return {
       name: tactic.name,
       parentTdp: tactic.parentTdp,
@@ -489,6 +514,7 @@ export function scoreTactics(
       materials: tactic.materials,
       compositeScore,
       evidenceTrail,
+      signalDensity: density,
     }
   })
 }

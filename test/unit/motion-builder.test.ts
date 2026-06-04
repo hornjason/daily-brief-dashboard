@@ -246,8 +246,10 @@ describe('Motion Builder — buildMotion', () => {
     expect(motion).toBeNull()
   })
 
-  it('produces motion with single play node from subscription (#573)', async () => {
-    // Single subscription → 1 play node via TDP mapping → motion should be generated
+  it('produces motion with single play node from subscription (#573) — suppressed when sparse (#595)', async () => {
+    // Single subscription → 1 play node via TDP mapping.
+    // #595: Graph has only 2 node types (subscription + play), which is < 3,
+    // so all phases are suppressed due to insufficient signal density.
     const minimalSignals: Signal[] = [
       {
         source: 'subscriptions', type: 'subscription', headline: 'OpenShift',
@@ -257,8 +259,8 @@ describe('Motion Builder — buildMotion', () => {
     ]
     const graph = buildCustomerGraph('sub-only', 'Sub Only Corp', minimalSignals)
     const motion = await buildMotion(graph, 'sub-only', 'Sub Only Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
-    // With threshold lowered to < 1, a single play node should produce a motion
-    expect(motion).not.toBeNull()
+    // #595: With < 3 signal source types, phases are suppressed → null motion
+    expect(motion).toBeNull()
   })
 
   it('produces motion with correct title from matched sales play', async () => {
