@@ -28,7 +28,7 @@ import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
 import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
-import type { GeminiRecommendation } from './gemini-tactic-recommender.ts'
+import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +77,8 @@ export interface StrategicMotion {
   status: 'active' | 'dismissed' | 'pinned'
   enrichedContacts?: EnrichedContact[]
   geminiInsights?: GeminiRecommendation[]
+  /** Enhanced Gemini recommendations with novel discoveries (#613) */
+  enhancedRecommendations?: MergedRecommendation[]
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1084,6 +1086,53 @@ export async function buildMotion(
     }
   }
 
+  // Step 10: Enhanced Gemini inference (#613) — deeper graph-aware recommendations
+  let enhancedRecommendations: MergedRecommendation[] | undefined
+  if (process.env.GEMINI_ENHANCED_INFERENCE === 'true') {
+    try {
+      const { summarizeGraph } = await import('./graph-summary.ts')
+      const { buildFullGraphContext } = await import('./graph-context.ts')
+      const { enhancedRecommendTactics, mergeRecommendations } = await import('./gemini-tactic-recommender.ts')
+
+      const graphText = summarizeGraph(graph)
+      const fullGraphContext = buildFullGraphContext(graph)
+      const availableTactics = tacticSignals.map(s => ({
+        name: s.headline,
+        parentTdp: String(s.metadata?.parentTdp ?? ''),
+      }))
+
+      // Get deterministic top 5 tactic names from phases
+      const deterministicTop = phases
+        .flatMap(p => p.tactics.map(t => t.name))
+        .slice(0, 5)
+
+      const enhanced = await enhancedRecommendTactics(
+        graphText,
+        fullGraphContext,
+        availableTactics,
+        deterministicTop,
+        customerName,
+      )
+
+      // Merge deterministic + novel
+      const deterministicScored = phases
+        .flatMap(p => p.tactics)
+        .map((t, i) => ({
+          name: t.name,
+          parentTdp: t.parentTdp,
+          compositeScore: 1.0 - (i * 0.1), // Preserve phase ordering
+        }))
+        .slice(0, 5)
+
+      const merged = mergeRecommendations(deterministicScored, enhanced)
+      if (merged.some(m => m.isNovel)) {
+        enhancedRecommendations = merged
+      }
+    } catch (e: any) {
+      console.warn('[motion-builder] Enhanced Gemini inference failed:', e?.message)
+    }
+  }
+
   return {
     id: `motion:${customerSlug}`,
     customerSlug,
@@ -1096,6 +1145,7 @@ export async function buildMotion(
     generatedAt: new Date().toISOString(),
     status: 'active',
     geminiInsights,
+    enhancedRecommendations,
   }
 }
 
