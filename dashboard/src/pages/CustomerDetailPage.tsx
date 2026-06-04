@@ -71,6 +71,7 @@ import { IntelligenceInsightsCard } from '../components/RecommendationCard'
 import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
 import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { TopPlaysCard } from '../components/TopPlaysCard'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1595,6 +1596,12 @@ export function CustomerDetailPage() {
         <div className="flex flex-1 overflow-hidden">
           {/* Left column — 65% */}
           <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
+          {/* Always visible: Top expansion plays (#620) */}
+          <TopPlaysCard
+            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+            customerName={customerName}
+          />
+
           {/* Always visible: Brief section */}
           <BriefSection name={customerName} />
 
