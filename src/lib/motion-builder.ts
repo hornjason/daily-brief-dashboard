@@ -1086,9 +1086,9 @@ export async function buildMotion(
     }
   }
 
-  // Step 10: Enhanced Gemini inference (#613) — deeper graph-aware recommendations
+  // Step 10: Enhanced Gemini inference (#613, #617) — deeper graph-aware recommendations
   let enhancedRecommendations: MergedRecommendation[] | undefined
-  if (process.env.GEMINI_ENHANCED_INFERENCE === 'true') {
+  {
     try {
       const { summarizeGraph } = await import('./graph-summary.ts')
       const { buildFullGraphContext } = await import('./graph-context.ts')
