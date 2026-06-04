@@ -69,6 +69,8 @@ import { TechStackTab } from '../components/tabs/TechStackTab'
 import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 import { IntelligenceInsightsCard } from '../components/RecommendationCard'
 import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
+import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
+import { CollapsibleSection } from '../components/CollapsibleSection'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1540,6 +1542,11 @@ export function CustomerDetailPage() {
         )}
       </header>
 
+      {/* Temporal diff strip — progressive disclosure (#619) */}
+      <TemporalDiffStrip
+        customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+      />
+
       {/* Tab bar (GitHub Issue #142, #240) */}
       <CustomerTabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -1588,24 +1595,80 @@ export function CustomerDetailPage() {
         <div className="flex flex-1 overflow-hidden">
           {/* Left column — 65% */}
           <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
-          <TemporalDeltaSection customerName={customerName} />
-          <IntelligenceChangesCard customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')} />
+          {/* Always visible: Brief section */}
           <BriefSection name={customerName} />
-          <ProductIntelSection
-            customerName={customerName}
-            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-          />
+
+          {/* Collapsible: Temporal changes (#619) */}
+          <CollapsibleSection
+            sectionName="temporal-changes"
+            title="What Changed"
+            icon={<Clock className="w-4 h-4" />}
+            summaryText={`Brief-over-brief delta`}
+          >
+            <div className="p-4 space-y-4">
+              <TemporalDeltaSection customerName={customerName} />
+              <IntelligenceChangesCard customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')} />
+            </div>
+          </CollapsibleSection>
+
+          {/* Collapsible: Product Intelligence (#619) */}
+          <CollapsibleSection
+            sectionName="product-intel"
+            title="Product Intelligence"
+            icon={<Package className="w-4 h-4" />}
+            summaryText="Product lifecycle and intel"
+          >
+            <div className="p-4">
+              <ProductIntelSection
+                customerName={customerName}
+                customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+              />
+            </div>
+          </CollapsibleSection>
+
           {/* BKL-HERO-18: Drive-sourced sections — L3 safe */}
-          <CloudSpendCard customerName={customerName} />
-          <PipelineCard customerName={customerName} />
-          <ActivityTimeline
-            meetings={sse.meetings}
-            emails={sse.emails}
-            drive={sse.drive}
-            loading={sectionLoading}
-          />
+          {/* Collapsible: Cloud Spend + Pipeline (#619) */}
+          <CollapsibleSection
+            sectionName="financials"
+            title="Cloud Spend & Pipeline"
+            icon={<Cloud className="w-4 h-4" />}
+            summaryText="CCSP revenue and open opps"
+          >
+            <div className="p-4 space-y-4">
+              <CloudSpendCard customerName={customerName} />
+              <PipelineCard customerName={customerName} />
+            </div>
+          </CollapsibleSection>
+
+          {/* Collapsible: Activity Timeline (#619) */}
+          <CollapsibleSection
+            sectionName="activity-timeline"
+            title="Activity"
+            icon={<Clock className="w-4 h-4" />}
+            summaryText={`Meetings, emails, docs`}
+          >
+            <div className="p-0">
+              <ActivityTimeline
+                meetings={sse.meetings}
+                emails={sse.emails}
+                drive={sse.drive}
+                loading={sectionLoading}
+              />
+            </div>
+          </CollapsibleSection>
+
+          {/* Collapsible: Product Q&A (#619) */}
           {/* BKL-AI16: Product Q&A panel — grounded Gemini for RHEL / OCP / AAP */}
-          <ProductQueryPanel customerName={customerName} />
+          <CollapsibleSection
+            sectionName="product-qa"
+            title="Product Q&A"
+            icon={<Sparkles className="w-4 h-4" />}
+            summaryText="Ask about this customer's products"
+          >
+            <div className="p-4">
+              <ProductQueryPanel customerName={customerName} />
+            </div>
+          </CollapsibleSection>
         </main>
 
         {/* Right column — 35%, flows with main content (no independent scroll) */}
@@ -1626,9 +1689,16 @@ export function CustomerDetailPage() {
           {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
           {stakeholderContacts.length > 0 && (
-            <div className="bg-surface border border-border rounded-xl p-5">
-              <StakeholderEngagementPanel contacts={stakeholderContacts} />
-            </div>
+            <CollapsibleSection
+              sectionName="stakeholder-engagement"
+              title="Stakeholder Engagement"
+              icon={<Users className="w-4 h-4" />}
+              summaryText={`${stakeholderContacts.length} contact${stakeholderContacts.length !== 1 ? 's' : ''}`}
+            >
+              <div className="p-5">
+                <StakeholderEngagementPanel contacts={stakeholderContacts} />
+              </div>
+            </CollapsibleSection>
           )}
           <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
           <DriveSection files={sse.drive} loading={sectionLoading} />
