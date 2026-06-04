@@ -628,6 +628,8 @@ function createDerivedEdges(
           evidence: [signal.headline],
           sourceUrl: signal.url,
           scoredAt: nowIso(),
+          createdAt: derivedCreatedAt,
+          sourceType: signal.source,
         })
       }
       // Check for matching play nodes
@@ -642,6 +644,8 @@ function createDerivedEdges(
           evidence: [signal.headline],
           sourceUrl: signal.url,
           scoredAt: nowIso(),
+          createdAt: derivedCreatedAt,
+          sourceType: signal.source,
         })
       }
     }
@@ -665,6 +669,8 @@ function createDerivedEdges(
           evidence: [signal.headline],
           sourceUrl: signal.url,
           scoredAt: nowIso(),
+          createdAt: derivedCreatedAt,
+          sourceType: signal.source,
         })
       }
     }
@@ -718,6 +724,8 @@ function createDerivedEdges(
           strength: 0.8,
           evidence: [`Active subscription: ${productDesc}`],
           scoredAt: nowIso(),
+          createdAt: derivedCreatedAt,
+          sourceType: signal.source,
         })
       }
     }

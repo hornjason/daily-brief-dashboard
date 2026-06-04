@@ -50,6 +50,7 @@ export interface MotionPhase {
     url?: string
   }>
   estimatedTcv?: number
+  brief?: string
 }
 
 export interface EnrichedContact {
