@@ -53,21 +53,37 @@ beforeEach(() => {
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
 
-/** Minimal signals — not enough for 2+ play nodes → motion = null */
+/** Minimal signals — single subscription + play node (enough for motion after #573) */
 function makeMinimalSignals(): Signal[] {
+  const now = new Date().toISOString()
   return [
     {
       source: 'subscriptions',
       type: 'subscription',
       headline: 'RHEL Server',
-      detail: 'Active subscription',
+      detail: 'Expired subscription',
       rawRelevance: 0.8,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       metadata: {
         customerSlug: 'test-customer',
         productDescription: 'Red Hat Enterprise Linux Server',
-        status: 'Active',
+        status: 'expired',
         sku: 'RH00001',
+        endDate: '2025-12-31',
+      },
+    },
+    {
+      source: 'solution-intelligence',
+      type: 'product-intel',
+      headline: 'Server and Cloud OS Play',
+      detail: 'Solution play match from RHEL subscription',
+      rawRelevance: 0.7,
+      timestamp: now,
+      metadata: {
+        customerSlug: 'test-customer',
+        solutionName: 'Server and Cloud OS',
+        productAlignment: 'Red Hat Enterprise Linux',
+        matchedTechnologies: ['RHEL'],
       },
     },
   ]
@@ -200,14 +216,15 @@ function makeRichSignals(): Signal[] {
 function makePlaySignals(): Signal[] {
   return [
     {
-      source: 'saleshub',
-      type: 'product-intel',
+      source: 'saleshub-plays',
+      type: 'recommendation',
       headline: 'Automation Everywhere Play',
       detail: 'SalesHub play',
-      rawRelevance: 0.9,
+      rawRelevance: 0.4,
       timestamp: new Date().toISOString(),
       metadata: {
-        tdpAlignment: ['Automation', 'Server and Cloud Computing'],
+        tdpAlignment: ['Automation', 'Server/Cloud OS'],
+        playType: 'strategic',
         personaRoles: ['VP Infrastructure', 'Director of IT'],
       },
     },
@@ -218,38 +235,41 @@ function makePlaySignals(): Signal[] {
 function makeTacticSignals(): Signal[] {
   return [
     {
-      source: 'saleshub',
-      type: 'product-intel',
+      source: 'saleshub-tactics',
+      type: 'recommendation',
       headline: 'Ansible Migration Tactic',
-      detail: 'Automation tactic',
-      rawRelevance: 0.8,
+      detail: 'TDP: Automation',
+      rawRelevance: 0.3,
       timestamp: new Date().toISOString(),
       metadata: {
         parentTdp: 'Automation',
-        assets: [{ name: 'Migration Guide', url: 'https://example.com/guide', type: 'pdf' }],
+        playType: 'tactic',
+        assets: [{ name: 'Migration Guide', url: 'https://example.com/guide', type: 'share' }],
       },
     },
     {
-      source: 'saleshub',
-      type: 'product-intel',
+      source: 'saleshub-tactics',
+      type: 'recommendation',
       headline: 'RHEL Cloud Tactic',
-      detail: 'Server tactic',
-      rawRelevance: 0.7,
+      detail: 'TDP: Server/Cloud OS',
+      rawRelevance: 0.3,
       timestamp: new Date().toISOString(),
       metadata: {
-        parentTdp: 'Server and Cloud Computing',
+        parentTdp: 'Server/Cloud OS',
+        playType: 'tactic',
         assets: [],
       },
     },
     {
-      source: 'saleshub',
-      type: 'product-intel',
+      source: 'saleshub-tactics',
+      type: 'recommendation',
       headline: 'AI Platform Tactic',
-      detail: 'AI tactic',
-      rawRelevance: 0.6,
+      detail: 'TDP: AI',
+      rawRelevance: 0.3,
       timestamp: new Date().toISOString(),
       metadata: {
         parentTdp: 'AI',
+        playType: 'tactic',
         assets: [],
       },
     },
