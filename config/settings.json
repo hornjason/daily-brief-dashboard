@@ -69,11 +69,11 @@
       "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
       "pods": {
         "CENTRAL_ENT_TOLA": {
-          "sfReportId": "00OPe00000kZhSfMAK",
+          "sfReportId": "00OPe00000odJCVMA2",
           "label": "TOLA"
         },
         "CENTRAL_ENT_TOLA_HP": {
-          "sfReportId": "00OPe00000ocwivMAA",
+          "sfReportId": "00OPe00000odJCVMA2",
           "label": "High Plains",
           "hidden": true
         }
