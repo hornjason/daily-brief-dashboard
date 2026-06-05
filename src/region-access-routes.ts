@@ -37,11 +37,13 @@ interface CatalogRegion {
 
 /** A region is selectable when it has all three: territorySheetUrl, podBookingsFolderId, ≥1 pod with sfReportId. */
 function buildCatalogRegion(region: RegionConfig): CatalogRegion {
-  const pods: CatalogPod[] = Object.entries(region.pods).map(([key, pod]) => ({
-    key,
-    label: pod.label,
-    qualifiedKey: `${region.id}.${key}`,
-  }))
+  const pods: CatalogPod[] = Object.entries(region.pods)
+    .filter(([_, pod]) => !pod.hidden)
+    .map(([key, pod]) => ({
+      key,
+      label: pod.label,
+      qualifiedKey: `${region.id}.${key}`,
+    }))
 
   const missing: string[] = []
   if (!region.territorySheetUrl) missing.push('territorySheetUrl')

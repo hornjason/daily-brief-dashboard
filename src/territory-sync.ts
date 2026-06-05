@@ -281,18 +281,23 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
       let terrCode = ''
 
       if (rawAeCell.includes('\n')) {
-        // Combined format: "AE Name\nTerrXX" or "AE Name\nTerrXX (TerrYY HP)"
+        // Combined format: "AE Name\nTOLA_Terr01" or "AE Name\nHigh_Plains_Terr03"
         const parts = rawAeCell.split('\n')
         aeName = parts[0].trim()
-        // Extract primary territory number from second part
-        const terrMatch = parts[1]?.trim().match(/Terr?(\d+)/i)
-        if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
+        // Preserve the full territory code including any prefix (e.g. TOLA_Terr01, High_Plains_Terr03)
+        const terrPart = parts[1]?.trim() ?? ''
+        const terrMatch = terrPart.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?(\d+)/i)
+        if (terrMatch) {
+          const prefix = terrMatch[1] ?? ''
+          const num = terrMatch[2].padStart(2, '0')
+          terrCode = `${prefix}Terr${num}`
+        }
       } else {
         aeName = rawAeCell
         // Territory code is within the next 1-3 rows at the same column
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
-          const m = candidate.match(/Terr?\d+/i)
+          const m = candidate.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?\d+/i)
           if (m) { terrCode = m[0]; break }
         }
       }
@@ -380,13 +385,25 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
 }
 
 /**
- * Convert an enterprise-style territory code (`Ter01`) into an internal
- * territory key (`CENTRAL_ENT_TOLA_TERR01`). Uses the first pod key in the
- * region as the base — enterprise regions have a single pod entry today.
+ * Convert an enterprise-style territory code into an internal territory key.
+ *
+ * Prefix-aware routing:
+ * - `High_Plains_Terr03` → `CENTRAL_ENT_TOLA_HP_TERR03` (finds pod key containing `_HP`)
+ * - `TOLA_Terr01` or bare `Terr01` → `CENTRAL_ENT_TOLA_TERR01` (first non-HP pod key)
  */
 export function enterpriseTerritoryKey(region: RegionConfig, terrCode: string): string {
   const podKeys = Object.keys(region.pods)
-  const base = podKeys[0] ?? region.id.toUpperCase().replace(/-/g, '_')
+  const fallbackBase = region.id.toUpperCase().replace(/-/g, '_')
+
+  let base: string
+  if (/^High_Plains_/i.test(terrCode)) {
+    // Route to the HP pod key
+    base = podKeys.find(k => k.includes('_HP')) ?? podKeys[0] ?? fallbackBase
+  } else {
+    // TOLA_ prefix or bare Terr — use the first non-HP pod key (default behavior)
+    base = podKeys.find(k => !k.includes('_HP')) ?? podKeys[0] ?? fallbackBase
+  }
+
   const m = terrCode.match(/(\d+)/)
   const num = m ? m[1].padStart(2, '0') : '00'
   return `${base}_TERR${num}`
@@ -619,8 +636,13 @@ async function syncEnterpriseRegion(
 
       const aeName = rawAeCell.split('\n')[0].trim()
       let terrCode = ''
-      const terrMatch = rawAeCell.match(/Terr?(\d+)/i)
-      if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
+      // Preserve full prefix (TOLA_, High_Plains_, etc.) for pod routing
+      const terrMatch = rawAeCell.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?(\d+)/i)
+      if (terrMatch) {
+        const prefix = terrMatch[1] ?? ''
+        const num = terrMatch[2].padStart(2, '0')
+        terrCode = `${prefix}Terr${num}`
+      }
       if (!terrCode) continue
 
       const fullTerrKey = enterpriseTerritoryKey(region, terrCode)
