@@ -618,11 +618,11 @@ function AutoBootstrapForm({
     return terrNum.split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
       .map(n => {
         const padded = n.padStart(2, '0')
-        const option = podTerritoryOptions.find(o => o.num === padded)
-        if (option?.key) return option.key
+        const entry = podTerritoryNames.find(t => t.num === padded)
+        if (entry?.key) return entry.key
         return `${pod}_TERR${padded}`
       }).join(', ')
-  }, [pod, terrNum, podTerritoryOptions])
+  }, [pod, terrNum, podTerritoryNames])
 
   // Fetch territory names from sheet whenever POD changes
   useEffect(() => {
