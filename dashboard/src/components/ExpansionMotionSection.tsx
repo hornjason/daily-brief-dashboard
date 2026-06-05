@@ -63,6 +63,17 @@ interface GeminiRecommendation {
   signalsUsed: string[]
 }
 
+interface MergedRecommendation {
+  name: string
+  parentTdp: string
+  compositeScore?: number
+  reasoning?: string
+  confidence?: 'high' | 'medium' | 'low'
+  signalsUsed?: string[]
+  isNovel: boolean
+  discoveryReason?: string
+}
+
 interface StrategicMotion {
   id: string
   customerSlug: string
@@ -76,6 +87,7 @@ interface StrategicMotion {
   status: 'active' | 'dismissed' | 'pinned'
   enrichedContacts?: EnrichedContact[]
   geminiInsights?: GeminiRecommendation[]
+  enhancedRecommendations?: MergedRecommendation[]
 }
 
 interface CampaignEmail {
@@ -636,6 +648,66 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
   )
 }
 
+// ── Novel Discoveries Section (#627) ────────────────────────────────────────
+
+function NovelDiscoveriesSection({ recommendations }: { recommendations: MergedRecommendation[] }) {
+  const [expanded, setExpanded] = useState(true)
+  const novelRecs = recommendations.filter(r => r.isNovel)
+
+  if (novelRecs.length === 0) return null
+
+  return (
+    <div className="mx-5 mb-4 border border-purple-400/30 rounded-lg overflow-hidden bg-purple-400/5">
+      {/* Header — collapsible */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full text-left px-4 py-3 flex items-center gap-2 hover:bg-purple-400/10 transition-colors"
+      >
+        <Sparkles className="w-4 h-4 text-purple-400" />
+        <h3 className="text-sm font-semibold text-purple-400">AI-Discovered Opportunities</h3>
+        <span className="text-xs text-text-secondary ml-1">
+          {novelRecs.length} tactic{novelRecs.length !== 1 ? 's' : ''}
+        </span>
+        <span className="ml-auto">
+          {expanded
+            ? <ChevronUp className="w-4 h-4 text-text-secondary" />
+            : <ChevronDown className="w-4 h-4 text-text-secondary" />}
+        </span>
+      </button>
+
+      {/* Novel recommendation rows */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-2">
+          {novelRecs.map((rec, i) => {
+            const reasonText = rec.discoveryReason || rec.reasoning || ''
+            const confStyle = rec.confidence ? CONFIDENCE_STYLE[rec.confidence] ?? '' : ''
+            return (
+              <div key={i} className="bg-bg-secondary/30 rounded-lg p-3 border border-border/30">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-sm font-medium text-text-primary">{rec.name}</span>
+                  <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
+                    TDP: {rec.parentTdp}
+                  </span>
+                  {rec.confidence && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${confStyle}`}>
+                      {rec.confidence}
+                    </span>
+                  )}
+                </div>
+                {reasonText && (
+                  <p className="text-xs text-text-secondary leading-relaxed line-clamp-1">
+                    {reasonText}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export function ExpansionMotionSection({ customerSlug, customerName }: ExpansionMotionSectionProps) {
@@ -738,6 +810,11 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
           <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
         ))}
       </div>
+
+      {/* AI-Discovered Opportunities — novel enhanced recommendations (#627) */}
+      {motion.enhancedRecommendations && (
+        <NovelDiscoveriesSection recommendations={motion.enhancedRecommendations} />
+      )}
 
       {/* AI Insights — Gemini tactic inference (#599) */}
       {motion.geminiInsights && motion.geminiInsights.length > 0 && (
