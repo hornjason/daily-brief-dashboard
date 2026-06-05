@@ -544,7 +544,7 @@ function AutoBootstrapForm({
   }, [pod])
   const [territoryError, setTerritoryError] = useState<string | null>(null)
   const [territoryLoading, setTerritoryLoading] = useState(false)
-  const [podTerritoryNames, setPodTerritoryNames] = useState<{ num: string; aeName: string }[]>([])
+  const [podTerritoryNames, setPodTerritoryNames] = useState<{ num: string; aeName: string; key?: string }[]>([])
   const [podNamesError, setPodNamesError] = useState<string | null>(null)
   const [preflightError, setPreflightError] = useState<string | null>(null)
 
@@ -612,12 +612,17 @@ function AutoBootstrapForm({
   // settings.json persists the last-validated POD folder and the config
   // block pre-fills from there on mount.
 
-  // Derive full territory string(s) from pod + terrNum — no reverse-parsing needed
+  // Derive full territory string(s) from pod + terrNum — prefer API-provided key for enterprise regions
   const territoryInput = useMemo(() => {
     if (!pod || !terrNum.trim()) return ''
     return terrNum.split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
-      .map(n => `${pod}_TERR${n.padStart(2, '0')}`).join(', ')
-  }, [pod, terrNum])
+      .map(n => {
+        const padded = n.padStart(2, '0')
+        const option = podTerritoryOptions.find(o => o.num === padded)
+        if (option?.key) return option.key
+        return `${pod}_TERR${padded}`
+      }).join(', ')
+  }, [pod, terrNum, podTerritoryOptions])
 
   // Fetch territory names from sheet whenever POD changes
   useEffect(() => {
@@ -626,7 +631,7 @@ function AutoBootstrapForm({
     setPodNamesError(null)
     fetch(`/api/territory-names?pod=${encodeURIComponent(pod)}`, { signal: controller.signal })
       .then(r => r.json().catch(() => ({ territories: [] })))
-      .then((d: { territories?: { num: string; aeName: string }[] }) => {
+      .then((d: { territories?: { num: string; aeName: string; key?: string }[] }) => {
         setPodTerritoryNames(d.territories ?? [])
         if (!d.territories?.length) setPodNamesError('Could not load territories — check your Google connection')
       })
@@ -639,7 +644,7 @@ function AutoBootstrapForm({
     if (!pod) return []
     // Prefer live sheet data
     if (podTerritoryNames.length > 0) {
-      return podTerritoryNames.map(({ num, aeName }) => ({ num, label: `${num} — ${aeName}` }))
+      return podTerritoryNames.map(({ num, aeName, key }) => ({ num, label: `${num} — ${aeName}`, key }))
     }
     // Fall back to knownAes (populated aes.json)
     const knownForPod = knownAes
@@ -1104,7 +1109,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
     const controller = new AbortController()
     fetch(`/api/territory-names?pod=${encodeURIComponent(selectedPod)}`, { signal: controller.signal })
       .then(r => r.json().catch(() => ({ territories: [] })))
-      .then((d: { territories?: { num: string; aeName: string }[] }) => {
+      .then((d: { territories?: { num: string; aeName: string; key?: string }[] }) => {
         const names = (d.territories ?? [])
           .map(t => t.aeName)
           .filter((n): n is string => typeof n === 'string' && n.length > 0)
