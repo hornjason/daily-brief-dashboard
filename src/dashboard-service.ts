@@ -284,9 +284,19 @@ export async function buildRedHatIntelligenceForMorningBrief(
           } catch { /* skip invalid cache */ }
         }
 
-        // Sort by significanceScore desc, take top 3
-        allArticles.sort((a, b) => (b.significanceScore ?? 0) - (a.significanceScore ?? 0))
-        const top3 = allArticles.slice(0, 3)
+        // Sort by blended score: significance + recency boost
+        const now = Date.now()
+        const DAY_MS = 86_400_000
+        const scored = allArticles.map(a => {
+          const age = a.publishedDate ? now - new Date(a.publishedDate).getTime() : Infinity
+          let recencyBoost = 0
+          if (age < DAY_MS) recencyBoost = 3
+          else if (age < 3 * DAY_MS) recencyBoost = 1
+          else if (age > 7 * DAY_MS) recencyBoost = -2
+          return { ...a, effectiveScore: (a.significanceScore ?? 0) + recencyBoost }
+        })
+        scored.sort((a, b) => b.effectiveScore - a.effectiveScore)
+        const top3 = scored.slice(0, 3)
 
         for (const article of top3) {
           meetingNews.push({
