@@ -384,7 +384,8 @@ export function createRefreshRouter(): Hono {
     return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
   })
   router.post('/api/refresh/news', async (c) => {
-    try {
+    const customerCount = customers.length
+    Promise.resolve().then(async () => {
       const { newsProvider } = await import('./news-provider.ts')
       let success = 0, failed = 0
       for (const customer of customers) {
@@ -394,11 +395,12 @@ export function createRefreshRouter(): Hono {
         } catch { failed++ }
       }
       FeatureModuleRegistry.recordOutcome('news-radar', { success: failed === 0, recordCount: success })
-      return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
-    } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('news-radar', { success: false, error: e?.message })
-      return c.json({ ok: false, error: e?.message }, 500)
-    }
+      console.log(`[news-radar] batch refresh complete: ${success} succeeded, ${failed} failed`)
+    }).catch(e => {
+      FeatureModuleRegistry.recordOutcome('news-radar', { success: false, error: (e as Error)?.message })
+      console.error('[news-radar] batch refresh failed:', (e as Error)?.message)
+    })
+    return c.json({ ok: true, status: 'started', message: `Refreshing news for ${customerCount} customers in background` }, 202)
   })
   router.post('/api/refresh/cloud-marketplace', async (c) => {
     const mod = FeatureModuleRegistry.get('cloud-marketplace')
