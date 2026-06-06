@@ -1129,8 +1129,28 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
   }
 
   territories.sort((a, b) => a.num.localeCompare(b.num))
-  console.log(`[territory-names] ${pod}: ${territories.length} territories`)
-  const result = { territories }
+
+  // Group by AE name — merge territories for AEs spanning multiple columns (e.g. TOLA + High Plains)
+  const grouped = new Map<string, { nums: string[]; keys: string[]; aeName: string }>()
+  for (const t of territories) {
+    const existing = grouped.get(t.aeName)
+    if (existing) {
+      if (!existing.nums.includes(t.num)) existing.nums.push(t.num)
+      if (!existing.keys.includes(t.key)) existing.keys.push(t.key)
+    } else {
+      grouped.set(t.aeName, { nums: [t.num], keys: [t.key], aeName: t.aeName })
+    }
+  }
+  const mergedTerritories = Array.from(grouped.values()).map(g => ({
+    num: g.nums.join(','),
+    aeName: g.aeName,
+    key: g.keys[0],
+    keys: g.keys,
+  }))
+  mergedTerritories.sort((a, b) => a.num.split(',')[0].localeCompare(b.num.split(',')[0]))
+
+  console.log(`[territory-names] ${pod}: ${territories.length} raw → ${mergedTerritories.length} grouped territories`)
+  const result = { territories: mergedTerritories }
   territoryNamesCacheMap.set(pod, { data: result, cachedAt: Date.now() })
   return result
 }
