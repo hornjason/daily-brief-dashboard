@@ -952,8 +952,12 @@ export function registerScrapeRoutes(app: Hono): void {
       podBookingsFolderId = region.podBookingsFolderId || null
       parentFolderId = region.parentFolderId || ''
       territorySheetUrl = region.territorySheetUrl || null
-      podSfReports = flattenPodSfReports(region)
-      podLabels = flattenPodLabels(region)
+      const visiblePods = Object.fromEntries(
+        Object.entries(region.pods).filter(([_, p]) => !p.hidden)
+      ) as typeof region.pods
+      const visibleRegion = { ...region, pods: visiblePods }
+      podSfReports = flattenPodSfReports(visibleRegion)
+      podLabels = flattenPodLabels(visibleRegion)
     } catch { /* no settings file yet — return empty defaults */ }
     return c.json({ podBookingsFolderId, parentFolderId, podSfReports, podLabels, territorySheetUrl })
   })
