@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test'
-import { parseTerritoryParts } from '../../src/lib/territory.ts'
+import { parseTerritoryParts, getUniquePodFilters } from '../../src/lib/territory.ts'
 
 describe('parseTerritoryParts', () => {
   test('parses a 5-part commercial territory', () => {
@@ -49,5 +49,66 @@ describe('parseTerritoryParts', () => {
     expect(() => parseTerritoryParts('WEST COMM CORP TERR01')).toThrow(
       /Invalid territory format/,
     )
+  })
+})
+
+describe('getUniquePodFilters (#632)', () => {
+  test('returns single entry for single-pod territories', () => {
+    const result = getUniquePodFilters([
+      'CENTRAL_ENT_TOLA_TERR02',
+      'CENTRAL_ENT_TOLA_TERR05',
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
+  })
+
+  test('returns multiple entries for multi-pod territories', () => {
+    const result = getUniquePodFilters([
+      'CENTRAL_ENT_TOLA_TERR05',
+      'CENTRAL_ENT_HEARTLAND_TERR08',
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
+    expect(result[1].pod).toBe('CENTRAL_ENT_HEARTLAND_POD')
+  })
+
+  test('returns entries for mixed enterprise and commercial territories', () => {
+    const result = getUniquePodFilters([
+      'CENTRAL_ENT_TOLA_TERR05',
+      'WEST_COMM_CORP_NORTHWEST_TERR01',
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
+    expect(result[0].segment).toBe('Enterprise')
+    expect(result[1].pod).toBe('WEST_COMM_CORP_NORTHWEST')
+    expect(result[1].segment).toBe('Commercial')
+  })
+
+  test('deduplicates territories that map to the same pod', () => {
+    const result = getUniquePodFilters([
+      'WEST_COMM_CORP_NORTHWEST_TERR01',
+      'WEST_COMM_CORP_NORTHWEST_TERR03',
+      'CENTRAL_ENT_TOLA_TERR02',
+      'CENTRAL_ENT_TOLA_TERR05',
+    ])
+    expect(result).toHaveLength(2)
+    expect(result[0].pod).toBe('WEST_COMM_CORP_NORTHWEST')
+    expect(result[1].pod).toBe('CENTRAL_ENT_TOLA_POD')
+  })
+
+  test('returns empty array for empty input', () => {
+    expect(getUniquePodFilters([])).toEqual([])
+  })
+
+  test('preserves full TerritoryParts for each unique pod', () => {
+    const result = getUniquePodFilters(['EAST_ENT_FINANCE_TERR05'])
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({
+      pod: 'EAST_ENT_FINANCE_POD',
+      subregion: 'EAST_ENT_FINANCE',
+      segment: 'Enterprise',
+      subsegment: 'Enterprise',
+      region: 'EAST',
+    })
   })
 })

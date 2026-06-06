@@ -18,9 +18,11 @@
  *   segment   = Enterprise
  *   region    = CENTRAL                   (first segment)
  */
-export function parseTerritoryParts(territory: string): {
+export type TerritoryParts = {
   pod: string; subregion: string; segment: string; subsegment: string; region: string
-} {
+}
+
+export function parseTerritoryParts(territory: string): TerritoryParts {
   if (!/^[A-Z0-9_]+$/i.test(territory)) {
     throw new Error(`Invalid territory format: ${territory}`)
   }
@@ -35,4 +37,30 @@ export function parseTerritoryParts(territory: string): {
   const region = isEnterprise ? (parts[0] ?? 'CENTRAL') : 'NA_COMM_COMMERCIAL'
 
   return { pod, subregion, segment, subsegment: segment, region }
+}
+
+/**
+ * Extract unique pod filter sets from a list of territory strings.
+ *
+ * When an AE has territories in multiple pods (e.g., CENTRAL_ENT_TOLA_TERR05
+ * and WEST_COMM_CORP_NORTHWEST_TERR01), this returns one TerritoryParts per
+ * unique pod so the caller can fetch CCSP data for each pod independently.
+ *
+ * De-duplicates by pod name — territories that map to the same pod
+ * (e.g., CENTRAL_ENT_TOLA_TERR02 and CENTRAL_ENT_TOLA_TERR05) produce
+ * only one entry.
+ *
+ * Returns an empty array if no valid territories are provided.
+ */
+export function getUniquePodFilters(territories: string[]): TerritoryParts[] {
+  const seen = new Set<string>()
+  const result: TerritoryParts[] = []
+  for (const t of territories) {
+    const parts = parseTerritoryParts(t)
+    if (!seen.has(parts.pod)) {
+      seen.add(parts.pod)
+      result.push(parts)
+    }
+  }
+  return result
 }
