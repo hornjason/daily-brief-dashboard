@@ -23,7 +23,7 @@ import { sanitizeErr } from './utils.ts'
 import { callGemini } from './gemini-call.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
-import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
+import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, enterpriseTerritoryKey } from './territory-sync.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { buildTodaysMeetings } from './lib/todays-meetings.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
@@ -406,14 +406,14 @@ export function podKeyFromTerritoryCode(terrCode: string): string {
   return key
 }
 
-export function getSheetAndTypeForPod(pod: string): { sheetId: string; regionType: 'commercial' | 'enterprise' } {
+export function getSheetAndTypeForPod(pod: string): { sheetId: string; regionType: 'commercial' | 'enterprise'; region?: import('./region-config.ts').RegionConfig } {
   try {
     const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
     const settings = normalizeSettings(raw)
     for (const region of settings.regions) {
       if (pod in region.pods) {
         const match = region.territorySheetUrl.match(/\/spreadsheets\/d\/([\w-]+)/)
-        if (match) return { sheetId: match[1], regionType: region.type ?? 'commercial' }
+        if (match) return { sheetId: match[1], regionType: region.type ?? 'commercial', region }
       }
     }
   } catch {
@@ -1000,13 +1000,13 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
   if (!auth) throw new Error('Google auth not configured')
 
   const sheetsClient = google.sheets({ version: 'v4', auth })
-  const { sheetId, regionType } = getSheetAndTypeForPod(pod)
+  const { sheetId, regionType, region } = getSheetAndTypeForPod(pod)
   const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
   const tabNames = (meta.data.sheets ?? [])
     .filter(s => !s.properties?.hidden)
     .map(s => s.properties?.title ?? '')
 
-  const territories: { num: string; aeName: string }[] = []
+  const territories: { num: string; aeName: string; key: string }[] = []
 
   if (regionType === 'enterprise') {
     // Enterprise path: find the tab detected by isEnterpriseTab, extract AE map
@@ -1035,7 +1035,8 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
           const m = terrCode.match(/Terr(\d+)/i)
           if (!m) continue
           const num = m[1].padStart(2, '0')
-          territories.push({ num, aeName })
+          const key = region ? enterpriseTerritoryKey(region, terrCode) : `${pod}_TERR${num}`
+          territories.push({ num, aeName, key })
         }
       }
       break // Only one enterprise tab expected
@@ -1121,15 +1122,35 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
         const terrNumMatch = terrCode.match(/Terr(\d+)/i)
         if (!terrNumMatch) continue
         const num = terrNumMatch[1].padStart(2, '0')
-        territories.push({ num, aeName })
+        territories.push({ num, aeName, key: `${pod}_TERR${num}` })
       }
       break
     }
   }
 
   territories.sort((a, b) => a.num.localeCompare(b.num))
-  console.log(`[territory-names] ${pod}: ${territories.length} territories`)
-  const result = { territories }
+
+  // Group by AE name — merge territories for AEs spanning multiple columns (e.g. TOLA + High Plains)
+  const grouped = new Map<string, { nums: string[]; keys: string[]; aeName: string }>()
+  for (const t of territories) {
+    const existing = grouped.get(t.aeName)
+    if (existing) {
+      if (!existing.nums.includes(t.num)) existing.nums.push(t.num)
+      if (!existing.keys.includes(t.key)) existing.keys.push(t.key)
+    } else {
+      grouped.set(t.aeName, { nums: [t.num], keys: [t.key], aeName: t.aeName })
+    }
+  }
+  const mergedTerritories = Array.from(grouped.values()).map(g => ({
+    num: g.nums.join(','),
+    aeName: g.aeName,
+    key: g.keys[0],
+    keys: g.keys,
+  }))
+  mergedTerritories.sort((a, b) => a.num.split(',')[0].localeCompare(b.num.split(',')[0]))
+
+  console.log(`[territory-names] ${pod}: ${territories.length} raw → ${mergedTerritories.length} grouped territories`)
+  const result = { territories: mergedTerritories }
   territoryNamesCacheMap.set(pod, { data: result, cachedAt: Date.now() })
   return result
 }
