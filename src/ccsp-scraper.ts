@@ -1,6 +1,6 @@
 import { setLivePageBusy, getScrapeContext, ensureBrowserHealthy } from "./rh-scraper.ts"
 import { isPrimary } from './lib/node-role.ts'
-import { parseTerritoryParts } from './lib/territory.ts'
+import { parseTerritoryParts, getUniquePodFilters } from './lib/territory.ts'
 /**
  * src/ccsp-scraper.ts
  *
@@ -140,22 +140,27 @@ export async function checkCcspL3Exists(ae: AE, podBookingsFolderId: string | un
   const territories = (ae.tableauTerritories ?? []).filter(Boolean)
   if (territories.length === 0) return false
   try {
-    const podName = parseTerritoryParts(territories[0]).pod
-    if (!podName) return false
+    // #632: Check ALL unique pods — multi-pod AEs need cache hits for every pod
+    const uniquePods = getUniquePodFilters(territories)
+    if (uniquePods.length === 0) return false
     const today = new Date().toISOString().slice(0, 10)
-    const cacheFileName = `CCSP-${podName}-${today}.csv`
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     const drive = google.drive({ version: 'v3', auth })
-    const listRes = await withQuotaRetry(
-      () => drive.files.list({
-        q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
-        fields: 'files(id, name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      }),
-      'CCSP L3 existence check',
-    )
-    return Boolean(listRes.data.files && listRes.data.files.length > 0)
+    for (const podFilter of uniquePods) {
+      if (!podFilter.pod) return false
+      const cacheFileName = `CCSP-${podFilter.pod}-${today}.csv`
+      const listRes = await withQuotaRetry(
+        () => drive.files.list({
+          q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
+          fields: 'files(id, name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+        'CCSP L3 existence check',
+      )
+      if (!listRes.data.files || listRes.data.files.length === 0) return false
+    }
+    return true
   } catch (e: any) {
     // Fail-open to false: on any Drive error, defer to runCcspScrape's own resilient path
     console.warn('[ccsp] checkCcspL3Exists: Drive error — falling through to L4:', e?.message ?? e)
@@ -307,30 +312,61 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   // Compute rolling window up front — used by both cache and live paths
   const { years, quarters, label } = getRollingFyWindow()
 
+  // #632: Derive UNIQUE pod filter sets from ALL territories — multi-pod AEs
+  // need separate cache lookups and live fetches for each pod.
+  const uniquePodFilters = validTerritories.length > 0
+    ? getUniquePodFilters(validTerritories)
+    : []
+
   // Issue #15 Step 2: cache tiers extracted to src/ccsp-cache.ts.
   //   Tier 1 — in-memory POD cache (BKL-PERF-02, BKL-PERF-04, BKL-INGEST-03).
   //   Tier 2 — Drive POD cache CCSP-<pod>-<date>.csv (BKL-PERF-03).
   // Both return full POD-wide rows; this orchestrator post-filters per AE.
-  const currentPod = validTerritories.length > 0 ? parseTerritoryParts(validTerritories[0]).pod : ''
 
-  // Tier 1: in-memory cache (gated on pod match + Drive modifiedTime freshness).
-  if (validTerritories.length > 0 && currentPod) {
-    const mem = await tryMemoryCache(currentPod)
-    if (mem.hit && mem.rows) {
-      const filtered = filterRowsForAe(mem.rows, validTerritories, quarters)
-      console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (memory tier)`)
-      return { aeName: ae.name, rows: filtered, accountPeriod: mem.period ?? label }
+  // Tier 1: in-memory cache — try ALL pods; if every pod hits, merge and return.
+  if (uniquePodFilters.length > 0) {
+    let allMemHit = true
+    const memRows: Record<string, string>[] = []
+    let memPeriod: string | undefined
+    for (const podFilter of uniquePodFilters) {
+      if (!podFilter.pod) { allMemHit = false; break }
+      const mem = await tryMemoryCache(podFilter.pod)
+      if (mem.hit && mem.rows) {
+        memRows.push(...mem.rows)
+        memPeriod = memPeriod ?? mem.period
+      } else {
+        allMemHit = false
+        break
+      }
+    }
+    if (allMemHit && memRows.length > 0) {
+      const filtered = filterRowsForAe(memRows, validTerritories, quarters)
+      console.log(`[ccsp] ${ae.name}: using cached POD data (${uniquePodFilters.length} pod(s)) — ${filtered.length} rows (memory tier)`)
+      return { aeName: ae.name, rows: filtered, accountPeriod: memPeriod ?? label }
     }
   }
 
-  // Tier 2: Drive cache. Only runs on memory miss.
-  if (podBookingsFolderId && validTerritories.length > 0 && currentPod) {
-    const drv = await tryDriveCache(currentPod, podBookingsFolderId)
-    if (drv.hit && drv.rows) {
-      const before = drv.rows.length
-      const rows = filterRowsForAe(drv.rows, validTerritories, quarters)
-      console.log(`[ccsp] ${ae.name}: Drive cache filter (territory+quarter): ${before} → ${rows.length} rows`)
-      return { aeName: ae.name, rows, accountPeriod: drv.period ?? label }
+  // Tier 2: Drive cache — try ALL pods; if every pod hits, merge and return.
+  if (podBookingsFolderId && uniquePodFilters.length > 0) {
+    let allDrvHit = true
+    const drvRows: Record<string, string>[] = []
+    let drvPeriod: string | undefined
+    for (const podFilter of uniquePodFilters) {
+      if (!podFilter.pod) { allDrvHit = false; break }
+      const drv = await tryDriveCache(podFilter.pod, podBookingsFolderId)
+      if (drv.hit && drv.rows) {
+        drvRows.push(...drv.rows)
+        drvPeriod = drvPeriod ?? drv.period
+      } else {
+        allDrvHit = false
+        break
+      }
+    }
+    if (allDrvHit && drvRows.length > 0) {
+      const before = drvRows.length
+      const rows = filterRowsForAe(drvRows, validTerritories, quarters)
+      console.log(`[ccsp] ${ae.name}: Drive cache filter (${uniquePodFilters.length} pod(s), territory+quarter): ${before} → ${rows.length} rows`)
+      return { aeName: ae.name, rows, accountPeriod: drvPeriod ?? label }
     }
   }
 
@@ -341,41 +377,47 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   }
 
   // -- Live Tableau fetch (Issue #15 Step 3 — extracted to ccsp-tableau-fetch.ts) -----
+  // #632: Fetch CSV for EACH unique pod and merge rows. Different pods may have
+  // different Tableau filter params (Region, Segment, Subregion, POD).
   // BKL-CCSP-05: territory string drives Region/Segment/POD derivation.
-  // Tableau URL build, page navigation, SSO recovery handshake, CSV download,
-  // and response classification all live in fetchPodCsv. The shared BrowserContext
-  // is NOT acquired there — caller passes the page (ADR-015 invariant intact).
-  const territoryFilters = validTerritories.length > 0
-    ? parseTerritoryParts(validTerritories[0])
-    : { pod: '', subregion: '', segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }
+  const effectivePodFilters = uniquePodFilters.length > 0
+    ? uniquePodFilters
+    : [{ pod: '', subregion: '', segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }]
 
   let rows: Record<string, string>[] = []
-  try {
-    const fetched = await fetchPodCsv({
-      page,
-      aeName: ae.name,
-      territoryFilters,
-      validTerritories,
-      years,
-      quarters,
-    })
-    rows = fetched.rows
-    // Save freshened Tableau cookies after successful manual login during the fetch.
-    if (fetched.loggedInDuringFetch && _ctx) {
-      await saveTableauSession(_ctx)
+  for (const territoryFilters of effectivePodFilters) {
+    let podRows: Record<string, string>[] = []
+    try {
+      console.log(`[ccsp] ${ae.name}: fetching pod ${territoryFilters.pod || '(default)'}`)
+      const fetched = await fetchPodCsv({
+        page,
+        aeName: ae.name,
+        territoryFilters,
+        validTerritories,
+        years,
+        quarters,
+      })
+      podRows = fetched.rows
+      rows.push(...podRows)
+      // Save freshened Tableau cookies after successful manual login during the fetch.
+      if (fetched.loggedInDuringFetch && _ctx) {
+        await saveTableauSession(_ctx)
+      }
+    } catch (e: any) {
+      console.warn(`[ccsp] ${ae.name}: live Tableau fetch failed for pod ${territoryFilters.pod}: ${e.message}`)
+      // If there's only one pod, propagate the error as before
+      if (effectivePodFilters.length === 1) throw e
+      // For multi-pod, log and continue — partial data is better than none
     }
-  } catch (e: any) {
-    console.warn(`[ccsp] ${ae.name}: live Tableau fetch failed: ${e.message}`)
-    throw e
-  }
 
-  // Issue #15 Step 2: cache write-back (memory + Drive) lives in ccsp-cache.writeCaches.
-  //   - BKL-PERF-02 / BKL-PERF-04: in-memory POD-keyed cache.
-  //   - BKL-PERF-03: Drive cache write CCSP-<pod>-<today>.csv.
-  //   - REG-CCSP-DUP-01: stale-sibling deletion.
-  //   - BKL-INGEST-03: stamps driveFileId onto in-memory entry post-write.
-  if (rows.length > 0 && validTerritories.length > 0) {
-    await writeCaches(territoryFilters.pod, rows, label, podBookingsFolderId)
+    // Issue #15 Step 2: cache write-back per pod (uses this pod's rows only)
+    //   - BKL-PERF-02 / BKL-PERF-04: in-memory POD-keyed cache.
+    //   - BKL-PERF-03: Drive cache write CCSP-<pod>-<today>.csv.
+    //   - REG-CCSP-DUP-01: stale-sibling deletion.
+    //   - BKL-INGEST-03: stamps driveFileId onto in-memory entry post-write.
+    if (podRows.length > 0 && territoryFilters.pod) {
+      await writeCaches(territoryFilters.pod, podRows, label, podBookingsFolderId)
+    }
   }
 
   // Post-filter by territory and quarter — download returns full POD dataset.
