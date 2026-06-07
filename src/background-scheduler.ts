@@ -885,6 +885,65 @@ export function initBackgroundScheduler(opts: {
     },
   })
 
+  // Meeting Prep Refresh — every 60 minutes (#646)
+  // Finds meetings starting within 2 hours that already have a prep doc and regenerates
+  // using update-in-place. Skips meetings manually regenerated within the last hour.
+  schedulerRegistry.register({
+    name: 'meeting-prep-refresh',
+    type: 'interval',
+    intervalMs: 60 * 60 * 1000, // every 60 minutes
+    enabled: true,
+    run: async () => {
+      console.log('[meeting-prep-refresh] scheduled scan started')
+      const { findMeetingsNeedingRefresh } = await import('./lib/meeting-prep-refresh.ts')
+      const { generateMeetingPrep, readHistory } = await import('./meeting-prep-service.ts')
+      const { fetchCalendar } = await import('./google.ts')
+      const { toSlug } = await import('./cache-layer.ts')
+
+      let events
+      try {
+        events = await fetchCalendar(customers, true)
+      } catch (e: any) {
+        console.warn(`[meeting-prep-refresh] Calendar fetch failed: ${e.message}`)
+        return
+      }
+
+      // Build history map for all customers
+      const historyBySlug = new Map<string, any[]>()
+      for (const c of customers) {
+        const slug = toSlug(c.name)
+        historyBySlug.set(slug, readHistory(slug))
+      }
+
+      const candidates = findMeetingsNeedingRefresh(events, customers, historyBySlug)
+      if (candidates.length === 0) {
+        console.log('[meeting-prep-refresh] no meetings need refresh')
+        return
+      }
+
+      let refreshed = 0
+      let errors = 0
+      for (const { event, customer } of candidates) {
+        try {
+          console.log(`[meeting-prep-refresh] Refreshing prep for "${event.title}" (${customer.name})`)
+          await generateMeetingPrep(customer, {
+            meetingTitle: event.title,
+            meetingStart: event.start,
+            attendees: event.attendees ?? [],
+            attendeeDetails: event.attendeeDetails,
+            recurringEventId: event.recurringEventId,
+          })
+          refreshed++
+        } catch (e: any) {
+          console.warn(`[meeting-prep-refresh] Failed to refresh "${event.title}": ${e.message}`)
+          errors++
+        }
+      }
+
+      console.log(`[meeting-prep-refresh] scan complete: ${refreshed} refreshed, ${errors} errors`)
+    },
+  })
+
   // Events — every 7 days
   schedulerRegistry.register({
     name: 'rh-events',

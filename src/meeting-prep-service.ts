@@ -54,9 +54,9 @@ import {
   detectAudienceType,
   crossReferencePartnerCustomers,
   type AudienceType,
-  type EvidenceBlock,
 } from './lib/audience-filter.ts'
 import { resolveAttendees, type AttendeeProfile } from './lib/attendee-profile-cache.ts'
+import { computeEscalation, formatEscalationForPrompt } from './lib/carry-forward.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,11 @@ export interface PrepHistoryEntry {
   recurringEventId?: string // #269: series tracking
   actionItems?: string[]    // #269: extracted for carry-forward
   docId?: string            // #641: Drive doc ID for update-in-place
+  recommendedPlays?: Array<{  // #646: carry-forward escalation
+    playName: string
+    compositeScore: number
+    firstRecommendedAt?: string
+  }>
 }
 
 interface PartnerConfig {
@@ -526,6 +531,65 @@ export async function assembleMeetingPrepForMeeting(
   return preps[0] ?? null
 }
 
+// ── Recommended Play Extraction (#646) ──────────────────────────────────────
+
+/**
+ * Extract recommended plays from generated prep content for carry-forward tracking.
+ * Looks for play/tactic headers in the Gemini output. When evidence blocks (#643) are
+ * available, this function will receive them directly instead of parsing content.
+ */
+function extractRecommendedPlays(
+  prepContent: string,
+  recurringEventId?: string,
+  customerSlug?: string,
+): Array<{ playName: string; compositeScore: number; firstRecommendedAt?: string }> {
+  const plays: Array<{ playName: string; compositeScore: number; firstRecommendedAt?: string }> = []
+
+  // Extract play names from "### Play N: PlayName (confidence: 0.XX)" headers
+  const playHeaderRegex = /###\s+Play\s+\d+:\s+(.+?)\s*\(confidence:\s*([\d.]+)\)/g
+  let match
+  while ((match = playHeaderRegex.exec(prepContent)) !== null) {
+    plays.push({
+      playName: match[1].trim(),
+      compositeScore: parseFloat(match[2]) || 0,
+    })
+  }
+
+  // Also try "### N. PlayName" pattern (7-section format Value Play references)
+  if (plays.length === 0) {
+    const altRegex = /###\s+\d+\.\s+(?:Value Play|Recommended Plays?):\s*(.+)/g
+    while ((match = altRegex.exec(prepContent)) !== null) {
+      plays.push({
+        playName: match[1].trim(),
+        compositeScore: 0.5, // default score for non-evidence-block format
+      })
+    }
+  }
+
+  // Resolve firstRecommendedAt from history if this is a recurring meeting
+  if (recurringEventId && customerSlug) {
+    const history = readHistory(customerSlug)
+    for (const play of plays) {
+      // Find the earliest history entry in this series that recommended this play
+      const seriesEntries = history.filter(h => h.recurringEventId === recurringEventId)
+      for (let i = seriesEntries.length - 1; i >= 0; i--) {
+        const entry = seriesEntries[i]
+        const prevPlay = (entry.recommendedPlays ?? []).find(p => p.playName === play.playName)
+        if (prevPlay) {
+          play.firstRecommendedAt = prevPlay.firstRecommendedAt ?? entry.generatedAt
+          break
+        }
+      }
+      // If no previous match, this is the first time — set to now
+      if (!play.firstRecommendedAt) {
+        play.firstRecommendedAt = new Date().toISOString()
+      }
+    }
+  }
+
+  return plays
+}
+
 // ── Core Generation Logic ─────────────────────────────────────────────────────
 
 export async function generateMeetingPrep(
@@ -637,6 +701,11 @@ export async function generateMeetingPrep(
       }
     }
   }
+
+  // ── Step 1a-1: Carry-forward escalation (#646) ────────────────────────
+  // Computed after generation, injected into the Gemini prompt as escalation context.
+  // Escalation will be applied in the prompt injection below after evidence blocks are available.
+  let escalationContext = ''
 
   // ── Step 1a-2: Scan customer Drive folder for recent docs (#269) ──────
   let driveDocsContext = ''
@@ -942,6 +1011,19 @@ export async function generateMeetingPrep(
     ? customerCases.map(sc => `- ${sc.summary} (Sev${sc.severity}, ${sc.status})`).join('\n')
     : 'No open support cases'
 
+  // ── Step 3b: Compute carry-forward escalation (#646) ────────────────────
+  if (isRecurring && meeting.recurringEventId) {
+    const fullHistory = readHistory(slug)
+    // Build minimal evidence blocks from current signals for escalation tracking
+    // When #643 evidence-block-builder merges, this will use real evidence blocks
+    const currentPlays: EvidenceBlock[] = [] // placeholder until evidence blocks are available
+    const escalations = computeEscalation(currentPlays, fullHistory, meeting.recurringEventId)
+    escalationContext = formatEscalationForPrompt(escalations)
+    if (escalationContext) {
+      console.log(`[meeting-prep] Carry-forward escalation: ${escalations.size} plays escalated`)
+    }
+  }
+
   // ── Step 4: Check for existing playbook (ADR-026 derived view) ──────────
   const playbook = readPlaybook(slug)
   let prepContent: string
@@ -1198,6 +1280,8 @@ ${recentInteractionsContext ? `### Recent Interactions & History\n${recentIntera
 
 ${partnerCrossRefContext ? `### Partner Cross-Reference\n${partnerCrossRefContext}` : ''}
 
+${escalationContext ? `${escalationContext}` : ''}
+
 ---
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
@@ -1402,6 +1486,8 @@ ${enrichmentContext ? `## ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Sc
 ${graphDiffBlock ? `## ${graphDiffBlock}` : ''}
 
 ${recentInteractionsContext ? `## Recent Interactions & History (synthesize into Section 3)\n${recentInteractionsContext}` : ''}
+
+${escalationContext ? `${escalationContext}` : ''}
 
 ${partnerResearch ? `## Partner Context\n${partnerResearch}` : ''}
 
@@ -1661,6 +1747,10 @@ Use the Product & Market Intelligence context above to identify the most relevan
 
   const generatedAt = new Date().toISOString()
   const generatedActionItems = extractActionItems(prepContent)
+
+  // #646: Save recommended plays to history for carry-forward escalation
+  const recommendedPlays = extractRecommendedPlays(prepContent, meeting.recurringEventId, slug)
+
   const entry: PrepHistoryEntry = {
     meetingTitle: meeting.meetingTitle,
     meetingStart: meeting.meetingStart,
@@ -1671,6 +1761,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
     recurringEventId: meeting.recurringEventId,
     actionItems: generatedActionItems.length > 0 ? generatedActionItems : undefined,
     docId,
+    recommendedPlays: recommendedPlays.length > 0 ? recommendedPlays : undefined,
   }
 
   appendHistory(slug, entry)
