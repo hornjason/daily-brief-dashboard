@@ -959,6 +959,18 @@ export function persistGraph(graph: CustomerGraph, dataDir: string): void {
   }
 
   const filePath = resolve(dataDir, graph.customerId, 'intelligence-graph.json')
+
+  // Save the current graph as .previous.json before overwriting (#671)
+  if (existsSync(filePath)) {
+    try {
+      const currentRaw = readFileSync(filePath, 'utf-8')
+      const previousPath = resolve(dataDir, graph.customerId, 'intelligence-graph.previous.json')
+      writeJsonAtomic(previousPath, JSON.parse(currentRaw))
+    } catch {
+      // If we can't read/parse the current file, skip creating previous snapshot
+    }
+  }
+
   writeJsonAtomic(filePath, graph)
 }
 
