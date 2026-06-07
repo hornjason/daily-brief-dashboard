@@ -82,6 +82,7 @@ export interface PrepHistoryEntry {
   customerName?: string
   recurringEventId?: string // #269: series tracking
   actionItems?: string[]    // #269: extracted for carry-forward
+  docId?: string            // #641: Drive doc ID for update-in-place
 }
 
 interface PartnerConfig {
@@ -1282,6 +1283,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
 
   let docUrl = ''
+  let docId: string | undefined
   const docTitle = `Meeting Prep — ${meeting.meetingTitle} — ${meetingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   try {
@@ -1296,41 +1298,63 @@ Use the Product & Market Intelligence context above to identify the most relevan
       preparedFor: accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team',
     })
 
-    // Delete existing docs with same name (like upsertDoc replace mode)
+    // #641: Update-in-place — preserve doc ID/URL across regenerations
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     const drive = google.drive({ version: 'v3', auth })
     const DOC_MIME = 'application/vnd.google-apps.document'
 
-    const existing = await drive.files.list({
-      q: `'${prepFolderId}' in parents and name = '${docTitle.replace(/'/g, "\\'")}' and mimeType = '${DOC_MIME}' and trashed = false`,
-      fields: 'files(id)',
-      pageSize: 10,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    for (const f of existing.data.files ?? []) {
-      if (f.id) await drive.files.delete({ fileId: f.id, supportsAllDrives: true } as any)
+    // Look up existing doc ID: first from history (reliable), then title match (fallback)
+    const history = readHistory(slug)
+    const historyMatch = history.find(h => h.docId && h.title === docTitle)
+    let existingDocId = historyMatch?.docId ?? null
+
+    if (!existingDocId) {
+      // Fallback: search Drive by title in the prep folder
+      const existing = await drive.files.list({
+        q: `'${prepFolderId}' in parents and name = '${docTitle.replace(/'/g, "\\'")}' and mimeType = '${DOC_MIME}' and trashed = false`,
+        fields: 'files(id)',
+        pageSize: 1,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      existingDocId = existing.data.files?.[0]?.id ?? null
     }
 
-    // Create Google Doc from HTML — single API call, perfect formatting
-    const docResponse = await drive.files.create({
-      requestBody: {
-        name: docTitle,
-        mimeType: DOC_MIME,
-        parents: [prepFolderId],
-      },
-      media: {
-        mimeType: 'text/html',
-        body: Readable.from(Buffer.from(htmlContent)),
-      },
-      fields: 'id,webViewLink',
-      supportsAllDrives: true,
-    })
-
-    docUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${docResponse.data.id}/edit`
-    console.log(`[meeting-prep] Doc created: ${docUrl}`)
+    if (existingDocId) {
+      // Update existing doc content in-place — same ID, same URL, same sharing
+      await drive.files.update({
+        fileId: existingDocId,
+        media: {
+          mimeType: 'text/html',
+          body: Readable.from(Buffer.from(htmlContent)),
+        },
+        fields: 'id,webViewLink',
+        supportsAllDrives: true,
+      } as any)
+      docId = existingDocId
+      docUrl = historyMatch?.docUrl ?? `https://docs.google.com/document/d/${existingDocId}/edit`
+      console.log(`[meeting-prep] Doc updated in-place: ${docUrl}`)
+    } else {
+      // First generation — create new doc
+      const docResponse = await drive.files.create({
+        requestBody: {
+          name: docTitle,
+          mimeType: DOC_MIME,
+          parents: [prepFolderId],
+        },
+        media: {
+          mimeType: 'text/html',
+          body: Readable.from(Buffer.from(htmlContent)),
+        },
+        fields: 'id,webViewLink',
+        supportsAllDrives: true,
+      })
+      docId = docResponse.data.id ?? undefined
+      docUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${docId}/edit`
+      console.log(`[meeting-prep] Doc created: ${docUrl}`)
+    }
   } catch (e: any) {
-    console.warn(`[meeting-prep] Drive doc creation failed:`, e.message)
+    console.warn(`[meeting-prep] Drive doc save failed:`, e.message)
     // Continue without Drive doc — still return the generated content
     docUrl = ''
   }
@@ -1348,6 +1372,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
     customerName: customer.name,
     recurringEventId: meeting.recurringEventId,
     actionItems: generatedActionItems.length > 0 ? generatedActionItems : undefined,
+    docId,
   }
 
   appendHistory(slug, entry)
