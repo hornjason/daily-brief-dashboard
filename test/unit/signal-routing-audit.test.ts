@@ -3,7 +3,7 @@
  * Verifies that all signal sources route to appropriate template sections.
  */
 import { test, expect, describe } from 'bun:test'
-import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack } from '../../src/lib/signal-templates.ts'
+import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack, templateCompetitiveLandscape, templateStrategicOpportunities, templateAll } from '../../src/lib/signal-templates.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
 
 function makeSignal(overrides: Partial<Signal>): Signal {
@@ -157,5 +157,128 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(templateCases([signal])).toBeNull()
     expect(templateRenewals([signal])).toBeNull()
     expect(templateTechStack([signal])).toBeNull()
+  })
+
+  // #672: Ecosystem catalog signal routing
+  test('ecosystem-catalog signals route to ecosystem, not product (#672)', () => {
+    const signal = makeSignal({
+      source: 'ecosystem-catalog',
+      type: 'intelligence',
+      headline: 'Cisco ACI + Ansible integration',
+      detail: 'Certified content collection for network automation',
+      metadata: {
+        partnerName: 'Cisco',
+        solutionName: 'ACI Ansible Collection',
+        product: 'Red Hat Ansible Automation Platform',
+        resourceTypes: ['certification', 'documentation', 'integration'],
+      },
+      url: 'https://catalog.redhat.com/software/containers/cisco/aci',
+    })
+    // Must NOT appear in product alignment (has metadata.product but should route to ecosystem)
+    expect(templateProductAlignment([signal])).toBeNull()
+    // Must NOT appear in competitive, cloud, cases, renewals, tech
+    expect(templateCompetitiveLandscape([signal])).toBeNull()
+    expect(templateCloudMarketplace([signal])).toBeNull()
+    expect(templateCases([signal])).toBeNull()
+    expect(templateRenewals([signal])).toBeNull()
+    expect(templateTechStack([signal])).toBeNull()
+  })
+
+  test('ecosystem-catalog signals enrich strategic opportunities when plays exist (#672)', async () => {
+    const ecosystemSignal = makeSignal({
+      source: 'ecosystem-catalog',
+      type: 'intelligence',
+      headline: 'Cisco ACI + Ansible integration',
+      detail: 'Certified content collection',
+      metadata: {
+        partnerName: 'Cisco',
+        solutionName: 'ACI Ansible Collection',
+        resourceTypes: ['certification', 'documentation'],
+      },
+      url: 'https://catalog.redhat.com/cisco',
+    })
+    const playSignal = makeSignal({
+      source: 'solution-plays',
+      type: 'intelligence',
+      headline: 'Ansible (HIGH)',
+      detail: 'Network automation play',
+      metadata: {
+        solutionPlayId: 'play-1',
+        solutionPlayName: 'Network Automation',
+        solutionTdp: 'Automation',
+        redHatProducts: ['Ansible Automation Platform'],
+      },
+    })
+    // templateStrategicOpportunities should include partner ecosystem subsection
+    const result = templateStrategicOpportunities([playSignal, ecosystemSignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Partner Ecosystem Solutions')
+    expect(result).toContain('Cisco')
+    expect(result).toContain('ACI Ansible Collection')
+    expect(result).toContain('2 resources')
+    expect(result).toContain('https://catalog.redhat.com/cisco')
+  })
+
+  // #672: Competitive intel signal routing
+  test('competitive-intel signals route to competitive section (#672)', () => {
+    const signal = makeSignal({
+      source: 'competitive-intel',
+      type: 'competitive',
+      headline: 'VMware announces vSphere 9 pricing increase',
+      detail: 'Counter with OpenShift Virtualization migration path',
+      metadata: {
+        competitor: 'VMware',
+        product: 'vSphere',
+        redHatCounter: 'OpenShift Virtualization offers 40% TCO reduction',
+        salesTriggers: ['License renewal window', 'Budget reallocation'],
+      },
+    })
+    // Must appear in competitive landscape
+    const result = templateCompetitiveLandscape([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('VMware')
+    expect(result).toContain('vSphere 9 pricing increase')
+    expect(result).toContain('OpenShift Virtualization')
+    expect(result).toContain('License renewal window')
+
+    // Must NOT appear in product alignment (has metadata.product but should route to competitive)
+    expect(templateProductAlignment([signal])).toBeNull()
+  })
+
+  test('competitive-intel signals with compensation metadata render notes (#672)', () => {
+    const signal = makeSignal({
+      source: 'competitive-intel',
+      type: 'competitive',
+      headline: 'Broadcom VMware bundling changes',
+      detail: 'Counter with modular RHEL + OpenShift approach',
+      metadata: {
+        competitor: 'VMware',
+        redHatCounter: 'Modular approach saves cost',
+        salesTriggers: ['Contract renewal'],
+        compensation: 'VMware reps getting 2x comp on renewals — urgency to lock customers in',
+      },
+    })
+    const result = templateCompetitiveLandscape([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('VMware reps getting 2x comp')
+  })
+
+  test('competitive-intel signals appear in templateAll deterministic output (#672)', async () => {
+    const signal = makeSignal({
+      source: 'competitive-intel',
+      type: 'competitive',
+      headline: 'VMware price hike',
+      detail: 'Counter with RHEL virtualization',
+      metadata: {
+        competitor: 'VMware',
+        redHatCounter: 'RHEL virt',
+        salesTriggers: ['renewal'],
+      },
+    })
+    const result = await templateAll([signal])
+    expect(result.deterministic).toContain('Competitive Landscape')
+    expect(result.deterministic).toContain('VMware')
+    expect(result.narrativeContext).toContain('competitive')
+    expect(result.narrativeContext).toContain('VMware price hike')
   })
 })
