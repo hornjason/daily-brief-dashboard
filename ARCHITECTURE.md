@@ -1446,6 +1446,34 @@ const promptSection = toPromptContext(team)
 - **`makeAuth` missing import** in `src/account-intelligence.ts` — caused intelligence generation to crash on startup when `makeAuth` was called but not imported from `google-auth-library`.
 - **`google` (googleapis) missing import** in `src/account-intelligence.ts` — caused Drive docs write step (Step 3) to fail with `google is not defined`. Both caught when triggering "Generate All" to restore industry/segment labels after customers.json restore.
 
+## §20a. Multi-Pod Enterprise Regions (ADR-034, 2026-06-06)
+
+Enterprise regions (type: `'enterprise'`) can have multiple pods when territories are absorbed from another region. The TOLA region absorbed High Plains but kept legacy territory naming, requiring two pods under one region with internal routing.
+
+### Key mechanisms
+
+| Mechanism | Purpose |
+|-----------|---------|
+| `hidden: true` on pod | Hides from UI catalog and wizard; visible to internal data routing |
+| `prefixes: string[]` on pod | Declarative territory-code-to-pod mapping (e.g., `['High_Plains']` routes `High_Plains_Terr03`) |
+| Combined `sfReportId` | Two pods sharing one SF report when territories are in one combined report |
+| AE dropdown dedup | AEs spanning multiple pods appear once with all territory keys |
+| `getUniquePodFilters()` | CCSP scraper iterates all unique pods in `tableauTerritories` |
+| `extractEnterpriseAeAccounts()` | Collects accounts from all matching AE columns across all pods |
+
+### Hidden pod enforcement points
+
+- `/api/regions/catalog` — `buildCatalogRegion()` filters hidden pods
+- `/api/settings/pod-config` — `scrape-api.ts` filters hidden pods from `flattenPodSfReports()` / `flattenPodLabels()`
+- Setup wizard dropdown — uses pod-config API, inherits the filter
+
+### Known limitations
+
+- Six `[0]` callsites assume single territory (accidental correctness for same-pod multi-territory)
+- `parseTerritoryParts()` in `lib/territory.ts` doesn't know about prefixes — CCSP uses `getUniquePodFilters()` instead
+
+Full decision rationale: `docs/adr/ADR-034-multi-pod-enterprise-regions.md`
+
 ## §21. Gemini Output Quality Gate (ADR-024, 2026-05-18)
 
 `validateAndRetry()` in `src/gemini-quality-gate.ts` validates all Gemini-generated content before it is saved to cache or Drive. It operates as a middleware pattern — wrapping the output of any generation function, regardless of whether that function uses `callGemini()` or the legacy `callGeminiGrounded()` path.

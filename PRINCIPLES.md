@@ -326,6 +326,17 @@ Consumers select which section groups they need via options. They MUST NOT:
 - Import `getCustomerSolutionContext()` directly
 - Assemble their own signal context from registry signals
 
+## Multi-pod Enterprise Region Contract (ADR-034)
+
+Enterprise regions can have multiple pods with `hidden: true` for internal routing. This separates the organizational concept (one region) from the data reality (multiple territory groupings).
+
+- Territory-to-pod mapping is declarative via `prefixes` on `RegionPodConfig` — no hardcoded strings
+- Any consumer iterating `region.pods` for UI display MUST filter `hidden` pods
+- CCSP scraper uses `getUniquePodFilters()` for multi-pod territory arrays — never `territories[0]`
+- AE dropdown groups by name — one entry per AE regardless of territory count
+- `extractEnterpriseAeAccounts()` collects from all matching AE columns across all pods in the region
+- Reference: `docs/adr/ADR-034-multi-pod-enterprise-regions.md`
+
 ## Anti-patterns
 
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
@@ -346,6 +357,7 @@ Consumers select which section groups they need via options. They MUST NOT:
 - ❌ Consumers calling individual template functions (`templateSalesAlignment()`, etc.) instead of `templateAll()` (ADR-031) — bypasses the single data path, produces inconsistent coverage across consumers.
 - ❌ Soft-deleting customers with `inactive: true` flag instead of binary active/archived model (ADR-018) — accumulates stale data, confuses cleanup logic, inflates metrics.
 - ❌ Reading L3 CSV data via static sheet IDs instead of `discoverL3Csv()` (ADR-019) — becomes stale when source files change, skips change detection, breaks on sheet re-creation.
+- ❌ Hardcoding territory-to-pod mapping instead of using declarative `prefixes` on `RegionPodConfig` (ADR-034) — breaks when territories are absorbed or reorganized, requires code changes instead of config changes.
 
 ## ADR → PRINCIPLES.md Enforcement (MANDATORY)
 
