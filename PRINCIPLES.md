@@ -119,6 +119,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 | src/modules/tech-stack-module.ts | Producer | Extracts customer tech stack |
 | src/customer/doc-extractors.ts | Producer | Extracts content from customer documents |
 | src/lib/attendee-profile-cache.ts | Internal | Resolves attendee identities via grounded search (#645) |
+| src/lib/executive-resolver.ts | Internal | Resolves executives by role via grounded search (#670) |
 
 ## Consumer → ensureFresh Contract
 

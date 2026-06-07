@@ -33,6 +33,7 @@ import { getAccountTeam } from './account-team.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
+import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -282,6 +283,7 @@ async function uploadCampaignToDrive(
   markdown: string,
   aeName: string,
   signals: CustomerSignals,
+  accountTeamOverride?: import('./types.ts').AccountTeamMember[],
 ): Promise<{ driveUrl: string; htmlUrl: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
   const docName = `${materialTitle} - Campaign for ${customer.name}`
@@ -292,7 +294,7 @@ async function uploadCampaignToDrive(
   console.log(`[campaigns] Created Google Doc via Docs API: ${docName} → ${driveUrl}`)
 
   // HTML file kept for browser preview — still uses generateCampaignHTML
-  const accountTeam = getAccountTeam(customer)
+  const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -469,10 +471,13 @@ export async function generateCampaign(
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
   // 3a. Build deterministic intelligence context from signals (PRINCIPLES.md Layer 2)
-  const accountTeam = getAccountTeam(customer)
+  // #668: Filter account team to AE + product-relevant SSP/SSA only
   const productFilter = config?.valueProps
     ?.map(vp => vp.id) // valueProps id may be product slug
     .filter((id): id is string => typeof id === 'string')
+  const accountTeam = productFilter && productFilter.length > 0
+    ? getAccountTeam(customer, { products: productFilter })
+    : getAccountTeam(customer)
   const templateResult = await templateAll(registrySignals, accountTeam, {
     format: 'campaign',
     productFilter: productFilter && productFilter.length > 0 ? productFilter : undefined,
@@ -613,7 +618,8 @@ export async function generateCampaign(
       materialUrl,
       markdown,
       customer.ae ?? 'Unknown AE',
-      signals
+      signals,
+      accountTeam,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
@@ -714,7 +720,10 @@ export async function generateCampaignFromPlay(
   const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
 
   // Build deterministic context
-  const accountTeam = getAccountTeam(customer)
+  // #668: Filter account team to AE + product-relevant SSP/SSA only
+  const accountTeam = playContext.products.length > 0
+    ? getAccountTeam(customer, { products: playContext.products })
+    : getAccountTeam(customer)
   const templateResult = await templateAll(registrySignals, accountTeam, {
     format: 'campaign',
     productFilter: playContext.products.length > 0 ? playContext.products : undefined,
@@ -730,10 +739,77 @@ export async function generateCampaignFromPlay(
     }
   }
 
+  // #669: Extract ecosystem/partner resources matching play products
+  const ecosystemSignals = registrySignals.filter(s =>
+    s.source === 'ecosystem-catalog' &&
+    playContext.products.some(p => (s.metadata?.platform as string)?.toLowerCase().includes(p.toLowerCase()))
+  )
+  const partnerSignals = registrySignals.filter(s =>
+    s.source === 'partner-catalog' &&
+    (s.metadata?.matchedProducts as string[] | undefined)?.some(mp =>
+      playContext.products.some(p => mp.toLowerCase().includes(p.toLowerCase()))
+    )
+  )
+
+  const resourceLinks = [
+    ...ecosystemSignals.flatMap(s => {
+      const resources = (s.metadata?.resources ?? []) as Array<{ title?: string; url?: string; type?: string }>
+      const solutionName = (s.metadata?.solutionName as string) ?? s.headline
+      const partnerName = (s.metadata?.partnerName as string) ?? ''
+      // If no individual resources, link the solution itself
+      if (resources.length === 0 && s.url) {
+        return [`- [${solutionName} — ${partnerName}](${s.url})`]
+      }
+      return resources
+        .filter(r => r.url)
+        .map(r => `- [${r.title ?? solutionName}](${r.url}) (${r.type ?? 'solution'})`)
+    }),
+    ...partnerSignals
+      .filter(s => s.metadata?.catalogUrl)
+      .map(s => {
+        const partnerName = (s.metadata?.partnerName as string) ?? s.headline
+        const specs = (s.metadata?.specializations as string[]) ?? []
+        return `- [${partnerName} — ${specs.join(', ')}](${s.metadata!.catalogUrl as string})`
+      }),
+  ].join('\n')
+
+  // Build partner/ecosystem context for the prompt
+  const partnerEcosystemContext = resourceLinks
+    ? `\n## Available Partner & Ecosystem Resources\n${resourceLinks}\n\nInclude 1-2 of these partner/ecosystem links in each email where relevant to the persona's concerns.\n`
+    : ''
+
+  // #670: Resolve real executives for campaign personas
+  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
+    { role: 'VP Infrastructure', enabled: true },
+    { role: 'VP Operations', enabled: true },
+    { role: 'CIO', enabled: true },
+  ]
+  let resolvedContactsContext = ''
+  try {
+    const rolesToResolve = enabledPersonas
+      .filter(p => !p.linkedinUrl && !p.name)  // Only resolve generic personas
+      .map(p => p.role)
+    if (rolesToResolve.length > 0) {
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      if (resolved.length > 0) {
+        const contactLines = resolved.map(r =>
+          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
+        )
+        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
+        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
+  }
+
+  // Augment material content with partner resources + resolved contacts
+  const augmentedContent = materialContent + partnerEcosystemContext + resolvedContactsContext
+
   // Generate via Gemini
   const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
-    materialContent,
+    materialContent: augmentedContent,
     customerName: customer.name,
     customerSignals: signals,
     registrySignals,
@@ -749,7 +825,7 @@ export async function generateCampaignFromPlay(
       const feedback = formatFailureFeedback(failures)
       return callGeminiForCampaign({
         materialTitle,
-        materialContent: materialContent + '\n\n' + feedback,
+        materialContent: augmentedContent + '\n\n' + feedback,
         customerName: customer.name,
         customerSignals: signals,
         registrySignals,
@@ -789,6 +865,7 @@ export async function generateCampaignFromPlay(
     const driveResult = await uploadCampaignToDrive(
       customerFolderId, customer, materialTitle, '',
       markdown, customer.ae ?? 'Unknown AE', signals,
+      accountTeam,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
