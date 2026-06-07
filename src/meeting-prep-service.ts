@@ -40,6 +40,8 @@ import { templateAll } from './lib/signal-templates.ts'
 import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt } from './lib/meeting-prep-graph-integration.ts'
+import { buildEvidenceBlocks, type EvidenceBlock } from './lib/evidence-block-builder.ts'
+import { validateMeetingPrepOutput } from './lib/meeting-prep-validation.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
   extractActionItems,
@@ -51,6 +53,44 @@ import {
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const CONFIG_DIR = DATA_CONFIG_DIR
+
+// ── Evidence Block Formatting (#643) ────────────────────────────────────────
+
+/**
+ * Format evidence blocks into structured text for the Gemini prompt.
+ * Replaces raw enrichment context with actionable, structured data.
+ */
+function formatEvidenceBlocksForPrompt(blocks: EvidenceBlock[]): string {
+  if (blocks.length === 0) return ''
+
+  const sections: string[] = ['## Pre-Scored Evidence Blocks (use these to build Recommended Plays)']
+
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]
+    sections.push(`### Play ${i + 1}: ${b.playName} (confidence: ${b.compositeScore.toFixed(2)})`)
+
+    if (b.evidenceTrail.length > 0) {
+      sections.push('**Evidence:**')
+      for (const e of b.evidenceTrail) {
+        sections.push(`- ${e.fact} — source: ${e.source}, ${e.recency}`)
+      }
+    }
+
+    if (b.availableLevers.length > 0) {
+      sections.push('**Available Levers:**')
+      for (const l of b.availableLevers) {
+        const expiry = l.validThrough ? ` (valid through ${l.validThrough})` : ''
+        sections.push(`- [${l.name}](${l.url}) — ${l.description}${expiry}`)
+      }
+    }
+
+    sections.push(`**Team Lead:** ${b.teamContext}`)
+    sections.push(`**Proposed Ask:** ${b.proposedAsk}`)
+    sections.push('')
+  }
+
+  return sections.join('\n')
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -835,6 +875,14 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
     customerSlug: slug,
   })
 
+  // ── Step 2d: Build evidence blocks from scored tactics + signals (#643) ──
+  const evidenceBlocks = graphScoring.graphLoaded
+    ? buildEvidenceBlocks(graphScoring.scoredTactics, allSignals, accountTeam)
+    : []
+  if (evidenceBlocks.length > 0) {
+    console.log(`[meeting-prep] Built ${evidenceBlocks.length} evidence blocks: ${evidenceBlocks.map(b => `${b.playName} (${b.compositeScore.toFixed(2)})`).join(', ')}`)
+  }
+
   // ── Step 3: Filter cases to this customer ──────────────────────────────
 
   const customerCases = casesData.filter((sc) =>
@@ -909,8 +957,28 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
+    // ── Build evidence blocks context for prompt (#643) ────────────────
+    const evidenceBlocksContext = formatEvidenceBlocksForPrompt(evidenceBlocks)
+
     // Build shorter, focused Gemini prompt using playbook intelligence
-    const derivedSystemPrompt = `You are generating a focused Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
+    // When evidence blocks are available, use the assertive 4-section format (#643)
+    const derivedSystemPrompt = evidenceBlocks.length > 0
+      ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
+
+VOICE RULES (CRITICAL):
+- Assert recommendations with evidence. NEVER phrase as questions ("Have you considered..." or "It might be worth exploring..."). Instead: "Push X because Y evidence shows Z."
+- Name people from account team by name and role in every recommendation.
+- Connect every recommendation to financial impact — pipeline amounts, renewal dates, deal sizes, subscription counts.
+- End each play with a concrete proposed ask — something specific to request in the meeting.
+- Use ONLY data provided in the evidence blocks below — do not invent case numbers, dollar amounts, subscription counts, or person names.
+- Render all resource links as clickable markdown links: [Name](URL)
+
+FORMAT RULES:
+- EXACTLY 4 sections: Meeting Objective, What Changed, Recommended Plays, Open Items
+- NO markdown tables — all sections use bullets and narrative
+- Bold assertions, bulleted evidence, clear visual hierarchy for scannability
+- Each Recommended Play has: bold assertion, evidence trail bullets, available levers as links, proposed ask`
+      : `You are generating a focused Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
 
 FOCUS RULE (CRITICAL):
 - The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
@@ -925,7 +993,63 @@ FORMAT RULES:
 - Open Items section: ONLY include if there are active cases or urgent renewals relevant to THIS meeting. If nothing actionable, OMIT the section entirely. Reference renewals by PRODUCT NAME and DOLLAR AMOUNT — never show bare opportunity IDs like "00567293".
 - Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates`
 
-    const derivedUserPrompt = `Generate a 7-section meeting prep for this specific meeting using the existing customer playbook:
+    // ── User prompt: evidence-block path (4-section) or legacy path (7-section) ──
+    const derivedUserPrompt = evidenceBlocks.length > 0
+      ? `Generate an assertive 4-section meeting prep using the evidence blocks below.
+
+## Meeting Details
+- Customer: ${customer.name}
+- Meeting: ${meeting.meetingTitle}
+- Date: ${dateStr}
+- Attendees: ${attendeeNames.join(', ') || 'Not specified'}
+${teamContext ? `\n${teamContext}` : ''}
+${meeting.context?.objective ? `\n## MEETING OBJECTIVE\n${meeting.context.objective}\n` : ''}
+${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n` : ''}
+
+${evidenceBlocksContext}
+
+${graphDiffBlock ? `## What Changed Recently\n${graphDiffBlock}` : ''}
+
+## Customer Context (from playbook)
+### Strategic Position
+${strategicPosition}
+
+### Current Priorities
+${currentPriorities}
+
+### Open Action Items
+${openActions || 'No open action items'}
+
+${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
+
+### Open Support Cases
+${caseSummary}
+
+${templateResult.deterministic ? `## Signal Intelligence\n${templateResult.deterministic}` : ''}
+
+---
+
+Generate the document with these EXACT 4 sections:
+
+# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
+
+### 1. Meeting Objective
+[2-3 sentences. State the recommended outcome for this meeting. Be specific — not "discuss renewal" but "secure commitment to upgrade 47 RHEL 7 subscriptions before EOS 2027-06-30".]
+
+### 2. What Changed
+[Bulleted list of changes since last meeting or recent intelligence updates. Each bullet: date + what changed. Use the "What Changed Recently" data above. If no changes, note "No significant changes since last interaction."]
+
+### 3. Recommended Plays
+[Top 2-3 plays from the evidence blocks above. For EACH play:]
+**[Bold assertion of what to push and why, naming the SSP/specialist]**
+- Evidence: [2-3 bullets with specific data — case numbers, subscription counts, dollar amounts, dates]
+- Levers: [Each as a clickable markdown link: [Name](URL)]
+- **Ask:** [Specific thing to request in this meeting]
+
+### 4. Open Items
+[Carry-forward action items from previous meetings + new items to track. Bullet points with owner names and dates. If none, write "No outstanding items."]`
+      : `Generate a 7-section meeting prep for this specific meeting using the existing customer playbook:
 
 ## Meeting Details
 - Customer: ${customer.name}
@@ -1107,7 +1231,26 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
-    const systemPrompt = `You are generating a Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. Every line must help the account team sell.
+    // ── Build evidence blocks context for standard path (#643) ────────
+    const evidenceBlocksContextStd = formatEvidenceBlocksForPrompt(evidenceBlocks)
+
+    const systemPrompt = evidenceBlocks.length > 0
+      ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
+
+VOICE RULES (CRITICAL):
+- Assert recommendations with evidence. NEVER phrase as questions ("Have you considered..." or "It might be worth exploring..."). Instead: "Push X because Y evidence shows Z."
+- Name people from account team by name and role in every recommendation.
+- Connect every recommendation to financial impact — pipeline amounts, renewal dates, deal sizes, subscription counts.
+- End each play with a concrete proposed ask — something specific to request in the meeting.
+- Use ONLY data provided in the evidence blocks below — do not invent case numbers, dollar amounts, subscription counts, or person names.
+- Render all resource links as clickable markdown links: [Name](URL)
+
+FORMAT RULES:
+- EXACTLY 4 sections: Meeting Objective, What Changed, Recommended Plays, Open Items
+- NO markdown tables — all sections use bullets and narrative
+- Bold assertions, bulleted evidence, clear visual hierarchy for scannability
+- Each Recommended Play has: bold assertion, evidence trail bullets, available levers as links, proposed ask`
+      : `You are generating a Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. Every line must help the account team sell.
 
 FOCUS RULE (CRITICAL):
 - The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
@@ -1125,7 +1268,56 @@ FORMAT RULES:
 - NO generic value statements. "Improves efficiency" is forbidden. Be specific.
 - Only include products the customer subscribes to in the Value Play.`
 
-    const userPrompt = `Generate a 7-section meeting prep for:
+    const userPrompt = evidenceBlocks.length > 0
+      ? `Generate an assertive 4-section meeting prep using the evidence blocks below.
+
+## Meeting Details
+- Customer: ${customer.name}
+- Meeting: ${meeting.meetingTitle}
+- Date: ${dateStr}
+- Attendees: ${attendeeEmails.map(e => getAttendeeDisplayName(meeting, e)).join(', ') || 'Not specified'}
+${teamContext ? `\n${teamContext}` : ''}
+${meeting.context?.objective ? `\n## MEETING OBJECTIVE\n${meeting.context.objective}\n` : ''}
+${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n` : ''}
+
+${evidenceBlocksContextStd}
+
+${graphDiffBlock ? `## What Changed Recently\n${graphDiffBlock}` : ''}
+
+## Deterministic Customer Intelligence (from signal registry)
+${templateResult.deterministic || 'No signal data available'}
+
+## Strategic Context (top signals for narrative synthesis)
+${templateResult.narrativeContext || 'No signals available'}
+
+## Open Support Cases
+${caseSummary}
+
+${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
+
+---
+
+Generate the document with these EXACT 4 sections:
+
+# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
+
+### 1. Meeting Objective
+[2-3 sentences. State the recommended outcome for this meeting. Be specific — not "discuss renewal" but "secure commitment to upgrade 47 RHEL 7 subscriptions before EOS 2027-06-30".]
+
+### 2. What Changed
+[Bulleted list of changes since last meeting or recent intelligence updates. Each bullet: date + what changed. If no changes, note "No significant changes since last interaction."]
+
+### 3. Recommended Plays
+[Top 2-3 plays from the evidence blocks above. For EACH play:]
+**[Bold assertion of what to push and why, naming the SSP/specialist]**
+- Evidence: [2-3 bullets with specific data — case numbers, subscription counts, dollar amounts, dates]
+- Levers: [Each as a clickable markdown link: [Name](URL)]
+- **Ask:** [Specific thing to request in this meeting]
+
+### 4. Open Items
+[Carry-forward action items from previous meetings + new items to track. Bullet points with owner names and dates. If none, write "No outstanding items."]`
+      : `Generate a 7-section meeting prep for:
 
 ## Meeting Details
 - Customer: ${customer.name}
@@ -1300,6 +1492,31 @@ Use the Product & Market Intelligence context above to identify the most relevan
     const s3Start = prepContent.indexOf('### 3.')
     if (s2Start !== -1 && s3Start !== -1) {
       prepContent = prepContent.slice(0, s2Start) + deterministicSection2 + '\n\n' + prepContent.slice(s3Start)
+    }
+  }
+
+  // ── Step 4f: Post-generation validation (#643) ────────────────────────
+  // Validate that Gemini didn't fabricate case numbers, dollar amounts, or names
+  if (evidenceBlocks.length > 0) {
+    const validation = validateMeetingPrepOutput(prepContent, evidenceBlocks, accountTeam)
+    if (!validation.valid) {
+      console.warn(`[meeting-prep] Post-generation validation warnings for ${customer.name}:`)
+      for (const warning of validation.warnings) {
+        console.warn(`  - ${warning}`)
+      }
+      // Strip fabricated data points from output
+      for (const warning of validation.warnings) {
+        const caseMatch = warning.match(/case.*?number.*?(\d{7,10})/i)
+        if (caseMatch) {
+          // Add a warning comment next to fabricated case numbers
+          prepContent = prepContent.replace(
+            new RegExp(`\\b${caseMatch[1]}\\b`, 'g'),
+            `${caseMatch[1]} [⚠ UNVERIFIED]`
+          )
+        }
+      }
+    } else {
+      console.log(`[meeting-prep] Post-generation validation passed for ${customer.name} — all data points verified`)
     }
   }
 
