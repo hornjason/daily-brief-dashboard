@@ -137,6 +137,7 @@ export interface PrepHistoryEntry {
     playName: string
     compositeScore: number
     firstRecommendedAt?: string
+    evidenceSnapshot?: string[]  // #650: evidence facts at time of recommendation for delta diffing
   }>
 }
 
@@ -260,11 +261,10 @@ export function buildCCSPContext(customer: Customer): string {
 
 // ── Attendee & Partner Detection ──────────────────────────────────────────────
 
-export function deriveCompanyFromDomain(email: string): string {
-  const domain = email.split('@')[1] ?? ''
-  const company = domain.split('.')[0] ?? ''
-  return company.charAt(0).toUpperCase() + company.slice(1)
-}
+// Imported from lib/domain-detection.ts (#651)
+import { deriveCompanyFromDomain } from './lib/domain-detection.ts'
+// Re-exported for backward compat
+export { deriveCompanyFromDomain }
 
 export function getAttendeeDisplayName(meeting: { attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> }, email: string): string {
   const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
@@ -274,23 +274,31 @@ export function getAttendeeDisplayName(meeting: { attendees: string[]; attendeeD
   return local.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 }
 
-export function detectPartnerDomains(
-  attendeeEmails: string[],
-  customer: Customer
-): { partnerDomains: string[]; customerDomains: string[] } {
-  const customerDomains = [customer.domain, ...(customer.aliasDomains ?? [])].filter(Boolean) as string[]
-  const externalEmails = attendeeEmails.filter(e => !e.endsWith('@redhat.com'))
-
-  const partnerDomains = new Set<string>()
-  for (const email of externalEmails) {
-    const domain = email.split('@')[1] ?? ''
-    if (domain && !customerDomains.some(cd => domain.endsWith(cd))) {
-      partnerDomains.add(domain)
-    }
+/**
+ * Format attendee name with title and company from resolved profiles (#648).
+ * Returns "Name, Title at Company" for resolved profiles, or
+ * "email (profile not found)" for unresolved, falling back to display name.
+ */
+export function getEnrichedAttendeeName(
+  email: string,
+  meeting: { attendees: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> },
+  profiles: AttendeeProfile[],
+): string {
+  const profile = profiles.find(p => p.email === email)
+  if (profile?.resolved && profile.title) {
+    return `${profile.name}, ${profile.title} at ${profile.company}`
   }
-
-  return { partnerDomains: [...partnerDomains], customerDomains }
+  if (profile && !profile.resolved) {
+    return `${profile.name} (profile not found)`
+  }
+  // Fallback to calendar display name
+  return getAttendeeDisplayName(meeting, email)
 }
+
+// Imported from lib/domain-detection.ts (#651)
+import { detectPartnerDomains } from './lib/domain-detection.ts'
+// Re-exported for backward compat
+export { detectPartnerDomains }
 
 // ── Product Slug Inference ────────────────────────────────────────────────────
 
@@ -817,6 +825,7 @@ export async function generateMeetingPrep(
   let attendeeResearch = ''
   let partnerResearch = ''
   let otherPartnersTable = ''
+  let resolvedProfiles: AttendeeProfile[] = []
 
   // Build calendar display name map from meeting data
   const calendarDisplayNames = new Map<string, string>()
@@ -833,7 +842,7 @@ export async function generateMeetingPrep(
   // Resolve ALL attendees (customer + partner) via profile cache (#645)
   // AC-4: Partner attendees get full research — no skip
   try {
-    const resolvedProfiles = await resolveAttendees(
+    resolvedProfiles = await resolveAttendees(
       attendeeEmails,
       customer.name,
       {
@@ -995,9 +1004,8 @@ export async function generateMeetingPrep(
   // ── Step 3b: Compute carry-forward escalation (#646) ────────────────────
   if (isRecurring && meeting.recurringEventId) {
     const fullHistory = readHistory(slug)
-    // Build minimal evidence blocks from current signals for escalation tracking
-    // When #643 evidence-block-builder merges, this will use real evidence blocks
-    const currentPlays: EvidenceBlock[] = [] // placeholder until evidence blocks are available
+    // Use real evidence blocks for escalation tracking (#647)
+    const currentPlays = filteredEvidenceBlocks
     const escalations = computeEscalation(currentPlays, fullHistory, meeting.recurringEventId)
     escalationContext = formatEscalationForPrompt(escalations)
     if (escalationContext) {
@@ -1014,9 +1022,10 @@ export async function generateMeetingPrep(
     console.log(`[meeting-prep] Found playbook for ${customer.name} — generating derived meeting prep`)
 
     // Build attendee filter: match against key relationships and team members
+    // Use enriched names with titles from resolved profiles (#648)
     const attendeeNames = meeting.attendees
-      .map(email => getAttendeeDisplayName(meeting, email))
-      .filter(n => !n.endsWith('@redhat.com'))
+      .filter(e => !e.endsWith('@redhat.com'))
+      .map(email => getEnrichedAttendeeName(email, meeting, resolvedProfiles))
 
     // Extract relevant playbook sections
     const strategicPosition = playbook.sections.strategicPosition.content
@@ -1253,7 +1262,7 @@ ${caseSummary}
 
 ${templateResult.deterministic ? `### Signal Intelligence (from registry — includes ecosystem catalog, tech stack, cloud marketplace)\n${templateResult.deterministic}` : ''}
 
-${enrichmentContext ? `### ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
+${filteredEvidenceBlocks.length === 0 && enrichmentContext ? `### ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
 
 ${graphDiffBlock ? `### ${graphDiffBlock}` : ''}
 
@@ -1394,7 +1403,7 @@ FORMAT RULES:
 - Customer: ${customer.name}
 - Meeting: ${meeting.meetingTitle}
 - Date: ${dateStr}
-- Attendees: ${attendeeEmails.map(e => getAttendeeDisplayName(meeting, e)).join(', ') || 'Not specified'}
+- Attendees: ${attendeeEmails.map(e => getEnrichedAttendeeName(e, meeting, resolvedProfiles)).join(', ') || 'Not specified'}
 ${teamContext ? `\n${teamContext}` : ''}
 ${meeting.context?.objective ? `\n## MEETING OBJECTIVE\n${meeting.context.objective}\n` : ''}
 ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n` : ''}
@@ -1442,7 +1451,7 @@ Generate the document with these EXACT 4 sections:
 - Customer: ${customer.name}
 - Meeting: ${meeting.meetingTitle}
 - Date: ${dateStr}
-- Attendees: ${attendeeEmails.map(e => getAttendeeDisplayName(meeting, e)).join(', ') || 'Not specified'}
+- Attendees: ${attendeeEmails.map(e => getEnrichedAttendeeName(e, meeting, resolvedProfiles)).join(', ') || 'Not specified'}
 ${teamContext ? `\n${teamContext}` : ''}
 ${meeting.context?.objective ? `\n## MEETING OBJECTIVE (from account team — THIS IS THE #1 PRIORITY)\n${meeting.context.objective}\n` : ''}
 ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT (from account team)\n${meeting.context.notes}\n` : ''}
@@ -1462,7 +1471,7 @@ ${attendeeResearch || 'No attendee research available'}
 ## Open Support Cases
 ${caseSummary}
 
-${enrichmentContext ? `## ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (use contextually in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
+${filteredEvidenceBlocks.length === 0 && enrichmentContext ? `## ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (use contextually in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
 
 ${graphDiffBlock ? `## ${graphDiffBlock}` : ''}
 
@@ -1623,7 +1632,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
   // ── Step 4f: Post-generation validation (#643) ────────────────────────
   // Validate that Gemini didn't fabricate case numbers, dollar amounts, or names
   if (filteredEvidenceBlocks.length > 0) {
-    const validation = validateMeetingPrepOutput(prepContent, filteredEvidenceBlocks, accountTeam)
+    const validation = validateMeetingPrepOutput(prepContent, filteredEvidenceBlocks, accountTeam, templateResult.deterministic)
     if (!validation.valid) {
       console.warn(`[meeting-prep] Post-generation validation warnings for ${customer.name}:`)
       for (const warning of validation.warnings) {
@@ -1730,7 +1739,15 @@ Use the Product & Market Intelligence context above to identify the most relevan
   const generatedActionItems = extractActionItems(prepContent)
 
   // #646: Save recommended plays to history for carry-forward escalation
+  // #650: Attach evidence snapshots for future delta diffing
   const recommendedPlays = extractRecommendedPlays(prepContent, meeting.recurringEventId, slug)
+    .map(play => {
+      const block = filteredEvidenceBlocks.find(b => b.playName === play.playName)
+      return {
+        ...play,
+        evidenceSnapshot: block?.evidenceTrail.map(e => e.fact),
+      }
+    })
 
   const entry: PrepHistoryEntry = {
     meetingTitle: meeting.meetingTitle,

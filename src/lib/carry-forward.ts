@@ -124,8 +124,16 @@ function computePlayEscalation(
   // Use the oldest firstRecommendedAt we found
   const resolvedFirst = firstRecommendedAt ?? seriesHistory[seriesHistory.length - 1]?.generatedAt ?? new Date().toISOString()
 
-  // Build evidence delta: all current evidence facts
-  const evidenceDelta = block.evidenceTrail.map(e => e.fact)
+  // Build evidence delta: diff current evidence against first recommendation snapshot (#650)
+  // Find the oldest entry in the streak to get its evidence snapshot
+  const oldestStreakEntry = seriesHistory[consecutiveCount - 1]
+  const oldestMatch = oldestStreakEntry?.recommendedPlays?.find(p => p.playName === block.playName)
+  const firstSnapshot = (oldestMatch as any)?.evidenceSnapshot as string[] | undefined
+
+  const currentFacts = block.evidenceTrail.map(e => e.fact)
+  const evidenceDelta = firstSnapshot && firstSnapshot.length > 0
+    ? currentFacts.filter(fact => !firstSnapshot.includes(fact))
+    : currentFacts // No snapshot available — treat all current evidence as delta
 
   // Build urgency change description
   const daysSinceFirst = Math.round(

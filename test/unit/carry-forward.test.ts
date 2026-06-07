@@ -177,4 +177,69 @@ describe('computeEscalation', () => {
     expect(typeof esc.urgencyChange).toBe('string')
     expect(esc.urgencyChange.length).toBeGreaterThan(0)
   })
+
+  it('#647: non-empty evidence blocks produce non-empty escalation map for repeated plays', () => {
+    const currentBlocks = [
+      makeBlock('RHEL Migration', 0.85, ['47 RHEL 7 subs expiring']),
+      makeBlock('OpenShift AI', 0.90, ['GPU cluster ready']),
+    ]
+    const history: PrepHistoryEntry[] = [
+      makeHistory(
+        [
+          { playName: 'RHEL Migration', compositeScore: 0.80 },
+          { playName: 'OpenShift AI', compositeScore: 0.88 },
+        ],
+        '2026-05-01T10:00:00Z',
+      ),
+    ]
+    const result = computeEscalation(currentBlocks, history, 'series-1')
+    // Both plays should produce escalation entries
+    expect(result.size).toBe(2)
+    expect(result.has('RHEL Migration')).toBe(true)
+    expect(result.has('OpenShift AI')).toBe(true)
+    // Each should have evidence delta
+    expect(result.get('RHEL Migration')!.evidenceDelta.length).toBeGreaterThan(0)
+    expect(result.get('OpenShift AI')!.evidenceDelta.length).toBeGreaterThan(0)
+  })
+
+  it('#650: evidence delta computes real diff when history has evidenceSnapshot', () => {
+    const currentBlocks = [
+      makeBlock('RHEL Migration', 0.90, [
+        '47 RHEL 7 subs expiring 2027-06-30',    // old evidence (in snapshot)
+        'New Sev1 case on RHEL 7 compat issue',   // NEW evidence (not in snapshot)
+      ]),
+    ]
+    const history: PrepHistoryEntry[] = [
+      makeHistory(
+        [{
+          playName: 'RHEL Migration',
+          compositeScore: 0.80,
+          firstRecommendedAt: '2026-04-01T10:00:00Z',
+          evidenceSnapshot: ['47 RHEL 7 subs expiring 2027-06-30'],
+        }],
+        '2026-05-01T10:00:00Z',
+      ),
+    ]
+    const result = computeEscalation(currentBlocks, history, 'series-1')
+    const esc = result.get('RHEL Migration')!
+    // Delta should contain ONLY the new evidence, not the old
+    expect(esc.evidenceDelta).toEqual(['New Sev1 case on RHEL 7 compat issue'])
+    expect(esc.evidenceDelta).not.toContain('47 RHEL 7 subs expiring 2027-06-30')
+  })
+
+  it('#650: evidence delta returns all facts when history has no evidenceSnapshot', () => {
+    const currentBlocks = [
+      makeBlock('RHEL Migration', 0.90, ['fact-1', 'fact-2']),
+    ]
+    const history: PrepHistoryEntry[] = [
+      makeHistory(
+        [{ playName: 'RHEL Migration', compositeScore: 0.80 }],
+        '2026-05-01T10:00:00Z',
+      ),
+    ]
+    const result = computeEscalation(currentBlocks, history, 'series-1')
+    const esc = result.get('RHEL Migration')!
+    // Without snapshot, all current facts appear as delta (backward compat)
+    expect(esc.evidenceDelta).toEqual(['fact-1', 'fact-2'])
+  })
 })

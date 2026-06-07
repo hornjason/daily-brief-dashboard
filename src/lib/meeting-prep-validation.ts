@@ -28,6 +28,7 @@ export function validateMeetingPrepOutput(
   output: string,
   evidenceBlocks: EvidenceBlock[],
   team: AccountTeamMember[],
+  additionalContext?: string,
 ): ValidationResult {
   if (!output || output.trim().length === 0) {
     return { valid: true, warnings: [] }
@@ -40,11 +41,14 @@ export function validateMeetingPrepOutput(
   const allLevers = evidenceBlocks.flatMap(b => b.availableLevers)
   const allTeamContexts = evidenceBlocks.map(b => b.teamContext)
   const allProposedAsks = evidenceBlocks.map(b => b.proposedAsk)
+  // Include deterministic template output (#652) to avoid false positives
+  // on dollar amounts from pipeline data injected after evidence blocks
   const allInputText = [
     ...allFacts,
     ...allLevers.map(l => `${l.name} ${l.description}`),
     ...allTeamContexts,
     ...allProposedAsks,
+    ...(additionalContext ? [additionalContext] : []),
   ].join(' ')
 
   // AC-9: Validate case numbers

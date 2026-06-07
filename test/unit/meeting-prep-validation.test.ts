@@ -154,4 +154,53 @@ Alice Johnson will handle procurement coordination.
     // With no evidence to validate against, case numbers are flagged
     expect(result.warnings.length).toBeGreaterThan(0)
   })
+
+  it('#652: accepts dollar amounts from additionalContext (deterministic template)', () => {
+    const output = `
+## Recommended Plays
+The $2,500,000 pipeline opportunity is significant.
+Pipeline shows $750K in pending renewals.
+Case 12345678 is the priority.
+    `.trim()
+
+    const result = validateMeetingPrepOutput(
+      output,
+      [makeEvidenceBlock({
+        evidenceTrail: [
+          { fact: 'Case 12345678: kernel panic', source: 'cases', recency: 'current' },
+        ],
+      })],
+      mockTeam,
+      // Deterministic template output containing pipeline amounts
+      'Pipeline: $2,500,000 total | Pending renewals: $750K'
+    )
+
+    // Dollar amounts from deterministic template should NOT trigger warnings
+    expect(result.warnings.some(w => w.includes('2,500,000'))).toBe(false)
+    expect(result.warnings.some(w => w.includes('750'))).toBe(false)
+  })
+
+  it('#652: still catches fabricated amounts not in evidence OR additionalContext', () => {
+    const output = `
+## Plays
+$9,999,999 fabricated amount.
+$150,000 is in evidence.
+    `.trim()
+
+    const result = validateMeetingPrepOutput(
+      output,
+      [makeEvidenceBlock({
+        evidenceTrail: [
+          { fact: '$150,000 renewal due 2026-09-15', source: 'pipeline', recency: 'current' },
+        ],
+      })],
+      mockTeam,
+      'Pipeline: $500K total'
+    )
+
+    // $9,999,999 is in neither evidence nor additional context — should be flagged
+    expect(result.warnings.some(w => w.includes('9,999,999'))).toBe(true)
+    // $150,000 is in evidence — should NOT be flagged
+    expect(result.warnings.some(w => w.includes('150,000'))).toBe(false)
+  })
 })

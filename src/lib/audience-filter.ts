@@ -10,7 +10,7 @@
  * - Internal: No filtering — pass all data through
  */
 
-import { detectPartnerDomains } from '../meeting-prep-service.ts'
+import { detectPartnerDomains } from './domain-detection.ts'
 import { loadPartnersFromConfig, findPartnerByDomain, matchPartnersToProducts } from './partner-catalog.ts'
 import { toSlug } from '../cache-layer.ts'
 import type { Customer } from '../types.ts'
