@@ -118,6 +118,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 | src/product-feature-radar.ts | Producer | Tracks product feature updates |
 | src/modules/tech-stack-module.ts | Producer | Extracts customer tech stack |
 | src/customer/doc-extractors.ts | Producer | Extracts content from customer documents |
+| src/lib/attendee-profile-cache.ts | Internal | Resolves attendee identities via grounded search (#645) |
 
 ## Consumer → ensureFresh Contract
 

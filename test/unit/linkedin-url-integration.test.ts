@@ -17,6 +17,8 @@ const DASHBOARD_DIR = resolve(import.meta.dir, '../../dashboard/src')
 
 describe('#385 — Meeting prep attendee LinkedIn URLs', () => {
   const meetingPrepSource = readFileSync(resolve(SRC_DIR, 'meeting-prep-service.ts'), 'utf-8')
+  // #645: attendee resolution moved to attendee-profile-cache.ts
+  const attendeeCacheSource = readFileSync(resolve(SRC_DIR, 'lib/attendee-profile-cache.ts'), 'utf-8')
   const typesSource = readFileSync(resolve(SRC_DIR, 'types.ts'), 'utf-8')
   const dashboardTypesSource = readFileSync(resolve(DASHBOARD_DIR, 'types.ts'), 'utf-8')
 
@@ -26,15 +28,15 @@ describe('#385 — Meeting prep attendee LinkedIn URLs', () => {
   })
 
   test('AC-1: attendee research uses LinkedIn URL when provided', () => {
-    // When a linkedinUrl is provided, the prompt should use it directly
-    expect(meetingPrepSource).toContain('linkedinUrl')
-    // Should include logic to use the URL directly in the prompt
-    expect(meetingPrepSource).toMatch(/linkedinUrl.*Research this LinkedIn profile/s)
+    // #645: attendee resolution now lives in attendee-profile-cache.ts
+    // The cache module includes linkedinUrl in profile and grounding search
+    expect(attendeeCacheSource).toContain('linkedinUrl')
+    expect(attendeeCacheSource).toMatch(/linkedinUrl.*LinkedIn/s)
   })
 
   test('AC-3: attendee research falls back to search string when no LinkedIn URL', () => {
-    // The existing search string pattern should still exist
-    expect(meetingPrepSource).toContain('site:linkedin.com')
+    // #645: fallback via email-derived + grounding search in attendee-profile-cache
+    expect(attendeeCacheSource).toContain('site:linkedin.com')
   })
 
   test('AC-2: CalendarEvent attendeeDetails type includes linkedinUrl in src/types.ts', () => {

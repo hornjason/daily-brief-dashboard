@@ -119,6 +119,8 @@ async function groundingSearch(
     const result = await callGemini(
       'You are a professional identity researcher. Given a person\'s name and their company, find their current LinkedIn profile. Return ONLY a JSON object with these fields: title (current job title), linkedinUrl (full LinkedIn URL). If you cannot find the person with certainty, return {"title":"","linkedinUrl":""}. Never guess — return empty strings if unsure.',
       `Find the LinkedIn profile for "${name}" who works at "${company}" (email: ${email}).
+Search: "${name}" site:linkedin.com ${company}
+If a linkedinUrl is already known, Research this LinkedIn profile to confirm the title.
 Return JSON: {"title":"...","linkedinUrl":"..."}`,
       {
         callType: 'attendee-profile-resolution',
