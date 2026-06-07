@@ -281,23 +281,18 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
       let terrCode = ''
 
       if (rawAeCell.includes('\n')) {
-        // Combined format: "AE Name\nTOLA_Terr01" or "AE Name\nHigh_Plains_Terr03"
+        // Combined format: "AE Name\nTerrXX" or "AE Name\nTerrXX (TerrYY HP)"
         const parts = rawAeCell.split('\n')
         aeName = parts[0].trim()
-        // Preserve the full territory code including any prefix (e.g. TOLA_Terr01, High_Plains_Terr03)
-        const terrPart = parts[1]?.trim() ?? ''
-        const terrMatch = terrPart.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?(\d+)/i)
-        if (terrMatch) {
-          const prefix = terrMatch[1] ?? ''
-          const num = terrMatch[2].padStart(2, '0')
-          terrCode = `${prefix}Terr${num}`
-        }
+        // Extract primary territory number from second part
+        const terrMatch = parts[1]?.trim().match(/Terr?(\d+)/i)
+        if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
       } else {
         aeName = rawAeCell
         // Territory code is within the next 1-3 rows at the same column
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
-          const m = candidate.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?\d+/i)
+          const m = candidate.match(/Terr?\d+/i)
           if (m) { terrCode = m[0]; break }
         }
       }
@@ -328,8 +323,6 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
 export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): string[] {
   const maxHeaderRow = Math.min(10, rows.length)
   const targetName = aeName.toLowerCase().trim()
-  const allAccounts: string[] = []
-  const seen = new Set<string>()
 
   for (let headerRow = 0; headerRow < maxHeaderRow; headerRow++) {
     const header = rows[headerRow] ?? []
@@ -344,10 +337,12 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
       let accountsStartRow: number
 
       if (rawAeCell.includes('\n')) {
+        // Combined format: "AE Name\nTerrXX" — accounts start at headerRow+2
         colAeName = rawAeCell.split('\n')[0].trim()
         accountsStartRow = headerRow + 2
       } else {
         colAeName = rawAeCell
+        // Separate rows: scan headerRow+2..+4 for territory code; accounts start after
         accountsStartRow = headerRow + 2
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
@@ -360,46 +355,50 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
 
       if (colAeName.toLowerCase() !== targetName) continue
 
+      // Extract and normalize accounts; skip empty and placeholder cells
+      const accounts: string[] = []
       let consecutiveEmpty = 0
       for (let r = accountsStartRow; r < rows.length; r++) {
         const raw = String(rows[r]?.[col] ?? '').trim()
         if (!raw) {
           consecutiveEmpty++
+          // Stop after 3 consecutive empty rows — end of this AE's account block
           if (consecutiveEmpty >= 3) break
           continue
         }
         consecutiveEmpty = 0
         if (/^(TBH|TBD|N\/A)$/i.test(raw)) continue
         const normalized = normalizeTerritoryCustomerName(raw)
-        if (normalized && !seen.has(normalized.toLowerCase())) {
-          seen.add(normalized.toLowerCase())
-          allAccounts.push(normalized)
-        }
+        if (normalized) accounts.push(normalized)
       }
+
+      return accounts
     }
   }
 
-  return allAccounts
+  return []
 }
 
 /**
- * Convert an enterprise-style territory code into an internal territory key.
- *
- * Prefix-aware routing:
- * - `High_Plains_Terr03` → `CENTRAL_ENT_TOLA_HP_TERR03` (finds pod key containing `_HP`)
- * - `TOLA_Terr01` or bare `Terr01` → `CENTRAL_ENT_TOLA_TERR01` (first non-HP pod key)
+ * Convert an enterprise-style territory code (`Ter01`) into an internal
+ * territory key (`CENTRAL_ENT_TOLA_TERR01`). Uses the first pod key in the
+ * region as the base — enterprise regions have a single pod entry today.
  */
 export function enterpriseTerritoryKey(region: RegionConfig, terrCode: string): string {
-  const podKeys = Object.keys(region.pods)
   const fallbackBase = region.id.toUpperCase().replace(/-/g, '_')
 
-  let base: string
-  if (/^High_Plains_/i.test(terrCode)) {
-    // Route to the HP pod key
-    base = podKeys.find(k => k.includes('_HP')) ?? podKeys[0] ?? fallbackBase
-  } else {
-    // TOLA_ prefix or bare Terr — use the first non-HP pod key (default behavior)
-    base = podKeys.find(k => !k.includes('_HP')) ?? podKeys[0] ?? fallbackBase
+  // Declarative prefix routing: match terrCode against pod prefixes
+  let base = fallbackBase
+  for (const [key, pod] of Object.entries(region.pods)) {
+    if (pod.prefixes?.some(p => terrCode.toLowerCase().startsWith(p.toLowerCase() + '_'))) {
+      base = key
+      break
+    }
+  }
+  // If no prefix matched, use the first pod without prefixes (the default/primary pod)
+  if (base === fallbackBase) {
+    base = Object.entries(region.pods).find(([_, p]) => !p.prefixes?.length)?.[0]
+      ?? Object.keys(region.pods)[0] ?? fallbackBase
   }
 
   const m = terrCode.match(/(\d+)/)
@@ -634,13 +633,8 @@ async function syncEnterpriseRegion(
 
       const aeName = rawAeCell.split('\n')[0].trim()
       let terrCode = ''
-      // Preserve full prefix (TOLA_, High_Plains_, etc.) for pod routing
-      const terrMatch = rawAeCell.match(/((?:[A-Za-z]+_(?:[A-Za-z]+_)*)?)Terr?(\d+)/i)
-      if (terrMatch) {
-        const prefix = terrMatch[1] ?? ''
-        const num = terrMatch[2].padStart(2, '0')
-        terrCode = `${prefix}Terr${num}`
-      }
+      const terrMatch = rawAeCell.match(/Terr?(\d+)/i)
+      if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
       if (!terrCode) continue
 
       const fullTerrKey = enterpriseTerritoryKey(region, terrCode)

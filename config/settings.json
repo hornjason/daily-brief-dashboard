@@ -65,17 +65,18 @@
       "id": "central-enterprise-tola",
       "label": "Central Enterprise – TOLA",
       "type": "enterprise",
-      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=677438728#gid=677438728",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986",
       "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
       "pods": {
         "CENTRAL_ENT_TOLA": {
-          "sfReportId": "00OPe00000odJCVMA2",
+          "sfReportId": "00OPe00000kZhSfMAK",
           "label": "TOLA"
         },
         "CENTRAL_ENT_TOLA_HP": {
           "sfReportId": "00OPe00000odJCVMA2",
           "label": "High Plains",
-          "hidden": true
+          "hidden": true,
+          "prefixes": ["High_Plains"]
         }
       }
     }

@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'bun:test'
-import { parseTerritoryParts, getUniquePodFilters } from '../../src/lib/territory.ts'
+import { parseTerritoryParts } from '../../src/lib/territory.ts'
+import { enterpriseTerritoryKey } from '../../src/territory-sync.ts'
+import type { RegionConfig } from '../../src/region-config.ts'
 
 describe('parseTerritoryParts', () => {
   test('parses a 5-part commercial territory', () => {
@@ -52,63 +54,69 @@ describe('parseTerritoryParts', () => {
   })
 })
 
-describe('getUniquePodFilters (#632)', () => {
-  test('returns single entry for single-pod territories', () => {
-    const result = getUniquePodFilters([
-      'CENTRAL_ENT_TOLA_TERR02',
-      'CENTRAL_ENT_TOLA_TERR05',
-    ])
-    expect(result).toHaveLength(1)
-    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
+// ── enterpriseTerritoryKey — declarative prefix routing (#635) ──────────────
+
+describe('enterpriseTerritoryKey — prefix routing (#635)', () => {
+  const makeRegion = (pods: Record<string, { sfReportId: string; label: string; hidden?: boolean; prefixes?: string[] }>): RegionConfig => ({
+    id: 'central-enterprise',
+    label: 'Central Enterprise',
+    type: 'enterprise',
+    territorySheetUrl: '',
+    podBookingsFolderId: '',
+    parentFolderId: '',
+    pods,
   })
 
-  test('returns multiple entries for multi-pod territories', () => {
-    const result = getUniquePodFilters([
-      'CENTRAL_ENT_TOLA_TERR05',
-      'CENTRAL_ENT_HEARTLAND_TERR08',
-    ])
-    expect(result).toHaveLength(2)
-    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
-    expect(result[1].pod).toBe('CENTRAL_ENT_HEARTLAND_POD')
+  const multiPodRegion = makeRegion({
+    CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+    CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
   })
 
-  test('returns entries for mixed enterprise and commercial territories', () => {
-    const result = getUniquePodFilters([
-      'CENTRAL_ENT_TOLA_TERR05',
-      'WEST_COMM_CORP_NORTHWEST_TERR01',
-    ])
-    expect(result).toHaveLength(2)
-    expect(result[0].pod).toBe('CENTRAL_ENT_TOLA_POD')
-    expect(result[0].segment).toBe('Enterprise')
-    expect(result[1].pod).toBe('WEST_COMM_CORP_NORTHWEST')
-    expect(result[1].segment).toBe('Commercial')
+  test('High_Plains_ prefix routes to HP pod', () => {
+    expect(enterpriseTerritoryKey(multiPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
   })
 
-  test('deduplicates territories that map to the same pod', () => {
-    const result = getUniquePodFilters([
-      'WEST_COMM_CORP_NORTHWEST_TERR01',
-      'WEST_COMM_CORP_NORTHWEST_TERR03',
-      'CENTRAL_ENT_TOLA_TERR02',
-      'CENTRAL_ENT_TOLA_TERR05',
-    ])
-    expect(result).toHaveLength(2)
-    expect(result[0].pod).toBe('WEST_COMM_CORP_NORTHWEST')
-    expect(result[1].pod).toBe('CENTRAL_ENT_TOLA_POD')
+  test('TOLA_ prefix routes to default (non-prefix) pod', () => {
+    expect(enterpriseTerritoryKey(multiPodRegion, 'TOLA_Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
   })
 
-  test('returns empty array for empty input', () => {
-    expect(getUniquePodFilters([])).toEqual([])
+  test('bare Terr routes to default (non-prefix) pod', () => {
+    expect(enterpriseTerritoryKey(multiPodRegion, 'Terr05')).toBe('CENTRAL_ENT_TOLA_TERR05')
   })
 
-  test('preserves full TerritoryParts for each unique pod', () => {
-    const result = getUniquePodFilters(['EAST_ENT_FINANCE_TERR05'])
-    expect(result).toHaveLength(1)
-    expect(result[0]).toEqual({
-      pod: 'EAST_ENT_FINANCE_POD',
-      subregion: 'EAST_ENT_FINANCE',
-      segment: 'Enterprise',
-      subsegment: 'Enterprise',
-      region: 'EAST',
+  test('prefix matching is case-insensitive', () => {
+    expect(enterpriseTerritoryKey(multiPodRegion, 'high_plains_Terr07')).toBe('CENTRAL_ENT_TOLA_HP_TERR07')
+  })
+
+  test('hypothetical third prefix group routes correctly', () => {
+    const threePodRegion = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_TOLA_MW: { sfReportId: 'r3', label: 'Mountain West', hidden: true, prefixes: ['Mountain_West'] },
     })
+    expect(enterpriseTerritoryKey(threePodRegion, 'Mountain_West_Terr02')).toBe('CENTRAL_ENT_TOLA_MW_TERR02')
+    // Non-prefixed still routes to default
+    expect(enterpriseTerritoryKey(threePodRegion, 'Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
+  })
+
+  test('single-pod region (no prefixes) still works', () => {
+    const singlePod = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+    })
+    expect(enterpriseTerritoryKey(singlePod, 'Terr04')).toBe('CENTRAL_ENT_TOLA_TERR04')
+  })
+
+  test('adding a new prefix group is config-only — no code change needed', () => {
+    // This test proves AC-5: a new group just needs a prefixes entry
+    const fourPodRegion = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', prefixes: ['High_Plains'] },
+      CENTRAL_ENT_TOLA_MW: { sfReportId: 'r3', label: 'Mountain West', prefixes: ['Mountain_West'] },
+      CENTRAL_ENT_TOLA_GL: { sfReportId: 'r4', label: 'Great Lakes', prefixes: ['Great_Lakes'] },
+    })
+    expect(enterpriseTerritoryKey(fourPodRegion, 'Great_Lakes_Terr09')).toBe('CENTRAL_ENT_TOLA_GL_TERR09')
+    expect(enterpriseTerritoryKey(fourPodRegion, 'Mountain_West_Terr02')).toBe('CENTRAL_ENT_TOLA_MW_TERR02')
+    expect(enterpriseTerritoryKey(fourPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(fourPodRegion, 'Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
   })
 })

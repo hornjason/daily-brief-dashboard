@@ -14,6 +14,7 @@ export interface RegionPodConfig {
   sfReportId: string
   label: string
   hidden?: boolean
+  prefixes?: string[]
 }
 
 export type RegionType = 'commercial' | 'enterprise'
@@ -144,6 +145,7 @@ function coerceRegion(r: unknown): RegionConfig {
           sfReportId: typeof value.sfReportId === 'string' ? value.sfReportId : '',
           label: typeof value.label === 'string' ? value.label : defaultLabelForPodKey(key),
           ...(value.hidden === true ? { hidden: true } : {}),
+          ...(Array.isArray(value.prefixes) ? { prefixes: value.prefixes.filter((p: unknown) => typeof p === 'string') } : {}),
         }
       }
     }
