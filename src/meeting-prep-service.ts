@@ -56,6 +56,7 @@ import {
   type AudienceType,
   type EvidenceBlock,
 } from './lib/audience-filter.ts'
+import { resolveAttendees, type AttendeeProfile } from './lib/attendee-profile-cache.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -731,7 +732,7 @@ export async function generateMeetingPrep(
     .filter(item => productSlugs.length === 0 || (item.productTags ?? []).some(tag => productSlugs.includes(tag.toLowerCase())))
     .slice(0, 10)
 
-  // ── Step 2: Research attendees via Gemini with grounding ─────────────────
+  // ── Step 2: Resolve attendees via profile cache (#645) ───────────────────
 
   const attendeeEmails = meeting.attendees.filter(e => !e.endsWith('@redhat.com'))
   const { partnerDomains, customerDomains } = detectPartnerDomains(meeting.attendees, customer)
@@ -748,66 +749,52 @@ export async function generateMeetingPrep(
   let partnerResearch = ''
   let otherPartnersTable = ''
 
-  // Separate customer attendees from partner attendees
-  const customerAttendees = attendeeEmails.filter(e => {
-    const domain = e.split('@')[1] ?? ''
-    return customerDomains.some(cd => domain.endsWith(cd))
-  })
-  const partnerAttendees = attendeeEmails.filter(e => !customerAttendees.includes(e))
-
-  if (customerAttendees.length > 0) {
-    // Research customer attendees deeply via LinkedIn
-    try {
-      const attendeeLines = customerAttendees.map(email => {
-        const name = getAttendeeDisplayName(meeting, email)
-        const detail = (meeting.attendeeDetails ?? []).find(d => d.email === email)
-        if (detail?.linkedinUrl) {
-          return `- "${name}" at ${customer.name} (${email}) — Research this LinkedIn profile: ${detail.linkedinUrl}`
-        }
-        return `- "${name}" at ${customer.name} (${email}) — search: "${name}" site:linkedin.com ${customer.name}`
-      }).join('\n')
-
-      const attendeeResult = await callGemini(
-        'You are an expert sales intelligence researcher. For each attendee, find their LinkedIn profile at the specified company. Return detailed, specific information. If you cannot find someone, state "Profile not found" — never guess or return a wrong person.',
-        `Research these customer attendees from ${customer.name}:
-${attendeeLines}
-
-For each attendee, provide:
-1. **Full Name & Title** — current title at ${customer.name}
-Return ONE bullet line per person in this exact format:
-- **Full Name**, Current Title at Company — one key insight (career highlight, certification, or recent signal)
-
-Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
-        {
-          callType: 'meeting-prep-attendee-research',
-          customerName: customer.name,
-          grounding: true,
-          timeoutMs: 60_000,
-        }
-      )
-      attendeeResearch = attendeeResult.text
-    } catch (e: any) {
-      console.warn(`[meeting-prep] Attendee research failed:`, e.message)
-      attendeeResearch = buildFallbackAttendeeTable(customerAttendees, meetingPrepData, meeting)
+  // Build calendar display name map from meeting data
+  const calendarDisplayNames = new Map<string, string>()
+  for (const email of attendeeEmails) {
+    const displayName = getAttendeeDisplayName(meeting, email)
+    if (displayName && displayName !== email) {
+      calendarDisplayNames.set(email, displayName)
     }
   }
 
-  // For partner attendees, just list names — the Partner section covers their company
-  if (partnerAttendees.length > 0 && !attendeeResearch) {
-    const rows = partnerAttendees.map(email => {
-      const name = getAttendeeDisplayName(meeting, email)
-      const company = deriveCompanyFromDomain(email)
-      return `| ${name} | ${company} | Partner/integrator representative | See Partners & Integrators section |`
-    }).join('\n')
-    attendeeResearch = `| Name | Company | Role | Notes |\n|---|---|---|---|\n${rows}`
-  } else if (partnerAttendees.length > 0) {
-    // Append partner attendees as simple rows to existing customer attendee table
-    const partnerRows = partnerAttendees.map(email => {
-      const name = getAttendeeDisplayName(meeting, email)
-      const company = deriveCompanyFromDomain(email)
-      return `| ${name} (${company}) | Partner representative | See Partners & Integrators section | Discuss their role in this engagement |`
-    }).join('\n')
-    attendeeResearch += '\n' + partnerRows
+  // Load meeting history for cross-reference
+  const meetingHistory = readHistory(slug)
+
+  // Resolve ALL attendees (customer + partner) via profile cache (#645)
+  // AC-4: Partner attendees get full research — no skip
+  try {
+    const resolvedProfiles = await resolveAttendees(
+      attendeeEmails,
+      customer.name,
+      {
+        calendarDisplayNames,
+        meetingHistory,
+        customerName: customer.name,
+      }
+    )
+
+    // Get AE name for unresolved attendee messages
+    const team = getAccountTeam(customer)
+    const aeEntry = team.find(m => m.role === 'ae')
+    const aeName = aeEntry?.name ?? 'your AE'
+
+    // Format resolved profiles into attendee research output
+    const profileLines = resolvedProfiles.map(profile => {
+      if (profile.resolved) {
+        const titlePart = profile.title ? `, ${profile.title}` : ''
+        const linkedinPart = profile.linkedinUrl ? ` — [LinkedIn](${profile.linkedinUrl})` : ''
+        return `- **${profile.name}**${titlePart} at ${profile.company}${linkedinPart}`
+      } else {
+        return `- **${profile.name}** at ${profile.company} — Profile not found — ask ${aeName} for context`
+      }
+    })
+
+    attendeeResearch = profileLines.join('\n')
+    console.log(`[meeting-prep] Resolved ${resolvedProfiles.filter(p => p.resolved).length}/${resolvedProfiles.length} attendee profiles for ${customer.name}`)
+  } catch (e: any) {
+    console.warn(`[meeting-prep] Attendee profile resolution failed:`, e.message)
+    attendeeResearch = buildFallbackAttendeeTable(attendeeEmails, meetingPrepData, meeting)
   }
 
   // ── Step 2b: Partner context from config or grounding ────────────────────
