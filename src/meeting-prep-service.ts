@@ -39,6 +39,7 @@ import { buildEnrichmentPromptContext, buildSalesAlignmentBlock } from './meetin
 import { templateAll } from './lib/signal-templates.ts'
 import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
+import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt } from './lib/meeting-prep-graph-integration.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
   extractActionItems,
@@ -547,7 +548,15 @@ export async function generateMeetingPrep(
     }
   }
 
-  // ── Step 1a: Recurring meeting carry-forward (#269) ────────────────────
+  // ── Step 1a: Load intelligence graph and score tactics (#642) ─────────
+  const graphScoring = loadAndScoreTactics(slug)
+  if (graphScoring.graphLoaded) {
+    console.log(`[meeting-prep] Intelligence graph loaded for ${customer.name} — ${graphScoring.scoredTactics.length} tactics scored`)
+  } else {
+    console.log(`[meeting-prep] No intelligence graph for ${customer.name} — falling back to enrichment context`)
+  }
+
+  // ── Step 1b: Recurring meeting carry-forward (#269) ────────────────────
   let carryForwardContext = ''
   const isRecurring = !!meeting.recurringEventId
   if (isRecurring) {
@@ -881,16 +890,21 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
       .map(item => `- ${item.text} (Owner: ${item.owner})`)
       .join('\n')
 
-    // ── Build enrichment context for prompt injection (#426) ──────────
-    const enrichmentContext = buildEnrichmentPromptContext(customer, productSlugs, {
-      productSummaries, rssItems: relevantRSS, customerSlug: slug,
-      getValueMapFn: getValueMap,
-      getIntelFn: getCachedCustomerProductIntel,
-      getSheetCacheFn: (name: string) => {
-        try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
-      },
-      lifecycleCache, roadmapData,
-    })
+    // ── Build enrichment context for prompt injection (#426, #642) ────
+    // When intelligence graph is available, use scored tactics instead of raw enrichment
+    const scoredTacticsBlock = formatScoredTacticsForPrompt(graphScoring.scoredTactics)
+    const graphDiffBlock = formatGraphDiffForPrompt(graphScoring.graphDiff)
+    const enrichmentContext = graphScoring.graphLoaded && scoredTacticsBlock
+      ? scoredTacticsBlock
+      : buildEnrichmentPromptContext(customer, productSlugs, {
+          productSummaries, rssItems: relevantRSS, customerSlug: slug,
+          getValueMapFn: getValueMap,
+          getIntelFn: getCachedCustomerProductIntel,
+          getSheetCacheFn: (name: string) => {
+            try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+          },
+          lifecycleCache, roadmapData,
+        })
 
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
@@ -1002,7 +1016,9 @@ ${caseSummary}
 
 ${templateResult.deterministic ? `### Signal Intelligence (from registry — includes ecosystem catalog, tech stack, cloud marketplace)\n${templateResult.deterministic}` : ''}
 
-${enrichmentContext ? `### Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
+${enrichmentContext ? `### ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
+
+${graphDiffBlock ? `### ${graphDiffBlock}` : ''}
 
 ${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
@@ -1072,16 +1088,21 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     // ── No playbook: standard generation flow ──────────────────────────────
     console.log(`[meeting-prep] No playbook for ${customer.name} — using standard generation flow`)
 
-    // ── Build enrichment context for prompt injection (#426) ──────────
-    const enrichmentContext = buildEnrichmentPromptContext(customer, productSlugs, {
-      productSummaries, rssItems: relevantRSS, customerSlug: slug,
-      getValueMapFn: getValueMap,
-      getIntelFn: getCachedCustomerProductIntel,
-      getSheetCacheFn: (name: string) => {
-        try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
-      },
-      lifecycleCache, roadmapData,
-    })
+    // ── Build enrichment context for prompt injection (#426, #642) ────
+    // When intelligence graph is available, use scored tactics instead of raw enrichment
+    const scoredTacticsBlock = formatScoredTacticsForPrompt(graphScoring.scoredTactics)
+    const graphDiffBlock = formatGraphDiffForPrompt(graphScoring.graphDiff)
+    const enrichmentContext = graphScoring.graphLoaded && scoredTacticsBlock
+      ? scoredTacticsBlock
+      : buildEnrichmentPromptContext(customer, productSlugs, {
+          productSummaries, rssItems: relevantRSS, customerSlug: slug,
+          getValueMapFn: getValueMap,
+          getIntelFn: getCachedCustomerProductIntel,
+          getSheetCacheFn: (name: string) => {
+            try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+          },
+          lifecycleCache, roadmapData,
+        })
 
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
@@ -1130,7 +1151,9 @@ ${attendeeResearch || 'No attendee research available'}
 ## Open Support Cases
 ${caseSummary}
 
-${enrichmentContext ? `## Product & Market Intelligence (use contextually in Discussion Questions and Value Play)\n${enrichmentContext}` : ''}
+${enrichmentContext ? `## ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (use contextually in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
+
+${graphDiffBlock ? `## ${graphDiffBlock}` : ''}
 
 ${recentInteractionsContext ? `## Recent Interactions & History (synthesize into Section 3)\n${recentInteractionsContext}` : ''}
 

@@ -55,7 +55,7 @@ export interface MeetingPrepBrief {
  * Extract candidate tactics from play nodes in the graph.
  * Each play node becomes a tactic candidate for scoring.
  */
-function extractCandidateTactics(graph: CustomerGraph) {
+export function extractCandidateTactics(graph: CustomerGraph) {
   const playNodes = findActiveNodesByType(graph, 'play')
 
   return playNodes.map(play => {
