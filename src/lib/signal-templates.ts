@@ -81,13 +81,16 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'intelligence' | 'partner' | 'saleshub' | 'other' {
   const m = signal.metadata ?? {}
 
-  // #672: Source-specific routing — before metadata checks so ecosystem signals
+  // #672/#673: Source-specific routing — before metadata checks so signals
   // with metadata.product don't incorrectly route to 'product'
   if (signal.source === 'ecosystem-catalog') return 'ecosystem'
   if (signal.source === 'competitive-intel') return 'competitive'
+  if (signal.source === 'intelligence') return 'intelligence'
+  if (signal.source === 'partner-catalog') return 'partner'
+  if (signal.source === 'saleshub-tactics' || signal.source === 'saleshub-plays') return 'saleshub'
 
   // Metadata-driven routing (most specific first)
   if (m.hasCloudSpend || m.provider) return 'cloud'
@@ -515,6 +518,21 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
     parts.push(ecoLines.join('\n'))
   }
 
+  // #673: Specialized Partners — enrichment from partner-catalog signals
+  const partnerSignals = signals.filter(s => routeSignal(s) === 'partner')
+  if (partnerSignals.length > 0 && uniqueSignals.length > 0) {
+    const partnerLines: string[] = ['### Specialized Partners']
+    for (const s of partnerSignals.slice(0, 8)) {
+      const m = s.metadata ?? {}
+      const partnerName = String(m.partnerName ?? s.headline)
+      const level = String(m.partnershipLevel ?? 'Partner')
+      const specs = Array.isArray(m.specializations) ? m.specializations.join(', ') : ''
+      const creds = Number(m.credentialCount ?? 0)
+      partnerLines.push(`- **${partnerName}** (${level}) — Specializations: ${specs} | Certs: ${creds}`)
+    }
+    parts.push(partnerLines.join('\n'))
+  }
+
   // Customer wins proof points (from any signal with customerWins)
   const allWins: string[] = []
   for (const s of uniqueSignals) {
@@ -590,8 +608,6 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
 /**
  * Competitive Landscape section (#672): signals from competitive-intel showing
  * competitor announcements, Red Hat counter-positioning, and sales triggers.
- *
- * Renders: Competitor, Announcement, Red Hat Counter, Sales Trigger
  */
 export function templateCompetitiveLandscape(signals: Signal[]): string | null {
   const competitiveSignals = signals.filter(s => routeSignal(s) === 'competitive')
@@ -624,6 +640,83 @@ export function templateCompetitiveLandscape(signals: Signal[]): string | null {
   }
 
   return rows.join('\n')
+}
+
+/**
+ * Company & Industry Intelligence section (#673): signals from the intelligence
+ * module showing company analysis and industry context.
+ */
+export function templateIntelligence(signals: Signal[]): string | null {
+  const intelSignals = signals.filter(s => routeSignal(s) === 'intelligence')
+  if (intelSignals.length === 0) return null
+
+  const companySignals = intelSignals.filter(s => s.metadata?.docType === 'company')
+  const industrySignals = intelSignals.filter(s => s.metadata?.docType === 'industry')
+
+  if (companySignals.length === 0 && industrySignals.length === 0) return null
+
+  const lines: string[] = ['## Company & Industry Intelligence']
+
+  if (companySignals.length > 0) {
+    lines.push('')
+    lines.push('### Company Context')
+    for (const s of companySignals.slice(0, 3)) {
+      lines.push(s.detail.slice(0, 500))
+    }
+  }
+
+  if (industrySignals.length > 0) {
+    lines.push('')
+    lines.push('### Industry Context')
+    for (const s of industrySignals.slice(0, 3)) {
+      lines.push(s.detail.slice(0, 500))
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Sales Plays & Tactics section (#673): signals from saleshub-tactics and
+ * saleshub-plays modules showing active tactics and strategic plays.
+ */
+export function templateSalesHubInsights(signals: Signal[]): string | null {
+  const shSignals = signals.filter(s => routeSignal(s) === 'saleshub')
+  if (shSignals.length === 0) return null
+
+  const tactics = shSignals.filter(s => s.metadata?.playType === 'tactic')
+  const strategicPlays = shSignals.filter(s => s.metadata?.playType === 'strategic')
+
+  if (tactics.length === 0 && strategicPlays.length === 0) return null
+
+  const lines: string[] = ['## Sales Plays & Tactics']
+
+  if (tactics.length > 0) {
+    lines.push('')
+    lines.push('### Active Tactics')
+    for (const s of tactics.slice(0, 8)) {
+      const m = s.metadata ?? {}
+      const name = s.headline
+      const parentTdp = String(m.parentTdp ?? '')
+      const snippet = Array.isArray(m.assets) && m.assets.length > 0
+        ? String(m.assets[0])
+        : (m.talkTrack ? String(m.talkTrack).slice(0, 100) : s.detail.slice(0, 100))
+      lines.push(`- **${name}** (${parentTdp}) — ${snippet}`)
+    }
+  }
+
+  if (strategicPlays.length > 0) {
+    lines.push('')
+    lines.push('### Strategic Plays')
+    for (const s of strategicPlays.slice(0, 8)) {
+      const m = s.metadata ?? {}
+      const name = s.headline
+      const tdps = Array.isArray(m.tdpAlignment) ? m.tdpAlignment.join(', ') : String(m.tdpAlignment ?? '')
+      lines.push(`- **${name}** — TDPs: ${tdps}`)
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**
@@ -854,6 +947,8 @@ export async function templateAll(
   const saleshubContext = templateSalesHubContext(filteredSignals)
   const upcomingEvents = templateUpcomingEvents(filteredSignals)
   const competitiveLandscape = templateCompetitiveLandscape(filteredSignals)
+  const intelligence = templateIntelligence(filteredSignals)
+  const salesHubInsights = templateSalesHubInsights(filteredSignals)
 
   // #380: Account plan — render as text section for playbook/brief only
   const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
@@ -866,6 +961,8 @@ export async function templateAll(
 
   // Sales Alignment at the top — management-visible TDP/Play mapping
   if (salesAlignment) sections.push(`## Sales Alignment\n\n${salesAlignment}`)
+  // #673: SalesHub insights (tactics + strategic plays) — after sales alignment, before strategic opportunities
+  if (salesHubInsights) sections.push(salesHubInsights)
   // Strategic detail (solution plays table, marketplace, correlations) — consolidated under Sales Alignment
   if (strategicOpportunities) sections.push(strategicOpportunities)
   // #672: Competitive landscape — after strategic opportunities
@@ -883,6 +980,8 @@ export async function templateAll(
     sections.push(`## Account Plan\n\n${accountPlan}`)
   }
   if (keyRelationships) sections.push(`## Key Relationships\n\n${keyRelationships}`)
+  // #673: Intelligence section — after key relationships
+  if (intelligence) sections.push(intelligence)
 
   const deterministic = sections.join('\n\n')
 

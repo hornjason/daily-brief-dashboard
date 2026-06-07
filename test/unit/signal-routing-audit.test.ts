@@ -3,7 +3,7 @@
  * Verifies that all signal sources route to appropriate template sections.
  */
 import { test, expect, describe } from 'bun:test'
-import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack, templateCompetitiveLandscape, templateStrategicOpportunities, templateAll } from '../../src/lib/signal-templates.ts'
+import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack, templateCompetitiveLandscape, templateIntelligence, templateSalesHubInsights, templateStrategicOpportunities, templateAll } from '../../src/lib/signal-templates.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
 
 function makeSignal(overrides: Partial<Signal>): Signal {
@@ -140,6 +140,124 @@ describe('routeSignal coverage — #325 audit', () => {
       },
     })
     // Should NOT appear in product alignment (it's an account plan, not a product)
+    expect(templateProductAlignment([signal])).toBeNull()
+  })
+
+  // #673: Intelligence signal routing
+  test('intelligence source routes to intelligence, not product (#673)', () => {
+    const signal = makeSignal({
+      source: 'intelligence',
+      type: 'intelligence',
+      headline: 'Acme Corp company analysis',
+      detail: 'Major cloud migration initiative underway with $50M budget',
+      metadata: {
+        docType: 'company',
+        customerSlug: 'acme-corp',
+      },
+    })
+    const result = templateIntelligence([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Company Context')
+    // Must NOT appear in product alignment
+    expect(templateProductAlignment([signal])).toBeNull()
+  })
+
+  // #673: Partner-catalog signal routing
+  test('partner-catalog source routes to partner, not product (#673)', () => {
+    const signal = makeSignal({
+      source: 'partner-catalog',
+      type: 'intelligence',
+      headline: 'Accenture',
+      detail: 'Premier partner with OpenShift specialization',
+      metadata: {
+        partnerName: 'Accenture',
+        partnershipLevel: 'Premier',
+        specializations: ['OpenShift', 'Ansible'],
+        credentialCount: 42,
+      },
+    })
+    // Must NOT appear in product alignment
+    expect(templateProductAlignment([signal])).toBeNull()
+    // Must NOT appear in cloud, cases, renewals, tech
+    expect(templateCloudMarketplace([signal])).toBeNull()
+    expect(templateCases([signal])).toBeNull()
+    expect(templateRenewals([signal])).toBeNull()
+    expect(templateTechStack([signal])).toBeNull()
+  })
+
+  test('partner-catalog signals enrich strategic opportunities when plays exist (#673)', () => {
+    const partnerSignal = makeSignal({
+      source: 'partner-catalog',
+      type: 'intelligence',
+      headline: 'Accenture',
+      detail: 'Premier partner',
+      metadata: {
+        partnerName: 'Accenture',
+        partnershipLevel: 'Premier',
+        specializations: ['OpenShift', 'Ansible'],
+        credentialCount: 42,
+      },
+    })
+    const playSignal = makeSignal({
+      source: 'solution-plays',
+      type: 'intelligence',
+      headline: 'Ansible (HIGH)',
+      detail: 'Network automation play',
+      metadata: {
+        solutionPlayId: 'play-1',
+        solutionPlayName: 'Network Automation',
+        solutionTdp: 'Automation',
+        redHatProducts: ['Ansible Automation Platform'],
+      },
+    })
+    const result = templateStrategicOpportunities([playSignal, partnerSignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Specialized Partners')
+    expect(result).toContain('Accenture')
+    expect(result).toContain('Premier')
+    expect(result).toContain('OpenShift, Ansible')
+    expect(result).toContain('Certs: 42')
+  })
+
+  // #673: SalesHub signal routing
+  test('saleshub-tactics source routes to saleshub (#673)', () => {
+    const signal = makeSignal({
+      source: 'saleshub-tactics',
+      type: 'intelligence',
+      headline: 'Migrate VMware workloads',
+      detail: 'Cost reduction tactic for virtualization modernization',
+      metadata: {
+        playType: 'tactic',
+        parentTdp: 'Virtualization',
+        talkTrack: 'Customers report 40% TCO reduction',
+      },
+    })
+    const result = templateSalesHubInsights([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Active Tactics')
+    expect(result).toContain('Migrate VMware workloads')
+    expect(result).toContain('Virtualization')
+    // Must NOT appear in product alignment
+    expect(templateProductAlignment([signal])).toBeNull()
+  })
+
+  test('saleshub-plays source routes to saleshub (#673)', () => {
+    const signal = makeSignal({
+      source: 'saleshub-plays',
+      type: 'intelligence',
+      headline: 'Modernize Infrastructure',
+      detail: 'Strategic play for infrastructure modernization',
+      metadata: {
+        playType: 'strategic',
+        tdpAlignment: ['Virtualization', 'Server/Cloud OS'],
+      },
+    })
+    const result = templateSalesHubInsights([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Strategic Plays')
+    expect(result).toContain('Modernize Infrastructure')
+    expect(result).toContain('Virtualization, Server/Cloud OS')
+    // Must NOT appear in product alignment
     expect(templateProductAlignment([signal])).toBeNull()
   })
 
