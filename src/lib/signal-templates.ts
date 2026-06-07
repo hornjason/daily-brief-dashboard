@@ -81,8 +81,13 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'other' {
   const m = signal.metadata ?? {}
+
+  // #672: Source-specific routing — before metadata checks so ecosystem signals
+  // with metadata.product don't incorrectly route to 'product'
+  if (signal.source === 'ecosystem-catalog') return 'ecosystem'
+  if (signal.source === 'competitive-intel') return 'competitive'
 
   // Metadata-driven routing (most specific first)
   if (m.hasCloudSpend || m.provider) return 'cloud'
@@ -494,6 +499,22 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
   }
   parts.push(playRows.join('\n'))
 
+  // #672: Partner Ecosystem Solutions — enrichment from ecosystem-catalog signals
+  // Only show when solution plays exist (don't show partner solutions without play context)
+  const ecosystemSignals = signals.filter(s => routeSignal(s) === 'ecosystem')
+  if (ecosystemSignals.length > 0) {
+    const ecoLines: string[] = ['### Partner Ecosystem Solutions']
+    for (const s of ecosystemSignals.slice(0, 10)) {
+      const m = s.metadata ?? {}
+      const partnerName = String(m.partnerName ?? 'Unknown Partner')
+      const solutionName = String(m.solutionName ?? s.headline)
+      const resourceCount = Array.isArray(m.resourceTypes) ? m.resourceTypes.length : 0
+      const urlPart = s.url ? ` — [View](${s.url})` : ''
+      ecoLines.push(`- **${partnerName}**: ${solutionName} (${resourceCount} resources)${urlPart}`)
+    }
+    parts.push(ecoLines.join('\n'))
+  }
+
   // Customer wins proof points (from any signal with customerWins)
   const allWins: string[] = []
   for (const s of uniqueSignals) {
@@ -564,6 +585,45 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
   }
 
   return parts.join('\n\n')
+}
+
+/**
+ * Competitive Landscape section (#672): signals from competitive-intel showing
+ * competitor announcements, Red Hat counter-positioning, and sales triggers.
+ *
+ * Renders: Competitor, Announcement, Red Hat Counter, Sales Trigger
+ */
+export function templateCompetitiveLandscape(signals: Signal[]): string | null {
+  const competitiveSignals = signals.filter(s => routeSignal(s) === 'competitive')
+  if (competitiveSignals.length === 0) return null
+
+  const rows: string[] = []
+  rows.push('## Competitive Landscape')
+  rows.push('')
+  rows.push('| Competitor | Announcement | Red Hat Counter | Sales Trigger |')
+  rows.push('|---|---|---|---|')
+
+  const notes: string[] = []
+
+  for (const s of competitiveSignals.slice(0, 8)) {
+    const m = s.metadata ?? {}
+    const competitor = String(m.competitor ?? 'Unknown')
+    const announcement = s.headline.slice(0, 100)
+    const counter = String(m.redHatCounter ?? m.counter ?? s.detail.slice(0, 80))
+    const triggers = Array.isArray(m.salesTriggers) ? String(m.salesTriggers[0] ?? '') : String(m.salesTrigger ?? '')
+    rows.push(`| ${competitor} | ${announcement} | ${counter} | ${triggers} |`)
+
+    if (m.compensation) {
+      notes.push(`_${competitor}: ${String(m.compensation)}_`)
+    }
+  }
+
+  if (notes.length > 0) {
+    rows.push('')
+    rows.push(notes.join('\n'))
+  }
+
+  return rows.join('\n')
 }
 
 /**
@@ -793,6 +853,7 @@ export async function templateAll(
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
   const saleshubContext = templateSalesHubContext(filteredSignals)
   const upcomingEvents = templateUpcomingEvents(filteredSignals)
+  const competitiveLandscape = templateCompetitiveLandscape(filteredSignals)
 
   // #380: Account plan — render as text section for playbook/brief only
   const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
@@ -807,6 +868,8 @@ export async function templateAll(
   if (salesAlignment) sections.push(`## Sales Alignment\n\n${salesAlignment}`)
   // Strategic detail (solution plays table, marketplace, correlations) — consolidated under Sales Alignment
   if (strategicOpportunities) sections.push(strategicOpportunities)
+  // #672: Competitive landscape — after strategic opportunities
+  if (competitiveLandscape) sections.push(competitiveLandscape)
   // Talk tracks and positioning detail — only in narrativeContext, not deterministic (avoids duplication)
   // saleshubContext feeds Gemini but doesn't render as a separate visible section
   if (productAlignment) sections.push(`## Product Alignment\n\n${productAlignment}`)
@@ -856,6 +919,16 @@ export async function templateAll(
   // Legacy intelligence context passthrough (campaigns only)
   if (options.intelligenceContext && options.format === 'campaign') {
     narrativeContext = `${narrativeContext}\n\nCompany Intelligence:\n${options.intelligenceContext}`
+  }
+
+  // #672: Append competitive signals to narrative context so Gemini can reference them
+  const competitiveNarrative = filteredSignals
+    .filter(s => routeSignal(s) === 'competitive')
+    .slice(0, 5)
+    .map(s => `[competitive] ${s.headline}: ${s.detail}`)
+    .join('\n')
+  if (competitiveNarrative) {
+    narrativeContext = `${narrativeContext}\n\nCompetitive Intelligence:\n${competitiveNarrative}`
   }
 
   // Append SalesHub talk tracks to narrative context so Gemini uses the language
