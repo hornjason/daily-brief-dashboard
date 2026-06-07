@@ -962,30 +962,9 @@ export async function generateMeetingPrep(
   // Merge meeting-specific signals with registry signals
   const rawSignals = [...(signalData.registrySignals ?? []), ...meetingSignals]
 
-  // Apply audience filter (#644) — strip sensitive data before Gemini
-  // Convert signals to evidence block shape for filtering, then extract back
-  const signalsAsBlocks: EvidenceBlock[] = rawSignals.map((s: any) => ({
-    title: s.headline ?? s.source ?? '',
-    source: s.source ?? '',
-    content: s.detail ?? '',
-    metadata: s.metadata ?? {},
-    availableLevers: s.metadata?.availableLevers ?? [],
-    evidenceItems: [
-      ...(s.metadata?.evidenceItems ?? []),
-      // Also treat the signal itself as an evidence item for pipeline $ filtering
-      { text: `${s.headline ?? ''} ${s.detail ?? ''}`, source: s.source ?? '' },
-    ],
-  }))
-  const filteredBlocks = filterForAudience(signalsAsBlocks, audienceType)
-
-  // Map filtered blocks back — for internal, use raw signals directly
-  const allSignals = audienceType === 'internal'
-    ? rawSignals
-    : rawSignals.filter((_: any, i: number) => {
-        const block = filteredBlocks[i]
-        // If the signal's self-evidence-item was stripped (pipeline $ for partner), exclude it
-        return block.evidenceItems.length > 0
-      })
+  // Audience filter (#644) is applied later to evidence blocks, not raw signals.
+  // Raw signals pass through to templateAll() for deterministic sections.
+  const allSignals = rawSignals
 
   // Call templateAll — PRINCIPLES.md Layer 3 compliance
   const templateResult = await templateAll(allSignals, accountTeam, {
@@ -998,8 +977,10 @@ export async function generateMeetingPrep(
   const evidenceBlocks = graphScoring.graphLoaded
     ? buildEvidenceBlocks(graphScoring.scoredTactics, allSignals, accountTeam)
     : []
-  if (evidenceBlocks.length > 0) {
-    console.log(`[meeting-prep] Built ${evidenceBlocks.length} evidence blocks: ${evidenceBlocks.map(b => `${b.playName} (${b.compositeScore.toFixed(2)})`).join(', ')}`)
+  // Apply audience filter (#644) to evidence blocks before Gemini
+  const filteredEvidenceBlocks = filterForAudience(evidenceBlocks, audienceType)
+  if (filteredEvidenceBlocks.length > 0) {
+    console.log(`[meeting-prep] Built ${filteredEvidenceBlocks.length} evidence blocks (audience: ${audienceType}): ${filteredEvidenceBlocks.map(b => `${b.playName} (${b.compositeScore.toFixed(2)})`).join(', ')}`)
   }
 
   // ── Step 3: Filter cases to this customer ──────────────────────────────
@@ -1090,11 +1071,11 @@ export async function generateMeetingPrep(
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
     // ── Build evidence blocks context for prompt (#643) ────────────────
-    const evidenceBlocksContext = formatEvidenceBlocksForPrompt(evidenceBlocks)
+    const evidenceBlocksContext = formatEvidenceBlocksForPrompt(filteredEvidenceBlocks)
 
     // Build shorter, focused Gemini prompt using playbook intelligence
     // When evidence blocks are available, use the assertive 4-section format (#643)
-    const derivedSystemPrompt = evidenceBlocks.length > 0
+    const derivedSystemPrompt = filteredEvidenceBlocks.length > 0
       ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
 
 VOICE RULES (CRITICAL):
@@ -1126,7 +1107,7 @@ FORMAT RULES:
 - Action Items use bullets with phase markers (Pre-meeting/During/Post-meeting), specific names, and dates`
 
     // ── User prompt: evidence-block path (4-section) or legacy path (7-section) ──
-    const derivedUserPrompt = evidenceBlocks.length > 0
+    const derivedUserPrompt = filteredEvidenceBlocks.length > 0
       ? `Generate an assertive 4-section meeting prep using the evidence blocks below.
 
 ## Meeting Details
@@ -1370,9 +1351,9 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
     // ── Build evidence blocks context for standard path (#643) ────────
-    const evidenceBlocksContextStd = formatEvidenceBlocksForPrompt(evidenceBlocks)
+    const evidenceBlocksContextStd = formatEvidenceBlocksForPrompt(filteredEvidenceBlocks)
 
-    const systemPrompt = evidenceBlocks.length > 0
+    const systemPrompt = filteredEvidenceBlocks.length > 0
       ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
 
 VOICE RULES (CRITICAL):
@@ -1406,7 +1387,7 @@ FORMAT RULES:
 - NO generic value statements. "Improves efficiency" is forbidden. Be specific.
 - Only include products the customer subscribes to in the Value Play.`
 
-    const userPrompt = evidenceBlocks.length > 0
+    const userPrompt = filteredEvidenceBlocks.length > 0
       ? `Generate an assertive 4-section meeting prep using the evidence blocks below.
 
 ## Meeting Details
@@ -1641,8 +1622,8 @@ Use the Product & Market Intelligence context above to identify the most relevan
 
   // ── Step 4f: Post-generation validation (#643) ────────────────────────
   // Validate that Gemini didn't fabricate case numbers, dollar amounts, or names
-  if (evidenceBlocks.length > 0) {
-    const validation = validateMeetingPrepOutput(prepContent, evidenceBlocks, accountTeam)
+  if (filteredEvidenceBlocks.length > 0) {
+    const validation = validateMeetingPrepOutput(prepContent, filteredEvidenceBlocks, accountTeam)
     if (!validation.valid) {
       console.warn(`[meeting-prep] Post-generation validation warnings for ${customer.name}:`)
       for (const warning of validation.warnings) {

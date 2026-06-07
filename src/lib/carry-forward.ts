@@ -10,18 +10,9 @@
  */
 
 import type { PrepHistoryEntry } from '../meeting-prep-service.ts'
+import type { EvidenceBlock } from './evidence-block-builder.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-/** Minimal evidence block interface for carry-forward (avoids circular deps) */
-export interface EvidenceBlock {
-  playName: string
-  compositeScore: number
-  evidenceTrail: Array<{ fact: string; source: string; recency: string }>
-  availableLevers: Array<{ name: string; description: string; url: string; validThrough?: string; source: string }>
-  teamContext: string
-  proposedAsk: string
-}
 
 export interface RecommendedPlay {
   playName: string

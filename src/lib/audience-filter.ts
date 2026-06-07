@@ -14,33 +14,11 @@ import { detectPartnerDomains } from '../meeting-prep-service.ts'
 import { loadPartnersFromConfig, findPartnerByDomain, matchPartnersToProducts } from './partner-catalog.ts'
 import { toSlug } from '../cache-layer.ts'
 import type { Customer } from '../types.ts'
+import type { EvidenceBlock } from './evidence-block-builder.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type AudienceType = 'customer' | 'partner' | 'internal'
-
-export interface EvidenceBlock {
-  title: string
-  source: string
-  content: string
-  metadata: Record<string, any>
-  availableLevers: Lever[]
-  evidenceItems: EvidenceItem[]
-  [key: string]: any
-}
-
-export interface Lever {
-  name: string
-  source: string
-  description: string
-  [key: string]: any
-}
-
-export interface EvidenceItem {
-  text: string
-  source: string
-  [key: string]: any
-}
 
 export interface CustomerMatch {
   customerName: string
@@ -81,17 +59,17 @@ export function filterForAudience(
       lever => !INTERNAL_LEVER_SOURCES.has(lever.source)
     )
 
-    let filteredEvidence: EvidenceItem[]
+    let filteredEvidence: typeof block.evidenceTrail
 
     if (audienceType === 'customer') {
-      filteredEvidence = block.evidenceItems.filter(
+      filteredEvidence = block.evidenceTrail.filter(
         item => !COMPETITIVE_SOURCES.has(item.source)
       )
     } else {
       // Partner: strip competitive intel AND pipeline dollar amounts
-      filteredEvidence = block.evidenceItems.filter(item => {
+      filteredEvidence = block.evidenceTrail.filter(item => {
         if (COMPETITIVE_SOURCES.has(item.source)) return false
-        if (DOLLAR_AMOUNT_RE.test(item.text)) return false
+        if (DOLLAR_AMOUNT_RE.test(item.fact)) return false
         return true
       })
     }
@@ -99,7 +77,7 @@ export function filterForAudience(
     return {
       ...block,
       availableLevers: filteredLevers,
-      evidenceItems: filteredEvidence,
+      evidenceTrail: filteredEvidence,
     }
   })
 }

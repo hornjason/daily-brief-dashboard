@@ -24,12 +24,12 @@ beforeAll(async () => {
 
 function makeEvidenceBlock(overrides: Partial<any> = {}): any {
   return {
-    title: 'Test Block',
-    source: 'pipeline',
-    content: 'Some content',
-    metadata: {},
+    playName: 'Test Play',
+    compositeScore: 0.75,
+    evidenceTrail: [],
     availableLevers: [],
-    evidenceItems: [],
+    teamContext: 'SSP Test',
+    proposedAsk: 'Test ask',
     ...overrides,
   }
 }
@@ -39,14 +39,16 @@ function makeLever(overrides: Partial<any> = {}): any {
     name: 'Test Lever',
     source: 'product',
     description: 'A lever',
+    url: 'https://example.com',
     ...overrides,
   }
 }
 
 function makeEvidenceItem(overrides: Partial<any> = {}): any {
   return {
-    text: 'Evidence text',
+    fact: 'Evidence fact',
     source: 'intelligence',
+    recency: 'current',
     ...overrides,
   }
 }
@@ -106,26 +108,26 @@ describe('filterForAudience — Customer', () => {
 
   it('strips evidence items with source "competitive-intel"', () => {
     const block = makeEvidenceBlock({
-      evidenceItems: [
-        makeEvidenceItem({ text: 'Competitor is weak here', source: 'competitive-intel' }),
-        makeEvidenceItem({ text: 'Customer uses RHEL 9', source: 'subscriptions' }),
+      evidenceTrail: [
+        makeEvidenceItem({ fact: 'Competitor is weak here', source: 'competitive-intel' }),
+        makeEvidenceItem({ fact: 'Customer uses RHEL 9', source: 'subscriptions' }),
       ],
     })
 
     const [filtered] = filterForAudience([block], 'customer')
-    expect(filtered.evidenceItems).toHaveLength(1)
-    expect(filtered.evidenceItems[0].source).toBe('subscriptions')
+    expect(filtered.evidenceTrail).toHaveLength(1)
+    expect(filtered.evidenceTrail[0].source).toBe('subscriptions')
   })
 
   it('keeps blocks with no sensitive content unchanged', () => {
     const block = makeEvidenceBlock({
       availableLevers: [makeLever({ source: 'product' })],
-      evidenceItems: [makeEvidenceItem({ source: 'intelligence' })],
+      evidenceTrail: [makeEvidenceItem({ source: 'intelligence' })],
     })
 
     const [filtered] = filterForAudience([block], 'customer')
     expect(filtered.availableLevers).toHaveLength(1)
-    expect(filtered.evidenceItems).toHaveLength(1)
+    expect(filtered.evidenceTrail).toHaveLength(1)
   })
 })
 
@@ -152,29 +154,29 @@ describe('filterForAudience — Partner', () => {
 
   it('strips evidence items containing pipeline dollar amounts', () => {
     const block = makeEvidenceBlock({
-      evidenceItems: [
-        makeEvidenceItem({ text: 'Pipeline worth $1.2M in Q3', source: 'pipeline' }),
-        makeEvidenceItem({ text: 'Customer evaluating OpenShift', source: 'intelligence' }),
-        makeEvidenceItem({ text: 'Deal value: $500,000', source: 'pipeline' }),
+      evidenceTrail: [
+        makeEvidenceItem({ fact: 'Pipeline worth $1.2M in Q3', source: 'pipeline' }),
+        makeEvidenceItem({ fact: 'Customer evaluating OpenShift', source: 'intelligence' }),
+        makeEvidenceItem({ fact: 'Deal value: $500,000', source: 'pipeline' }),
       ],
     })
 
     const [filtered] = filterForAudience([block], 'partner')
-    expect(filtered.evidenceItems).toHaveLength(1)
-    expect(filtered.evidenceItems[0].text).toBe('Customer evaluating OpenShift')
+    expect(filtered.evidenceTrail).toHaveLength(1)
+    expect(filtered.evidenceTrail[0].fact).toBe('Customer evaluating OpenShift')
   })
 
   it('strips evidence items with source "competitive-intel"', () => {
     const block = makeEvidenceBlock({
-      evidenceItems: [
-        makeEvidenceItem({ text: 'VMware displacement opportunity', source: 'competitive-intel' }),
-        makeEvidenceItem({ text: 'Using Ansible for automation', source: 'tech-stack' }),
+      evidenceTrail: [
+        makeEvidenceItem({ fact: 'VMware displacement opportunity', source: 'competitive-intel' }),
+        makeEvidenceItem({ fact: 'Using Ansible for automation', source: 'tech-stack' }),
       ],
     })
 
     const [filtered] = filterForAudience([block], 'partner')
-    expect(filtered.evidenceItems).toHaveLength(1)
-    expect(filtered.evidenceItems[0].source).toBe('tech-stack')
+    expect(filtered.evidenceTrail).toHaveLength(1)
+    expect(filtered.evidenceTrail[0].source).toBe('tech-stack')
   })
 
   it('keeps partner-relevant levers (ecosystem, marketplace)', () => {
@@ -200,16 +202,16 @@ describe('filterForAudience — Internal', () => {
         makeLever({ source: 'internal-incentive' }),
         makeLever({ source: 'product' }),
       ],
-      evidenceItems: [
+      evidenceTrail: [
         makeEvidenceItem({ source: 'competitive-intel' }),
-        makeEvidenceItem({ text: 'Pipeline: $2M', source: 'pipeline' }),
+        makeEvidenceItem({ fact: 'Pipeline: $2M', source: 'pipeline' }),
         makeEvidenceItem({ source: 'intelligence' }),
       ],
     })
 
     const [filtered] = filterForAudience([block], 'internal')
     expect(filtered.availableLevers).toHaveLength(3)
-    expect(filtered.evidenceItems).toHaveLength(3)
+    expect(filtered.evidenceTrail).toHaveLength(3)
   })
 
   it('returns the same array reference for internal (no copy overhead)', () => {
