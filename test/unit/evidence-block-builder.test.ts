@@ -16,6 +16,7 @@ import {
   extractKeyDataPoint,
   type EvidenceBlock,
   type EvidenceItem,
+  type DataPoint,
   type Lever,
 } from '../../src/lib/evidence-block-builder.ts'
 
@@ -251,33 +252,35 @@ describe('AC-16: lever extraction from specific signal sources', () => {
 
 // ── #653: Data-driven proposed asks ─────────────────────────────────────────
 
-describe('#653: extractKeyDataPoint()', () => {
-  it('extracts subscription counts from evidence', () => {
+describe('#653/#658: extractKeyDataPoint()', () => {
+  it('returns DataPoint with primary from EOS date (highest priority)', () => {
     const evidence: EvidenceItem[] = [
       { fact: '47 RHEL 7 subscriptions, EOS 2027-06-30', source: 'subscriptions', recency: 'current' },
     ]
-    expect(extractKeyDataPoint(evidence)).toBe('47 RHEL 7 subscriptions')
+    const result = extractKeyDataPoint(evidence)
+    expect(result.primary).toBe('EOS 2027-06-30')
+    expect(result.secondary).toBe('47 RHEL 7 subscriptions')
   })
 
-  it('extracts EOS dates from evidence', () => {
+  it('extracts EOS dates as primary from evidence', () => {
     const evidence: EvidenceItem[] = [
       { fact: 'Product approaching EOS 2027-06-30', source: 'lifecycle', recency: 'current' },
     ]
-    expect(extractKeyDataPoint(evidence)).toBe('EOS 2027-06-30')
+    expect(extractKeyDataPoint(evidence).primary).toBe('EOS 2027-06-30')
   })
 
   it('extracts case numbers from evidence', () => {
     const evidence: EvidenceItem[] = [
       { fact: 'Case #12345678: kernel panic on RHEL 7.9', source: 'cases', recency: '2d ago' },
     ]
-    expect(extractKeyDataPoint(evidence)).toBe('case #12345678')
+    expect(extractKeyDataPoint(evidence).primary).toBe('case #12345678')
   })
 
   it('extracts dollar amounts from evidence', () => {
     const evidence: EvidenceItem[] = [
       { fact: 'Pipeline opportunity worth $1,234,567', source: 'pipeline', recency: 'current' },
     ]
-    expect(extractKeyDataPoint(evidence)).toBe('$1,234,567')
+    expect(extractKeyDataPoint(evidence).primary).toBe('$1,234,567')
   })
 
   it('falls back to truncated first fact when no pattern matches', () => {
@@ -285,12 +288,45 @@ describe('#653: extractKeyDataPoint()', () => {
       { fact: 'Customer expressed interest in container security solutions', source: 'notes', recency: 'current' },
     ]
     const result = extractKeyDataPoint(evidence)
-    expect(result.length).toBeLessThanOrEqual(60)
-    expect(result).toContain('container security')
+    expect(result.primary.length).toBeLessThanOrEqual(60)
+    expect(result.primary).toContain('container security')
+    expect(result.secondary).toBeUndefined()
   })
 
-  it('returns empty string for empty evidence array', () => {
-    expect(extractKeyDataPoint([])).toBe('')
+  it('returns empty primary for empty evidence array', () => {
+    expect(extractKeyDataPoint([]).primary).toBe('')
+  })
+
+  it('#658: evidence with sub count AND EOS date returns EOS date as primary', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: '47 RHEL 7 subscriptions approaching end of life', source: 'subscriptions', recency: 'current' },
+      { fact: 'EOS 2027-06-30 for RHEL 7', source: 'lifecycle', recency: 'current' },
+    ]
+    const result = extractKeyDataPoint(evidence)
+    expect(result.primary).toBe('EOS 2027-06-30')
+    expect(result.secondary).toBe('47 RHEL 7 subscriptions')
+  })
+
+  it('#658: priority order dates > dollars > cases > subs', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: '47 RHEL subscriptions total', source: 'subscriptions', recency: 'current' },
+      { fact: 'Case #99887766 open since last week', source: 'cases', recency: '2d ago' },
+      { fact: 'Pipeline opportunity worth $500K', source: 'pipeline', recency: 'current' },
+      { fact: 'Renewal closing 2027-01-15', source: 'lifecycle', recency: 'current' },
+    ]
+    const result = extractKeyDataPoint(evidence)
+    expect(result.primary).toBe('closing 2027-01-15')
+    expect(result.secondary).toBe('$500K')
+  })
+
+  it('#658: scans ALL evidence items, not just first match', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: 'General interest in containers', source: 'notes', recency: 'current' },
+      { fact: 'No specific data here either', source: 'notes', recency: 'current' },
+      { fact: 'But this one has $2M pipeline', source: 'pipeline', recency: 'current' },
+    ]
+    const result = extractKeyDataPoint(evidence)
+    expect(result.primary).toBe('$2M')
   })
 })
 
@@ -333,5 +369,20 @@ describe('#653: data-driven proposed asks in buildEvidenceBlocks', () => {
     })
     const blocks = buildEvidenceBlocks([tactic], [], mockTeamLocal)
     expect(blocks[0].proposedAsk).toContain('case #98765432')
+  })
+
+  it('#658: compound ask includes both primary and secondary data points', () => {
+    const tactic = makeScoredTactic({
+      name: 'RHEL Migration',
+      compositeScore: 0.85,
+      evidenceTrail: [
+        { fact: '47 RHEL 7 subscriptions, EOS 2027-06-30', module: 'subscriptions', recency: 'current', weight: 0.9 },
+        { fact: 'Pipeline opportunity worth $500K for migration', module: 'pipeline', recency: 'current', weight: 0.7 },
+      ],
+    })
+    const blocks = buildEvidenceBlocks([tactic], [], mockTeamLocal)
+    // EOS date is primary (highest priority), dollar amount is secondary
+    expect(blocks[0].proposedAsk).toContain('EOS 2027-06-30')
+    expect(blocks[0].proposedAsk).toContain('$500K')
   })
 })

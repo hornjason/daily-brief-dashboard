@@ -297,27 +297,46 @@ function findRelevantTeamMember(team: AccountTeamMember[], domainKeys: string[])
 }
 
 /**
- * Extract a key data point from evidence for injection into proposed asks (#653).
- * Looks for subscription counts, dates, case numbers, dollar amounts — concrete facts.
+ * Structured data point extracted from evidence (#658).
+ * Primary is highest-priority match; secondary provides compound context.
+ */
+export interface DataPoint {
+  primary: string
+  secondary?: string
+}
+
+/**
+ * Extract key data points from evidence for injection into proposed asks (#653, #658).
+ * Scans ALL evidence items and collects matches by type.
+ * Priority order: EOS/expiry dates > dollar amounts > case numbers > subscription counts.
+ * Returns primary + optional secondary data point for compound asks.
  * Exported for testing.
  */
-export function extractKeyDataPoint(evidence: EvidenceItem[]): string {
+export function extractKeyDataPoint(evidence: EvidenceItem[]): DataPoint {
+  const dates: string[] = []
+  const dollars: string[] = []
+  const cases: string[] = []
+  const subs: string[] = []
+
   for (const e of evidence) {
-    // Subscription counts: "47 RHEL 7 subscriptions"
-    const subMatch = e.fact.match(/(\d+)\s+\w[\w\s]*subscriptions?/i)
-    if (subMatch) return subMatch[0]
-    // Dates with context: "EOS 2027-06-30", "renewal 2026-12-01", "expiring 2027-01-15"
     const dateMatch = e.fact.match(/\b(EOS|EOL|expir\w*|renew\w*|closing)\s+(\d{4}-\d{2}-\d{2})/i)
-    if (dateMatch) return `${dateMatch[1]} ${dateMatch[2]}`
-    // Case numbers: "case #12345678" or "Case 12345678"
-    const caseMatch = e.fact.match(/case\s*#?(\d{6,})/i)
-    if (caseMatch) return `case #${caseMatch[1]}`
-    // Dollar amounts: "$1,234,567" or "$50K"
+    if (dateMatch) dates.push(`${dateMatch[1]} ${dateMatch[2]}`)
     const dollarMatch = e.fact.match(/\$[\d,]+[KMB]?/i)
-    if (dollarMatch) return dollarMatch[0]
+    if (dollarMatch) dollars.push(dollarMatch[0])
+    const caseMatch = e.fact.match(/case\s*#?(\d{6,})/i)
+    if (caseMatch) cases.push(`case #${caseMatch[1]}`)
+    const subMatch = e.fact.match(/(\d+)\s+\w[\w\s]*subscriptions?/i)
+    if (subMatch) subs.push(subMatch[0])
   }
-  // Fallback: first 60 chars of first evidence fact
-  return evidence[0]?.fact?.slice(0, 60) || ''
+
+  // Priority order: dates > dollars > cases > subs
+  const all = [...dates, ...dollars, ...cases, ...subs]
+  if (all.length === 0) return { primary: evidence[0]?.fact?.slice(0, 60) || '' }
+
+  return {
+    primary: all[0],
+    secondary: all.length > 1 ? all[1] : undefined,
+  }
 }
 
 /**
@@ -330,7 +349,8 @@ function generateProposedAsk(
   levers: Lever[],
 ): string {
   const name = tactic.name.toLowerCase()
-  const keyDataPoint = extractKeyDataPoint(evidence)
+  const dataPoint = extractKeyDataPoint(evidence)
+  const keyDataPoint = dataPoint.primary
 
   // Check for migration-related evidence
   const hasMigrationEvidence = evidence.some(e =>
@@ -352,15 +372,17 @@ function generateProposedAsk(
   const hasIncentives = levers.some(l => l.source === 'cloud-marketplace')
 
   if (hasMigrationEvidence) {
-    const detail = keyDataPoint ? `for ${keyDataPoint}` : 'with the customer\'s infrastructure team'
+    const detail = keyDataPoint
+      ? `for ${keyDataPoint}${dataPoint.secondary ? ` (${dataPoint.secondary})` : ''}`
+      : 'with the customer\'s infrastructure team'
     return `Request migration planning ${detail}. ${hasIncentives ? 'Highlight available migration credits.' : ''}`.trim()
   }
 
   if (hasCaseEvidence && hasRenewalEvidence) {
     const caseDetail = evidence.find(e => e.source === 'cases')
-    const casePoint = caseDetail ? extractKeyDataPoint([caseDetail]) : ''
+    const casePoint = caseDetail ? extractKeyDataPoint([caseDetail]).primary : ''
     const renewalDetail = evidence.find(e => e.fact.toLowerCase().includes('renewal') || e.fact.toLowerCase().includes('expir'))
-    const renewalPoint = renewalDetail ? extractKeyDataPoint([renewalDetail]) : ''
+    const renewalPoint = renewalDetail ? extractKeyDataPoint([renewalDetail]).primary : ''
     return `Connect resolution of ${casePoint || 'open cases'} to ${renewalPoint || 'renewal timeline'}. Propose an upgrade path that addresses current issues.`
   }
 

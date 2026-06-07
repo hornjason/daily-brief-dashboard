@@ -41,7 +41,7 @@ import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt } from './lib/meeting-prep-graph-integration.ts'
 import { buildEvidenceBlocks, type EvidenceBlock } from './lib/evidence-block-builder.ts'
-import { validateMeetingPrepOutput } from './lib/meeting-prep-validation.ts'
+import { applyDeterministicOverrides } from './lib/deterministic-overrides.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
   extractActionItems,
@@ -1578,89 +1578,16 @@ Use the Product & Market Intelligence context above to identify the most relevan
     }
   }
 
-  // ── Step 4c: Deterministic pipeline section (#446) ────────────────────
-  // Replace Gemini's pipeline section with real data from pipeline signals.
-  // Gemini invents fake opp names with "undisclosed" amounts.
-  const pipelineSignals = (signalData.registrySignals ?? []).filter((s: any) => s.source === 'pipeline')
-  if (pipelineSignals.length > 0) {
-    const openPipeline = pipelineSignals.filter((s: any) => {
-      const stage = (s.metadata?.stage ?? '').toLowerCase()
-      return !stage.includes('closed')
-    })
-    if (openPipeline.length > 0) {
-      const pipelineLines = openPipeline.map((s: any) => {
-        const m = s.metadata ?? {}
-        const name = m.opportunityName ?? s.headline ?? 'Unknown'
-        const amount = m.amount ? `$${Number(m.amount).toLocaleString()}` : ''
-        const close = m.closeDate ?? ''
-        const stage = m.stage ?? ''
-        return `- **${name}:** ${amount}${close ? `, closing ${close}` : ''}${stage ? ` [${stage}]` : ''}`
-      })
-      const deterministicPipeline = `### 7. Pipeline Opportunities\n${pipelineLines.join('\n')}`
-      const p7Start = prepContent.indexOf('### 7.')
-      const p8Start = prepContent.indexOf('### 8.')
-      if (p7Start !== -1 && p8Start !== -1) {
-        prepContent = prepContent.slice(0, p7Start) + deterministicPipeline + '\n\n' + prepContent.slice(p8Start)
-        console.log(`[meeting-prep] Deterministic pipeline section injected (${openPipeline.length} opps)`)
-      }
-    }
-  }
-
-  // ── Step 4d: Deterministic attendee list (#446) ───────────────────────
-  // Replace Gemini's "Who's in the Room" with a clean list from calendar data.
-  // Gemini ignores "ONLY list calendar attendees" and dumps the full account team.
-  const calendarAttendees = (meeting.attendees ?? []).filter(Boolean)
-  if (calendarAttendees.length > 0) {
-    const attendeeLines = calendarAttendees.map(email => {
-      const isInternal = email.endsWith('@redhat.com')
-      if (isInternal) {
-        const name = getAttendeeDisplayName(meeting, email)
-        const teamMember = accountTeam.find(m =>
-          m.name.toLowerCase().includes(name.split(' ')[0].toLowerCase())
-        )
-        return `- **${name}**${teamMember ? `, ${teamMember.role.toUpperCase()}` : ''}`
-      }
-      // #654: Use enriched name (title + company) from resolved profiles for external attendees
-      const profile = resolvedProfiles.find(p => p.email === email)
-      if (profile?.resolved && profile.title) {
-        return `- **${profile.name}, ${profile.title} at ${profile.company}**`
-      }
-      // Unresolved: fall back to display name + domain
-      const displayName = getAttendeeDisplayName(meeting, email)
-      return `- **${displayName}** (${email.split('@')[1]?.replace(/\.\w+$/, '') ?? 'external'})`
-    })
-    const deterministicSection2 = `### 2. Who's in the Room\n${attendeeLines.join('\n')}`
-    const s2Start = prepContent.indexOf('### 2.')
-    const s3Start = prepContent.indexOf('### 3.')
-    if (s2Start !== -1 && s3Start !== -1) {
-      prepContent = prepContent.slice(0, s2Start) + deterministicSection2 + '\n\n' + prepContent.slice(s3Start)
-    }
-  }
-
-  // ── Step 4f: Post-generation validation (#643) ────────────────────────
-  // Validate that Gemini didn't fabricate case numbers, dollar amounts, or names
-  if (filteredEvidenceBlocks.length > 0) {
-    const validation = validateMeetingPrepOutput(prepContent, filteredEvidenceBlocks, accountTeam, templateResult.deterministic)
-    if (!validation.valid) {
-      console.warn(`[meeting-prep] Post-generation validation warnings for ${customer.name}:`)
-      for (const warning of validation.warnings) {
-        console.warn(`  - ${warning}`)
-      }
-      // Strip fabricated data points from output
-      for (const warning of validation.warnings) {
-        const caseMatch = warning.match(/case.*?number.*?(\d{7,10})/i)
-        if (caseMatch) {
-          // Add a warning comment next to fabricated case numbers
-          prepContent = prepContent.replace(
-            new RegExp(`\\b${caseMatch[1]}\\b`, 'g'),
-            `${caseMatch[1]} [⚠ UNVERIFIED]`
-          )
-        }
-      }
-    } else {
-      console.log(`[meeting-prep] Post-generation validation passed for ${customer.name} — all data points verified`)
-    }
-  }
+  // ── Steps 4c/4d/4f: Deterministic overrides (#657) ─────────────────────
+  // Pipeline section, attendee list, and post-generation validation
+  // extracted to src/lib/deterministic-overrides.ts
+  const overrideResult = applyDeterministicOverrides({
+    prepContent, signalData, meeting, accountTeam,
+    resolvedProfiles, filteredEvidenceBlocks, templateResult,
+    getAttendeeDisplayName, getEnrichedAttendeeName,
+    customerName: customer.name,
+  })
+  prepContent = overrideResult.content
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
 
@@ -1774,7 +1701,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
     recurringEventId: meeting.recurringEventId,
     actionItems: generatedActionItems.length > 0 ? generatedActionItems : undefined,
     docId,
-    attendeeEmails: calendarAttendees.length > 0 ? calendarAttendees : undefined, // #655: for cross-ref resolution
+    attendeeEmails: (meeting.attendees ?? []).filter(Boolean).length > 0 ? (meeting.attendees ?? []).filter(Boolean) : undefined, // #655: for cross-ref resolution
     recommendedPlays: recommendedPlays.length > 0 ? recommendedPlays : undefined,
   }
 
