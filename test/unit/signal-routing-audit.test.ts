@@ -3,7 +3,7 @@
  * Verifies that all signal sources route to appropriate template sections.
  */
 import { test, expect, describe } from 'bun:test'
-import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack, templateCompetitiveLandscape, templateIntelligence, templateSalesHubInsights, templateStrategicOpportunities, templateAll } from '../../src/lib/signal-templates.ts'
+import { templateProductAlignment, templateCloudMarketplace, templateCases, templateRenewals, templateTechStack, templateCompetitiveLandscape, templateIntelligence, templateSalesHubInsights, templateEmailIntelligence, templateStrategicOpportunities, templateAll } from '../../src/lib/signal-templates.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
 
 function makeSignal(overrides: Partial<Signal>): Signal {
@@ -178,7 +178,38 @@ describe('routeSignal coverage — #325 audit', () => {
     })
     // Must NOT appear in product alignment
     expect(templateProductAlignment([signal])).toBeNull()
-    // Must NOT appear in cloud, cases, renewals, tech
+    expect(templateCloudMarketplace([signal])).toBeNull()
+    expect(templateCases([signal])).toBeNull()
+    expect(templateRenewals([signal])).toBeNull()
+    expect(templateTechStack([signal])).toBeNull()
+  })
+
+  // #674: Email signal routing
+  test('emails source signals route to email section (#674)', () => {
+    const signal = makeSignal({
+      source: 'emails',
+      type: 'intelligence',
+      headline: 'OpenShift evaluation discussion',
+      detail: 'CTO mentioned evaluating OpenShift for container platform',
+      metadata: {
+        from: 'john.doe@acme.com',
+        to: 'jane.smith@redhat.com',
+        classification: 'Technical Discussion',
+        techMentions: ['OpenShift', 'Kubernetes'],
+        competitiveMentions: ['VMware Tanzu'],
+        actionItems: ['Schedule follow-up demo', 'Send pricing sheet'],
+      },
+    })
+    const result = templateEmailIntelligence([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Email Intelligence')
+    expect(result).toContain('john.doe@acme.com')
+    expect(result).toContain('Technical Discussion')
+    expect(result).toContain('OpenShift, Kubernetes')
+    expect(result).toContain('VMware Tanzu')
+    expect(result).toContain('Action Items')
+    expect(result).toContain('Schedule follow-up demo')
+    expect(templateProductAlignment([signal])).toBeNull()
     expect(templateCloudMarketplace([signal])).toBeNull()
     expect(templateCases([signal])).toBeNull()
     expect(templateRenewals([signal])).toBeNull()
@@ -219,7 +250,6 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(result).toContain('Certs: 42')
   })
 
-  // #673: SalesHub signal routing
   test('saleshub-tactics source routes to saleshub (#673)', () => {
     const signal = makeSignal({
       source: 'saleshub-tactics',
@@ -237,7 +267,6 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(result).toContain('Active Tactics')
     expect(result).toContain('Migrate VMware workloads')
     expect(result).toContain('Virtualization')
-    // Must NOT appear in product alignment
     expect(templateProductAlignment([signal])).toBeNull()
   })
 
@@ -257,8 +286,41 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(result).toContain('Strategic Plays')
     expect(result).toContain('Modernize Infrastructure')
     expect(result).toContain('Virtualization, Server/Cloud OS')
-    // Must NOT appear in product alignment
     expect(templateProductAlignment([signal])).toBeNull()
+  })
+
+  test('emails signals without action items omit Action Items section (#674)', () => {
+    const signal = makeSignal({
+      source: 'emails',
+      type: 'intelligence',
+      headline: 'Budget approval pending',
+      detail: 'CFO reviewing Q3 budget for infrastructure',
+      metadata: {
+        from: 'finance@acme.com',
+        classification: 'Business Update',
+      },
+    })
+    const result = templateEmailIntelligence([signal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('finance@acme.com')
+    expect(result).not.toContain('Action Items')
+  })
+
+  test('emails signals appear in templateAll deterministic output (#674)', async () => {
+    const signal = makeSignal({
+      source: 'emails',
+      type: 'intelligence',
+      headline: 'Ansible interest from VP Ops',
+      detail: 'VP of Operations asking about automation capabilities',
+      metadata: {
+        from: 'vp-ops@acme.com',
+        classification: 'Product Interest',
+        techMentions: ['Ansible'],
+      },
+    })
+    const result = await templateAll([signal])
+    expect(result.deterministic).toContain('Email Intelligence')
+    expect(result.deterministic).toContain('vp-ops@acme.com')
   })
 
   test('signals without routing metadata still reach narrativeContext', () => {
