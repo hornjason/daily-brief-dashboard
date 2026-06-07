@@ -81,8 +81,15 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'email' | 'other' {
   const m = signal.metadata ?? {}
+
+  // #672: Source-specific routing — before metadata checks so ecosystem signals
+  // with metadata.product don't incorrectly route to 'product'
+  if (signal.source === 'ecosystem-catalog') return 'ecosystem'
+  if (signal.source === 'competitive-intel') return 'competitive'
+  // #674: Email intelligence routing
+  if (signal.source === 'emails') return 'email'
 
   // Metadata-driven routing (most specific first)
   if (m.hasCloudSpend || m.provider) return 'cloud'
@@ -411,6 +418,62 @@ export function templateUpcomingEvents(signals: Signal[]): string | null {
   }
 
   return rows.join('\n')
+}
+
+/**
+ * Email Intelligence section (#674): signals from the emails module showing
+ * classified email insights, tech/competitive mentions, and action items.
+ *
+ * Renders: From, Classification, Headline, Tech mentions, Competitive mentions
+ * Groups by classification. Limits to 10 signals. Shows action items if present.
+ */
+export function templateEmailIntelligence(signals: Signal[]): string | null {
+  const emailSignals = signals.filter(s => routeSignal(s) === 'email').slice(0, 10)
+  if (emailSignals.length === 0) return null
+
+  // Group by classification
+  const byClassification = new Map<string, Signal[]>()
+  for (const s of emailSignals) {
+    const classification = String(s.metadata?.classification ?? 'uncategorized')
+    const group = byClassification.get(classification) ?? []
+    group.push(s)
+    byClassification.set(classification, group)
+  }
+
+  const lines: string[] = ['## Email Intelligence', '', '### Recent Insights']
+
+  for (const [classification, group] of byClassification) {
+    lines.push(`\n**${classification}**`)
+    for (const s of group) {
+      const m = s.metadata ?? {}
+      const from = String(m.from ?? 'Unknown')
+      const techMentions = Array.isArray(m.techMentions) ? m.techMentions.join(', ') : ''
+      const competitiveMentions = Array.isArray(m.competitiveMentions) ? m.competitiveMentions.join(', ') : ''
+      const parts = [`**${from}** (${classification}): ${s.headline}`]
+      if (techMentions) parts.push(`Tech: ${techMentions}`)
+      if (competitiveMentions) parts.push(`Competitive: ${competitiveMentions}`)
+      lines.push(`- ${parts.join(' — ')}`)
+    }
+  }
+
+  // Action items section — only if any signals have actionItems
+  const allActionItems: string[] = []
+  for (const s of emailSignals) {
+    const items = s.metadata?.actionItems
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        if (typeof item === 'string' && item.length > 0) allActionItems.push(item)
+      }
+    }
+  }
+  if (allActionItems.length > 0) {
+    lines.push('', '### Action Items')
+    for (const item of allActionItems) {
+      lines.push(`- ${item}`)
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**
@@ -793,6 +856,8 @@ export async function templateAll(
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
   const saleshubContext = templateSalesHubContext(filteredSignals)
   const upcomingEvents = templateUpcomingEvents(filteredSignals)
+  // #674: Email intelligence
+  const emailIntelligence = templateEmailIntelligence(filteredSignals)
 
   // #380: Account plan — render as text section for playbook/brief only
   const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
@@ -813,6 +878,8 @@ export async function templateAll(
   if (cloudMarketplace) sections.push(`## Cloud Marketplace\n\n${cloudMarketplace}`)
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
   if (cases) sections.push(`## Support Cases\n\n${cases}`)
+  // #674: Email intelligence — after cases
+  if (emailIntelligence) sections.push(emailIntelligence)
   if (techStack) sections.push(`## Technology Stack\n\n${techStack}`)
   if (upcomingEvents) sections.push(`## Upcoming Events\n\n${upcomingEvents}`)
   // #380: Account plan — long-form text, only in playbook/brief (not campaign)
