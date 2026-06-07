@@ -20,6 +20,7 @@ import { sanitizeErr } from './utils.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import {
   generateCampaign,
+  generateCampaignFromPlay,
   loadCampaignsFromCache,
   loadCampaignFromCache,
   deleteCampaignFromCache,
@@ -30,6 +31,7 @@ import {
   type CampaignRequest,
   type CampaignResult,
   type CampaignListItem,
+  type PlayContextRequest,
 } from './campaign-service.ts'
 
 // ── In-flight guard ──────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ export function createCampaignsRouter(): Hono {
   const router = new Hono()
 
   // POST /api/customer/:name/campaigns/generate
+  // Supports both materialUrl-based and playContext-based generation (#663)
   router.post('/api/customer/:name/campaigns/generate', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
@@ -50,15 +53,17 @@ export function createCampaignsRouter(): Hono {
 
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-    let body: CampaignRequest
+    let body: CampaignRequest & { playContext?: PlayContextRequest }
     try {
       body = await c.req.json()
     } catch {
       return c.json({ error: 'Invalid JSON body' }, 400)
     }
 
-    if (!body.materialUrl || typeof body.materialUrl !== 'string') {
-      return c.json({ error: 'materialUrl is required' }, 400)
+    // #663: Support play-based generation — playContext takes precedence over materialUrl
+    const hasPlayContext = body.playContext && body.playContext.playName
+    if (!hasPlayContext && (!body.materialUrl || typeof body.materialUrl !== 'string')) {
+      return c.json({ error: 'materialUrl or playContext is required' }, 400)
     }
 
     const slug = toSlug(customer.name)
@@ -68,7 +73,9 @@ export function createCampaignsRouter(): Hono {
 
     _campaignsInFlight.add(slug)
     try {
-      const result = await generateCampaign(customer, body.materialUrl, body)
+      const result = hasPlayContext
+        ? await generateCampaignFromPlay(customer, body.playContext!, body)
+        : await generateCampaign(customer, body.materialUrl, body)
       return c.json(result)
     } catch (e: any) {
       console.error(`[campaigns] Generation failed for ${customer.name}:`, e.message)

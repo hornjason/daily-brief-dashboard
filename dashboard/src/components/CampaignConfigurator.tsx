@@ -10,7 +10,8 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { RefreshCw, AlertCircle, Plus, Trash2 } from 'lucide-react'
+import { RefreshCw, AlertCircle, Plus, Trash2, Zap } from 'lucide-react'
+import { getPlayContext, type PlayContext } from '../lib/play-context-store'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ interface MaterialExtractionResponse {
   style: string
 }
 
-type FlowState = 'input' | 'loading' | 'preview' | 'error'
+type FlowState = 'input' | 'loading' | 'preview' | 'error' | 'play-generating' | 'play-done'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,9 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   })
   const [error, setError] = useState<string | null>(null)
   const autoAnalyzeTriggered = useRef(false)
+  // #663: Play context state for auto-generation from play bridge
+  const [playContext, setPlayContext] = useState<PlayContext | null>(null)
+  const [playResult, setPlayResult] = useState<{ driveUrl: string; htmlUrl: string } | null>(null)
 
   // Preview state — editable config
   const [materialTitle, setMaterialTitle] = useState('')
@@ -161,6 +165,60 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
     fetchAEVoice()
   }, [customerName])
 
+  // #663: Check for play context on mount and auto-generate
+  useEffect(() => {
+    const ctx = getPlayContext()
+    if (!ctx) return
+    setPlayContext(ctx)
+
+    // Auto-trigger play-based generation
+    setState('play-generating')
+    const generateFromPlay = async () => {
+      try {
+        const customerParam = ctx.customerSlug || (customerName ?? '')
+        const res = await fetch(`/api/customer/${encodeURIComponent(customerParam)}/campaigns/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playContext: {
+              playName: ctx.playName,
+              products: ctx.products,
+              valueProps: ctx.valueProps,
+              evidence: ctx.evidence,
+            },
+          }),
+        })
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Campaign generation failed' }))
+          setError(err.error || 'Campaign generation failed')
+          setState('error')
+          return
+        }
+
+        const result = await res.json()
+        setPlayResult({ driveUrl: result.driveUrl, htmlUrl: result.htmlUrl })
+        setState('play-done')
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Campaign generation failed')
+        setState('error')
+      }
+    }
+
+    generateFromPlay()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // #660: Auto-trigger analysis when materialUrl is pre-filled from URL params
+  useEffect(() => {
+    if (!autoAnalyzeTriggered.current && materialUrl && state === 'input') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('materialUrl')) {
+        autoAnalyzeTriggered.current = true
+        handleAnalyze()
+      }
+    }
+  }, [materialUrl, state]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Material extraction ────────────────────────────────────────────────────
 
   async function handleAnalyze() {
@@ -203,17 +261,6 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       setState('error')
     }
   }
-
-  // #660: Auto-trigger analysis when materialUrl is pre-filled from URL params
-  useEffect(() => {
-    if (!autoAnalyzeTriggered.current && materialUrl && state === 'input') {
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('materialUrl')) {
-        autoAnalyzeTriggered.current = true
-        handleAnalyze()
-      }
-    }
-  }, [materialUrl, state])
 
   async function handleReanalyze() {
     setState('loading')
@@ -304,6 +351,58 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   const hasEnabledPersona = personas.some(p => p.enabled)
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  // #663: Play-based generation states
+  if (state === 'play-generating' && playContext) {
+    return (
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center space-y-3">
+        <RefreshCw className="w-8 h-8 text-accent mx-auto animate-spin" />
+        <div className="flex items-center justify-center gap-2">
+          <Zap className="w-4 h-4 text-accent" />
+          <p className="text-sm text-text-primary font-medium">Generating from play: {playContext.playName}</p>
+        </div>
+        <p className="text-xs text-text-secondary">
+          Building campaign from play value propositions and customer intelligence...
+        </p>
+      </div>
+    )
+  }
+
+  if (state === 'play-done' && playContext && playResult) {
+    return (
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2 text-emerald-400">
+          <Zap className="w-5 h-5" />
+          <h2 className="text-base font-semibold">Campaign Generated from Play</h2>
+        </div>
+        <p className="text-sm text-text-secondary">
+          Campaign for <span className="text-text-primary font-medium">{playContext.playName}</span> has been generated.
+        </p>
+        <div className="flex gap-2">
+          {playResult.driveUrl && (
+            <a
+              href={playResult.driveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors"
+            >
+              View in Google Docs
+            </a>
+          )}
+          {playResult.htmlUrl && (
+            <a
+              href={playResult.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700 text-zinc-400 text-sm font-medium hover:bg-zinc-800 transition-colors"
+            >
+              View HTML
+            </a>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Input state
   if (state === 'input') {

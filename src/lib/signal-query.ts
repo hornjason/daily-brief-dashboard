@@ -56,6 +56,57 @@ export interface RecommendedAction {
 
 const MAX_RECOMMENDATIONS = 10
 
+// ── Play URL & Asset Resolution (#662) ───────────────────────────────────────
+
+/** Resolve a play's URL from linkedAssets, TDP cheatsheetUrl/customerDeckUrl, or ecosystem catalog */
+function resolvePlayUrl(play: any, saleshubKnowledge: any): string | undefined {
+  // 1. Check play.linkedAssets[0].url
+  if (Array.isArray(play.linkedAssets) && play.linkedAssets.length > 0) {
+    const firstAsset = play.linkedAssets.find((a: any) => a.url)
+    if (firstAsset?.url) return firstAsset.url
+  }
+
+  // 2. Check TDP data from saleshub-knowledge for cheatsheetUrl/customerDeckUrl
+  if (play.tdp && saleshubKnowledge?.tdps) {
+    const tdpEntries = saleshubKnowledge.tdpDetails ?? saleshubKnowledge.tdps
+    if (Array.isArray(tdpEntries)) {
+      const tdp = tdpEntries.find((t: any) =>
+        typeof t === 'object' && t.name?.toLowerCase() === play.tdp?.toLowerCase()
+      )
+      if (tdp?.cheatsheetUrl) return tdp.cheatsheetUrl
+      if (tdp?.customerDeckUrl) return tdp.customerDeckUrl
+    }
+  }
+
+  return undefined
+}
+
+/** Resolve play assets from linkedAssets and TDP data */
+function resolvePlayAssets(play: any, saleshubKnowledge: any): Array<{ name: string; url: string; type: string }> | undefined {
+  const assets: Array<{ name: string; url: string; type: string }> = []
+
+  // Collect linkedAssets
+  if (Array.isArray(play.linkedAssets)) {
+    for (const a of play.linkedAssets) {
+      if (a.url) assets.push({ name: a.name || play.name, url: a.url, type: a.type || 'document' })
+    }
+  }
+
+  // Collect TDP assets
+  if (play.tdp && saleshubKnowledge?.tdps) {
+    const tdpEntries = saleshubKnowledge.tdpDetails ?? saleshubKnowledge.tdps
+    if (Array.isArray(tdpEntries)) {
+      const tdp = tdpEntries.find((t: any) =>
+        typeof t === 'object' && t.name?.toLowerCase() === play.tdp?.toLowerCase()
+      )
+      if (tdp?.cheatsheetUrl) assets.push({ name: `${play.tdp} Cheat Sheet`, url: tdp.cheatsheetUrl, type: 'cheat-sheet' })
+      if (tdp?.customerDeckUrl) assets.push({ name: `${play.tdp} Customer Deck`, url: tdp.customerDeckUrl, type: 'customer-deck' })
+    }
+  }
+
+  return assets.length > 0 ? assets : undefined
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Extract technology names from signal metadata or headline */
@@ -205,12 +256,15 @@ export function getRecommendations(
 
     for (const play of solutionPlays) {
       if (matchesTriggers(techNames, play.triggerTechnologies ?? [])) {
+        // #662: Resolve play URL from linkedAssets or TDP data
+        const playUrl = resolvePlayUrl(play, saleshubKnowledge)
+        const playAssets = resolvePlayAssets(play, saleshubKnowledge)
         addTrigger(`play:${play.id}`, {
           solutionKey: `play:${play.id}`,
           solutionName: play.name,
           solutionType: 'play',
-          solutionUrl: undefined,
-          assets: undefined,
+          solutionUrl: playUrl,
+          assets: playAssets,
           actions: ['View play deck', 'Draft email', 'Prep meeting'],
         }, signal)
       }
@@ -286,12 +340,15 @@ export function getRecommendations(
         (techMentions.length > 0 && matchesTriggers(techMentions, triggers)) ||
         textMentionsTrigger(signal, triggers)
       ) {
+        // #662: Resolve play URL from linkedAssets or TDP data
+        const playUrl = resolvePlayUrl(play, saleshubKnowledge)
+        const playAssets = resolvePlayAssets(play, saleshubKnowledge)
         addTrigger(`play:${play.id}`, {
           solutionKey: `play:${play.id}`,
           solutionName: play.name,
           solutionType: 'play',
-          solutionUrl: undefined,
-          assets: undefined,
+          solutionUrl: playUrl,
+          assets: playAssets,
           actions: ['View play deck', 'Draft email', 'Prep meeting'],
         }, signal)
       }
@@ -304,12 +361,15 @@ export function getRecommendations(
       const triggers = play.triggerTechnologies ?? []
       // Check if intelligence text mentions trigger technologies
       if (textMentionsTrigger(signal, triggers)) {
+        // #662: Resolve play URL from linkedAssets or TDP data
+        const playUrl = resolvePlayUrl(play, saleshubKnowledge)
+        const playAssets = resolvePlayAssets(play, saleshubKnowledge)
         addTrigger(`play:${play.id}`, {
           solutionKey: `play:${play.id}`,
           solutionName: play.name,
           solutionType: 'play',
-          solutionUrl: undefined,
-          assets: undefined,
+          solutionUrl: playUrl,
+          assets: playAssets,
           actions: ['View play deck', 'Draft email', 'Prep meeting'],
         }, signal)
       }

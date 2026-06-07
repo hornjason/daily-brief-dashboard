@@ -650,6 +650,179 @@ export async function generateCampaign(
   }
 }
 
+// ── Play-based campaign generation (#663) ────────────────────────────────────
+
+export interface PlayContextRequest {
+  playName: string
+  products: string[]
+  valueProps: string[]
+  evidence: string[]
+}
+
+/**
+ * Generate a campaign from play context instead of a material URL.
+ * Uses valueProps + evidence as the content source instead of Google Doc extraction.
+ */
+export async function generateCampaignFromPlay(
+  customer: Customer,
+  playContext: PlayContextRequest,
+  config?: Partial<CampaignRequest>,
+): Promise<CampaignResult> {
+  const slug = toSlug(customer.name)
+  console.log(`[campaigns] Generating campaign from play "${playContext.playName}" for ${customer.name}`)
+
+  // Build synthetic material content from play context
+  const materialTitle = `${playContext.playName} — Recommended Play`
+  const materialContent = [
+    `# ${playContext.playName}`,
+    '',
+    '## Value Propositions',
+    ...playContext.valueProps.map(vp => `- ${vp}`),
+    '',
+    '## Customer Evidence',
+    ...playContext.evidence.map(e => `- ${e}`),
+    '',
+    '## Products',
+    ...playContext.products.map(p => `- ${p}`),
+  ].join('\n')
+
+  // Pre-flight: ensure intelligence is fresh
+  const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
+  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
+
+  let needsIntelRefresh = !existsSync(intelPath)
+  if (!needsIntelRefresh && existsSync(intelPath)) {
+    try {
+      const intelData = JSON.parse(readFileSync(intelPath, 'utf-8'))
+      const cachedAt = intelData.cachedAt ? new Date(intelData.cachedAt).getTime() : 0
+      if (Date.now() - cachedAt > STALE_THRESHOLD_MS) needsIntelRefresh = true
+    } catch { needsIntelRefresh = true }
+  }
+
+  if (needsIntelRefresh) {
+    try {
+      await runIntelligencePipeline(customer.name, true)
+    } catch (e: any) {
+      console.warn(`[campaigns] Intelligence generation failed for ${customer.name}:`, e?.message ?? e)
+    }
+  }
+
+  // Pre-flight signal refresh
+  await FeatureModuleRegistry.refreshStaleSignals(slug).catch(() => {})
+
+  // Load customer signals
+  const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
+
+  // Build deterministic context
+  const accountTeam = getAccountTeam(customer)
+  const templateResult = await templateAll(registrySignals, accountTeam, {
+    format: 'campaign',
+    productFilter: playContext.products.length > 0 ? playContext.products : undefined,
+    customerSlug: slug,
+  })
+
+  // Load voice profile
+  let voiceInstruction = config?.style || ''
+  if (!voiceInstruction && customer.ae) {
+    const voice = await getVoiceProfile(customer.ae)
+    if (voice) {
+      voiceInstruction = `## Voice: ${voice.aeName}\n${voice.promptInstruction}`
+    }
+  }
+
+  // Generate via Gemini
+  const rawMarkdown = await callGeminiForCampaign({
+    materialTitle,
+    materialContent,
+    customerName: customer.name,
+    customerSignals: signals,
+    registrySignals,
+    deterministicContext: templateResult.deterministic,
+    voiceInstruction,
+    personas: config?.personas as any,
+  })
+
+  const gateResult = await validateAndRetry(
+    rawMarkdown,
+    { validator: campaignValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      return callGeminiForCampaign({
+        materialTitle,
+        materialContent: materialContent + '\n\n' + feedback,
+        customerName: customer.name,
+        customerSignals: signals,
+        registrySignals,
+        deterministicContext: templateResult.deterministic,
+        voiceInstruction,
+        personas: config?.personas as any,
+      })
+    }
+  )
+  const markdown = gateResult.output
+
+  const generatedAt = new Date().toISOString()
+  const campaignId = Date.now().toString()
+
+  // Generate HTML
+  const timestamp = new Date().toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+
+  const htmlContent = generateCampaignHTML({
+    materialTitle,
+    materialUrl: '',
+    customerName: customer.name,
+    aeName: customer.ae ?? 'Unknown AE',
+    generatedDate: timestamp,
+    accountTeam,
+    signals,
+    markdown,
+  })
+
+  // Upload to Drive
+  let driveUrl = ''
+  let htmlUrl = ''
+  try {
+    const customerFolderId = await findCustomerDriveFolder(customer)
+    const driveResult = await uploadCampaignToDrive(
+      customerFolderId, customer, materialTitle, '',
+      markdown, customer.ae ?? 'Unknown AE', signals,
+    )
+    driveUrl = driveResult.driveUrl
+    htmlUrl = driveResult.htmlUrl
+  } catch (e: any) {
+    console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+  }
+
+  // Cache
+  saveCampaignToCache(slug, {
+    id: campaignId,
+    materialTitle,
+    materialUrl: '',
+    customerName: customer.name,
+    markdown,
+    htmlContent,
+    generatedAt,
+    driveUrl,
+    htmlUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
+    qualityScorecard: gateResult.scorecard,
+  })
+
+  return {
+    ok: true,
+    campaignId,
+    generatedAt,
+    driveUrl,
+    htmlUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
+  }
+}
+
 // ── AE Voice Profile Service ────────────────────────────────────────────────
 
 export { getVoiceProfile, detectVoiceProfile }

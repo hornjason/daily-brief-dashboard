@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ModulePageShell, useModulePage } from '../components/ModulePageShell'
 import { useApi } from '../hooks/useApi'
 import { FileText, Calendar, Clock, Users, ExternalLink, Loader2, CheckCircle, AlertCircle, ChevronRight, Filter, Trash2, X, Target } from 'lucide-react'
+import { getPlayContext } from '../lib/play-context-store'
 
 interface CalendarEvent {
   title: string
@@ -146,7 +147,7 @@ function MeetingCard({
 
   return (
     <div ref={cardRef} className={`p-4 rounded-lg bg-surface border transition-colors ${
-      highlighted ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border/50 hover:border-border'
+      highlighted ? 'border-l-4 border-l-accent bg-accent/5 ring-1 ring-accent/30' : 'border-border/50 hover:border-border'
     }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -402,12 +403,6 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   const { customer: contextCustomer } = useModulePage()
   const customer = propCustomer ?? contextCustomer
 
-  // #661: Read highlight param from URL for auto-selecting a meeting
-  const highlightParam = useMemo(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('highlight') || ''
-  }, [])
-
   // Fetch ALL calendar events (no customer filter required)
   const calendarApi = useApi<{ events: CalendarEvent[]; range: string }>('/api/calendar?range=week&all=true')
   const [history, setHistory] = useState<PrepHistoryEntry[]>([])
@@ -428,6 +423,37 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
       .then(d => setHistory(d.history ?? []))
       .catch(() => setHistory([]))
   }, [customer])
+
+  // #664: Auto-trigger meeting prep from play context bridge
+  const playAutoTriggered = useRef(false)
+  useEffect(() => {
+    if (playAutoTriggered.current) return
+    const ctx = getPlayContext()
+    if (!ctx || !customer) return
+    if (!calendarApi.data?.events?.length) return
+
+    // Find next upcoming customer meeting
+    const now = Date.now()
+    const customerMeetings = calendarApi.data.events
+      .filter(e =>
+        e.customers?.some(c => c.toLowerCase() === customer.toLowerCase()) &&
+        new Date(e.start).getTime() > now
+      )
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+
+    const nextMeeting = customerMeetings[0]
+    if (!nextMeeting) return
+
+    playAutoTriggered.current = true
+    console.log(`[MeetingPrepPage] Auto-triggering prep for "${nextMeeting.title}" from play "${ctx.playName}"`)
+
+    // Auto-trigger generation with play context as objective/focus
+    const playObjective = `Discuss ${ctx.playName} opportunity — ${ctx.valueProps[0] || 'explore alignment with customer needs'}`
+    handlePrep(nextMeeting, undefined, {
+      objective: playObjective,
+      productFocus: ctx.products,
+    })
+  }, [calendarApi.data, customer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter: show all meetings or only customer-matched
   // When embedded in account tab (propCustomer set), default to customer-only
@@ -569,27 +595,25 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   const dateKeys = Object.keys(groupedMeetings).sort()
   const totalMeetings = dateKeys.reduce((sum, k) => sum + groupedMeetings[k].length, 0)
 
+  // #661: Read highlight param from URL for auto-selecting a meeting
+  const highlightParam = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('highlight') || ''
+  }, [])
+
   // #661: Determine which meeting to highlight
-  // If highlight param matches a meeting title (substring match), highlight it
-  // If only one upcoming customer meeting exists, highlight it automatically
+  // Only highlight when highlightParam is present from URL — NOT for single-meeting auto-highlight (#666)
   const highlightedMeetingKey = useMemo(() => {
-    if (!customer) return ''
+    if (!customer || !highlightParam) return ''
     const allMeetings = dateKeys.flatMap(k => groupedMeetings[k])
     const customerMeetings = allMeetings.filter(m =>
       m.customers?.some(c => c.toLowerCase() === customer.toLowerCase())
     )
 
-    if (highlightParam) {
-      const match = customerMeetings.find(m =>
-        m.title.toLowerCase().includes(highlightParam.toLowerCase())
-      )
-      if (match) return `${match.title}:${match.start}`
-    }
-
-    // Auto-highlight if only one upcoming customer meeting
-    if (customerMeetings.length === 1) {
-      return `${customerMeetings[0].title}:${customerMeetings[0].start}`
-    }
+    const match = customerMeetings.find(m =>
+      m.title.toLowerCase().includes(highlightParam.toLowerCase())
+    )
+    if (match) return `${match.title}:${match.start}`
 
     return ''
   }, [dateKeys, groupedMeetings, customer, highlightParam])

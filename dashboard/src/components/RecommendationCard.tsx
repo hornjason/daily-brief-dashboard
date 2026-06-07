@@ -13,6 +13,7 @@
  */
 import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Zap, Lightbulb } from 'lucide-react'
+import { storePlayContext } from '../lib/play-context-store'
 
 export interface PlayData {
   summary: string
@@ -80,15 +81,46 @@ const CONFIDENCE_STYLES: Record<string, { dot: string; text: string; bg: string;
   },
 }
 
-/** #494: Route action button clicks to appropriate pages */
-function handleAction(action: string, customerSlug?: string, solutionUrl?: string, play?: PlayData) {
+/** #494, #665: Route action button clicks to appropriate pages with play context bridge */
+function handleAction(
+  action: string,
+  props: {
+    customerSlug?: string
+    solutionUrl?: string
+    solutionName?: string
+    headline?: string
+    confidence?: string
+    redHatProducts?: string[]
+    play?: PlayData
+    assets?: Array<{ name: string; url?: string; type: string; source?: string }>
+    triggerSignals?: Array<{ source: string; headline: string }>
+  },
+) {
   const actionLower = action.toLowerCase()
+  const { customerSlug, solutionUrl, solutionName, headline, confidence, redHatProducts, play, assets, triggerSignals } = props
+
+  // #665: Store play context before any navigation
+  if (customerSlug) {
+    storePlayContext({
+      playName: solutionName || headline || '',
+      products: redHatProducts ?? [],
+      valueProps: play?.valueProps ?? [],
+      evidence: (triggerSignals ?? []).map(s => s.headline || ''),
+      customerSlug: customerSlug,
+      customerName: '', // derived from slug downstream
+      confidence: confidence ?? 'EMERGING',
+      solutionUrl,
+      assets: (assets ?? []).map(a => ({ name: a.name || '', url: a.url || '', type: a.type || '' })),
+      triggeredBy: play?.triggeredBy,
+    })
+  }
 
   if (actionLower.includes('draft email')) {
     if (customerSlug) {
-      // #660: Pass the play's primary asset URL as materialUrl for auto-fill
+      // #667: Only pass materialUrl if it's a valid Google Doc/Slides URL
       const params = new URLSearchParams({ customer: customerSlug })
-      if (solutionUrl) params.set('materialUrl', solutionUrl)
+      const isGoogleDocUrl = solutionUrl?.match(/docs\.google\.com\/(document|presentation)\/d\//)
+      if (isGoogleDocUrl) params.set('materialUrl', solutionUrl!)
       window.location.href = `/dashboard/campaigns?${params.toString()}`
     }
     return
@@ -341,7 +373,7 @@ export function RecommendationCard({
             </div>
           )}
 
-          {/* Action buttons (#494: wired to navigation, #659: disabled state for missing URLs) */}
+          {/* Action buttons (#494: wired to navigation, #659: disabled state for missing URLs, #665: play context bridge) */}
           {actions.length > 0 && (
             <div className="flex items-center gap-1.5 pt-1 flex-wrap">
               {actions.map(action => {
@@ -359,7 +391,17 @@ export function RecommendationCard({
                     onClick={(e) => {
                       e.stopPropagation()
                       if (isDisabled) return
-                      handleAction(action, customerSlug, effectiveUrl, play)
+                      handleAction(action, {
+                        customerSlug,
+                        solutionUrl: effectiveUrl,
+                        solutionName,
+                        headline,
+                        confidence,
+                        redHatProducts,
+                        play,
+                        assets,
+                        triggerSignals,
+                      })
                     }}
                     disabled={isDisabled}
                     title={isDisabled ? 'No play deck available for this play' : undefined}
