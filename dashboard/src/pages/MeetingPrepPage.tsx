@@ -434,9 +434,11 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
 
     // Find next upcoming customer meeting
     const now = Date.now()
+    const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const customerSlugNorm = slugify(customer)
     const customerMeetings = calendarApi.data.events
       .filter(e =>
-        e.customers?.some(c => c.toLowerCase() === customer.toLowerCase()) &&
+        e.customers?.some(c => slugify(c) === customerSlugNorm) &&
         new Date(e.start).getTime() > now
       )
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
@@ -605,9 +607,11 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   // Only highlight when highlightParam is present from URL — NOT for single-meeting auto-highlight (#666)
   const highlightedMeetingKey = useMemo(() => {
     if (!customer || !highlightParam) return ''
+    const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const customerSlugNorm = slugify(customer)
     const allMeetings = dateKeys.flatMap(k => groupedMeetings[k])
     const customerMeetings = allMeetings.filter(m =>
-      m.customers?.some(c => c.toLowerCase() === customer.toLowerCase())
+      m.customers?.some(c => slugify(c) === customerSlugNorm)
     )
 
     const match = customerMeetings.find(m =>
