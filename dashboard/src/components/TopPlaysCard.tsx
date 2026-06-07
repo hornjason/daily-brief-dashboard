@@ -36,21 +36,12 @@ interface MotionPhase {
   }>
 }
 
-interface GeminiRecommendation {
-  tacticName: string
-  parentTdp: string
-  reasoning: string
-  confidence: 'high' | 'medium' | 'low'
-  signalsUsed: string[]
-}
-
 interface StrategicMotion {
   id: string
   title: string
   salesPlay?: string
   phases: MotionPhase[]
   confidence: 'high' | 'medium' | 'low'
-  geminiInsights?: GeminiRecommendation[]
   generatedAt: string
 }
 
@@ -75,18 +66,7 @@ interface TopPlay {
 function deriveTopPlays(motion: StrategicMotion): TopPlay[] {
   const plays: TopPlay[] = []
 
-  // Prefer Gemini insights — they have explicit reasoning and confidence per tactic
-  if (motion.geminiInsights && motion.geminiInsights.length > 0) {
-    for (const insight of motion.geminiInsights) {
-      plays.push({
-        tacticName: insight.tacticName,
-        reasoning: insight.reasoning,
-        confidence: insight.confidence,
-      })
-    }
-  }
-
-  // Fall back to phase tactics if no Gemini insights
+  // Derive plays from phase tactics
   if (plays.length === 0) {
     for (const phase of motion.phases) {
       for (const tactic of phase.tactics) {
