@@ -117,6 +117,12 @@ export function createMeetingPrepRouter() {
 
     const body = await c.req.json<MeetingPrepRequest>()
 
+    // #644: Accept audience override from query param or body
+    const audienceParam = c.req.query('audience') as 'customer' | 'partner' | 'internal' | undefined
+    if (audienceParam && ['customer', 'partner', 'internal'].includes(audienceParam)) {
+      body.audience = audienceParam
+    }
+
     if (!body.meetingTitle || !body.meetingStart) {
       return c.json({ error: 'meetingTitle and meetingStart are required' }, 400)
     }

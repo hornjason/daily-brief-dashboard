@@ -49,6 +49,13 @@ import {
   buildCarryForwardContext,
   type PrepHistoryWithSeries,
 } from './recurring-meeting-intel.ts'
+import {
+  filterForAudience,
+  detectAudienceType,
+  crossReferencePartnerCustomers,
+  type AudienceType,
+  type EvidenceBlock,
+} from './lib/audience-filter.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +107,7 @@ export interface MeetingPrepRequest {
   attendees: string[]
   attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>
   recurringEventId?: string // #269: for series tracking
+  audience?: AudienceType // #644: manual audience override
   context?: {
     objective?: string
     productFocus?: string[]
@@ -844,7 +852,37 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
     }
   }
 
-  // ── Step 2c: Build templateAll() context (PRINCIPLES.md Layer 3) ──────
+  // ── Step 2c: Audience detection & filtering (#644) ────────────────────
+  const audienceType: AudienceType = meeting.audience ?? detectAudienceType(meeting.attendees, customer)
+  console.log(`[meeting-prep] Audience type: ${audienceType}${meeting.audience ? ' (manual override)' : ' (auto-detected)'}`)
+
+  // For partner meetings, cross-reference partner specializations against all customers
+  let partnerCrossRefContext = ''
+  if (audienceType === 'partner' && partnerDomains.length > 0) {
+    try {
+      const { customers: allCustomers } = await import('./server-state.ts')
+      const crossRefMatches = crossReferencePartnerCustomers(
+        partnerDomains[0].split('.')[0], // use first partner domain slug
+        allCustomers,
+        (s) => {
+          try {
+            const { loadCustomerSignalsSync } = require('./lib/signal-loader.ts')
+            return loadCustomerSignalsSync?.(s) ?? []
+          } catch { return [] }
+        }
+      )
+      if (crossRefMatches.length > 0) {
+        partnerCrossRefContext = `## Partner Cross-Reference — Joint Opportunities\nCustomers aligned with this partner's specializations:\n${crossRefMatches.map(m =>
+          `- **${m.customerName}**: ${m.matchedProducts.join(', ')}${m.pipelineSize ? ` (pipeline: $${m.pipelineSize.toLocaleString()})` : ''}\n  ${m.opportunityContext}`
+        ).join('\n')}`
+        console.log(`[meeting-prep] Partner cross-reference: ${crossRefMatches.length} customer matches`)
+      }
+    } catch (e: any) {
+      console.warn(`[meeting-prep] Partner cross-reference failed:`, e?.message ?? e)
+    }
+  }
+
+  // ── Step 2d: Build templateAll() context (PRINCIPLES.md Layer 3) ──────
   const meetingSignals = enrichMeetingSignals({
     customer,
     meeting: {
@@ -866,7 +904,32 @@ Do NOT use a table. One bullet per person. Keep each bullet to one line.`,
   })
 
   // Merge meeting-specific signals with registry signals
-  const allSignals = [...(signalData.registrySignals ?? []), ...meetingSignals]
+  const rawSignals = [...(signalData.registrySignals ?? []), ...meetingSignals]
+
+  // Apply audience filter (#644) — strip sensitive data before Gemini
+  // Convert signals to evidence block shape for filtering, then extract back
+  const signalsAsBlocks: EvidenceBlock[] = rawSignals.map((s: any) => ({
+    title: s.headline ?? s.source ?? '',
+    source: s.source ?? '',
+    content: s.detail ?? '',
+    metadata: s.metadata ?? {},
+    availableLevers: s.metadata?.availableLevers ?? [],
+    evidenceItems: [
+      ...(s.metadata?.evidenceItems ?? []),
+      // Also treat the signal itself as an evidence item for pipeline $ filtering
+      { text: `${s.headline ?? ''} ${s.detail ?? ''}`, source: s.source ?? '' },
+    ],
+  }))
+  const filteredBlocks = filterForAudience(signalsAsBlocks, audienceType)
+
+  // Map filtered blocks back — for internal, use raw signals directly
+  const allSignals = audienceType === 'internal'
+    ? rawSignals
+    : rawSignals.filter((_: any, i: number) => {
+        const block = filteredBlocks[i]
+        // If the signal's self-evidence-item was stripped (pipeline $ for partner), exclude it
+        return block.evidenceItems.length > 0
+      })
 
   // Call templateAll — PRINCIPLES.md Layer 3 compliance
   const templateResult = await templateAll(allSignals, accountTeam, {
@@ -1146,7 +1209,11 @@ ${graphDiffBlock ? `### ${graphDiffBlock}` : ''}
 
 ${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
+${partnerCrossRefContext ? `### Partner Cross-Reference\n${partnerCrossRefContext}` : ''}
+
 ---
+
+**Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
 ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items from the last meeting are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
 
@@ -1351,7 +1418,11 @@ ${recentInteractionsContext ? `## Recent Interactions & History (synthesize into
 
 ${partnerResearch ? `## Partner Context\n${partnerResearch}` : ''}
 
+${partnerCrossRefContext}
+
 ---
+
+**Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
 ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
 
