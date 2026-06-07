@@ -385,8 +385,22 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
  * region as the base — enterprise regions have a single pod entry today.
  */
 export function enterpriseTerritoryKey(region: RegionConfig, terrCode: string): string {
-  const podKeys = Object.keys(region.pods)
-  const base = podKeys[0] ?? region.id.toUpperCase().replace(/-/g, '_')
+  const fallbackBase = region.id.toUpperCase().replace(/-/g, '_')
+
+  // Declarative prefix routing: match terrCode against pod prefixes
+  let base = fallbackBase
+  for (const [key, pod] of Object.entries(region.pods)) {
+    if (pod.prefixes?.some(p => terrCode.toLowerCase().startsWith(p.toLowerCase() + '_'))) {
+      base = key
+      break
+    }
+  }
+  // If no prefix matched, use the first pod without prefixes (the default/primary pod)
+  if (base === fallbackBase) {
+    base = Object.entries(region.pods).find(([_, p]) => !p.prefixes?.length)?.[0]
+      ?? Object.keys(region.pods)[0] ?? fallbackBase
+  }
+
   const m = terrCode.match(/(\d+)/)
   const num = m ? m[1].padStart(2, '0') : '00'
   return `${base}_TERR${num}`
