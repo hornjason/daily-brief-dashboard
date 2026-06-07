@@ -133,6 +133,7 @@ export interface PrepHistoryEntry {
   recurringEventId?: string // #269: series tracking
   actionItems?: string[]    // #269: extracted for carry-forward
   docId?: string            // #641: Drive doc ID for update-in-place
+  attendeeEmails?: string[] // #655: attendee emails for cross-ref resolution
   recommendedPlays?: Array<{  // #646: carry-forward escalation
     playName: string
     compositeScore: number
@@ -1611,15 +1612,22 @@ Use the Product & Market Intelligence context above to identify the most relevan
   const calendarAttendees = (meeting.attendees ?? []).filter(Boolean)
   if (calendarAttendees.length > 0) {
     const attendeeLines = calendarAttendees.map(email => {
-      const name = getAttendeeDisplayName(meeting, email)
       const isInternal = email.endsWith('@redhat.com')
       if (isInternal) {
+        const name = getAttendeeDisplayName(meeting, email)
         const teamMember = accountTeam.find(m =>
           m.name.toLowerCase().includes(name.split(' ')[0].toLowerCase())
         )
         return `- **${name}**${teamMember ? `, ${teamMember.role.toUpperCase()}` : ''}`
       }
-      return `- **${name}** (${email.split('@')[1]?.replace(/\.\w+$/, '') ?? 'external'})`
+      // #654: Use enriched name (title + company) from resolved profiles for external attendees
+      const profile = resolvedProfiles.find(p => p.email === email)
+      if (profile?.resolved && profile.title) {
+        return `- **${profile.name}, ${profile.title} at ${profile.company}**`
+      }
+      // Unresolved: fall back to display name + domain
+      const displayName = getAttendeeDisplayName(meeting, email)
+      return `- **${displayName}** (${email.split('@')[1]?.replace(/\.\w+$/, '') ?? 'external'})`
     })
     const deterministicSection2 = `### 2. Who's in the Room\n${attendeeLines.join('\n')}`
     const s2Start = prepContent.indexOf('### 2.')
@@ -1740,8 +1748,15 @@ Use the Product & Market Intelligence context above to identify the most relevan
 
   // #646: Save recommended plays to history for carry-forward escalation
   // #650: Attach evidence snapshots for future delta diffing
-  const recommendedPlays = extractRecommendedPlays(prepContent, meeting.recurringEventId, slug)
-    .map(play => {
+  // #656: Use evidence blocks directly when available; fall back to regex extraction
+  const recommendedPlays = (filteredEvidenceBlocks.length > 0
+    ? filteredEvidenceBlocks.map(b => ({
+        playName: b.playName,
+        compositeScore: b.compositeScore,
+        firstRecommendedAt: new Date().toISOString(),
+      }))
+    : extractRecommendedPlays(prepContent, meeting.recurringEventId, slug)
+  ).map(play => {
       const block = filteredEvidenceBlocks.find(b => b.playName === play.playName)
       return {
         ...play,
@@ -1759,6 +1774,7 @@ Use the Product & Market Intelligence context above to identify the most relevan
     recurringEventId: meeting.recurringEventId,
     actionItems: generatedActionItems.length > 0 ? generatedActionItems : undefined,
     docId,
+    attendeeEmails: calendarAttendees.length > 0 ? calendarAttendees : undefined, // #655: for cross-ref resolution
     recommendedPlays: recommendedPlays.length > 0 ? recommendedPlays : undefined,
   }
 

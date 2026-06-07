@@ -13,6 +13,7 @@ import type { AccountTeamMember } from '../../src/types.ts'
 // ── Import the module under test ────────────────────────────────────────────
 import {
   buildEvidenceBlocks,
+  extractKeyDataPoint,
   type EvidenceBlock,
   type EvidenceItem,
   type Lever,
@@ -245,5 +246,92 @@ describe('AC-16: lever extraction from specific signal sources', () => {
     const partnerLevers = levers.filter(l => l.source === 'partner-catalog')
     expect(partnerLevers.length).toBeGreaterThan(0)
     expect(partnerLevers[0].url).toContain('http')
+  })
+})
+
+// ── #653: Data-driven proposed asks ─────────────────────────────────────────
+
+describe('#653: extractKeyDataPoint()', () => {
+  it('extracts subscription counts from evidence', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: '47 RHEL 7 subscriptions, EOS 2027-06-30', source: 'subscriptions', recency: 'current' },
+    ]
+    expect(extractKeyDataPoint(evidence)).toBe('47 RHEL 7 subscriptions')
+  })
+
+  it('extracts EOS dates from evidence', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: 'Product approaching EOS 2027-06-30', source: 'lifecycle', recency: 'current' },
+    ]
+    expect(extractKeyDataPoint(evidence)).toBe('EOS 2027-06-30')
+  })
+
+  it('extracts case numbers from evidence', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: 'Case #12345678: kernel panic on RHEL 7.9', source: 'cases', recency: '2d ago' },
+    ]
+    expect(extractKeyDataPoint(evidence)).toBe('case #12345678')
+  })
+
+  it('extracts dollar amounts from evidence', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: 'Pipeline opportunity worth $1,234,567', source: 'pipeline', recency: 'current' },
+    ]
+    expect(extractKeyDataPoint(evidence)).toBe('$1,234,567')
+  })
+
+  it('falls back to truncated first fact when no pattern matches', () => {
+    const evidence: EvidenceItem[] = [
+      { fact: 'Customer expressed interest in container security solutions', source: 'notes', recency: 'current' },
+    ]
+    const result = extractKeyDataPoint(evidence)
+    expect(result.length).toBeLessThanOrEqual(60)
+    expect(result).toContain('container security')
+  })
+
+  it('returns empty string for empty evidence array', () => {
+    expect(extractKeyDataPoint([])).toBe('')
+  })
+})
+
+describe('#653: data-driven proposed asks in buildEvidenceBlocks', () => {
+  const mockTeamLocal: AccountTeamMember[] = [
+    { name: 'Alice Johnson', title: 'Account Executive', role: 'ae' },
+    { name: 'Bob Smith', title: 'Account Solution Architect', role: 'asa' },
+  ]
+
+  it('AC-1: migration ask includes specific subscription count and EOS date', () => {
+    const tactic = makeScoredTactic({
+      name: 'RHEL Migration',
+      evidenceTrail: [
+        { fact: '47 RHEL 7 subscriptions, EOS 2027-06-30', module: 'subscriptions', recency: 'current', weight: 0.9 },
+      ],
+    })
+    const blocks = buildEvidenceBlocks([tactic], [], mockTeamLocal)
+    expect(blocks[0].proposedAsk).toContain('47 RHEL 7 subscriptions')
+  })
+
+  it('AC-2: falls back to generic template when evidence has no extractable data points', () => {
+    const tactic = makeScoredTactic({
+      name: 'Generic Play',
+      compositeScore: 0.7,
+      evidenceTrail: [],
+    })
+    const blocks = buildEvidenceBlocks([tactic], [], mockTeamLocal)
+    // Should contain the tactic name in a generic ask
+    expect(blocks[0].proposedAsk).toContain('Generic Play')
+    expect(blocks[0].proposedAsk).toContain('deep-dive')
+  })
+
+  it('case ask includes specific case number', () => {
+    const tactic = makeScoredTactic({
+      name: 'Support Remediation',
+      compositeScore: 0.75,
+      evidenceTrail: [
+        { fact: 'Case #98765432: critical outage on RHEL 8', module: 'cases', recency: 'current', weight: 0.9 },
+      ],
+    })
+    const blocks = buildEvidenceBlocks([tactic], [], mockTeamLocal)
+    expect(blocks[0].proposedAsk).toContain('case #98765432')
   })
 })

@@ -222,11 +222,20 @@ function resolveFromCrossRef(
   meetingHistory?: PrepHistoryEntry[],
 ): AttendeeProfile | null {
   if (!meetingHistory?.length) return null
-  // Cross-reference is about finding this email in prior meeting data.
-  // The actual resolution comes from cache — if we've seen this email before
-  // in a meeting, the cache will have it from the prior resolution.
-  // This strategy is a fallback that checks the cache one more time
-  // (useful if cache was populated by a parallel process).
+
+  // #655: Search meeting history for prior appearances of this email
+  for (const entry of meetingHistory) {
+    if (entry.attendeeEmails?.includes(email)) {
+      // Found in a prior meeting — check cache for the resolved profile
+      const domain = email.split('@')[1] ?? ''
+      const cached = readProfileCache(domain)
+      if (cached && cached[email]) {
+        return { ...cached[email], source: 'cross-ref' }
+      }
+    }
+  }
+
+  // Fallback: check cache directly (may have been populated by parallel process)
   const domain = email.split('@')[1] ?? ''
   const cached = readProfileCache(domain)
   if (cached && cached[email]) {

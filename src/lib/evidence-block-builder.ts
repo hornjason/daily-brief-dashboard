@@ -297,7 +297,32 @@ function findRelevantTeamMember(team: AccountTeamMember[], domainKeys: string[])
 }
 
 /**
+ * Extract a key data point from evidence for injection into proposed asks (#653).
+ * Looks for subscription counts, dates, case numbers, dollar amounts — concrete facts.
+ * Exported for testing.
+ */
+export function extractKeyDataPoint(evidence: EvidenceItem[]): string {
+  for (const e of evidence) {
+    // Subscription counts: "47 RHEL 7 subscriptions"
+    const subMatch = e.fact.match(/(\d+)\s+\w[\w\s]*subscriptions?/i)
+    if (subMatch) return subMatch[0]
+    // Dates with context: "EOS 2027-06-30", "renewal 2026-12-01", "expiring 2027-01-15"
+    const dateMatch = e.fact.match(/\b(EOS|EOL|expir\w*|renew\w*|closing)\s+(\d{4}-\d{2}-\d{2})/i)
+    if (dateMatch) return `${dateMatch[1]} ${dateMatch[2]}`
+    // Case numbers: "case #12345678" or "Case 12345678"
+    const caseMatch = e.fact.match(/case\s*#?(\d{6,})/i)
+    if (caseMatch) return `case #${caseMatch[1]}`
+    // Dollar amounts: "$1,234,567" or "$50K"
+    const dollarMatch = e.fact.match(/\$[\d,]+[KMB]?/i)
+    if (dollarMatch) return dollarMatch[0]
+  }
+  // Fallback: first 60 chars of first evidence fact
+  return evidence[0]?.fact?.slice(0, 60) || ''
+}
+
+/**
  * Generate a proposed ask based on the tactic type and evidence strength.
+ * #653: Injects specific data points from evidence trail into ask text.
  */
 function generateProposedAsk(
   tactic: ScoredTactic,
@@ -305,6 +330,7 @@ function generateProposedAsk(
   levers: Lever[],
 ): string {
   const name = tactic.name.toLowerCase()
+  const keyDataPoint = extractKeyDataPoint(evidence)
 
   // Check for migration-related evidence
   const hasMigrationEvidence = evidence.some(e =>
@@ -326,25 +352,33 @@ function generateProposedAsk(
   const hasIncentives = levers.some(l => l.source === 'cloud-marketplace')
 
   if (hasMigrationEvidence) {
-    return `Request a migration planning session with the customer's infrastructure team. ${hasIncentives ? 'Highlight available migration credits.' : ''}`
+    const detail = keyDataPoint ? `for ${keyDataPoint}` : 'with the customer\'s infrastructure team'
+    return `Request migration planning ${detail}. ${hasIncentives ? 'Highlight available migration credits.' : ''}`.trim()
   }
 
   if (hasCaseEvidence && hasRenewalEvidence) {
-    return `Connect open case resolution to renewal timeline. Propose an upgrade path that addresses current issues.`
+    const caseDetail = evidence.find(e => e.source === 'cases')
+    const casePoint = caseDetail ? extractKeyDataPoint([caseDetail]) : ''
+    const renewalDetail = evidence.find(e => e.fact.toLowerCase().includes('renewal') || e.fact.toLowerCase().includes('expir'))
+    const renewalPoint = renewalDetail ? extractKeyDataPoint([renewalDetail]) : ''
+    return `Connect resolution of ${casePoint || 'open cases'} to ${renewalPoint || 'renewal timeline'}. Propose an upgrade path that addresses current issues.`
   }
 
   if (hasRenewalEvidence) {
-    return `Align product roadmap discussion with upcoming renewal. Position expansion value for renewal negotiation.`
+    return `Align product roadmap discussion with upcoming renewal${keyDataPoint ? ` (${keyDataPoint})` : ''}. Position expansion value for renewal negotiation.`
   }
 
   if (hasCaseEvidence) {
-    return `Address open cases as entry point. Propose architecture review to prevent recurrence.`
+    return `Address ${keyDataPoint || 'open cases'} as entry point. Propose architecture review to prevent recurrence.`
   }
 
   if (hasIncentives) {
     return `Present marketplace incentives and propose a POC leveraging available credits.`
   }
 
-  // Default: generic but still specific to the tactic
+  // Default: specific to tactic + first evidence fact
+  if (keyDataPoint) {
+    return `Schedule deep-dive on ${tactic.name} — ${keyDataPoint}.`
+  }
   return `Schedule deep-dive session on ${tactic.name} with the customer's technical leadership.`
 }
