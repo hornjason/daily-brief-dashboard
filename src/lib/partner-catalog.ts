@@ -143,6 +143,7 @@ export function matchPartnersToProducts(
       // Check credentials
       if (partner.credentials) {
         for (const cred of partner.credentials) {
+          if (!cred.product) continue // guard against missing product field
           if (cred.product.toLowerCase().includes(productLower) ||
               productLower.includes(cred.product.toLowerCase())) {
             if (!matchedProducts.includes(product)) matchedProducts.push(product)

@@ -42,6 +42,7 @@ beforeAll(async () => {
   await import('../../src/modules/playbook-module.ts')
   await import('../../src/modules/tech-stack-module.ts')
   await import('../../src/modules/cloud-marketplace-module.ts')
+  await import('../../src/modules/partner-catalog-module.ts')
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────
