@@ -151,20 +151,21 @@ export function createGraphRouter(): Hono {
         })
       }
 
-      // Load the previous graph snapshot if it exists
-      // The previous graph state is embedded in the current graph's nodes
-      // via history fields. We can compute the diff from just the current graph
-      // by using null as previousGraph (shows all active as new) or by loading
-      // a separate previous snapshot.
-      //
-      // For now, compute diff from the current graph alone. Nodes with
-      // history.status === 'historical' are surfaced as disappeared.
-      // New nodes are detected by checking if they appeared after the graph's
-      // own builtAt minus a reasonable window (7 days).
-      //
-      // Better approach: use the graph itself as both current and previous
-      // by reading history fields. No separate snapshot needed.
-      const diff = computeGraphDiff(graph)
+      // Load the previous graph snapshot (#671)
+      // persistGraph() saves the prior version as .previous.json before each write.
+      let previousGraph: import('./lib/intelligence-graph-types.ts').CustomerGraph | null = null
+      try {
+        const { existsSync, readFileSync } = await import('fs')
+        const { resolve } = await import('path')
+        const prevPath = resolve(CACHE_DIR, slug, 'intelligence-graph.previous.json')
+        if (existsSync(prevPath)) {
+          previousGraph = JSON.parse(readFileSync(prevPath, 'utf-8'))
+        }
+      } catch {
+        // If previous snapshot is unreadable, fall back to no previous
+      }
+
+      const diff = computeGraphDiff(graph, previousGraph)
 
       return c.json(diff)
     } catch (e: any) {
