@@ -8,7 +8,7 @@
  * Route: /dashboard/meeting-prep
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ModulePageShell, useModulePage } from '../components/ModulePageShell'
 import { useApi } from '../hooks/useApi'
 import { FileText, Calendar, Clock, Users, ExternalLink, Loader2, CheckCircle, AlertCircle, ChevronRight, Filter, Trash2, X, Target } from 'lucide-react'
@@ -75,6 +75,7 @@ function MeetingCard({
   generationResult,
   generationError,
   accounts,
+  highlighted,
 }: {
   meeting: CalendarEvent
   onPrep: (meeting: CalendarEvent, overrideCustomer?: string, context?: { objective?: string; productFocus?: string[]; notes?: string }) => void
@@ -83,17 +84,28 @@ function MeetingCard({
   generationResult: { docUrl: string; title: string } | null
   generationError: string | null
   accounts: string[]
+  /** #661: Whether this meeting card should be highlighted (scrolled-to + visually emphasized) */
+  highlighted?: boolean
 }) {
   const meetingKey = `${meeting.title}:${meeting.start}`
   const isGenerating = generatingKey === meetingKey && !['idle', 'done', 'error'].includes(generationStep)
   const isDone = generatingKey === meetingKey && generationStep === 'done'
   const hasError = generatingKey === meetingKey && generationStep === 'error'
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const attendeeList = (meeting.attendees ?? []).filter(Boolean)
   const autoCustomer = meeting.customers?.[0]
   const [manualCustomer, setManualCustomer] = useState<string | null>(null)
   const [showPicker, setShowPicker] = useState(false)
-  const [showContext, setShowContext] = useState(false)
+  // #661: Auto-show context panel when this card is highlighted from a recommendation
+  const [showContext, setShowContext] = useState(highlighted ?? false)
+
+  // #661: Scroll highlighted card into view on mount
+  useEffect(() => {
+    if (highlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlighted])
   const [objective, setObjective] = useState('')
   const [notes, setNotes] = useState('')
   const [linkedinUrls, setLinkedinUrls] = useState<Record<string, string>>({})
@@ -133,7 +145,9 @@ function MeetingCard({
   }
 
   return (
-    <div className="p-4 rounded-lg bg-surface border border-border/50 hover:border-border transition-colors">
+    <div ref={cardRef} className={`p-4 rounded-lg bg-surface border transition-colors ${
+      highlighted ? 'border-accent/50 ring-1 ring-accent/20' : 'border-border/50 hover:border-border'
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-text-primary">{meeting.title}</h3>
@@ -388,6 +402,12 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   const { customer: contextCustomer } = useModulePage()
   const customer = propCustomer ?? contextCustomer
 
+  // #661: Read highlight param from URL for auto-selecting a meeting
+  const highlightParam = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('highlight') || ''
+  }, [])
+
   // Fetch ALL calendar events (no customer filter required)
   const calendarApi = useApi<{ events: CalendarEvent[]; range: string }>('/api/calendar?range=week&all=true')
   const [history, setHistory] = useState<PrepHistoryEntry[]>([])
@@ -549,6 +569,31 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   const dateKeys = Object.keys(groupedMeetings).sort()
   const totalMeetings = dateKeys.reduce((sum, k) => sum + groupedMeetings[k].length, 0)
 
+  // #661: Determine which meeting to highlight
+  // If highlight param matches a meeting title (substring match), highlight it
+  // If only one upcoming customer meeting exists, highlight it automatically
+  const highlightedMeetingKey = useMemo(() => {
+    if (!customer) return ''
+    const allMeetings = dateKeys.flatMap(k => groupedMeetings[k])
+    const customerMeetings = allMeetings.filter(m =>
+      m.customers?.some(c => c.toLowerCase() === customer.toLowerCase())
+    )
+
+    if (highlightParam) {
+      const match = customerMeetings.find(m =>
+        m.title.toLowerCase().includes(highlightParam.toLowerCase())
+      )
+      if (match) return `${match.title}:${match.start}`
+    }
+
+    // Auto-highlight if only one upcoming customer meeting
+    if (customerMeetings.length === 1) {
+      return `${customerMeetings[0].title}:${customerMeetings[0].start}`
+    }
+
+    return ''
+  }, [dateKeys, groupedMeetings, customer, highlightParam])
+
   if (calendarApi.loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -593,18 +638,22 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
               {formatDate(dateKey)}
             </h3>
             <div className="space-y-2">
-              {groupedMeetings[dateKey].map((meeting, i) => (
-                <MeetingCard
-                  key={`${meeting.title}-${meeting.start}-${i}`}
-                  meeting={meeting}
-                  onPrep={handlePrep}
-                  generatingKey={generatingKey}
-                  generationStep={step}
-                  generationResult={generationResult}
-                  generationError={generationError}
-                  accounts={accountNames}
-                />
-              ))}
+              {groupedMeetings[dateKey].map((meeting, i) => {
+                const meetingKey = `${meeting.title}:${meeting.start}`
+                return (
+                  <MeetingCard
+                    key={`${meeting.title}-${meeting.start}-${i}`}
+                    meeting={meeting}
+                    onPrep={handlePrep}
+                    generatingKey={generatingKey}
+                    generationStep={step}
+                    generationResult={generationResult}
+                    generationError={generationError}
+                    accounts={accountNames}
+                    highlighted={highlightedMeetingKey === meetingKey}
+                  />
+                )
+              })}
             </div>
           </div>
         ))

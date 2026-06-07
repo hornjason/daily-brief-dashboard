@@ -9,7 +9,7 @@
  * - Confirm to generate campaign
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { RefreshCw, AlertCircle, Plus, Trash2 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -47,8 +47,13 @@ type FlowState = 'input' | 'loading' | 'preview' | 'error'
 
 export function CampaignConfigurator({ customerName, onConfirm, onCancel }: CampaignConfiguratorProps) {
   const [state, setState] = useState<FlowState>('input')
-  const [materialUrl, setMaterialUrl] = useState('')
+  // #660: Read materialUrl from URL search params if pre-filled from recommendation action
+  const [materialUrl, setMaterialUrl] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('materialUrl') || ''
+  })
   const [error, setError] = useState<string | null>(null)
+  const autoAnalyzeTriggered = useRef(false)
 
   // Preview state — editable config
   const [materialTitle, setMaterialTitle] = useState('')
@@ -198,6 +203,17 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       setState('error')
     }
   }
+
+  // #660: Auto-trigger analysis when materialUrl is pre-filled from URL params
+  useEffect(() => {
+    if (!autoAnalyzeTriggered.current && materialUrl && state === 'input') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('materialUrl')) {
+        autoAnalyzeTriggered.current = true
+        handleAnalyze()
+      }
+    }
+  }, [materialUrl, state])
 
   async function handleReanalyze() {
     setState('loading')

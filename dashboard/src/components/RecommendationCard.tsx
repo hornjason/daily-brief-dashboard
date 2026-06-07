@@ -20,6 +20,8 @@ export interface PlayData {
   cloudAmplifiers: string[]
   relatedPlays: string[]
   category: string
+  /** #661: Meeting title that triggered this play recommendation */
+  triggeredBy?: string
 }
 
 export interface TdpData {
@@ -79,28 +81,34 @@ const CONFIDENCE_STYLES: Record<string, { dot: string; text: string; bg: string;
 }
 
 /** #494: Route action button clicks to appropriate pages */
-function handleAction(action: string, customerSlug?: string, solutionUrl?: string) {
+function handleAction(action: string, customerSlug?: string, solutionUrl?: string, play?: PlayData) {
   const actionLower = action.toLowerCase()
 
   if (actionLower.includes('draft email')) {
     if (customerSlug) {
-      window.location.href = `/dashboard/campaigns?customer=${encodeURIComponent(customerSlug)}`
+      // #660: Pass the play's primary asset URL as materialUrl for auto-fill
+      const params = new URLSearchParams({ customer: customerSlug })
+      if (solutionUrl) params.set('materialUrl', solutionUrl)
+      window.location.href = `/dashboard/campaigns?${params.toString()}`
     }
     return
   }
 
   if (actionLower.includes('prep meeting')) {
     if (customerSlug) {
-      window.location.href = `/dashboard/meeting-prep?customer=${encodeURIComponent(customerSlug)}`
+      // #661: Pass trigger meeting context for auto-selection
+      const params = new URLSearchParams({ customer: customerSlug })
+      const triggerMeeting = play?.triggeredBy ?? ''
+      if (triggerMeeting) params.set('highlight', triggerMeeting)
+      window.location.href = `/dashboard/meeting-prep?${params.toString()}`
     }
     return
   }
 
   if (actionLower.includes('view play deck') || actionLower.includes('view partner solution') || actionLower.includes('view program details')) {
+    // #659: If no URL available, button is disabled — this handler won't fire
     if (solutionUrl) {
       window.open(solutionUrl, '_blank')
-    } else if (customerSlug) {
-      window.location.href = `/dashboard/customer/${encodeURIComponent(customerSlug)}`
     }
     return
   }
@@ -333,21 +341,38 @@ export function RecommendationCard({
             </div>
           )}
 
-          {/* Action buttons (#494: wired to navigation) */}
+          {/* Action buttons (#494: wired to navigation, #659: disabled state for missing URLs) */}
           {actions.length > 0 && (
             <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-              {actions.map(action => (
-                <button
-                  key={action}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleAction(action, customerSlug, solutionUrl ?? tdp?.cheatsheetUrl)
-                  }}
-                  className="text-xs px-2.5 py-1 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors"
-                >
-                  {action}
-                </button>
-              ))}
+              {actions.map(action => {
+                const actionLower = action.toLowerCase()
+                // #659: Resolve play deck URL with full fallback chain
+                const playDeckUrl = solutionUrl ?? tdp?.cheatsheetUrl ?? tdp?.customerDeckUrl
+                const isPlayDeckAction = actionLower.includes('view play deck') || actionLower.includes('view partner solution') || actionLower.includes('view program details')
+                const isDisabled = isPlayDeckAction && !playDeckUrl
+                // Resolve the effective URL for this action
+                const effectiveUrl = isPlayDeckAction ? playDeckUrl : (solutionUrl ?? tdp?.cheatsheetUrl ?? tdp?.customerDeckUrl)
+
+                return (
+                  <button
+                    key={action}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (isDisabled) return
+                      handleAction(action, customerSlug, effectiveUrl, play)
+                    }}
+                    disabled={isDisabled}
+                    title={isDisabled ? 'No play deck available for this play' : undefined}
+                    className={`text-xs px-2.5 py-1 rounded-lg border border-border ${
+                      isDisabled
+                        ? 'text-text-secondary/40 cursor-not-allowed'
+                        : 'text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                    } transition-colors`}
+                  >
+                    {action}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
