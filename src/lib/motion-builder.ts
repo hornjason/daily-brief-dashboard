@@ -657,9 +657,11 @@ function buildTransformPhase(
     if (alignment) contextKeywords.push(...extractKeywords(alignment))
   }
 
-  // Pull keywords from tech-stack products (AI tools, frameworks)
+  // Pull keywords from tech-stack products (AI tools, frameworks) — skip proprietary/internal tools
   const products = findNodesByType(graph, 'product')
   for (const p of products) {
+    const category = String(p.properties.category ?? '').toLowerCase()
+    if (category === 'proprietary' || category === 'internal') continue
     const name = String(p.properties.techName ?? p.name ?? '')
     contextKeywords.push(...extractKeywords(name))
   }
@@ -688,10 +690,12 @@ function buildTransformPhase(
     })
   }
 
-  // Tech stack evidence for AI-related products (reuse products from keyword extraction above)
+  // Tech stack evidence for AI-related products — exclude proprietary/internal tools
   for (const p of products) {
     const name = String(p.properties.techName ?? p.name ?? '')
-    if (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml')) {
+    const category = String(p.properties.category ?? '').toLowerCase()
+    const isProprietary = category === 'proprietary' || category === 'internal'
+    if (!isProprietary && (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml'))) {
       evidence.push({
         module: 'tech-stack',
         fact: `Uses ${name}`,
