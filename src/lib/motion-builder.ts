@@ -13,6 +13,7 @@
  *
  * Dependencies:
  *   - intelligence-graph-types.ts — CustomerGraph, IntelligenceNode, IntelligenceEdge
+ *   - competitive-vocabulary.ts — dynamic displacement map (replaces hardcoded DISPLACEMENT_KEYWORDS)
  *   - graph-utils.ts — findNodesByType, getEdgesFrom
  *   - gemini-call.ts — callGemini (optional, for phase briefs)
  */
@@ -30,6 +31,7 @@ import type { MaterialLink } from './material-index.ts'
 import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
 import type { TacticOutcome } from './deal-outcome-history.ts'
 import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
+import { getDisplacementMap } from './competitive-vocabulary.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -745,7 +747,22 @@ export function normalizeForDisplacement(name: string): string {
     .trim()
 }
 
-/** Map of competitor keywords → Red Hat displacement target + TDP domain */
+/** Dynamic displacement map from competitive-vocabulary.ts — falls back to hardcoded seed */
+function buildDisplacementKeywords(): Record<string, { redHat: string; tdp: string }> {
+  try {
+    const map = getDisplacementMap()
+    if (map.size > 0) {
+      const result: Record<string, { redHat: string; tdp: string }> = {}
+      for (const [key, entry] of map) {
+        result[key] = { redHat: entry.redHat, tdp: entry.tdp }
+      }
+      return result
+    }
+  } catch {}
+  return DISPLACEMENT_KEYWORDS
+}
+
+/** Seed data — also exported as DISPLACEMENT_KEYWORDS for backward compatibility */
 export const DISPLACEMENT_KEYWORDS: Record<string, { redHat: string; tdp: string }> = {
   // ── VMware family ────────────────────────────────────────────────────────
   'vmware':      { redHat: 'OpenShift Virtualization', tdp: 'Virtualization' },
@@ -896,7 +913,7 @@ function buildDisplacementPhase(
   const matchedTdps = new Set<string>()
 
   // Sort keywords longest-first so multi-word keywords match before single-word
-  const sortedKeywords = Object.entries(DISPLACEMENT_KEYWORDS)
+  const sortedKeywords = Object.entries(buildDisplacementKeywords())
     .sort((a, b) => b[0].length - a[0].length)
 
   for (const product of nonRedHatProducts) {
