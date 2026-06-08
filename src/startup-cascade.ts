@@ -2,9 +2,18 @@
 // GitHub Issue #310 — Post-bootstrap refresh cascade
 // After bootstrap completes (or on fresh startup with no manifest timestamps),
 // refresh data sources in dependency order with rate limiting to avoid spikes.
+//
+// GitHub Issue #678 — Config freshness check
+// Before running the cascade, compare config-templates/ (baked into image)
+// with /data/config/ (volume-mounted user data) and promote whichever is newer.
 
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
+import { existsSync, readFileSync, copyFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dir = (import.meta as any).dir ?? dirname(fileURLToPath(import.meta.url))
 
 // ── Dependency tiers (from GitHub Issue #310 design section) ────────────────
 
@@ -41,6 +50,87 @@ class Semaphore {
       this.permits++
     }
   }
+}
+
+// ── Config freshness check (GitHub #678) ────────────────────────────────────
+
+export interface FreshnessResult {
+  file: string
+  action: 'promoted' | 'kept-local' | 'seeded' | 'skipped'
+  imageTimestamp?: string
+  localTimestamp?: string
+}
+
+const DYNAMIC_CONFIGS = [
+  'rh-product-catalog.json',
+  'solution-plays.json',
+  'saleshub-knowledge.json',
+]
+
+export async function checkConfigFreshness(): Promise<FreshnessResult[]> {
+  const CONFIG_TEMPLATES_DIR = process.env.CONFIG_TEMPLATES_DIR ?? resolve(__dir, '../config-templates')
+  const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(__dir, '../data/config')
+
+  const results: FreshnessResult[] = []
+
+  for (const file of DYNAMIC_CONFIGS) {
+    const imagePath = resolve(CONFIG_TEMPLATES_DIR, file)
+    const localPath = resolve(CONFIG_DIR, file)
+
+    const imageExists = existsSync(imagePath)
+    const localExists = existsSync(localPath)
+
+    if (!imageExists) {
+      results.push({ file, action: 'skipped' })
+      continue
+    }
+
+    if (!localExists) {
+      // Fresh install — seed from image
+      try {
+        copyFileSync(imagePath, localPath)
+        results.push({ file, action: 'seeded' })
+      } catch (err: any) {
+        console.warn(`[config-freshness] Failed to seed ${file}: ${err?.message}`)
+        results.push({ file, action: 'skipped' })
+      }
+      continue
+    }
+
+    // Both exist — compare refreshedAt/scrapedAt timestamps
+    try {
+      const imageData = JSON.parse(readFileSync(imagePath, 'utf-8'))
+      const localData = JSON.parse(readFileSync(localPath, 'utf-8'))
+
+      const imageTs = imageData.refreshedAt ?? imageData.scrapedAt
+      const localTs = localData.refreshedAt ?? localData.scrapedAt
+
+      if (imageTs && localTs && new Date(imageTs) > new Date(localTs)) {
+        // Image is newer — promote
+        copyFileSync(imagePath, localPath)
+        results.push({
+          file,
+          action: 'promoted',
+          imageTimestamp: imageTs,
+          localTimestamp: localTs
+        })
+      } else {
+        // Local is newer, same age, or no timestamps — keep local (safe default)
+        results.push({
+          file,
+          action: 'kept-local',
+          imageTimestamp: imageTs,
+          localTimestamp: localTs
+        })
+      }
+    } catch (err: any) {
+      // Parse error or copy failure — keep local as safe default
+      console.warn(`[config-freshness] Error comparing ${file}: ${err?.message}`)
+      results.push({ file, action: 'kept-local' })
+    }
+  }
+
+  return results
 }
 
 // ── Refresh runner per module ───────────────────────────────────────────────

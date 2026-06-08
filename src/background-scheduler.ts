@@ -668,7 +668,18 @@ export function initBackgroundScheduler(opts: {
   // Otherwise, run a full refresh for existing install
   if (customers.length > 0) {
     (async () => {
-      const { runStartupCascade } = await import('./startup-cascade.ts')
+      // GitHub #678: Check config freshness before cascade/refresh
+      const { checkConfigFreshness, runStartupCascade } = await import('./startup-cascade.ts')
+      const freshnessResults = await checkConfigFreshness()
+
+      for (const r of freshnessResults) {
+        if (r.action === 'promoted') {
+          console.log(`[config-freshness] ${r.file}: promoted from image (image: ${r.imageTimestamp}, local: ${r.localTimestamp})`)
+        } else if (r.action === 'seeded') {
+          console.log(`[config-freshness] ${r.file}: seeded from image (fresh install)`)
+        }
+      }
+
       const allModuleStatus = await import('./feature-module-registry.ts').then(m => m.FeatureModuleRegistry.getStatus())
       const hasFreshModules = Object.values(allModuleStatus).some((s: any) => !s?.lastChecked)
 
@@ -882,65 +893,6 @@ export function initBackgroundScheduler(opts: {
       if (result.errors.length > 0) {
         console.warn(`[proactive-prep] errors: ${result.errors.join('; ')}`)
       }
-    },
-  })
-
-  // Meeting Prep Refresh — every 60 minutes (#646)
-  // Finds meetings starting within 2 hours that already have a prep doc and regenerates
-  // using update-in-place. Skips meetings manually regenerated within the last hour.
-  schedulerRegistry.register({
-    name: 'meeting-prep-refresh',
-    type: 'interval',
-    intervalMs: 60 * 60 * 1000, // every 60 minutes
-    enabled: true,
-    run: async () => {
-      console.log('[meeting-prep-refresh] scheduled scan started')
-      const { findMeetingsNeedingRefresh } = await import('./lib/meeting-prep-refresh.ts')
-      const { generateMeetingPrep, readHistory } = await import('./meeting-prep-service.ts')
-      const { fetchCalendar } = await import('./google.ts')
-      const { toSlug } = await import('./cache-layer.ts')
-
-      let events
-      try {
-        events = await fetchCalendar(customers, true)
-      } catch (e: any) {
-        console.warn(`[meeting-prep-refresh] Calendar fetch failed: ${e.message}`)
-        return
-      }
-
-      // Build history map for all customers
-      const historyBySlug = new Map<string, any[]>()
-      for (const c of customers) {
-        const slug = toSlug(c.name)
-        historyBySlug.set(slug, readHistory(slug))
-      }
-
-      const candidates = findMeetingsNeedingRefresh(events, customers, historyBySlug)
-      if (candidates.length === 0) {
-        console.log('[meeting-prep-refresh] no meetings need refresh')
-        return
-      }
-
-      let refreshed = 0
-      let errors = 0
-      for (const { event, customer } of candidates) {
-        try {
-          console.log(`[meeting-prep-refresh] Refreshing prep for "${event.title}" (${customer.name})`)
-          await generateMeetingPrep(customer, {
-            meetingTitle: event.title,
-            meetingStart: event.start,
-            attendees: event.attendees ?? [],
-            attendeeDetails: event.attendeeDetails,
-            recurringEventId: event.recurringEventId,
-          })
-          refreshed++
-        } catch (e: any) {
-          console.warn(`[meeting-prep-refresh] Failed to refresh "${event.title}": ${e.message}`)
-          errors++
-        }
-      }
-
-      console.log(`[meeting-prep-refresh] scan complete: ${refreshed} refreshed, ${errors} errors`)
     },
   })
 
