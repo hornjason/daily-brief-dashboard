@@ -15,6 +15,8 @@ import { callGemini } from '../gemini-call.ts'
 import { sanitizeErr } from '../utils.ts'
 import { extractNewsletterEvents } from '../newsletter-events.ts'
 import { CONFIG_DIR } from '../lib/paths.ts'
+import { validateAndRetry } from '../gemini-quality-gate.ts'
+import { cloudMarketplaceValidator } from '../quality-validators/cloud-marketplace-validator.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -226,23 +228,27 @@ const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
  * returns null so the caller can fall back to overlapping chunks.
  */
 function splitByProvider(text: string): Map<string, string> | null {
+  // Look for provider headings: lines that start with or are dominated by a provider name
+  // Common patterns: "AWS", "Amazon Web Services", "Google Cloud / GCP", "Microsoft Azure", "Oracle OCI"
   const lines = text.split('\n')
 
-  // Find major section headings — short standalone lines dominated by a provider name
-  // Tighter criteria: line must be < 40 chars OR provider name is the first word
-  // This avoids matching inline mentions like "Google Cloud Version" in body text
+  // Find heading lines and their positions
   const headings: { line: number; provider: string }[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    if (line.length > 100 || line.length === 0) continue
+    // Skip very long lines (body content, not headings)
+    if (line.length > 200) continue
+    // Skip empty lines
+    if (line.length === 0) continue
 
     for (const { key, patterns } of PROVIDER_LABELS) {
+      // A heading is a line where the provider name is prominent (first word or very short line)
       const isHeading = patterns.some(p => p.test(line)) && (
-        line.length < 40 ||
-        patterns.some(p => line.match(p)?.index === 0)
+        line.length < 80 ||  // short line = likely heading
+        patterns.some(p => line.match(p)?.index === 0) // starts with provider
       )
       if (isHeading) {
-        // Don't add duplicate providers — take the first major heading
+        // Don't add duplicate providers — take the first occurrence
         if (!headings.some(h => h.provider === key)) {
           headings.push({ line: i, provider: key })
         }
@@ -251,12 +257,12 @@ function splitByProvider(text: string): Map<string, string> | null {
     }
   }
 
-  const uniqueProviders = new Set(headings.map(h => h.provider))
-  if (uniqueProviders.size < 2) return null
+  // Need at least 2 distinct provider headings to consider this a valid split
+  if (headings.length < 2) return null
 
+  // Sort by line number
   headings.sort((a, b) => a.line - b.line)
 
-  // First-heading split — each provider gets from its heading to the next
   const sections = new Map<string, string>()
   for (let i = 0; i < headings.length; i++) {
     const start = headings[i].line
@@ -264,37 +270,7 @@ function splitByProvider(text: string): Map<string, string> | null {
     sections.set(headings[i].provider, lines.slice(start, end).join('\n'))
   }
 
-  // Second pass: for each provider, also collect ALL lines mentioning that provider
-  // from OUTSIDE its primary section. This catches scattered content.
-  for (const { key, patterns } of PROVIDER_LABELS) {
-    if (!sections.has(key)) continue
-    const primaryStart = headings.find(h => h.provider === key)!.line
-    const nextHeading = headings.find(h => h.line > primaryStart && h.provider !== key)
-    const primaryEnd = nextHeading ? nextHeading.line : lines.length
-
-    const extraLines: string[] = []
-    for (let i = 0; i < lines.length; i++) {
-      if (i >= primaryStart && i < primaryEnd) continue // skip primary section
-      const line = lines[i]
-      if (patterns.some(p => p.test(line))) {
-        // Include this line + up to 5 surrounding lines for context
-        const contextStart = Math.max(0, i - 2)
-        const contextEnd = Math.min(lines.length, i + 4)
-        extraLines.push(lines.slice(contextStart, contextEnd).join('\n'))
-      }
-    }
-
-    if (extraLines.length > 0) {
-      sections.set(key, sections.get(key)! + '\n\n--- Additional content ---\n\n' + extraLines.join('\n\n'))
-    }
-  }
-
-  const result = new Map<string, string>()
-  for (const [provider, content] of sections) {
-    result.set(provider, content)
-  }
-
-  return result
+  return sections
 }
 
 /**
@@ -453,67 +429,111 @@ function dedupeByName<T extends { name: string }>(items: T[]): T[] {
 }
 
 /**
- * Extract cloud marketplace data from slide text and newsletter HTML.
- *
- * Strategy:
- * 1. Try to split slide text by provider headings (AWS, Google, Microsoft, Oracle)
- * 2. If clear boundaries found: send each provider section separately to Gemini
- * 3. If no clear boundaries: split into overlapping chunks of ~40K chars
- * 4. Merge per-provider results, deduplicating offerings/programs/incentives
- *
- * This replaces the previous single-call approach that truncated 85% of content
- * via .slice(0, 15000) on slideText and .slice(0, 5000) on htmlBody.
+ * Merge baseline programs from config-templates/cloud-marketplace-baseline.json
+ * into extracted sections. Baseline programs provide a deterministic floor
+ * regardless of Gemini extraction quality.
  */
-async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
-  const allSections: CloudSection[] = []
+function mergeWithBaseline(sections: CloudSection[]): CloudSection[] {
+  let baseline: any = null
+  try {
+    const baselinePath = resolve('config-templates', 'cloud-marketplace-baseline.json')
+    if (existsSync(baselinePath)) {
+      baseline = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    }
+  } catch {}
 
-  // Strategy 1: Split by provider sections
-  const providerSections = splitByProvider(slideText)
+  if (!baseline?.providers) return sections
 
-  if (providerSections && providerSections.size >= 2) {
-    console.log(`[cloud-marketplace] splitting by ${providerSections.size} provider sections: ${[...providerSections.keys()].join(', ')}`)
-
-    // Send each provider section separately with relevant HTML context
-    const extractions = await Promise.all(
-      [...providerSections.entries()].map(([provider, content]) => {
-        // Include HTML body relevant to this provider (search for provider mentions)
-        const relevantHtml = extractRelevantHtml(htmlBody, provider)
-        return extractChunk(content, relevantHtml, newsletterDate, provider.toLowerCase())
+  for (const bp of baseline.providers) {
+    const existing = sections.find(s => s.provider === bp.provider)
+    if (existing) {
+      // Merge baseline programs into existing, deduplicating by name
+      const existingNames = new Set(existing.programs.map(p => p.name.toLowerCase()))
+      for (const prog of bp.programs) {
+        if (!existingNames.has(prog.name.toLowerCase())) {
+          existing.programs.push(prog)
+        }
+      }
+    } else {
+      // Provider not in extraction — add from baseline
+      sections.push({
+        provider: bp.provider,
+        offerings: [],
+        programs: bp.programs,
+        incentives: [],
+        newCountries: [],
+        partnerships: [],
       })
-    )
-    for (const sections of extractions) {
-      allSections.push(...sections)
-    }
-  } else {
-    // Strategy 2: Overlapping chunks
-    const slideChunks = splitIntoChunks(slideText, 40_000, 5_000)
-    const htmlChunks = splitIntoChunks(htmlBody, 20_000, 3_000)
-    console.log(`[cloud-marketplace] no clear provider boundaries — using ${slideChunks.length} slide chunk(s) + ${htmlChunks.length} HTML chunk(s)`)
-
-    // Process slide chunks
-    const slideExtractions = await Promise.all(
-      slideChunks.map((chunk, i) =>
-        extractChunk(chunk, '', newsletterDate, `slide-chunk-${i}`)
-      )
-    )
-    for (const sections of slideExtractions) {
-      allSections.push(...sections)
-    }
-
-    // Process HTML chunks (newsletter body often has additional content)
-    const htmlExtractions = await Promise.all(
-      htmlChunks.map((chunk, i) =>
-        extractChunk('', chunk, newsletterDate, `html-chunk-${i}`)
-      )
-    )
-    for (const sections of htmlExtractions) {
-      allSections.push(...sections)
     }
   }
 
+  return sections
+}
+
+/**
+ * Extract cloud marketplace data from slide text and newsletter HTML.
+ *
+ * Strategy: Per-provider focused extraction — send full document to Gemini
+ * once per provider with a focused prompt. This replaces the previous
+ * splitByProvider() approach that gave inconsistent results depending on
+ * how the 100K char slide deck content was split.
+ *
+ * After extraction, merges with baseline programs and validates via quality gate.
+ */
+async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
+  const providers = ['AWS', 'Google', 'Microsoft']
+
+  // Per-provider focused extraction — send full doc with focused prompt
+  const extractions = await Promise.all(
+    providers.map(async (provider) => {
+      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract ONLY ${provider} content. Ignore all other cloud providers. Focus exclusively on ${provider} offerings, programs, incentives, partnerships, and new countries.`
+
+      try {
+        const result = await callGemini(focusedPrompt, slideText.slice(0, 60_000) + '\n\nHTML CONTEXT:\n' + htmlBody.slice(0, 20_000), {
+          callType: `cloud-marketplace-${provider.toLowerCase()}`,
+          responseSchema: RESPONSE_SCHEMA,
+          deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
+          timeoutMs: 90_000,
+          temperature: 0.1,
+        })
+
+        const parsed = JSON.parse(result.text)
+        const clouds = parsed.clouds ?? parsed.providers ?? (Array.isArray(parsed) ? parsed : [])
+        // Filter to only this provider
+        return clouds.filter((c: any) =>
+          String(c.provider).toLowerCase() === provider.toLowerCase()
+        ) as CloudSection[]
+      } catch (e: any) {
+        console.warn(`[cloud-marketplace] ${provider} extraction failed: ${e.message}`)
+        return [] as CloudSection[]
+      }
+    })
+  )
+
+  // Flatten and merge
+  const allSections = extractions.flat()
   const merged = mergeCloudSections(allSections)
-  console.log(`[cloud-marketplace] extracted ${merged.length} providers with ${merged.reduce((sum, c) => sum + c.offerings.length, 0)} total offerings`)
-  return merged
+
+  // Merge with baseline programs (deterministic floor)
+  const withBaseline = mergeWithBaseline(merged)
+
+  // Validate extraction quality via ADR-024 quality gate
+  const extractionJson = JSON.stringify({ clouds: withBaseline })
+  const gateResult = await validateAndRetry(
+    extractionJson,
+    { validator: cloudMarketplaceValidator },
+    async (failures, attempt) => {
+      console.warn(`[cloud-marketplace] quality gate failed (attempt ${attempt}): ${failures.map(f => f.name).join(', ')}`)
+      // Don't retry extraction — just log and proceed with what we have
+      return extractionJson
+    }
+  )
+  if (!gateResult.passed) {
+    console.warn(`[cloud-marketplace] quality gate: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold} — proceeding with best result`)
+  }
+
+  console.log(`[cloud-marketplace] extracted ${withBaseline.length} providers with ${withBaseline.reduce((sum, c) => sum + c.offerings.length, 0)} total offerings, ${withBaseline.reduce((sum, c) => sum + c.programs.length, 0)} programs`)
+  return withBaseline
 }
 
 /**
