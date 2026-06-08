@@ -291,7 +291,7 @@ function splitByProvider(text: string): Map<string, string> | null {
 
   const result = new Map<string, string>()
   for (const [provider, content] of sections) {
-    result.set(provider, chunks.join('\n\n'))
+    result.set(provider, content)
   }
 
   return result
