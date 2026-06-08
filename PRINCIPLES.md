@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-30
+updated: 2026-06-08
 ---
 
 # Design Principles — Deep Module Architecture
@@ -39,20 +39,23 @@ Every feature in this project follows three architectural layers. Violating thes
 
 | Group | Gemini? | Sections |
 |-------|---------|----------|
-| `customer-core` | No | Product Alignment, Cloud & Marketplace, Tech Stack, Cases, Renewals & Pipeline |
-| `people` | No | Key Relationships, Attendee Profiles, Partner Ecosystem, Outreach History |
+| `customer-core` | No | Product Alignment, Cloud & Marketplace, Tech Stack, Cases, Renewals & Pipeline, Competitive Landscape, Company & Industry Intelligence, Email Intelligence |
+| `people` | No | Key Relationships, Attendee Profiles, Partner Ecosystem, Outreach History, Partner Ecosystem Solutions, Specialized Partners |
 | `narrative` | Yes | Strategic Position, Current Priorities, SWOT, MEDDPICC, Expansion Opportunities |
 | `activity` | No | Engagement History, Action Items |
 | `reference` | No | Product Lifecycle, Events, Industry News |
+| `sales-enablement` | No | Sales Plays & Tactics |
 
 ## Consumer → Group Mapping
 
+All consumers receive the expanded section groups automatically via `templateAll()`. No consumer changes required when new sections are added.
+
 | Consumer | Groups | Filter |
 |----------|--------|--------|
-| Playbook | all | None — full output |
+| Playbook | all (including `sales-enablement`) | None — full output |
 | Brief | `customer-core` (condensed) + `narrative` (strategic only) | Top signals only |
 | Campaign | `customer-core` (product-filtered) | Signals matching campaign product |
-| Meeting Prep | `customer-core` + `narrative` (priorities) | Filtered to attendee roles |
+| Meeting Prep | `customer-core` + `narrative` (priorities) + `sales-enablement` | Filtered to attendee roles |
 | Email Outreach | `customer-core` (condensed) | Product + cloud spend for customer |
 
 ## Pre-flight Questions for Every New Feature (MANDATORY)
@@ -74,6 +77,11 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 13. **If this module's signals feed playbook generation, do they support attribution?** (ADR-026) Modules whose signals are consumed by the playbook generator MUST include `sourceNoteId` in signal metadata for provenance tracking. When meeting notes are merged with existing playbook state, the merge prompt receives all contributing signals — each must be attributable. Modules that don't support attribution produce playbook sections that can't trace back to their source. Reference: `docs/adr/ADR-026-customer-engagement-playbook.md`.
 14. **Does this module need scheduled execution?** (ADR-028) If a module needs to run on a timer (daily, weekly, interval), it MUST call `SchedulerRegistry.register()` instead of using `setInterval`/`setTimeout` directly. The registry provides: timer lifecycle management, enabled-check-at-fire-time, `primaryOnly` flag (skip on hero installs), status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`. Reference: `docs/adr/ADR-028-unified-scheduler-registry.md`.
 15. **Does this module produce portfolio-level data?** (ADR-029) Modules that emit signals about Red Hat products (not customer-specific data) MUST cross-reference against customer subscriptions/interests using `getCustomerProductContext(customerSlug)`. Without this, portfolio signals score as general tier (ceiling 0.35 = Noise) even when directly relevant to a customer who owns that product. With the cross-reference, matching signals get `customerSlug` set → customer tier (floor 0.50). Reference: `docs/adr/ADR-029-signal-scoring-evolution.md`.
+16. **Does this module's signal route to a named template section?** (ADR-035) Every producer module must emit signals with metadata that routes to a specific section in `routeSignal()` — never to 'other'. If the signal doesn't fit an existing section, add a new route and template function before shipping the module. Signals that fall to 'other' are invisible in deterministic output. Reference: `docs/adr/ADR-035-signal-routing-expansion.md`.
+
+## Vocabulary Resolver Rule (MANDATORY)
+
+No hardcoded product, competitor, or technology vocabularies. Every keyword list, product name, competitor name, and technology mapping must be derived from a dynamic source of truth — not authored as a const array in source code. Dynamic sources: `product-vocabulary.ts` (RH product names), `competitive-vocabulary.ts` (competitor tech), `rh-product-catalog.json` (canonical catalog). When a module needs to match product or technology names, it imports from the vocabulary resolver — never maintains its own list.
 
 ## Consumer → File Mapping (Compliance-Enforced)
 
@@ -118,8 +126,6 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 | src/product-feature-radar.ts | Producer | Tracks product feature updates |
 | src/modules/tech-stack-module.ts | Producer | Extracts customer tech stack |
 | src/customer/doc-extractors.ts | Producer | Extracts content from customer documents |
-| src/lib/attendee-profile-cache.ts | Internal | Resolves attendee identities via grounded search (#645) |
-| src/lib/executive-resolver.ts | Internal | Resolves executives by role via grounded search (#670) |
 
 ## Consumer → ensureFresh Contract
 
@@ -328,23 +334,12 @@ Consumers select which section groups they need via options. They MUST NOT:
 - Import `getCustomerSolutionContext()` directly
 - Assemble their own signal context from registry signals
 
-## Multi-pod Enterprise Region Contract (ADR-034)
-
-Enterprise regions can have multiple pods with `hidden: true` for internal routing. This separates the organizational concept (one region) from the data reality (multiple territory groupings).
-
-- Territory-to-pod mapping is declarative via `prefixes` on `RegionPodConfig` — no hardcoded strings
-- Any consumer iterating `region.pods` for UI display MUST filter `hidden` pods
-- CCSP scraper uses `getUniquePodFilters()` for multi-pod territory arrays — never `territories[0]`
-- AE dropdown groups by name — one entry per AE regardless of territory count
-- `extractEnterpriseAeAccounts()` collects from all matching AE columns across all pods in the region
-- Reference: `docs/adr/ADR-034-multi-pod-enterprise-regions.md`
-
 ## Anti-patterns
 
 - ❌ Hardcoding `score` in a module — the registry scores, not the module
 - ❌ Adding signal type to a Gemini prompt instruction — template it, don't prompt-engineer it
 - ❌ Building a consumer that assembles its own signal context — use `templateAll()`
-- ❌ Creating a feature without answering the 15 pre-flight questions
+- ❌ Creating a feature without answering the 16 pre-flight questions
 - ❌ Shipping without checking the signal debug endpoint for the new data
 - ❌ Building a module with cached data but no `ensureFresh()` — consumers will generate with stale/missing data
 - ❌ Hardcoding refresh sources in signal-loader — use the registry auto-discovery pattern
@@ -359,7 +354,8 @@ Enterprise regions can have multiple pods with `hidden: true` for internal routi
 - ❌ Consumers calling individual template functions (`templateSalesAlignment()`, etc.) instead of `templateAll()` (ADR-031) — bypasses the single data path, produces inconsistent coverage across consumers.
 - ❌ Soft-deleting customers with `inactive: true` flag instead of binary active/archived model (ADR-018) — accumulates stale data, confuses cleanup logic, inflates metrics.
 - ❌ Reading L3 CSV data via static sheet IDs instead of `discoverL3Csv()` (ADR-019) — becomes stale when source files change, skips change detection, breaks on sheet re-creation.
-- ❌ Hardcoding territory-to-pod mapping instead of using declarative `prefixes` on `RegionPodConfig` (ADR-034) — breaks when territories are absorbed or reorganized, requires code changes instead of config changes.
+- ❌ Hardcoding product, competitor, or technology vocabularies as const arrays (ADR-035) — use vocabulary resolvers (`product-vocabulary.ts`, `competitive-vocabulary.ts`, `rh-product-catalog.json`). Hardcoded lists drift from source of truth, miss new products/competitors, and require code changes instead of data updates.
+- ❌ Shipping a producer module whose signals fall to 'other' in `routeSignal()` (ADR-035) — invisible in deterministic output. Every signal must route to a named section. Architecture compliance test enforces this.
 
 ## ADR → PRINCIPLES.md Enforcement (MANDATORY)
 
@@ -398,6 +394,7 @@ Every ADR in `docs/adr/` must include these sections:
 | 13 | ADR-026 | Playbook signal attribution + merge support |
 | 14 | ADR-028 | Use SchedulerRegistry for scheduled work |
 | 15 | ADR-029 | Portfolio modules cross-ref customer context |
+| 16 | ADR-035 | Signal routing: every module routes to a named section |
 
 ## Signal Scoring Quick Reference (ADR-027)
 

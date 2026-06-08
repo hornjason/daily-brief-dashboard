@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-30
+updated: 2026-06-08
 ---
 
 # DailyBriefDashboard — Project State
@@ -11,7 +11,7 @@ updated: 2026-05-30
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship workflow hardened: mid-session fix rule (no inline fixes >1 line), doc cascade matrix in DURABILITY step, 3-layer drift prevention (convention + workflow + test). PRINCIPLES.md: 15 pre-flight questions, 19 anti-patterns, 10 contract sections. 2155 unit tests passing (33 architecture compliance tests including 4 drift detectors).
+Last updated: 2026-06-08 — Documentation cascade (#683) + routing ADR (#685). Signal routing expanded from 8 to 14 routes (ADR-035). Vocabulary resolvers added (product-vocabulary.ts, competitive-vocabulary.ts). RH product catalog module added. PRINCIPLES.md: 16 pre-flight questions, 21 anti-patterns, 10 contract sections + vocabulary resolver rule. Section groups expanded: customer-core +3, people +2, new sales-enablement group.
 
 ---
 
@@ -114,7 +114,7 @@ Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship work
 - `GET /api/customer/:name/tools/artifacts` — List uploaded artifacts
 
 ### Feature Modules
-- `GET /api/modules/status` — Registry status for all modules (22 modules, auto-discovered)
+- `GET /api/modules/status` — Registry status for all modules (23 modules, auto-discovered; includes rh-product-catalog)
 - `POST /api/customer/:name/modules/:moduleName/sync` — Trigger module sync
 - `GET /api/customer/:name/signals/debug` — Signal debug: every signal with score, tier, rawRelevance, metadata, specificity (ADR-027)
 
@@ -152,6 +152,18 @@ Last updated: 2026-05-30 — ADR→PRINCIPLES.md gap closure complete. Ship work
 - Signals: per-document (Business presentation, Cheatsheet, Competitive review) with metadata (TDP, Sales Play, product, distributionTerms, driveUrl)
 - Scope: portfolio (not customer-specific)
 - Module: `src/modules/saleshub-content-module.ts`
+
+### RH Product Catalog (#683)
+- `POST /api/refresh/rh-product-catalog` — Re-scrape redhat.com/en/products for canonical product names
+- Cache: `config-templates/rh-product-catalog.json` (41 products seed data)
+- Module: `src/modules/rh-product-catalog-module.ts` — weekly refresh
+
+### Competitive Intel (#683)
+- `POST /api/refresh/competitive-intel` — Re-read competitive intelligence cache
+
+### Vocabulary Resolvers (#683)
+- `src/lib/product-vocabulary.ts` — RH product slug/name/alias resolution from product-intel-config.json
+- `src/lib/competitive-vocabulary.ts` — Competitor technology → RH displacement product mapping
 
 ### Batch Operations
 - `POST /api/batch/execute` — Batch campaigns/news with SSE progress streaming

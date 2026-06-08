@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-28
+updated: 2026-06-08
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -1446,34 +1446,6 @@ const promptSection = toPromptContext(team)
 - **`makeAuth` missing import** in `src/account-intelligence.ts` — caused intelligence generation to crash on startup when `makeAuth` was called but not imported from `google-auth-library`.
 - **`google` (googleapis) missing import** in `src/account-intelligence.ts` — caused Drive docs write step (Step 3) to fail with `google is not defined`. Both caught when triggering "Generate All" to restore industry/segment labels after customers.json restore.
 
-## §20a. Multi-Pod Enterprise Regions (ADR-034, 2026-06-06)
-
-Enterprise regions (type: `'enterprise'`) can have multiple pods when territories are absorbed from another region. The TOLA region absorbed High Plains but kept legacy territory naming, requiring two pods under one region with internal routing.
-
-### Key mechanisms
-
-| Mechanism | Purpose |
-|-----------|---------|
-| `hidden: true` on pod | Hides from UI catalog and wizard; visible to internal data routing |
-| `prefixes: string[]` on pod | Declarative territory-code-to-pod mapping (e.g., `['High_Plains']` routes `High_Plains_Terr03`) |
-| Combined `sfReportId` | Two pods sharing one SF report when territories are in one combined report |
-| AE dropdown dedup | AEs spanning multiple pods appear once with all territory keys |
-| `getUniquePodFilters()` | CCSP scraper iterates all unique pods in `tableauTerritories` |
-| `extractEnterpriseAeAccounts()` | Collects accounts from all matching AE columns across all pods |
-
-### Hidden pod enforcement points
-
-- `/api/regions/catalog` — `buildCatalogRegion()` filters hidden pods
-- `/api/settings/pod-config` — `scrape-api.ts` filters hidden pods from `flattenPodSfReports()` / `flattenPodLabels()`
-- Setup wizard dropdown — uses pod-config API, inherits the filter
-
-### Known limitations
-
-- Six `[0]` callsites assume single territory (accidental correctness for same-pod multi-territory)
-- `parseTerritoryParts()` in `lib/territory.ts` doesn't know about prefixes — CCSP uses `getUniquePodFilters()` instead
-
-Full decision rationale: `docs/adr/ADR-034-multi-pod-enterprise-regions.md`
-
 ## §21. Gemini Output Quality Gate (ADR-024, 2026-05-18)
 
 `validateAndRetry()` in `src/gemini-quality-gate.ts` validates all Gemini-generated content before it is saved to cache or Drive. It operates as a middleware pattern — wrapping the output of any generation function, regardless of whether that function uses `callGemini()` or the legacy `callGeminiGrounded()` path.
@@ -1955,3 +1927,42 @@ Seismic DocCenter Search API (same Bearer token as page-discovery)
 
 ### Data volumes
 ~100-150 high-value documents across 6 TDPs + 5 Sales Plays. Each TDP has ~18-30 items; each Sales Play has ~4-22 items when filtered to 3 content types.
+
+---
+
+## §32. Vocabulary Resolver Architecture (#683, 2026-06-08)
+
+Two shared vocabulary modules eliminate hardcoded product and competitor name lists across the codebase.
+
+### Product Vocabulary (`src/lib/product-vocabulary.ts`)
+
+Resolves RH product slugs to display names, short names, and aliases. Reads from `product-intel-config.json`. Used by `filterByProduct()` in `signal-templates.ts` and by 6 migrated modules that previously maintained their own product name arrays.
+
+| Export | Purpose |
+|--------|---------|
+| `resolveProductSlug(name)` | Full platform name → slug (e.g., "Red Hat Ansible Automation Platform" → "aap") |
+| `getProductDisplayName(slug)` | Slug → display name |
+| `getProductAliases(slug)` | All known aliases for a product |
+
+### Competitive Vocabulary (`src/lib/competitive-vocabulary.ts`)
+
+Resolves competitor technology names to Red Hat displacement products and plays. Reads from competitive-intel cache + `solution-plays.json` fallback. Used by `motion-builder.ts` (replaces `DISPLACEMENT_KEYWORDS` const array) and 5 migrated modules.
+
+| Export | Purpose |
+|--------|---------|
+| `resolveCompetitor(techName)` | Technology name → Red Hat displacement product |
+| `getDisplacementPlay(techName)` | Technology name → solution play ID + value props |
+| `isKnownCompetitor(techName)` | Check if a technology is a known competitive target |
+
+### RH Product Catalog Module (`src/modules/rh-product-catalog-module.ts`)
+
+Scrapes `redhat.com/en/products` for canonical product names. 41 products in seed data (`config-templates/rh-product-catalog.json`). Weekly refresh cycle.
+
+| API | Purpose |
+|-----|---------|
+| `POST /api/refresh/rh-product-catalog` | Trigger re-scrape of redhat.com/en/products |
+| `GET /api/modules/status` | Shows rh-product-catalog freshness in module registry |
+
+### Design principle
+
+Vocabulary resolvers are the single source of truth for product and competitor names. Modules that need to match product names import from the resolver — they never maintain their own `const PRODUCTS = [...]` array. This eliminates drift between modules and ensures new products (added to config or scraped from redhat.com) are immediately available everywhere.
