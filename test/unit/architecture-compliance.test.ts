@@ -43,6 +43,14 @@ beforeAll(async () => {
   await import('../../src/modules/tech-stack-module.ts')
   await import('../../src/modules/cloud-marketplace-module.ts')
   await import('../../src/modules/partner-catalog-module.ts')
+  await import('../../src/modules/competitive-intel-module.ts')
+  await import('../../src/modules/ecosystem-catalog-module.ts')
+  await import('../../src/modules/ma-module.ts')
+  await import('../../src/modules/recommended-actions-module.ts')
+  await import('../../src/modules/saleshub-module.ts')
+  await import('../../src/modules/saleshub-content-module.ts')
+  await import('../../src/modules/solution-intelligence-module.ts')
+  await import('../../src/modules/value-positioning-module.ts')
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -732,5 +740,133 @@ describe('ADR-033: No Storage Without Action gate', () => {
       unhandled,
       `Node types without TacticScorer handlers: ${unhandled.join(', ')}. Add handlers per ADR-033.`
     ).toEqual([])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 12. SIGNAL ROUTING COVERAGE — every producer routes to a named section
+//     (#675) Prevents producer modules from silently falling to 'other'
+//     in routeSignal(). 7 of 30 modules had broken routing before #672-#674.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Signal routing coverage — every producer routes to a named section (#675)', () => {
+  // ── Helper: make a test signal with given source and metadata ──────────
+  function makeSignal(
+    source: string,
+    opts: { type?: string; metadata?: Record<string, unknown> } = {}
+  ): import('../../src/feature-module-registry.ts').Signal {
+    return {
+      source,
+      type: (opts.type ?? 'intelligence') as import('../../src/feature-module-registry.ts').SignalType,
+      headline: `Test signal from ${source}`,
+      detail: `Compliance test detail for ${source} module`,
+      rawRelevance: 0.5,
+      timestamp: new Date().toISOString(),
+      metadata: opts.metadata ?? {},
+    }
+  }
+
+  // A companion solution-play signal needed to activate templateStrategicOpportunities,
+  // which gates rendering of ecosystem and partner subsections.
+  function makeSolutionPlaySignal(): import('../../src/feature-module-registry.ts').Signal {
+    return {
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'Solution play companion signal',
+      detail: 'Activates strategic opportunities rendering',
+      rawRelevance: 0.5,
+      timestamp: new Date().toISOString(),
+      metadata: { solutionPlayId: 'test-play-001', solutionPlayName: 'Test Play', infrastructure: true, redHatProducts: ['OpenShift'] },
+    }
+  }
+
+  // Each entry: source name emitted by the module's signals(), the substring
+  // expected in templateAll().deterministic when routed correctly, and any
+  // metadata the template function needs to actually render.
+  // If routeSignal() falls to 'other', the signal won't appear anywhere.
+  const PRODUCER_ROUTES: Array<{
+    source: string
+    expectInDeterministic: string
+    metadata?: Record<string, unknown>
+    type?: string
+    /** Extra signals needed to activate the parent section (e.g., solution plays) */
+    companionSignals?: import('../../src/feature-module-registry.ts').Signal[]
+  }> = [
+    // Source-routed modules (explicit source checks in routeSignal)
+    { source: 'subscriptions', expectInDeterministic: 'Product Alignment', metadata: { redHatProducts: ['OpenShift'] } },
+    { source: 'ccsp', expectInDeterministic: 'Product Alignment', metadata: { redHatProducts: ['RHEL'] } },
+    { source: 'cloud-marketplace', expectInDeterministic: 'Cloud Marketplace', metadata: { provider: 'AWS', hasCloudSpend: true } },
+    { source: 'cases', expectInDeterministic: 'Support Cases', metadata: { severity: '2', caseNumber: '01234567' } },
+    { source: 'pipeline', expectInDeterministic: 'Renewals', metadata: { renewal: true, stage: 'Negotiation', closeDate: '2026-12-01' }, type: 'subscription' },
+    { source: 'tech-stack', expectInDeterministic: 'Technology Stack', metadata: { infrastructure: true } },
+    { source: 'rh-events', expectInDeterministic: 'Upcoming Events', metadata: { format: 'webinar' }, type: 'event' },
+    { source: 'account-plan', expectInDeterministic: 'Account Plan', type: 'account-plan' },
+    // ecosystem-catalog and partner-catalog render inside templateStrategicOpportunities,
+    // which requires at least one signal with metadata.solutionPlayId to activate.
+    { source: 'ecosystem-catalog', expectInDeterministic: 'Partner Ecosystem', metadata: { partnerName: 'Acme Corp', solutionName: 'Cloud Tool', resourceTypes: ['guide'] }, companionSignals: [makeSolutionPlaySignal()] },
+    { source: 'competitive-intel', expectInDeterministic: 'Competitive', metadata: { competitor: 'VMware', redHatCounter: 'OpenShift advantage' } },
+    { source: 'intelligence', expectInDeterministic: 'Intelligence', metadata: { docType: 'company' } },
+    { source: 'partner-catalog', expectInDeterministic: 'Specialized Partners', metadata: { partnerName: 'IBM', partnershipLevel: 'Premier', specializations: ['Automation'], credentialCount: 12 }, companionSignals: [makeSolutionPlaySignal()] },
+    { source: 'saleshub-tactics', expectInDeterministic: 'Sales Plays', type: 'recommendation', metadata: { playType: 'tactic', parentTdp: 'TDP-001' } },
+    { source: 'saleshub-plays', expectInDeterministic: 'Sales Plays', type: 'recommendation', metadata: { playType: 'strategic' } },
+    { source: 'emails', expectInDeterministic: 'Email', metadata: { classification: 'technical', from: 'user@example.com' } },
+    // Metadata-routed modules (route via metadata fields, not source name)
+    { source: 'product-intel', expectInDeterministic: 'Product Alignment', metadata: { product: 'OpenShift' } },
+    { source: 'product-lifecycle', expectInDeterministic: 'Product Alignment', metadata: { product: 'RHEL' } },
+    { source: 'rh-rss', expectInDeterministic: 'Product Alignment', metadata: { productTags: ['OpenShift'] } },
+    { source: 'value-maps', expectInDeterministic: 'Product Alignment', metadata: { productSlug: 'openshift' } },
+    { source: 'solution-intelligence', expectInDeterministic: 'Cloud Marketplace', metadata: { provider: 'Azure', hasCloudIntel: true } },
+  ]
+
+  // Consumer-only modules (no signals()): campaigns, meeting-prep, playbook, tools, value-positioning
+  // These are excluded by design — they consume signals, they don't produce them.
+
+  for (const route of PRODUCER_ROUTES) {
+    test(`${route.source} routes to "${route.expectInDeterministic}" section (not 'other')`, async () => {
+      const { templateAll } = await import('../../src/lib/signal-templates.ts')
+
+      const signal = makeSignal(route.source, { type: route.type, metadata: route.metadata })
+      const signals = [...(route.companionSignals ?? []), signal]
+
+      const result = await templateAll(signals)
+
+      expect(
+        result.deterministic,
+        `Signal from '${route.source}' fell to 'other' — not routed to any named section. ` +
+        `Expected "${route.expectInDeterministic}" in deterministic output. ` +
+        `Fix routeSignal() in src/lib/signal-templates.ts to handle source '${route.source}'.`
+      ).toContain(route.expectInDeterministic)
+    })
+  }
+
+  // Skipped modules — documented reasons, visible as TODOs in test output
+  test.skip('mergers-acquisitions — no data source, deferred per #674 investigation', () => {
+    // mergers-acquisitions module registered but has no active data pipeline.
+    // Signal routing TBD when M&A data source is connected.
+  })
+
+  test.skip('customer-docs — routes need investigation, signals may not use standard source name', () => {
+    // customer-docs module needs investigation to determine what source name
+    // its signals emit and what section they should route to.
+  })
+
+  test.skip('saleshub-content — routes via metadata.product, needs verification of actual signal shape', () => {
+    // saleshub-content produces signals but routing depends on metadata.product
+    // which routes to 'product' via the metadata path. Needs real signal sample.
+  })
+
+  test.skip('news-radar — routes via metadata, needs investigation of actual signal shape', () => {
+    // news-radar signals may route via metadata fields. Need to verify what
+    // metadata they carry and which section they land in.
+  })
+
+  test.skip('recommended-actions — routes via metadata.product, needs verification', () => {
+    // recommended-actions produces signals that may route via metadata.product.
+    // Need to verify actual signal shape and expected section.
+  })
+
+  test.skip('customer-product-intel — routes via metadata, needs verification of routing path', () => {
+    // customer-product-intel is a producer but its routing path through
+    // routeSignal() needs verification against actual signal metadata.
   })
 })

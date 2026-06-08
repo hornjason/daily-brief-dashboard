@@ -11,6 +11,7 @@ import { existsSync, readFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { callGemini } from '../gemini-call.ts'
 import { writeJsonAtomic } from './atomic-write.ts'
+import { getAllSlugs, resolveToDisplayName, resolveToShortName } from './product-vocabulary.ts'
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -31,10 +32,24 @@ interface InitiativeCache {
 
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'intelligence')
 
-const VALID_PRODUCTS = new Set([
-  'RHEL', 'OpenShift', 'Ansible', 'RHOAI', 'OpenShift AI',
-  'OpenShift Virtualization', 'Satellite', 'Application Foundations',
-])
+/** Build VALID_PRODUCTS from vocabulary: includes slugs, displayNames, and shortNames */
+function buildValidProducts(): Set<string> {
+  const slugs = getAllSlugs()
+  const names = new Set<string>()
+  for (const slug of slugs) {
+    names.add(slug)
+    const display = resolveToDisplayName(slug)
+    if (display) names.add(display)
+    const short = resolveToShortName(slug)
+    if (short) names.add(short)
+  }
+  // Keep legacy names that may not be in vocabulary yet
+  names.add('Application Foundations')
+  names.add('Satellite')
+  return names
+}
+
+const VALID_PRODUCTS = buildValidProducts()
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -112,9 +127,10 @@ export async function extractInitiatives(
   // Call Gemini for extraction
   const systemPrompt = `You are a business analyst specializing in IT strategy. Extract business initiatives and strategic priorities from company intelligence reports. Return structured JSON only.`
 
+  const validCategories = Array.from(VALID_PRODUCTS).join(', ')
   const userPrompt = `Analyze the following intelligence text for ${customerName} and extract 2-5 business initiatives or strategic priorities.
 
-For each initiative, identify which Red Hat product categories it aligns with. Valid categories: RHEL, OpenShift, Ansible, RHOAI, OpenShift AI, OpenShift Virtualization, Satellite, Application Foundations.
+For each initiative, identify which Red Hat product categories it aligns with. Valid categories: ${validCategories}.
 
 Return a JSON array where each element has:
 - "name": short name for the initiative (e.g., "AI-native platform strategy")

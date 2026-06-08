@@ -14,6 +14,7 @@
 import type { ScoredTactic, EvidenceItem as TacticEvidenceItem } from './tactic-scorer.ts'
 import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
+import { getAllSlugs, getAliases } from './product-vocabulary.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,30 +60,58 @@ export interface BuildEvidenceBlocksOptions {
   maxBlocks?: number
 }
 
-// ── Product keyword mapping ─────────────────────────────────────────────────
+// ── Product keyword mapping (derived from product-vocabulary.ts) ────────────
 
-/** Maps tactic/TDP domain keywords to product terms for signal matching */
-const DOMAIN_KEYWORDS: Record<string, string[]> = {
-  'rhel': ['rhel', 'enterprise linux', 'red hat enterprise linux'],
-  'openshift': ['openshift', 'container platform', 'kubernetes', 'cloud native'],
-  'ansible': ['ansible', 'automation', 'it automation'],
-  'satellite': ['satellite', 'smart management'],
+/** Domain-only keywords not covered by product vocabulary */
+const DOMAIN_ONLY_KEYWORDS: Record<string, string[]> = {
   'cloud': ['cloud', 'marketplace', 'aws', 'azure', 'google cloud', 'gcp', 'oci'],
   'security': ['security', 'compliance', 'acs', 'advanced cluster security', 'crowdstrike', 'falcon'],
   'storage': ['storage', 'ceph', 'odf', 'data foundation'],
   'virtualization': ['virtualization', 'virt', 'hypervisor', 'migration'],
-  'ai': ['ai', 'machine learning', 'ml', 'inference', 'openshift ai'],
   'app platform': ['application platform', 'middleware', 'jboss', 'quarkus', 'runtimes'],
 }
 
-/** Maps product keywords to SSP/specialist role matchers */
-const PRODUCT_TO_ROLE_KEYWORDS: Record<string, string[]> = {
-  'rhel': ['rhel'],
-  'openshift': ['openshift'],
-  'ansible': ['ansible'],
+/**
+ * Build domain keywords map: product vocabulary aliases + domain-specific static entries.
+ * Product entries keyed by slug with lowercase aliases for matching.
+ */
+function getDomainKeywords(): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const slug of getAllSlugs()) {
+    map[slug] = getAliases(slug).map(a => a.toLowerCase())
+  }
+  // Merge domain-only keywords (not in vocabulary)
+  for (const [domain, keywords] of Object.entries(DOMAIN_ONLY_KEYWORDS)) {
+    if (!map[domain]) {
+      map[domain] = keywords
+    }
+  }
+  return map
+}
+
+/** Domain-only role keywords not covered by product vocabulary */
+const DOMAIN_ONLY_ROLE_KEYWORDS: Record<string, string[]> = {
   'cloud': ['cloud'],
-  'ai': ['ai'],
   'app platform': ['app platform', 'application platform', 'middleware'],
+}
+
+/**
+ * Build product-to-role keyword map from vocabulary + domain-specific entries.
+ * Each product slug maps to keywords used to match SSP/specialist titles.
+ */
+function getProductToRoleKeywords(): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const slug of getAllSlugs()) {
+    // Use the slug itself as the primary role keyword
+    map[slug] = [slug, ...getAliases(slug).map(a => a.toLowerCase()).filter(a => a.length > 2)]
+  }
+  // Merge domain-only role keywords
+  for (const [domain, keywords] of Object.entries(DOMAIN_ONLY_ROLE_KEYWORDS)) {
+    if (!map[domain]) {
+      map[domain] = keywords
+    }
+  }
+  return map
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -141,8 +170,9 @@ function buildSingleBlock(
 function detectDomainKeys(tactic: ScoredTactic): string[] {
   const searchText = `${tactic.name} ${tactic.parentTdp}`.toLowerCase()
   const matched: string[] = []
+  const domainKeywords = getDomainKeywords()
 
-  for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS)) {
+  for (const [domain, keywords] of Object.entries(domainKeywords)) {
     if (keywords.some(kw => searchText.includes(kw))) {
       matched.push(domain)
     }
@@ -274,12 +304,13 @@ function extractPartnerLevers(signal: Signal, _domainKeys: string[]): Lever[] {
  */
 function findRelevantTeamMember(team: AccountTeamMember[], domainKeys: string[]): string {
   // Look for SSP/SSA matching the tactic's product domain
+  const productToRoleKeywords = getProductToRoleKeywords()
   for (const member of team) {
     if (member.role !== 'ssp' && member.role !== 'ssa') continue
     const titleLower = member.title.toLowerCase()
 
     for (const domain of domainKeys) {
-      const roleKeywords = PRODUCT_TO_ROLE_KEYWORDS[domain] ?? [domain]
+      const roleKeywords = productToRoleKeywords[domain] ?? [domain]
       if (roleKeywords.some(kw => titleLower.includes(kw))) {
         return `${member.name} (${member.title})`
       }

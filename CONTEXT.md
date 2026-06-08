@@ -345,6 +345,32 @@ _Avoid_: "strategy" (too high-level), "use case" (too generic)
 Management-level sales motion that spans multiple TDPs. Five official plays: Build and Run Applications, Modernize Infrastructure, The AI-Ready Enterprise, Sovereignty, IT Operations Efficiency. Pipeline reporting rolls up to sales plays. Each play has customer-facing decks and target personas.
 _Avoid_: "solution play" in isolation (use "solution play" for the trigger-technology mapping in solution-plays.json, "sales play" for the management-level motion in saleshub-knowledge.json)
 
+### Meeting prep
+
+**Pre-scored intelligence**:
+The architectural pattern where the intelligence graph scores and ranks signals deterministically before Gemini sees them. Gemini's role is narrative synthesis only — it does not rank, filter, or decide what to include. This is the meeting prep implementation of the PRINCIPLES.md contract: "use Gemini only for narrative synthesis."
+_Avoid_: "raw signal dump", "Gemini-decided" (the graph decides, Gemini narrates)
+
+**Evidence block**:
+A structured input unit passed to Gemini containing: play name, composite score, evidence trail (specific data points with case numbers, counts, dates), available levers (incentives, POC kits, partner resources with URLs), account team context (named SSPs), and proposed ask. Gemini narrates evidence blocks into assertive talking points. The structured format prevents hallucination — Gemini cannot cite data not present in the block.
+_Avoid_: "enrichment context", "signal context" (those are the old raw-dump terms)
+
+**Seller ammunition** (also: levers):
+Actionable resources a seller can offer in a meeting: Red Hat spiffs/discounts, partner incentive programs, cloud marketplace credits, POC/trial kits, case studies, solution briefs. Woven into recommended plays with source links, not presented as a separate section.
+_Avoid_: "resources" in isolation (too generic — specify "seller ammunition" or "levers")
+
+**Meeting audience type**:
+One of three audience classifications that controls content filtering in meeting prep output: `customer` (full intelligence, exclude internal pricing), `partner` (customer context + joint opportunities, exclude pipeline $ and competitive intel), `internal` (full transparency, all data). Defaults from attendee domain detection, manually overridable.
+_Avoid_: "meeting type" (overloaded — QBR vs check-in is a different axis)
+
+**Attendee profile cache**:
+Persisted mapping of email addresses to resolved profiles (name, title, company, LinkedIn URL) at `data/cache/attendee-profiles/{domain}.json`. Built incrementally via Gemini grounded search. Once resolved, an attendee is never re-researched. Eliminates redundant Gemini calls across meetings with recurring contacts.
+_Avoid_: "attendee research" (that's the action; the cache is the persistence)
+
+**Update in place**:
+The pattern where meeting prep regeneration updates the existing Google Doc via `drive.files.update()` instead of deleting and recreating. Preserves the doc ID, URL, and sharing permissions. Required for team shareability.
+_Avoid_: "regenerate" without qualifier (could imply delete-and-recreate)
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.

@@ -9,6 +9,7 @@
 import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
+import { getAllSlugs, getAliases } from './lib/product-vocabulary.ts'
 
 const CACHE_DIR = resolve(BASE_CACHE_DIR, 'rss')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-feeds.json')
@@ -84,13 +85,20 @@ export function loadFeedConfig(): RSSFeedConfig[] {
   }
 }
 
-// ── Product Keyword Mapping ──────────────────────────────────────────────────
+// ── Product Keyword Mapping (derived from product-vocabulary.ts) ────────────
 
-const PRODUCT_KEYWORDS: Record<string, string[]> = {
-  AAP: ['ansible', 'aap', 'automation platform'],
-  OCP: ['openshift', 'ocp', 'kubernetes'],
-  RHEL: ['rhel', 'enterprise linux'],
-  RHOAI: ['openshift ai', 'rhoai', 'instructlab'],
+/**
+ * Build product keyword map from vocabulary.
+ * Keys are shortNames (e.g., "RHEL", "AAP") for backward-compatible tag output.
+ * Values are lowercase aliases for matching.
+ */
+function getProductKeywordMap(): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const slug of getAllSlugs()) {
+    const tag = slug.toUpperCase()
+    map[tag] = getAliases(slug).map(a => a.toLowerCase())
+  }
+  return map
 }
 
 /**
@@ -100,8 +108,9 @@ const PRODUCT_KEYWORDS: Record<string, string[]> = {
 function detectProductTags(text: string): string[] {
   const normalized = text.toLowerCase()
   const tags: string[] = []
+  const productKeywords = getProductKeywordMap()
 
-  for (const [tag, keywords] of Object.entries(PRODUCT_KEYWORDS)) {
+  for (const [tag, keywords] of Object.entries(productKeywords)) {
     if (keywords.some(kw => normalized.includes(kw))) {
       tags.push(tag)
     }

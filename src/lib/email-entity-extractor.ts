@@ -6,6 +6,7 @@
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { getAllProductNames, getAllSlugs, getAliases } from './product-vocabulary.ts'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -44,13 +45,15 @@ function loadTriggerTechnologies(): string[] {
   }
 }
 
-// ── Product keywords (stable Red Hat product list) ───────────────────────────
+// ── Product keywords (derived from product-vocabulary.ts) ───────────────────
 
-const PRODUCT_KEYWORDS: string[] = [
-  'RHEL', 'OpenShift', 'Ansible', 'AAP', 'OCP', 'RHACS', 'RHACM',
-  'Satellite', 'Quay', 'RHDH', 'OpenShift AI', 'RHOAI',
-  'OpenShift Virtualization', 'Red Hat Enterprise Linux',
-]
+/** Build product keyword list from vocabulary: display names, slugs, and all aliases */
+function getProductKeywords(): string[] {
+  const names = getAllProductNames()
+  const slugs = getAllSlugs()
+  const allAliases = slugs.flatMap(s => getAliases(s))
+  return [...new Set([...names, ...slugs, ...allAliases])]
+}
 
 // ── Competitor keywords ──────────────────────────────────────────────────────
 
@@ -99,8 +102,9 @@ export function extractEmailEntities(bodyText: string, subjectLine: string): Ema
   )]
 
   // Product mentions
+  const productKeywords = getProductKeywords()
   const productMentions = [...new Set(
-    PRODUCT_KEYWORDS.filter(product => matchesKeyword(fullText, product))
+    productKeywords.filter(product => matchesKeyword(fullText, product))
   )]
 
   // Competitor mentions

@@ -16,6 +16,7 @@ import { callGemini } from './gemini-call.ts'
 import { readSheetCache } from './cache-layer.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
 import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
+import { getAllSlugs, getAliases } from './lib/product-vocabulary.ts'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -46,13 +47,20 @@ export interface EnrichmentCache {
   enrichments: Record<string, EnrichmentEntry>
 }
 
-// ── Product tag → subscription keyword mapping ──────────────────────────────
+// ── Product tag → subscription keyword mapping (derived from vocabulary) ────
 
-const PRODUCT_TAG_KEYWORDS: Record<string, string[]> = {
-  OCP: ['openshift', 'ocp'],
-  AAP: ['ansible', 'aap', 'automation platform'],
-  RHEL: ['enterprise linux', 'rhel'],
-  RHOAI: ['openshift ai', 'rhoai', 'instructlab'],
+/**
+ * Build product tag keyword map from vocabulary.
+ * Keys are shortNames (e.g., "RHEL", "AAP") matching the tags emitted by rh-events-fetcher.
+ * Values are lowercase aliases for subscription matching.
+ */
+function getProductTagKeywords(): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const slug of getAllSlugs()) {
+    const tag = slug.toUpperCase()
+    map[tag] = getAliases(slug).map(a => a.toLowerCase())
+  }
+  return map
 }
 
 // ── HTML Stripping ──────────────────────────────────────────────────────────
@@ -151,8 +159,9 @@ export function matchCustomerRelevance(
 
     let matched = false
 
+    const productTagKeywords = getProductTagKeywords()
     for (const tag of realTags) {
-      const keywords = PRODUCT_TAG_KEYWORDS[tag]
+      const keywords = productTagKeywords[tag]
       if (!keywords) continue
 
       const hasMatch = subs.some(sub => {

@@ -11,6 +11,7 @@ import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import { google } from 'googleapis'
 import { CACHE_DIR as BASE_CACHE_DIR, DATA_DIR } from './lib/paths.ts'
+import { getAllSlugs, getAliases } from './lib/product-vocabulary.ts'
 
 const CACHE_DIR = resolve(BASE_CACHE_DIR, 'events')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-events.json')
@@ -38,13 +39,20 @@ export interface EventsCache {
   docId: string
 }
 
-// ── Product Keyword Mapping ──────────────────────────────────────────────────
+// ── Product Keyword Mapping (derived from product-vocabulary.ts) ────────────
 
-const PRODUCT_KEYWORDS: Record<string, string[]> = {
-  AAP: ['ansible', 'aap', 'automation platform'],
-  OCP: ['openshift', 'ocp', 'kubernetes'],
-  RHEL: ['rhel', 'enterprise linux', 'virtualization'],
-  RHOAI: ['openshift ai', 'rhoai', 'instructlab', 'ai workshop'],
+/**
+ * Build product keyword map from vocabulary.
+ * Keys are shortNames (e.g., "RHEL", "AAP") for backward-compatible tag output.
+ * Values are lowercase aliases for matching.
+ */
+function getProductKeywordMap(): Record<string, string[]> {
+  const map: Record<string, string[]> = {}
+  for (const slug of getAllSlugs()) {
+    const tag = slug.toUpperCase()
+    map[tag] = getAliases(slug).map(a => a.toLowerCase())
+  }
+  return map
 }
 
 // ── Metadata / Location Patterns ─────────────────────────────────────────────
@@ -116,8 +124,9 @@ function isGarbageEvent(name: string): boolean {
 function tagWithProducts(name: string): string[] {
   const text = name.toLowerCase()
   const tags: string[] = []
+  const productKeywords = getProductKeywordMap()
 
-  for (const [tag, keywords] of Object.entries(PRODUCT_KEYWORDS)) {
+  for (const [tag, keywords] of Object.entries(productKeywords)) {
     if (keywords.some(kw => text.includes(kw))) {
       tags.push(tag)
     }

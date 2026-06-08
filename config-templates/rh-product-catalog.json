@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "refreshedAt": "2026-06-07T00:00:00Z",
+  "source": "https://www.redhat.com/en/products",
+  "products": [
+    {
+      "name": "Red Hat Enterprise Linux",
+      "category": "Linux Platforms",
+      "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"
+    },
+    {
+      "name": "Red Hat Enterprise Linux for SAP Solutions",
+      "category": "Linux Platforms",
+      "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/sap"
+    },
+    {
+      "name": "Red Hat AI Enterprise",
+      "category": "Artificial Intelligence",
+      "url": "https://www.redhat.com/en/products/ai/enterprise"
+    },
+    {
+      "name": "Red Hat AI Factory with NVIDIA",
+      "category": "Artificial Intelligence",
+      "url": "https://www.redhat.com/en/products/ai/factory-with-nvidia"
+    },
+    {
+      "name": "Red Hat AI Inference",
+      "category": "Artificial Intelligence",
+      "url": "https://www.redhat.com/en/products/ai/inference"
+    },
+    {
+      "name": "Red Hat Enterprise Linux AI",
+      "category": "Artificial Intelligence",
+      "url": "https://www.redhat.com/en/products/ai/enterprise-linux-ai"
+    },
+    {
+      "name": "Red Hat OpenShift AI",
+      "category": "Artificial Intelligence",
+      "url": "https://www.redhat.com/en/products/ai/openshift-ai"
+    },
+    {
+      "name": "Red Hat OpenShift",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift"
+    },
+    {
+      "name": "Red Hat OpenShift Container Platform",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/container-platform"
+    },
+    {
+      "name": "Red Hat OpenShift Dedicated",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/dedicated"
+    },
+    {
+      "name": "Red Hat OpenShift Kubernetes Engine",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/kubernetes-engine"
+    },
+    {
+      "name": "Red Hat OpenShift on IBM Cloud",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/ibm"
+    },
+    {
+      "name": "Red Hat OpenShift Platform Plus",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/platform-plus"
+    },
+    {
+      "name": "Red Hat OpenShift Service on AWS",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/aws"
+    },
+    {
+      "name": "Red Hat OpenShift Virtualization",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+    },
+    {
+      "name": "Red Hat OpenShift Virtualization Engine",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization-engine"
+    },
+    {
+      "name": "Red Hat OpenStack Services on OpenShift",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openstack-services-on-openshift"
+    },
+    {
+      "name": "Red Hat Quay",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/quay"
+    },
+    {
+      "name": "Red Hat Service Interconnect",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/service-interconnect"
+    },
+    {
+      "name": "Microsoft Azure Red Hat OpenShift",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/azure"
+    },
+    {
+      "name": "Red Hat Advanced Developer Suite",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/products/advanced-developer-suite"
+    },
+    {
+      "name": "Red Hat Certificate System",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/certificate-system"
+    },
+    {
+      "name": "Red Hat Desktop",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/products/desktop"
+    },
+    {
+      "name": "Red Hat Developer Hub",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/developer-hub"
+    },
+    {
+      "name": "Red Hat Device Edge",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/device-edge"
+    },
+    {
+      "name": "Red Hat Directory Server",
+      "category": "Cloud Computing",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/directory-server"
+    },
+    {
+      "name": "Red Hat Advanced Cluster Management for Kubernetes",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/technologies/management/advanced-cluster-management"
+    },
+    {
+      "name": "Red Hat Advanced Cluster Security for Kubernetes",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/advanced-cluster-security-kubernetes"
+    },
+    {
+      "name": "Red Hat Ansible Automation Platform",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/technologies/management/ansible"
+    },
+    {
+      "name": "Red Hat Ansible Automation Platform on Microsoft Azure",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/technologies/management/ansible/azure"
+    },
+    {
+      "name": "Red Hat Lightspeed",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/lightspeed"
+    },
+    {
+      "name": "Red Hat Satellite",
+      "category": "Management",
+      "url": "https://www.redhat.com/en/technologies/management/satellite"
+    },
+    {
+      "name": "Red Hat 3scale API Management",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/jboss-middleware/3scale"
+    },
+    {
+      "name": "Red Hat AMQ",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/jboss-middleware/amq"
+    },
+    {
+      "name": "Red Hat Application Foundations",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/products/application-foundations"
+    },
+    {
+      "name": "Red Hat Connectivity Link",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/cloud-computing/connectivity-link"
+    },
+    {
+      "name": "Red Hat Data Grid",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/jboss-middleware/data-grid"
+    },
+    {
+      "name": "Red Hat JBoss Enterprise Application Platform",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/jboss-middleware/application-platform"
+    },
+    {
+      "name": "Red Hat JBoss Web Server",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/technologies/jboss-middleware/web-server"
+    },
+    {
+      "name": "Red Hat Runtimes",
+      "category": "Application Services",
+      "url": "https://www.redhat.com/en/products/runtimes"
+    },
+    {
+      "name": "Red Hat AI",
+      "category": "Platforms",
+      "url": "https://www.redhat.com/en/products/ai"
+    }
+  ]
+}

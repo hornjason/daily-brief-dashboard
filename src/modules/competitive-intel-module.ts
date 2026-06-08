@@ -11,6 +11,7 @@ import { createHash } from 'crypto'
 import { sanitizeErr } from '../utils.ts'
 import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
 import { competitiveIntelValidator } from '../quality-validators/competitive-intel-validator.ts'
+import { resolveToSlug } from '../lib/product-vocabulary.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,9 @@ export interface CompetitiveExtraction {
   salesTriggers: string[]
   compensation: string | null
   keyDates: string[]
+  redHatProducts: string[]
+  resolvedSlugs: string[]
+  unresolvedProducts: string[]
 }
 
 export interface DeckCache {
@@ -82,6 +86,8 @@ Extract ALL competitive positions mentioned. For each competitor/product discuss
   (e.g., "reduce IT staff but do more with less", "consolidate virtualization licensing")
 - compensation: Any SPIFF, incentive, or compensation notes for sellers (null if none)
 - keyDates: Array of relevant dates/deadlines (empty array if none)
+- redHatProducts: Array of Red Hat product names that counter/displace this competitor
+  (e.g., ["OpenShift Virtualization", "RHEL"] for VMware)
 
 Return a JSON array of extraction objects. Only include competitors explicitly discussed.`
 
@@ -206,13 +212,22 @@ FeatureModuleRegistry.register({
 
       for (const query of emailSearchTerms) {
         try {
-          const listRes = await gmail.users.messages.list({
-            userId: 'me',
-            q: query,
-            maxResults: 10,
-          })
+          let allMessages: any[] = []
+          let pageToken: string | undefined
+          const dateQuery = `${query} after:2025/01/01`
 
-          for (const msg of listRes.data.messages ?? []) {
+          do {
+            const listRes = await gmail.users.messages.list({
+              userId: 'me',
+              q: dateQuery,
+              maxResults: 100,
+              pageToken,
+            })
+            allMessages.push(...(listRes.data.messages ?? []))
+            pageToken = listRes.data.nextPageToken ?? undefined
+          } while (pageToken)
+
+          for (const msg of allMessages) {
             const msgRes = await gmail.users.messages.get({
               userId: 'me',
               id: msg.id!,
@@ -312,8 +327,9 @@ FeatureModuleRegistry.register({
                 salesTriggers: { type: 'array', items: { type: 'string' } },
                 compensation: { type: 'string' },
                 keyDates: { type: 'array', items: { type: 'string' } },
+                redHatProducts: { type: 'array', items: { type: 'string' } },
               },
-              required: ['competitor', 'product', 'announcement', 'redHatCounter', 'salesTriggers'],
+              required: ['competitor', 'product', 'announcement', 'redHatCounter', 'salesTriggers', 'redHatProducts'],
             },
           }
 
@@ -351,7 +367,20 @@ FeatureModuleRegistry.register({
             salesTriggers: Array.isArray(e.salesTriggers) ? e.salesTriggers.map(String) : [],
             compensation: e.compensation ? String(e.compensation) : null,
             keyDates: Array.isArray(e.keyDates) ? e.keyDates.map(String) : [],
+            redHatProducts: Array.isArray(e.redHatProducts) ? e.redHatProducts.map(String) : [],
+            resolvedSlugs: [],
+            unresolvedProducts: [],
           }))
+
+          // Validation layer: normalize competitor names and resolve product slugs
+          for (const extraction of extractions) {
+            extraction.competitor = normalizeCompetitorName(extraction.competitor)
+            extraction.resolvedSlugs = extraction.redHatProducts
+              .map(p => resolveToSlug(p))
+              .filter((s): s is string => s !== null)
+            extraction.unresolvedProducts = extraction.redHatProducts
+              .filter(p => resolveToSlug(p) === null)
+          }
 
           decks.push({
             deckId: fileId,
@@ -394,6 +423,19 @@ FeatureModuleRegistry.register({
     return generateSignals(cache)
   },
 })
+
+// ── Competitor name normalization ─────────────────────────────────────────────
+
+export function normalizeCompetitorName(name: string): string {
+  const normalized = name.trim()
+  if (/vmware|broadcom.*vmware|vmware.*broadcom/i.test(normalized)) return 'VMware/Broadcom'
+  if (/hashicorp|hashi.*corp/i.test(normalized)) return 'HashiCorp'
+  if (/nutanix/i.test(normalized)) return 'Nutanix'
+  if (/^\s*microsoft\s*$/i.test(normalized)) return 'Microsoft'
+  if (/^\s*aws\s*$/i.test(normalized)) return 'AWS'
+  if (/^\s*google\s*(cloud)?\s*$/i.test(normalized)) return 'Google Cloud'
+  return normalized
+}
 
 // ── Utility functions ─────────────────────────────────────────────────────────
 
