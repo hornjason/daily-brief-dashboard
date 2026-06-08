@@ -42,6 +42,7 @@ export interface PlaybookState {
     lifecycle: LifecycleSnapshot[]
     teamMembers: AccountTeamMember[]
     solutionPlays?: SolutionPlaySnapshot[]
+    signalIntelligence?: string | null     // Full template output from templateAll()
   }
 
   // Provenance: which sources contributed to the current state

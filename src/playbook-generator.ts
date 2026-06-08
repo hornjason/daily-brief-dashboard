@@ -513,6 +513,7 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       lifecycle,
       teamMembers: teamMembers,
       solutionPlays: solutionPlaySnapshots,
+      signalIntelligence: templateResult.deterministic || null,
     },
     sources: [
       {
