@@ -226,49 +226,49 @@ const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
  * returns null so the caller can fall back to overlapping chunks.
  */
 function splitByProvider(text: string): Map<string, string> | null {
-  // Look for provider headings: lines that start with or are dominated by a provider name
-  // Common patterns: "AWS", "Amazon Web Services", "Google Cloud / GCP", "Microsoft Azure", "Oracle OCI"
   const lines = text.split('\n')
 
-  // Find heading lines and their positions
+  // Find ALL heading lines for each provider (not just the first)
   const headings: { line: number; provider: string }[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    // Skip very long lines (body content, not headings)
-    if (line.length > 200) continue
-    // Skip empty lines
-    if (line.length === 0) continue
+    if (line.length > 200 || line.length === 0) continue
 
     for (const { key, patterns } of PROVIDER_LABELS) {
-      // A heading is a line where the provider name is prominent (first word or very short line)
       const isHeading = patterns.some(p => p.test(line)) && (
-        line.length < 80 ||  // short line = likely heading
-        patterns.some(p => line.match(p)?.index === 0) // starts with provider
+        line.length < 80 ||
+        patterns.some(p => line.match(p)?.index === 0)
       )
       if (isHeading) {
-        // Don't add duplicate providers — take the first occurrence
-        if (!headings.some(h => h.provider === key)) {
-          headings.push({ line: i, provider: key })
-        }
+        headings.push({ line: i, provider: key })
         break
       }
     }
   }
 
-  // Need at least 2 distinct provider headings to consider this a valid split
-  if (headings.length < 2) return null
+  const uniqueProviders = new Set(headings.map(h => h.provider))
+  if (uniqueProviders.size < 2) return null
 
-  // Sort by line number
   headings.sort((a, b) => a.line - b.line)
 
-  const sections = new Map<string, string>()
+  // Aggregate ALL sections for each provider across the document
+  const sections = new Map<string, string[]>()
   for (let i = 0; i < headings.length; i++) {
     const start = headings[i].line
     const end = i + 1 < headings.length ? headings[i + 1].line : lines.length
-    sections.set(headings[i].provider, lines.slice(start, end).join('\n'))
+    const chunk = lines.slice(start, end).join('\n')
+    const existing = sections.get(headings[i].provider) ?? []
+    existing.push(chunk)
+    sections.set(headings[i].provider, existing)
   }
 
-  return sections
+  // Join all chunks per provider
+  const result = new Map<string, string>()
+  for (const [provider, chunks] of sections) {
+    result.set(provider, chunks.join('\n\n'))
+  }
+
+  return result
 }
 
 /**
