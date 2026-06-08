@@ -228,19 +228,24 @@ const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
 function splitByProvider(text: string): Map<string, string> | null {
   const lines = text.split('\n')
 
-  // Find ALL heading lines for each provider (not just the first)
+  // Find major section headings — short standalone lines dominated by a provider name
+  // Tighter criteria: line must be < 40 chars OR provider name is the first word
+  // This avoids matching inline mentions like "Google Cloud Version" in body text
   const headings: { line: number; provider: string }[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    if (line.length > 200 || line.length === 0) continue
+    if (line.length > 100 || line.length === 0) continue
 
     for (const { key, patterns } of PROVIDER_LABELS) {
       const isHeading = patterns.some(p => p.test(line)) && (
-        line.length < 80 ||
+        line.length < 40 ||
         patterns.some(p => line.match(p)?.index === 0)
       )
       if (isHeading) {
-        headings.push({ line: i, provider: key })
+        // Don't add duplicate providers — take the first major heading
+        if (!headings.some(h => h.provider === key)) {
+          headings.push({ line: i, provider: key })
+        }
         break
       }
     }
@@ -251,20 +256,41 @@ function splitByProvider(text: string): Map<string, string> | null {
 
   headings.sort((a, b) => a.line - b.line)
 
-  // Aggregate ALL sections for each provider across the document
-  const sections = new Map<string, string[]>()
+  // First-heading split — each provider gets from its heading to the next
+  const sections = new Map<string, string>()
   for (let i = 0; i < headings.length; i++) {
     const start = headings[i].line
     const end = i + 1 < headings.length ? headings[i + 1].line : lines.length
-    const chunk = lines.slice(start, end).join('\n')
-    const existing = sections.get(headings[i].provider) ?? []
-    existing.push(chunk)
-    sections.set(headings[i].provider, existing)
+    sections.set(headings[i].provider, lines.slice(start, end).join('\n'))
   }
 
-  // Join all chunks per provider
+  // Second pass: for each provider, also collect ALL lines mentioning that provider
+  // from OUTSIDE its primary section. This catches scattered content.
+  for (const { key, patterns } of PROVIDER_LABELS) {
+    if (!sections.has(key)) continue
+    const primaryStart = headings.find(h => h.provider === key)!.line
+    const nextHeading = headings.find(h => h.line > primaryStart && h.provider !== key)
+    const primaryEnd = nextHeading ? nextHeading.line : lines.length
+
+    const extraLines: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      if (i >= primaryStart && i < primaryEnd) continue // skip primary section
+      const line = lines[i]
+      if (patterns.some(p => p.test(line))) {
+        // Include this line + up to 5 surrounding lines for context
+        const contextStart = Math.max(0, i - 2)
+        const contextEnd = Math.min(lines.length, i + 4)
+        extraLines.push(lines.slice(contextStart, contextEnd).join('\n'))
+      }
+    }
+
+    if (extraLines.length > 0) {
+      sections.set(key, sections.get(key)! + '\n\n--- Additional content ---\n\n' + extraLines.join('\n\n'))
+    }
+  }
+
   const result = new Map<string, string>()
-  for (const [provider, chunks] of sections) {
+  for (const [provider, content] of sections) {
     result.set(provider, chunks.join('\n\n'))
   }
 
