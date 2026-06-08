@@ -13,6 +13,7 @@ import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
 import { getTacticsByTdp, getTdpDescription, getSalesPlayByName } from './saleshub-knowledge-loader.ts'
 import { isValidCustomerWin, isValidAsset, isValidMetric } from './saleshub-filters.ts'
+import { resolveToSlug } from './product-vocabulary.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -131,11 +132,16 @@ function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' |
 function filterByProduct(signals: Signal[], productFilter?: string[]): Signal[] {
   if (!productFilter || productFilter.length === 0) return signals
 
+  const filterSlugs = new Set(productFilter.map(p => resolveToSlug(p) ?? p.toLowerCase()))
+
   return signals.filter(s => {
     const m = s.metadata ?? {}
     const products = m.redHatProducts ?? (m.product ? [m.product] : [])
     if (!Array.isArray(products)) return false
-    return products.some(p => productFilter.includes(String(p).toLowerCase()))
+    return products.some(p => {
+      const slug = resolveToSlug(String(p))
+      return slug ? filterSlugs.has(slug) : filterSlugs.has(String(p).toLowerCase())
+    })
   })
 }
 
