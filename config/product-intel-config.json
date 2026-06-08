@@ -204,6 +204,953 @@
         "contentHubUrl": null,
         "atomFeedUrl": null
       }
+    },
+    {
+      "slug": "rhel-sap",
+      "displayName": "Red Hat Enterprise Linux for SAP Solutions",
+      "shortName": "RHEL SAP",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Enterprise Linux for SAP Solutions",
+        "RHEL SAP",
+        "RHELSAP"
+      ],
+      "caseProductPatterns": [
+        "RHEL SAP"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Linux Platforms"
+    },
+    {
+      "slug": "rh-ai-enterprise",
+      "displayName": "Red Hat AI Enterprise",
+      "shortName": "AI Enterprise",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AI Enterprise",
+        "RHAIENTERPRISE"
+      ],
+      "caseProductPatterns": [
+        "AI Enterprise"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Artificial Intelligence"
+    },
+    {
+      "slug": "rh-ai-factory",
+      "displayName": "Red Hat AI Factory with NVIDIA",
+      "shortName": "AI Factory",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AI Factory",
+        "AI Factory with NVIDIA",
+        "RHAIFACTORY"
+      ],
+      "caseProductPatterns": [
+        "AI Factory"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Artificial Intelligence"
+    },
+    {
+      "slug": "rh-ai-inference",
+      "displayName": "Red Hat AI Inference",
+      "shortName": "AI Inference",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AI Inference",
+        "RHAIINFERENCE"
+      ],
+      "caseProductPatterns": [
+        "AI Inference"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Artificial Intelligence"
+    },
+    {
+      "slug": "openshift",
+      "displayName": "Red Hat OpenShift",
+      "shortName": "OpenShift",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OPENSHIFT",
+        "OpenShift"
+      ],
+      "caseProductPatterns": [
+        "OpenShift"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "osd",
+      "displayName": "Red Hat OpenShift Dedicated",
+      "shortName": "OSD",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OSD",
+        "OpenShift Dedicated"
+      ],
+      "caseProductPatterns": [
+        "OSD"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "oke",
+      "displayName": "Red Hat OpenShift Kubernetes Engine",
+      "shortName": "OKE",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OKE",
+        "OpenShift Kubernetes Engine"
+      ],
+      "caseProductPatterns": [
+        "OKE"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "roks",
+      "displayName": "Red Hat OpenShift on IBM Cloud",
+      "shortName": "ROKS",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenShift on IBM Cloud",
+        "ROKS"
+      ],
+      "caseProductPatterns": [
+        "ROKS"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "opp",
+      "displayName": "Red Hat OpenShift Platform Plus",
+      "shortName": "OPP",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OPP",
+        "OpenShift Platform Plus"
+      ],
+      "caseProductPatterns": [
+        "OPP"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rosa",
+      "displayName": "Red Hat OpenShift Service on AWS",
+      "shortName": "ROSA",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenShift Service on AWS",
+        "ROSA"
+      ],
+      "caseProductPatterns": [
+        "ROSA"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "ocp-virt",
+      "displayName": "Red Hat OpenShift Virtualization",
+      "shortName": "OCP Virt",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OCP Virt",
+        "OCPVIRT",
+        "OpenShift Virtualization"
+      ],
+      "caseProductPatterns": [
+        "OCP Virt"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "ocp-virt-engine",
+      "displayName": "Red Hat OpenShift Virtualization Engine",
+      "shortName": "OCP Virt Engine",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OCP Virt Engine",
+        "OCPVIRTENGINE",
+        "OpenShift Virtualization Engine"
+      ],
+      "caseProductPatterns": [
+        "OCP Virt Engine"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rhosp",
+      "displayName": "Red Hat OpenStack Services on OpenShift",
+      "shortName": "RHOSP",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenStack Services on OpenShift",
+        "RHOSP"
+      ],
+      "caseProductPatterns": [
+        "RHOSP"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "quay",
+      "displayName": "Red Hat Quay",
+      "shortName": "Quay",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "QUAY",
+        "Quay"
+      ],
+      "caseProductPatterns": [
+        "Quay"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-service-interconnect",
+      "displayName": "Red Hat Service Interconnect",
+      "shortName": "Service Interconnect",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "RHSERVICEINTERCONNECT",
+        "Service Interconnect"
+      ],
+      "caseProductPatterns": [
+        "Service Interconnect"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "aro",
+      "displayName": "Microsoft Azure Red Hat OpenShift",
+      "shortName": "ARO",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "ARO",
+        "Microsoft Azure OpenShift"
+      ],
+      "caseProductPatterns": [
+        "ARO"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-dev-suite",
+      "displayName": "Red Hat Advanced Developer Suite",
+      "shortName": "Dev Suite",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Advanced Developer Suite",
+        "Dev Suite",
+        "RHDEVSUITE"
+      ],
+      "caseProductPatterns": [
+        "Dev Suite"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-cert-system",
+      "displayName": "Red Hat Certificate System",
+      "shortName": "Certificate System",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Certificate System",
+        "RHCERTSYSTEM"
+      ],
+      "caseProductPatterns": [
+        "Certificate System"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-desktop",
+      "displayName": "Red Hat Desktop",
+      "shortName": "RH Desktop",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Desktop",
+        "RH Desktop",
+        "RHDESKTOP"
+      ],
+      "caseProductPatterns": [
+        "RH Desktop"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rhdh",
+      "displayName": "Red Hat Developer Hub",
+      "shortName": "RHDH",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Developer Hub",
+        "RHDH"
+      ],
+      "caseProductPatterns": [
+        "RHDH"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-device-edge",
+      "displayName": "Red Hat Device Edge",
+      "shortName": "Device Edge",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Device Edge",
+        "RHDEVICEEDGE"
+      ],
+      "caseProductPatterns": [
+        "Device Edge"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rh-directory-server",
+      "displayName": "Red Hat Directory Server",
+      "shortName": "Directory Server",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Directory Server",
+        "RHDIRECTORYSERVER"
+      ],
+      "caseProductPatterns": [
+        "Directory Server"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Cloud Computing"
+    },
+    {
+      "slug": "rhacm",
+      "displayName": "Red Hat Advanced Cluster Management for Kubernetes",
+      "shortName": "RHACM",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Advanced Cluster Management for Kubernetes",
+        "RHACM"
+      ],
+      "caseProductPatterns": [
+        "RHACM"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Management"
+    },
+    {
+      "slug": "rhacs",
+      "displayName": "Red Hat Advanced Cluster Security for Kubernetes",
+      "shortName": "RHACS",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Advanced Cluster Security for Kubernetes",
+        "RHACS"
+      ],
+      "caseProductPatterns": [
+        "RHACS"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Management"
+    },
+    {
+      "slug": "aap-azure",
+      "displayName": "Red Hat Ansible Automation Platform on Microsoft Azure",
+      "shortName": "AAP Azure",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AAP Azure",
+        "AAPAZURE",
+        "Ansible Automation Platform on Microsoft Azure"
+      ],
+      "caseProductPatterns": [
+        "AAP Azure"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Management"
+    },
+    {
+      "slug": "rh-lightspeed",
+      "displayName": "Red Hat Lightspeed",
+      "shortName": "Lightspeed",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Lightspeed",
+        "RHLIGHTSPEED"
+      ],
+      "caseProductPatterns": [
+        "Lightspeed"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Management"
+    },
+    {
+      "slug": "satellite",
+      "displayName": "Red Hat Satellite",
+      "shortName": "Satellite",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "SATELLITE",
+        "Satellite"
+      ],
+      "caseProductPatterns": [
+        "Satellite"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Management"
+    },
+    {
+      "slug": "3scale",
+      "displayName": "Red Hat 3scale API Management",
+      "shortName": "3scale",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "3SCALE",
+        "3scale",
+        "3scale API Management"
+      ],
+      "caseProductPatterns": [
+        "3scale"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "amq",
+      "displayName": "Red Hat AMQ",
+      "shortName": "AMQ",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AMQ"
+      ],
+      "caseProductPatterns": [
+        "AMQ"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "rh-app-foundations",
+      "displayName": "Red Hat Application Foundations",
+      "shortName": "App Foundations",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "App Foundations",
+        "Application Foundations",
+        "RHAPPFOUNDATIONS"
+      ],
+      "caseProductPatterns": [
+        "App Foundations"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "rh-connectivity-link",
+      "displayName": "Red Hat Connectivity Link",
+      "shortName": "Connectivity Link",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Connectivity Link",
+        "RHCONNECTIVITYLINK"
+      ],
+      "caseProductPatterns": [
+        "Connectivity Link"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "rh-data-grid",
+      "displayName": "Red Hat Data Grid",
+      "shortName": "Data Grid",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Data Grid",
+        "RHDATAGRID"
+      ],
+      "caseProductPatterns": [
+        "Data Grid"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "jboss-eap",
+      "displayName": "Red Hat JBoss Enterprise Application Platform",
+      "shortName": "JBoss EAP",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "JBOSSEAP",
+        "JBoss EAP",
+        "JBoss Enterprise Application Platform"
+      ],
+      "caseProductPatterns": [
+        "JBoss EAP"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "jboss-ws",
+      "displayName": "Red Hat JBoss Web Server",
+      "shortName": "JBoss WS",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "JBOSSWS",
+        "JBoss WS",
+        "JBoss Web Server"
+      ],
+      "caseProductPatterns": [
+        "JBoss WS"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "rh-runtimes",
+      "displayName": "Red Hat Runtimes",
+      "shortName": "Runtimes",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "RHRUNTIMES",
+        "Runtimes"
+      ],
+      "caseProductPatterns": [
+        "Runtimes"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Application Services"
+    },
+    {
+      "slug": "rh-ai",
+      "displayName": "Red Hat AI",
+      "shortName": "RH AI",
+      "driveFolder": null,
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AI",
+        "RH AI",
+        "RHAI"
+      ],
+      "caseProductPatterns": [
+        "RH AI"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      },
+      "category": "Platforms"
     }
   ]
 }
