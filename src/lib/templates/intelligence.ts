@@ -10,6 +10,10 @@ import { routeSignal } from './route-signal.ts'
  * Company & Industry Intelligence section (#673): signals from the intelligence
  * module showing company analysis and industry context.
  */
+function stripLeadingHeadings(text: string): string {
+  return text.replace(/^#{1,4}\s+[^\n]*\n+/gm, '').trim()
+}
+
 export function templateIntelligence(signals: Signal[]): string | null {
   const intelSignals = signals.filter(s => routeSignal(s) === 'intelligence')
   if (intelSignals.length === 0) return null
@@ -25,7 +29,7 @@ export function templateIntelligence(signals: Signal[]): string | null {
     lines.push('')
     lines.push('### Company Context')
     for (const s of companySignals.slice(0, 3)) {
-      lines.push(s.detail.slice(0, 500))
+      lines.push(stripLeadingHeadings(s.detail).slice(0, 500))
     }
   }
 
@@ -33,7 +37,7 @@ export function templateIntelligence(signals: Signal[]): string | null {
     lines.push('')
     lines.push('### Industry Context')
     for (const s of industrySignals.slice(0, 3)) {
-      lines.push(s.detail.slice(0, 500))
+      lines.push(stripLeadingHeadings(s.detail).slice(0, 500))
     }
   }
 

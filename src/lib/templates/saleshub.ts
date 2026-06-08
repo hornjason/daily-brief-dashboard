@@ -30,8 +30,9 @@ export function templateSalesHubInsights(signals: Signal[]): string | null {
       const m = s.metadata ?? {}
       const name = s.headline
       const parentTdp = String(m.parentTdp ?? '')
-      const snippet = Array.isArray(m.assets) && m.assets.length > 0
-        ? String(m.assets[0])
+      const firstAsset = Array.isArray(m.assets) && m.assets.length > 0 ? m.assets[0] : null
+      const snippet = firstAsset
+        ? String(typeof firstAsset === 'object' ? (firstAsset as any).name ?? (firstAsset as any).title ?? JSON.stringify(firstAsset) : firstAsset)
         : (m.talkTrack ? String(m.talkTrack).slice(0, 100) : s.detail.slice(0, 100))
       lines.push(`- **${name}** (${parentTdp}) — ${snippet}`)
     }

@@ -30,7 +30,7 @@ export function templateCompetitiveLandscape(signals: Signal[]): string | null {
     const triggers = Array.isArray(m.salesTriggers) ? String(m.salesTriggers[0] ?? '') : String(m.salesTrigger ?? '')
     rows.push(`| ${competitor} | ${announcement} | ${counter} | ${triggers} |`)
 
-    if (m.compensation) {
+    if (m.compensation && String(m.compensation) !== 'null' && String(m.compensation).trim().length > 0) {
       notes.push(`_${competitor}: ${String(m.compensation)}_`)
     }
   }
