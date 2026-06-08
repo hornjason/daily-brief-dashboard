@@ -9,33 +9,28 @@ import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.t
 import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { normalizeProductSlug } from '../lib/customer-product-context.ts'
+import { getAllSlugs, getAliases, resolveToSlug } from '../lib/product-vocabulary.ts'
+import { getAllCompetitors } from '../lib/competitive-vocabulary.ts'
 
 // ── Cross-pollination: tech and competitive mention detection (#348) ─────────
+// Now dynamic — reads from vocabulary resolvers instead of hardcoded arrays
 
-const TECH_KEYWORDS: Array<{ pattern: RegExp; slug: string }> = [
-  { pattern: /\bansible\b/i, slug: 'aap' },
-  { pattern: /\bopenshift\b/i, slug: 'ocp' },
-  { pattern: /\brhel\b/i, slug: 'rhel' },
-  { pattern: /\benterprise linux\b/i, slug: 'rhel' },
-  { pattern: /\bsatellite\b/i, slug: 'satellite' },
-  { pattern: /\bquay\b/i, slug: 'quay' },
-  { pattern: /\bdeveloper hub\b/i, slug: 'rhdh' },
-  { pattern: /\badvanced cluster security\b/i, slug: 'acs' },
-  { pattern: /\badvanced cluster management\b/i, slug: 'acm' },
-  { pattern: /\bopenshift ai\b/i, slug: 'rhoai' },
-  { pattern: /\brhel ai\b/i, slug: 'rhoai' },
-]
-
-const COMPETITIVE_KEYWORDS: string[] = [
-  'VMware', 'Tanzu', 'vSphere', 'AWS EKS', 'Azure AKS', 'GKE',
-  'Rancher', 'SUSE', 'Canonical', 'Ubuntu', 'CentOS Stream',
-  'Docker Enterprise', 'Portworx', 'Nutanix', 'Chef', 'Puppet',
-  'Terraform', 'Pulumi', 'CloudFoundry',
-]
+function buildTechKeywords(): Array<{ pattern: RegExp; slug: string }> {
+  const keywords: Array<{ pattern: RegExp; slug: string }> = []
+  for (const slug of getAllSlugs()) {
+    for (const alias of getAliases(slug)) {
+      if (alias.length >= 3) {
+        const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        keywords.push({ pattern: new RegExp(`\\b${escaped}\\b`, 'i'), slug })
+      }
+    }
+  }
+  return keywords
+}
 
 function extractTechMentions(text: string): string[] {
   const found = new Set<string>()
-  for (const { pattern, slug } of TECH_KEYWORDS) {
+  for (const { pattern, slug } of buildTechKeywords()) {
     if (pattern.test(text)) found.add(slug)
   }
   return [...found]
@@ -44,8 +39,8 @@ function extractTechMentions(text: string): string[] {
 function extractCompetitiveMentions(text: string): string[] {
   const found: string[] = []
   const lower = text.toLowerCase()
-  for (const kw of COMPETITIVE_KEYWORDS) {
-    if (lower.includes(kw.toLowerCase())) found.push(kw)
+  for (const kw of getAllCompetitors()) {
+    if (kw.length >= 3 && lower.includes(kw.toLowerCase())) found.push(kw)
   }
   return found
 }

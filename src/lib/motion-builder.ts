@@ -682,14 +682,18 @@ function buildTransformPhase(
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
 
-  // Evidence from plays and tech stack
+  // Evidence from plays — filter to AI/Transform-relevant TDPs only
+  const transformTdps = new Set(['AI Platform', 'Container Mgmt'])
   const evidence: MotionPhase['evidence'] = []
   for (const play of plays) {
-    evidence.push({
-      module: 'solution-intelligence',
-      fact: `Matched play: ${play.name}`,
-      url: play.properties.url as string | undefined,
-    })
+    const playTdp = String(play.properties.tdp ?? play.properties.solutionTdp ?? '')
+    if (transformTdps.has(playTdp) || playTdp.toLowerCase().includes('ai')) {
+      evidence.push({
+        module: 'solution-intelligence',
+        fact: `Matched play: ${play.name}`,
+        url: play.properties.url as string | undefined,
+      })
+    }
   }
 
   // Tech stack evidence for AI-related products — exclude proprietary/internal tools
