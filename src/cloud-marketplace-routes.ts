@@ -45,7 +45,7 @@ export function createCloudMarketplaceRouter(): Hono {
 
     try {
       // Layer 3 compliant: go through the signal registry, not mod.signals() directly (#701)
-      const { registrySignals } = await loadCustomerSignals(customerSlug, { ensureFresh: true })
+      const { registrySignals } = await loadCustomerSignals(customerSlug, customerName, { ensureFresh: true })
       const cloudSignals = registrySignals.filter(s => s.source === 'cloud-marketplace')
 
       // Filter to summary signals only

@@ -528,6 +528,34 @@ function extractProviderLines(text: string, provider: string): string {
   return relevant.join('\n')
 }
 
+/**
+ * Extract HTML blocks relevant to a specific cloud provider.
+ * Unlike extractProviderLines (designed for line-separated slide text),
+ * this splits HTML on block-level tags (<p>, <div>, <tr>, <li>, <h1-6>)
+ * which avoids the problem of HTML having very few linebreaks — the
+ * line-based approach captures the entire HTML body as one "line".
+ * GitHub Issue #707
+ */
+function extractProviderHtmlBlocks(html: string, provider: string, maxChars: number = 15_000): string {
+  if (!html || html.length === 0) return ''
+  const patterns = PROVIDER_LABELS.find(l => l.key === provider)?.patterns ?? []
+  if (patterns.length === 0) return html.slice(0, maxChars)
+
+  const blocks = html.split(/(?=<(?:p|div|tr|li|h[1-6])\b)/i)
+  const relevant: string[] = []
+  let totalLen = 0
+
+  for (const block of blocks) {
+    if (patterns.some(p => p.test(block))) {
+      relevant.push(block)
+      totalLen += block.length
+      if (totalLen >= maxChars) break
+    }
+  }
+
+  return relevant.length > 0 ? relevant.join('') : html.slice(0, maxChars)
+}
+
 async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
   const providers = ['AWS', 'Google', 'Microsoft']
 
@@ -536,7 +564,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
   for (const provider of providers) {
     const extraction = await (async () => {
       const providerText = extractProviderLines(slideText, provider)
-      const providerHtml = extractProviderLines(htmlBody, provider)
+      const providerHtml = extractProviderHtmlBlocks(htmlBody, provider)
       console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
 
       const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract content relevant to ${provider}'s marketplace. Include Red Hat products listed on ${provider}'s marketplace even when described alongside other cloud providers. For example, if a paragraph mentions "available on AWS, Azure, and GCP", extract that offering under ${provider}. Also extract programs, incentives, partnerships, and country availability specific to ${provider}.`
@@ -594,7 +622,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       return extractionJson
     }
   )
-  if (!gateResult.passed) {
+  if (!gateResult.scorecard.passed) {
     console.warn(`[cloud-marketplace] quality gate: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold} — proceeding with best result`)
   }
 

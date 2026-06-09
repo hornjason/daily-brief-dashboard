@@ -104,6 +104,41 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
   })
 })
 
+describe('Cloud marketplace HTML block extraction (#707)', () => {
+
+  test('extractProviderHtmlBlocks function exists with block-level tag splitting', () => {
+    expect(content).toContain('function extractProviderHtmlBlocks(html: string, provider: string, maxChars: number = 15_000): string')
+  })
+
+  test('HTML extraction splits on block-level tags, not newlines', () => {
+    // Must split on <p>, <div>, <tr>, <li>, <h1-6> — not \n
+    expect(content).toContain('html.split(/(?=<(?:p|div|tr|li|h[1-6])\\b)/i)')
+  })
+
+  test('extractCloudData uses extractProviderHtmlBlocks for HTML (not extractProviderLines)', () => {
+    // The HTML path must use block-based extraction, not line-based
+    expect(content).toContain('extractProviderHtmlBlocks(htmlBody, provider)')
+    // extractProviderLines is still used for slide text (line-separated)
+    expect(content).toContain('extractProviderLines(slideText, provider)')
+  })
+
+  test('HTML extraction caps output at maxChars (default 15K)', () => {
+    // maxChars parameter with 15_000 default prevents sending 110K+ chars to Gemini
+    expect(content).toContain('maxChars: number = 15_000')
+    expect(content).toContain('if (totalLen >= maxChars) break')
+  })
+
+  test('HTML extraction returns empty string for empty input', () => {
+    expect(content).toContain("if (!html || html.length === 0) return ''")
+  })
+
+  test('HTML extraction falls back to slice when no patterns match', () => {
+    // When no provider-relevant blocks found, return first maxChars of HTML
+    expect(content).toContain('relevant.length > 0 ? relevant.join')
+    expect(content).toContain('html.slice(0, maxChars)')
+  })
+})
+
 describe('Cloud marketplace extraction fixes (#703)', () => {
 
   test('extraction prompt handles cross-provider content', () => {
