@@ -103,3 +103,138 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
     expect(content).toContain('position Red Hat solutions')
   })
 })
+
+// ── #704: Canonical product name normalization ─────────────────────────────
+
+// Import the exported functions for direct testing
+const { normalizeOfferingName, splitCompoundOfferings } = await import('../../src/modules/cloud-marketplace-module.ts')
+
+describe('Cloud marketplace name normalization (#704)', () => {
+
+  describe('normalizeOfferingName()', () => {
+
+    test('AC-3: RHAIE variants normalize to RHEL AI canonical name', () => {
+      expect(normalizeOfferingName('RHAIE (Red Hat AI Enablement)')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('RHAIE (Red Hat AI for the Enterprise)')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('RHAIE')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+    })
+
+    test('RHEL AI variants normalize to canonical form', () => {
+      expect(normalizeOfferingName('RHEL AI')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('Red Hat Enterprise Linux AI (RHEL AI)')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('Red Hat Enterprise Linux AI')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('Red Hat AI')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+    })
+
+    test('RHEL variants normalize to canonical form', () => {
+      expect(normalizeOfferingName('RHEL')).toBe('Red Hat Enterprise Linux (RHEL)')
+      expect(normalizeOfferingName('Red Hat Enterprise Linux')).toBe('Red Hat Enterprise Linux (RHEL)')
+    })
+
+    test('RHEL SAP normalizes correctly (not to base RHEL)', () => {
+      expect(normalizeOfferingName('RHEL SAP')).toBe('Red Hat Enterprise Linux for SAP')
+      expect(normalizeOfferingName('Red Hat Enterprise Linux for SAP')).toBe('Red Hat Enterprise Linux for SAP')
+      expect(normalizeOfferingName('RHEL for SAP')).toBe('Red Hat Enterprise Linux for SAP')
+    })
+
+    test('OpenShift variants normalize', () => {
+      expect(normalizeOfferingName('OpenShift')).toBe('Red Hat OpenShift')
+      expect(normalizeOfferingName('Red Hat OpenShift')).toBe('Red Hat OpenShift')
+      expect(normalizeOfferingName('ROSA')).toBe('Red Hat OpenShift')
+    })
+
+    test('Ansible variants normalize', () => {
+      expect(normalizeOfferingName('Ansible Automation Platform')).toBe('Red Hat Ansible Automation Platform')
+      expect(normalizeOfferingName('Red Hat Ansible Automation Platform')).toBe('Red Hat Ansible Automation Platform')
+      expect(normalizeOfferingName('Ansible as a Service')).toBe('Red Hat Ansible Automation Platform')
+      expect(normalizeOfferingName('Red Hat Ansible Automation Platform Service on AWS')).toBe('Red Hat Ansible Automation Platform')
+      expect(normalizeOfferingName('AAP')).toBe('Red Hat Ansible Automation Platform')
+    })
+
+    test('RHACM variants normalize', () => {
+      expect(normalizeOfferingName('RHACM')).toBe('Red Hat Advanced Cluster Management')
+      expect(normalizeOfferingName('Advanced Cluster Management')).toBe('Red Hat Advanced Cluster Management')
+    })
+
+    test('RHLS variants normalize', () => {
+      expect(normalizeOfferingName('RHLS')).toBe('Red Hat Learning Subscription')
+      expect(normalizeOfferingName('Red Hat Learning Subscription')).toBe('Red Hat Learning Subscription')
+    })
+
+    test('unknown names pass through unchanged', () => {
+      expect(normalizeOfferingName('Something Else')).toBe('Something Else')
+      expect(normalizeOfferingName('Custom Product')).toBe('Custom Product')
+    })
+
+    test('normalization is case-insensitive', () => {
+      expect(normalizeOfferingName('rhel ai')).toBe('Red Hat Enterprise Linux AI (RHEL AI)')
+      expect(normalizeOfferingName('OPENSHIFT')).toBe('Red Hat OpenShift')
+      expect(normalizeOfferingName('rosa')).toBe('Red Hat OpenShift')
+    })
+  })
+
+  describe('splitCompoundOfferings()', () => {
+
+    test('AC-2: splits comma-separated compound entries', () => {
+      const items = [{ name: 'RHEL, RHEL SAP, RHEL Arm', description: 'compound' }]
+      const result = splitCompoundOfferings(items)
+      expect(result.length).toBeGreaterThanOrEqual(3)
+      const names = result.map((r: any) => r.name)
+      expect(names).toContain('Red Hat Enterprise Linux (RHEL)')
+      expect(names).toContain('Red Hat Enterprise Linux for SAP')
+    })
+
+    test('does not split non-compound entries', () => {
+      const items = [{ name: 'Red Hat OpenShift', description: 'single' }]
+      const result = splitCompoundOfferings(items)
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('Red Hat OpenShift')
+    })
+
+    test('splits semicolon-separated entries', () => {
+      const items = [{ name: 'RHEL; OpenShift', description: 'compound' }]
+      const result = splitCompoundOfferings(items)
+      expect(result.length).toBeGreaterThanOrEqual(2)
+    })
+
+    test('preserves description from original entry on split items', () => {
+      const items = [{ name: 'RHEL, OpenShift', description: 'important desc' }]
+      const result = splitCompoundOfferings(items)
+      expect(result.every((r: any) => r.description === 'important desc')).toBe(true)
+    })
+  })
+
+  describe('dedupeByName integration with normalization', () => {
+
+    test('AC-1: dedupeByName uses canonical name mapping', () => {
+      expect(content).toContain('normalizeOfferingName')
+      const dedupeStart = content.indexOf('function dedupeByName')
+      const dedupeBlock = content.slice(dedupeStart, content.indexOf('\n}', dedupeStart) + 2)
+      expect(dedupeBlock).toContain('normalizeOfferingName')
+    })
+
+    test('AC-4: duplicate product names with different surface forms deduplicate', () => {
+      const testNames = [
+        'RHEL AI',
+        'Red Hat Enterprise Linux AI (RHEL AI)',
+        'Red Hat Enterprise Linux AI',
+        'Red Hat AI',
+        'RHAIE (Red Hat AI Enablement)',
+        'RHEL, RHEL SAP, RHEL Arm',
+        'Ansible as a Service',
+        'Red Hat Ansible Automation Platform Service on AWS',
+        'Red Hat Ansible Automation Platform',
+        'RHEL',
+        'OpenShift',
+        'ROSA',
+        'Red Hat OpenShift',
+        'RHACM',
+        'Red Hat Learning Subscription',
+        'RHLS',
+      ]
+      // After normalization and dedup, unique canonical names should be <= 10
+      const normalized = new Set(testNames.map(n => normalizeOfferingName(n).toLowerCase().trim()))
+      expect(normalized.size).toBeLessThanOrEqual(10)
+    })
+  })
+})
