@@ -7,7 +7,6 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { createHash } from 'crypto'
 import { toSlug, readCCSPCache } from '../cache-layer.ts'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../google.ts'
@@ -222,73 +221,7 @@ const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
   { key: 'Oracle', patterns: [/\bOracle\b/i, /\bOCI\b/i] },
 ]
 
-/**
- * Split slide text into per-provider sections by finding heading-like boundaries.
- * Returns a map of provider key → content. If clear boundaries aren't found,
- * returns null so the caller can fall back to overlapping chunks.
- */
-function splitByProvider(text: string): Map<string, string> | null {
-  // Look for provider headings: lines that start with or are dominated by a provider name
-  // Common patterns: "AWS", "Amazon Web Services", "Google Cloud / GCP", "Microsoft Azure", "Oracle OCI"
-  const lines = text.split('\n')
-
-  // Find heading lines and their positions
-  const headings: { line: number; provider: string }[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-    // Skip very long lines (body content, not headings)
-    if (line.length > 200) continue
-    // Skip empty lines
-    if (line.length === 0) continue
-
-    for (const { key, patterns } of PROVIDER_LABELS) {
-      // A heading is a line where the provider name is prominent (first word or very short line)
-      const isHeading = patterns.some(p => p.test(line)) && (
-        line.length < 80 ||  // short line = likely heading
-        patterns.some(p => line.match(p)?.index === 0) // starts with provider
-      )
-      if (isHeading) {
-        // Don't add duplicate providers — take the first occurrence
-        if (!headings.some(h => h.provider === key)) {
-          headings.push({ line: i, provider: key })
-        }
-        break
-      }
-    }
-  }
-
-  // Need at least 2 distinct provider headings to consider this a valid split
-  if (headings.length < 2) return null
-
-  // Sort by line number
-  headings.sort((a, b) => a.line - b.line)
-
-  const sections = new Map<string, string>()
-  for (let i = 0; i < headings.length; i++) {
-    const start = headings[i].line
-    const end = i + 1 < headings.length ? headings[i + 1].line : lines.length
-    sections.set(headings[i].provider, lines.slice(start, end).join('\n'))
-  }
-
-  return sections
-}
-
-/**
- * Split text into overlapping chunks when provider boundaries aren't clear.
- * Each chunk is up to `chunkSize` chars with `overlap` chars of overlap.
- */
-function splitIntoChunks(text: string, chunkSize: number = 40_000, overlap: number = 5_000): string[] {
-  if (text.length <= chunkSize) return [text]
-  const chunks: string[] = []
-  let start = 0
-  while (start < text.length) {
-    chunks.push(text.slice(start, start + chunkSize))
-    start += chunkSize - overlap
-  }
-  return chunks
-}
-
-// ── Gemini extraction (per-provider or chunked) ──────────────────────────────
+// ── Gemini extraction ────────────────────────────────────────────────────────
 
 const RESPONSE_SCHEMA = {
   type: 'object',
@@ -352,33 +285,6 @@ const RESPONSE_SCHEMA = {
   },
   required: ['newsletterDate', 'clouds'],
 } as const
-
-/**
- * Call Gemini for a single content chunk and return extracted cloud sections.
- */
-async function extractChunk(
-  slideContent: string,
-  htmlContent: string,
-  newsletterDate: string,
-  deltaKeySuffix: string,
-): Promise<CloudSection[]> {
-  const userPrompt = `Slide deck content:\n\n${slideContent}\n\nNewsletter email body:\n\n${htmlContent}\n\nExtract cloud marketplace data as JSON. Preserve any URLs found in anchor tags.`
-
-  try {
-    const result = await callGemini(EXTRACTION_PROMPT, userPrompt, {
-      callType: 'cloud-marketplace-extraction',
-      responseSchema: RESPONSE_SCHEMA,
-      deltaKey: `cloud-marketplace-${deltaKeySuffix}`,
-      timeoutMs: 60_000,
-      temperature: 0.2,
-    })
-    const parsed = JSON.parse(result.text)
-    return parsed.clouds ?? []
-  } catch (e: any) {
-    console.error(`[cloud-marketplace] Gemini extraction failed for ${deltaKeySuffix}: ${sanitizeErr(e.message)}`)
-    return []
-  }
-}
 
 /**
  * Merge cloud sections from multiple extraction calls.
@@ -578,33 +484,6 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
 
   console.log(`[cloud-marketplace] extracted ${withBaseline.length} providers with ${withBaseline.reduce((sum, c) => sum + c.offerings.length, 0)} total offerings, ${withBaseline.reduce((sum, c) => sum + c.programs.length, 0)} programs`)
   return withBaseline
-}
-
-/**
- * Extract HTML content relevant to a specific provider.
- * Searches for paragraphs/sections mentioning the provider name.
- */
-function extractRelevantHtml(html: string, provider: string): string {
-  if (!html || html.length === 0) return ''
-
-  const providerPatterns = PROVIDER_LABELS.find(p => p.key === provider)?.patterns ?? []
-  if (providerPatterns.length === 0) return html.slice(0, 10_000)
-
-  // Split HTML into rough blocks (by <p>, <div>, <tr>, <li> boundaries)
-  const blocks = html.split(/(?=<(?:p|div|tr|li|h[1-6])\b)/i)
-  const relevant: string[] = []
-  let totalLen = 0
-  const MAX_RELEVANT = 15_000
-
-  for (const block of blocks) {
-    if (providerPatterns.some(p => p.test(block))) {
-      relevant.push(block)
-      totalLen += block.length
-      if (totalLen >= MAX_RELEVANT) break
-    }
-  }
-
-  return relevant.length > 0 ? relevant.join('') : html.slice(0, 10_000)
 }
 
 // ── Cache management ───────────────────────────────────────────────────────────
@@ -867,6 +746,18 @@ FeatureModuleRegistry.register({
         return
       }
 
+      // Filter expired programs/incentives at cache-write time (#708)
+      const now = new Date().toISOString().slice(0, 10)
+      for (const cloud of clouds) {
+        const expiredProgs = cloud.programs.filter(p => p.validThrough && p.validThrough < now).length
+        const expiredIncs = cloud.incentives.filter(i => i.validThrough && i.validThrough < now).length
+        cloud.programs = cloud.programs.filter(p => !p.validThrough || p.validThrough >= now)
+        cloud.incentives = cloud.incentives.filter(i => !i.validThrough || i.validThrough >= now)
+        if (expiredProgs + expiredIncs > 0) {
+          console.log(`[cloud-marketplace] ${cloud.provider}: removed ${expiredProgs} expired program(s), ${expiredIncs} expired incentive(s) at cache-write`)
+        }
+      }
+
       const cache: CloudMarketplaceCache = {
         newsletterDate,
         searchQuery: DEFAULT_SEARCH_QUERY,
@@ -919,9 +810,8 @@ FeatureModuleRegistry.register({
 
     const ccspClouds = new Set(customerRecords.map(r => r.cloudPartner).filter(Boolean))
 
-    // Detect cloud usage from tech-stack intelligence
+    // Detect cloud usage from tech-stack intelligence — explicit provider matches only
     const techStackClouds = new Set<string>()
-    let hasGenericCloudIntel = false
     try {
       const techPath = resolve(CACHE_DIR, 'tech-stack', `${customerSlug}.json`)
       if (existsSync(techPath)) {
@@ -933,14 +823,10 @@ FeatureModuleRegistry.register({
             if (lower.includes('azure') || lower.includes('microsoft')) techStackClouds.add('Microsoft')
             if (lower.includes('google cloud') || lower.includes('gcp')) techStackClouds.add('Google')
             if (lower.includes('oracle cloud') || lower.includes('oci')) techStackClouds.add('Oracle')
-            if (lower.includes('cloud') || lower.includes('kubernetes') || lower.includes('containers')) hasGenericCloudIntel = true
           }
         }
       }
     } catch { /* tech-stack cache missing */ }
-    if (hasGenericCloudIntel) {
-      for (const p of ['AWS', 'Microsoft', 'Google', 'Oracle']) techStackClouds.add(p)
-    }
 
     const signals: Signal[] = []
 
@@ -1020,6 +906,7 @@ FeatureModuleRegistry.register({
           incentives: activeIncentives.map(i => ({ name: i.name, value: i.value, url: i.url, description: i.description, validThrough: i.validThrough })),
           newCountries: cloud.newCountries,
           partnerships: cloud.partnerships,
+          sourceNoteId: `cloud-marketplace-${cloud.provider.toLowerCase()}-${marketplaceCache.newsletterDate}`,
         },
       })
     }

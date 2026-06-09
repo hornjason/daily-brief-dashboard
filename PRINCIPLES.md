@@ -209,7 +209,7 @@ async ensureFresh(customerSlug: string): Promise<void> {
 |--------|-----------|--------|
 | `saleshub-content` | `saleshub-knowledge.json` | ✅ Implemented (#460) — syncNow + ensureFresh download from Drive |
 | `saleshub` | `saleshub-knowledge.json` | ✅ Implemented (#442) — syncNow downloads from Drive |
-| `cloud-marketplace` | `cloud-marketplace/latest.json` | ❌ **TODO** — reads local cache only |
+| `cloud-marketplace` | `cloud-marketplace/latest.json` | ✅ Implemented (#703) — ensureFresh reads from Drive, syncNow extracts + uploads to Drive |
 | `ecosystem-catalog` | `ecosystem-catalog/*.json` | ❌ **TODO** — reads local cache only |
 | `product-intel` | Product corpus files | ✅ Has its own scraper (not Drive-dependent) |
 
