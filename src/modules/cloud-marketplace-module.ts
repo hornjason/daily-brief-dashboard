@@ -449,7 +449,7 @@ function mergeWithBaseline(sections: CloudSection[]): CloudSection[] {
     if (existing) {
       // Baseline programs override extraction — they have no validThrough (standing programs)
       // This prevents Gemini from adding expired validThrough dates to permanent programs
-      for (const prog of bp.programs) {
+      for (const prog of (bp.programs ?? [])) {
         const idx = existing.programs.findIndex(p => p.name.toLowerCase() === prog.name.toLowerCase())
         if (idx >= 0) {
           existing.programs[idx] = prog
@@ -457,12 +457,19 @@ function mergeWithBaseline(sections: CloudSection[]): CloudSection[] {
           existing.programs.push(prog)
         }
       }
+      // Baseline offerings — add if missing, don't override extraction
+      for (const off of (bp.offerings ?? [])) {
+        const exists = existing.offerings.some(o => o.name.toLowerCase() === off.name.toLowerCase())
+        if (!exists) {
+          existing.offerings.push(off)
+        }
+      }
     } else {
       // Provider not in extraction — add from baseline
       sections.push({
         provider: bp.provider,
-        offerings: [],
-        programs: bp.programs,
+        offerings: bp.offerings ?? [],
+        programs: bp.programs ?? [],
         incentives: [],
         newCountries: [],
         partnerships: [],
@@ -510,7 +517,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       const providerHtml = extractProviderLines(htmlBody, provider)
       console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
 
-      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract ONLY ${provider} content. Focus exclusively on ${provider} offerings, programs, incentives, partnerships, and new countries.`
+      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract content relevant to ${provider}'s marketplace. Include Red Hat products listed on ${provider}'s marketplace even when described alongside other cloud providers. For example, if a paragraph mentions "available on AWS, Azure, and GCP", extract that offering under ${provider}. Also extract programs, incentives, partnerships, and country availability specific to ${provider}.`
 
       try {
         const result = await callGemini(focusedPrompt, providerText.slice(0, 10_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 5_000), {
@@ -830,6 +837,14 @@ FeatureModuleRegistry.register({
       return
     }
     _syncRunning = true
+
+    // Clear delta cache for all cloud-marketplace keys to force re-extraction
+    const deltaCacheDir = resolve('data/cache/gemini-delta')
+    for (const provider of ['aws', 'google', 'microsoft']) {
+      const deltaPath = resolve(deltaCacheDir, `cloud-marketplace-${provider}.json`)
+      try { if (existsSync(deltaPath)) { unlinkSync(deltaPath); console.log(`[cloud-marketplace] cleared delta cache for ${provider}`) } } catch {}
+    }
+
     console.log('[cloud-marketplace] fetching latest newsletter...')
     try {
       const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)

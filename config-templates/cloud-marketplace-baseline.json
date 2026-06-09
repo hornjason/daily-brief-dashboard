@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Known marketplace programs per provider \u2014 deterministic floor regardless of Gemini extraction",
+  "description": "Known marketplace programs and offerings per provider — deterministic floor regardless of Gemini extraction",
   "providers": [
     {
       "provider": "AWS",
@@ -25,6 +25,24 @@
           "name": "AWS Marketplace Credit Incentive",
           "description": "Promotional credits for customers purchasing through AWS Marketplace."
         }
+      ],
+      "offerings": [
+        {
+          "name": "Red Hat Enterprise Linux (RHEL)",
+          "description": "Enterprise Linux platform available on AWS Marketplace with multiple instance types and billing options."
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "description": "Managed OpenShift container platform via ROSA (Red Hat OpenShift Service on AWS)."
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "description": "IT automation platform available on AWS Marketplace for infrastructure and application automation."
+        },
+        {
+          "name": "Red Hat Enterprise Linux for SAP",
+          "description": "RHEL optimized for SAP HANA and SAP S/4HANA workloads on AWS."
+        }
       ]
     },
     {
@@ -42,6 +60,24 @@
           "name": "Google Cloud Commit",
           "description": "Red Hat marketplace purchases burn down customer's Google Cloud committed spend."
         }
+      ],
+      "offerings": [
+        {
+          "name": "Red Hat Enterprise Linux (RHEL)",
+          "description": "Enterprise Linux platform available on Google Cloud Marketplace."
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "description": "OpenShift container platform available on Google Cloud Marketplace."
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "description": "IT automation platform available on Google Cloud Marketplace."
+        },
+        {
+          "name": "Red Hat Enterprise Linux for SAP",
+          "description": "RHEL optimized for SAP workloads on Google Cloud."
+        }
       ]
     },
     {
@@ -58,6 +94,28 @@
         {
           "name": "Azure Consumption Commitment (MACC)",
           "description": "Red Hat marketplace purchases count toward customer's Microsoft Azure Consumption Commitment."
+        }
+      ],
+      "offerings": [
+        {
+          "name": "Red Hat Enterprise Linux (RHEL)",
+          "description": "Enterprise Linux platform available on Azure Marketplace."
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "description": "Azure Red Hat OpenShift (ARO) — managed OpenShift on Azure."
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "description": "IT automation platform available on Azure Marketplace."
+        },
+        {
+          "name": "Red Hat Enterprise Linux for SAP",
+          "description": "RHEL optimized for SAP workloads on Azure."
+        },
+        {
+          "name": "Red Hat Enterprise Linux for HPC on Azure",
+          "description": "RHEL optimized for high-performance computing workloads on Azure."
         }
       ]
     }

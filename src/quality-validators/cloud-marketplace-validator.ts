@@ -163,6 +163,21 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
+  // 8. Parity check — if richest provider has N offerings and another has <N/3, flag it
+  const offeringCounts = clouds.map((c: any) => ({ provider: c.provider, count: c.offerings?.length ?? 0 }))
+  const maxOfferings = Math.max(...offeringCounts.map((o: any) => o.count), 0)
+  const parityThreshold = Math.floor(maxOfferings / 3)
+  const lowParityProviders = offeringCounts.filter((o: any) => o.count < parityThreshold && maxOfferings >= 3)
+  checks.push({
+    name: 'offering-parity',
+    passed: lowParityProviders.length === 0,
+    expected: `All providers have >= ${parityThreshold} offerings (1/3 of max ${maxOfferings})`,
+    actual: lowParityProviders.length > 0
+      ? `Low parity: ${lowParityProviders.map((o: any) => `${o.provider}=${o.count}`).join(', ')}`
+      : `${offeringCounts.map((o: any) => `${o.provider}=${o.count}`).join(', ')}`,
+    severity: 'recommended',
+  })
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 

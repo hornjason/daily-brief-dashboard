@@ -103,3 +103,39 @@ describe('Cloud marketplace L3 upgrade (#451)', () => {
     expect(content).toContain('position Red Hat solutions')
   })
 })
+
+describe('Cloud marketplace extraction fixes (#703)', () => {
+
+  test('extraction prompt handles cross-provider content', () => {
+    // AC-6: Prompt must NOT say "Extract ONLY" which skips cross-provider mentions
+    expect(content).not.toContain("Extract ONLY ${provider} content")
+    expect(content).toContain("even when described alongside other cloud providers")
+  })
+
+  test('baseline JSON includes offerings for all 3 providers', () => {
+    const baselinePath = resolve(import.meta.dir, '../../config-templates/cloud-marketplace-baseline.json')
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    expect(baseline.providers).toHaveLength(3)
+    for (const p of baseline.providers) {
+      expect(p.offerings).toBeDefined()
+      expect(p.offerings.length).toBeGreaterThanOrEqual(3)
+      // AC-3: RHEL, OpenShift, Ansible must be in each provider
+      const names = p.offerings.map((o: any) => o.name.toLowerCase())
+      expect(names.some((n: string) => n.includes('rhel'))).toBe(true)
+      expect(names.some((n: string) => n.includes('openshift'))).toBe(true)
+      expect(names.some((n: string) => n.includes('ansible'))).toBe(true)
+    }
+  })
+
+  test('mergeWithBaseline merges offerings not just programs', () => {
+    // AC-4: mergeWithBaseline must handle bp.offerings
+    expect(content).toContain("bp.offerings")
+    expect(content).toContain("existing.offerings.push(off)")
+  })
+
+  test('syncNow clears delta cache before re-extraction', () => {
+    // AC-5 related: delta cache is cleared on manual refresh
+    expect(content).toContain("cleared delta cache for")
+    expect(content).toContain("cloud-marketplace-${provider}")
+  })
+})

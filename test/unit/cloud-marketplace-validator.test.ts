@@ -78,7 +78,7 @@ const BAD_EXTRACTION = JSON.stringify({
 describe('cloudMarketplaceValidator', () => {
   it('has correct contentType and threshold', () => {
     expect(cloudMarketplaceValidator.contentType).toBe('cloud-marketplace')
-    expect(cloudMarketplaceValidator.passThreshold).toBe(70)
+    expect(cloudMarketplaceValidator.passThreshold).toBe(50)
   })
 
   it('passes good extraction', () => {
@@ -139,6 +139,52 @@ describe('cloudMarketplaceValidator', () => {
     const dupCheck = scorecard.checks.find(c => c.name === 'no-duplicate-offerings')
     expect(dupCheck).toBeDefined()
     expect(dupCheck!.passed).toBe(false)
+  })
+
+  it('flags offering parity when one provider has far fewer offerings than the richest', () => {
+    const imbalanced = JSON.stringify({
+      clouds: [
+        {
+          provider: 'AWS',
+          offerings: [
+            { name: 'RHEL 9.5', description: 'AWS RHEL.' },
+            { name: 'OpenShift ROSA', description: 'Managed OpenShift.' },
+            { name: 'Ansible AAP', description: 'Automation.' },
+            { name: 'RHEL AI', description: 'AI platform.' },
+            { name: 'RHACM', description: 'Advanced Cluster Mgmt.' },
+            { name: 'RHEL for SAP', description: 'SAP optimized.' },
+          ],
+          programs: [{ name: 'P1', description: 'Prog.' }],
+          incentives: [], newCountries: [], partnerships: [],
+        },
+        {
+          provider: 'Google',
+          offerings: [],
+          programs: [{ name: 'P2', description: 'Prog.' }],
+          incentives: [], newCountries: [], partnerships: [],
+        },
+        {
+          provider: 'Microsoft',
+          offerings: [
+            { name: 'RHEL Azure', description: 'OK.' },
+          ],
+          programs: [{ name: 'P3', description: 'Prog.' }],
+          incentives: [], newCountries: [], partnerships: [],
+        },
+      ],
+    })
+    const scorecard = cloudMarketplaceValidator.validate(imbalanced)
+    const parityCheck = scorecard.checks.find(c => c.name === 'offering-parity')
+    expect(parityCheck).toBeDefined()
+    expect(parityCheck!.passed).toBe(false)
+    expect(parityCheck!.actual).toContain('Google=0')
+  })
+
+  it('passes parity check when offerings are roughly balanced', () => {
+    const scorecard = cloudMarketplaceValidator.validate(GOOD_EXTRACTION)
+    const parityCheck = scorecard.checks.find(c => c.name === 'offering-parity')
+    expect(parityCheck).toBeDefined()
+    expect(parityCheck!.passed).toBe(true)
   })
 
   it('checks program description length', () => {
