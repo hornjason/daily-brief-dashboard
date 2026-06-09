@@ -489,7 +489,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract ONLY ${provider} content. Ignore all other cloud providers. Focus exclusively on ${provider} offerings, programs, incentives, partnerships, and new countries.`
 
       try {
-        const result = await callGemini(focusedPrompt, slideText.slice(0, 60_000) + '\n\nHTML CONTEXT:\n' + htmlBody.slice(0, 20_000), {
+        const result = await callGemini(focusedPrompt, slideText.slice(0, 30_000) + '\n\nHTML CONTEXT:\n' + htmlBody.slice(0, 10_000), {
           callType: `cloud-marketplace-${provider.toLowerCase()}`,
           responseSchema: RESPONSE_SCHEMA,
           deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
