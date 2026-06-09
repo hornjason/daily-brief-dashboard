@@ -1017,8 +1017,8 @@ FeatureModuleRegistry.register({
       if (existsSync(techPath)) {
         const techData = JSON.parse(readFileSync(techPath, 'utf-8'))
         for (const tech of techData.technologies ?? []) {
-          for (const infra of tech.infrastructure ?? []) {
-            const lower = infra.toLowerCase()
+          const searchTexts = [tech.name ?? '', ...(tech.infrastructure ?? [])].map((s: string) => s.toLowerCase())
+          for (const lower of searchTexts) {
             if (lower.includes('aws') || lower.includes('amazon')) techStackClouds.add('AWS')
             if (lower.includes('azure') || lower.includes('microsoft')) techStackClouds.add('Microsoft')
             if (lower.includes('google cloud') || lower.includes('gcp')) techStackClouds.add('Google')
