@@ -849,20 +849,8 @@ FeatureModuleRegistry.register({
     try {
       const { newsletterDate, fileIds, slideText, htmlBody } = await fetchNewsletterContent(DEFAULT_SEARCH_QUERY)
 
-      // Skip re-extraction if same slide deck file IDs AND cache has actual content
+      // syncNow always re-extracts — no file-ID skip (PRINCIPLES.md: syncNow vs ensureFresh contract)
       const existing = readCloudMarketplaceCache()
-      if (existing?.sourceFileIds && existing.clouds?.length > 0) {
-        const cachedIds = new Set(existing.sourceFileIds)
-        const newIds = new Set(fileIds)
-        if (cachedIds.size === newIds.size && [...newIds].every(id => cachedIds.has(id))) {
-          console.log(`[cloud-marketplace] same ${fileIds.length} file IDs as cache (${existing.clouds.length} clouds) — skipping re-extraction`)
-          FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true, recordCount: existing.clouds.length })
-          return
-        }
-        console.log(`[cloud-marketplace] file IDs changed: cached=${existing.sourceFileIds.length}, new=${fileIds.length}`)
-      } else if (existing?.sourceFileIds && (!existing.clouds || existing.clouds.length === 0)) {
-        console.log('[cloud-marketplace] cache has 0 clouds — forcing re-extraction')
-      }
 
       if (!slideText || slideText.trim().length < 100) {
         console.warn('[cloud-marketplace] insufficient slide text extracted')
