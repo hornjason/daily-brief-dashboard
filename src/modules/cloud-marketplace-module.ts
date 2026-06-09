@@ -575,7 +575,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
           model: 'lite',
           responseSchema: RESPONSE_SCHEMA,
           deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
-          timeoutMs: 60_000,
+          timeoutMs: 120_000,
           temperature: 0.1,
         })
 
