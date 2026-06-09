@@ -447,10 +447,13 @@ function mergeWithBaseline(sections: CloudSection[]): CloudSection[] {
   for (const bp of baseline.providers) {
     const existing = sections.find(s => s.provider === bp.provider)
     if (existing) {
-      // Merge baseline programs into existing, deduplicating by name
-      const existingNames = new Set(existing.programs.map(p => p.name.toLowerCase()))
+      // Baseline programs override extraction — they have no validThrough (standing programs)
+      // This prevents Gemini from adding expired validThrough dates to permanent programs
       for (const prog of bp.programs) {
-        if (!existingNames.has(prog.name.toLowerCase())) {
+        const idx = existing.programs.findIndex(p => p.name.toLowerCase() === prog.name.toLowerCase())
+        if (idx >= 0) {
+          existing.programs[idx] = prog
+        } else {
           existing.programs.push(prog)
         }
       }

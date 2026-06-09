@@ -1,31 +1,64 @@
 {
   "version": 1,
-  "description": "Known marketplace programs per provider — deterministic floor regardless of Gemini extraction",
+  "description": "Known marketplace programs per provider \u2014 deterministic floor regardless of Gemini extraction",
   "providers": [
     {
       "provider": "AWS",
       "programs": [
-        { "name": "Enterprise Discount Program (EDP)", "description": "Customers commit to cloud spend and get discounts. Red Hat marketplace purchases count toward EDP commitments 1:1." },
-        { "name": "Migration Acceleration Program (MAP)", "description": "AWS funding to offset costs of migrating workloads. Includes assessment credits and migration tooling." },
-        { "name": "AWS Co-Sell", "description": "Joint selling motion with AWS field sales. Begin with an AWS co-sell opportunity in ACE portal." },
-        { "name": "Channel Partner Private Offer (CPPO)", "description": "Red Hat solutions available through distribution partners on AWS Marketplace." },
-        { "name": "AWS Marketplace Credit Incentive", "description": "Promotional credits for customers purchasing through AWS Marketplace." }
+        {
+          "name": "Enterprise Discount Program (EDP)",
+          "description": "Customers commit to cloud spend and get discounts. Red Hat marketplace purchases count toward EDP commitments 1:1."
+        },
+        {
+          "name": "Migration Acceleration Program (MAP)",
+          "description": "AWS funding to offset costs of migrating workloads. Includes assessment credits and migration tooling."
+        },
+        {
+          "name": "AWS Co-Sell",
+          "description": "Joint selling motion with AWS field sales. Begin with an AWS co-sell opportunity in ACE portal."
+        },
+        {
+          "name": "Channel Partner Private Offer (CPPO)",
+          "description": "Red Hat solutions available through distribution partners on AWS Marketplace."
+        },
+        {
+          "name": "AWS Marketplace Credit Incentive",
+          "description": "Promotional credits for customers purchasing through AWS Marketplace."
+        }
       ]
     },
     {
       "provider": "Google",
       "programs": [
-        { "name": "Distribution Channel Private Offer (DCPO)", "description": "Red Hat solutions available through distribution partners: Arrow, Carahsoft, Ingram Micro, TD Synnex." },
-        { "name": "Marketplace Customer Private Offer (MCPO)", "description": "Direct private offers to customers on Google Cloud Marketplace." },
-        { "name": "Google Cloud Commit", "description": "Red Hat marketplace purchases burn down customer's Google Cloud committed spend." }
+        {
+          "name": "Distribution Channel Private Offer (DCPO)",
+          "description": "Red Hat solutions available through distribution partners: Arrow, Carahsoft, Ingram Micro, TD Synnex."
+        },
+        {
+          "name": "Marketplace Customer Private Offer (MCPO)",
+          "description": "Direct private offers to customers on Google Cloud Marketplace."
+        },
+        {
+          "name": "Google Cloud Commit",
+          "description": "Red Hat marketplace purchases burn down customer's Google Cloud committed spend."
+        }
       ]
     },
     {
       "provider": "Microsoft",
       "programs": [
-        { "name": "Marketplace Azure Acceleration Program (MAAP)", "description": "Incentives for transacting Red Hat solutions through Azure Marketplace." },
-        { "name": "Azure Sponsorship for POC", "description": "Up to $400K in free Azure credits for qualified partners and customers for deployment and POC." },
-        { "name": "Azure Consumption Commitment (MACC)", "description": "Red Hat marketplace purchases count toward customer's Microsoft Azure Consumption Commitment." }
+        {
+          "name": "Marketplace Azure Acceleration Program (MAAP)",
+          "description": "Incentives for transacting Red Hat solutions through Azure Marketplace."
+        },
+        {
+          "name": "Azure Sponsorship for POC",
+          "description": "Up to $400K in free Azure credits for qualified partners and customers for deployment and POC."
+        },
+        {
+          "name": "Azure Consumption Commitment (MACC)",
+          "description": "Red Hat marketplace purchases count toward customer's Microsoft Azure Consumption Commitment."
+        }
       ]
     }
   ]

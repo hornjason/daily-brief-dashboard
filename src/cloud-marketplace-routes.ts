@@ -95,7 +95,8 @@ export function createCloudMarketplaceRouter(): Hono {
         }
       }
 
-      return c.json({ providers, newsletterDate, cachedAt, driveFolderUrl })
+      const isStale = cachedAt ? (Date.now() - new Date(cachedAt).getTime()) > 7 * 24 * 60 * 60 * 1000 : true
+      return c.json({ providers, newsletterDate, cachedAt, driveFolderUrl, isStale })
     } catch (e: any) {
       return c.json({ error: e.message }, 500)
     }
