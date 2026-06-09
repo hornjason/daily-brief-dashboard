@@ -480,16 +480,36 @@ function mergeWithBaseline(sections: CloudSection[]): CloudSection[] {
  *
  * After extraction, merges with baseline programs and validates via quality gate.
  */
+function extractProviderLines(text: string, provider: string): string {
+  const patterns = PROVIDER_LABELS.find(l => l.key === provider)?.patterns ?? [new RegExp(`\\b${provider}\\b`, 'i')]
+  const lines = text.split('\n')
+  const relevant: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (patterns.some(p => p.test(lines[i]))) {
+      const start = Math.max(0, i - 3)
+      const end = Math.min(lines.length, i + 5)
+      for (let j = start; j < end; j++) {
+        if (!relevant.includes(lines[j])) relevant.push(lines[j])
+      }
+    }
+  }
+  return relevant.join('\n')
+}
+
 async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
   const providers = ['AWS', 'Google', 'Microsoft']
 
-  // Per-provider focused extraction — send full doc with focused prompt
+  // Per-provider focused extraction — pre-filter text to provider-relevant lines
   const extractions = await Promise.all(
     providers.map(async (provider) => {
-      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract ONLY ${provider} content. Ignore all other cloud providers. Focus exclusively on ${provider} offerings, programs, incentives, partnerships, and new countries.`
+      const providerText = extractProviderLines(slideText, provider)
+      const providerHtml = extractProviderLines(htmlBody, provider)
+      console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
+
+      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract ONLY ${provider} content. Focus exclusively on ${provider} offerings, programs, incentives, partnerships, and new countries.`
 
       try {
-        const result = await callGemini(focusedPrompt, slideText.slice(0, 30_000) + '\n\nHTML CONTEXT:\n' + htmlBody.slice(0, 10_000), {
+        const result = await callGemini(focusedPrompt, providerText.slice(0, 20_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 8_000), {
           callType: `cloud-marketplace-${provider.toLowerCase()}`,
           responseSchema: RESPONSE_SCHEMA,
           deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
