@@ -22,7 +22,7 @@ interface CustomerTabBarProps {
   onChange: (tabId: AccountTab) => void
 }
 
-const OVERFLOW_THRESHOLD = 7
+const OVERFLOW_THRESHOLD = 9
 
 export function CustomerTabBar({ tabs, activeTab, onChange }: CustomerTabBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -49,7 +49,7 @@ export function CustomerTabBar({ tabs, activeTab, onChange }: CustomerTabBarProp
   const activeOverflowTab = overflow.find(t => t.id === activeTab)
 
   return (
-    <div className="w-full h-12 bg-surface flex items-end px-6 gap-1 shrink-0 overflow-x-auto">
+    <div className="w-full h-12 bg-surface flex items-end px-6 gap-1 shrink-0 overflow-visible">
       {/* Visible tabs */}
       {visible.map(tab => {
         const isActive = tab.id === activeTab
@@ -82,7 +82,7 @@ export function CustomerTabBar({ tabs, activeTab, onChange }: CustomerTabBarProp
                 : 'text-text-secondary hover:text-text-primary'
             }`}
           >
-            {activeInOverflow ? activeOverflowTab?.label : 'More'}
+            More
             <ChevronDown className="w-3.5 h-3.5" />
             {activeInOverflow && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-t" />
