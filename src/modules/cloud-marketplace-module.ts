@@ -499,9 +499,10 @@ function extractProviderLines(text: string, provider: string): string {
 async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
   const providers = ['AWS', 'Google', 'Microsoft']
 
-  // Per-provider focused extraction — pre-filter text to provider-relevant lines
-  const extractions = await Promise.all(
-    providers.map(async (provider) => {
+  // Per-provider focused extraction — sequential to avoid rate limits
+  const extractions: CloudSection[][] = []
+  for (const provider of providers) {
+    const extraction = await (async () => {
       const providerText = extractProviderLines(slideText, provider)
       const providerHtml = extractProviderLines(htmlBody, provider)
       console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
@@ -527,8 +528,9 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
         console.warn(`[cloud-marketplace] ${provider} extraction failed: ${e.message}`)
         return [] as CloudSection[]
       }
-    })
-  )
+    })()
+    extractions.push(extraction)
+  }
 
   // Flatten and merge
   const allSections = extractions.flat()
