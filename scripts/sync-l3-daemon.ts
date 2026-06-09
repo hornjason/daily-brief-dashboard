@@ -418,15 +418,43 @@ async function proactiveRecycle(): Promise<void> {
   try {
     const result = await Promise.race([recycleWork(), timeoutPromise])
     if (result === 'timeout') {
-      console.error(`[sync-daemon] proactiveRecycle: TIMED OUT after ${RECYCLE_TIMEOUT_MS / 1000}s — releasing mutex`)
+      console.error(`[sync-daemon] proactiveRecycle: TIMED OUT after ${RECYCLE_TIMEOUT_MS / 1000}s — force-killing Chrome`)
+
+      // BKL-SYNC-CHROME-LEAK fix: timeout means recycleWork() is stuck on a dead pipe
+      // (ctx.storageState() or closeScrapeContext() hanging). The pkill inside recycleWork()
+      // never runs, so Chrome accumulates zombie tabs indefinitely. Force-kill here.
+      try {
+        const { execSync } = await import('node:child_process')
+        execSync('pkill -9 -f "chromium|chrome" 2>/dev/null || true', { timeout: 5_000 })
+        console.log('[sync-daemon] proactiveRecycle: force-killed Chrome on timeout')
+      } catch { /* non-fatal */ }
+
+      await new Promise(r => setTimeout(r, 2_000))
+
+      // Reinit context from persisted profile after force-kill
+      try {
+        const { initScrapeContext: reinitCtx, getScrapeContext: getCtx } = await import('../src/rh-scraper.ts')
+        await reinitCtx(PROFILE_DIR)
+        const newCtx = getCtx()
+        if (newCtx) {
+          adoptCcspContext(newCtx)
+          adoptSfContext(newCtx, PROFILE_DIR)
+          console.log('[sync-daemon] proactiveRecycle: browser recovered after timeout force-kill')
+        } else {
+          console.error('[sync-daemon] proactiveRecycle: reinit after force-kill returned no context')
+        }
+      } catch (reinitErr: any) {
+        console.error(`[sync-daemon] proactiveRecycle: reinit after force-kill failed: ${reinitErr?.message}`)
+      }
+
       await sendBriefEmail(
         ALERT_EMAIL,
-        `ALERT: Sync Daemon Recycle Timeout — ${new Date().toISOString().slice(0, 10)}`,
+        `ALERT: Sync Daemon Recycle Timeout (recovered) — ${new Date().toISOString().slice(0, 10)}`,
         `<html><body>
-          <h2>Browser Recycle Timed Out</h2>
+          <h2>Browser Recycle Timed Out — Force Recovery Applied</h2>
           <p>proactiveRecycle() did not complete within ${RECYCLE_TIMEOUT_MS / 1000}s.</p>
-          <p>The recycle mutex has been released but the browser state may be inconsistent.</p>
-          <p><strong>Recommended action:</strong> restart the pai-sync-l3 container.</p>
+          <p>Chrome was force-killed and the context was reinitialized.</p>
+          <p>If keepalive failures continue, restart the container:</p>
           <pre>podman restart pai-sync-l3</pre>
         </body></html>`,
       ).catch(emailErr => console.error('[sync-daemon] recycle timeout alert email failed:', emailErr))
@@ -607,6 +635,8 @@ async function main(): Promise<void> {
   // Initialized to true so the first successful keepalive after daemon start
   // does NOT falsely trigger a sync (only recovery from failure triggers sync).
   let lastKeepaliveOk = true
+  let consecutiveKeepaliveFailures = 0
+  const MAX_KEEPALIVE_FAILURES_BEFORE_RECYCLE = 3
   setInterval(async () => {
     if (keepaliveRunning) {
       console.log('[sync-daemon] keepalive skipped — previous keepalive still running')
@@ -637,6 +667,7 @@ async function main(): Promise<void> {
       }
       // AC-4: Mark keepalive as healthy
       lastKeepaliveOk = true
+      consecutiveKeepaliveFailures = 0
       console.log('[sync-daemon] keepalive OK')
       writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
         lastRun: new Date().toISOString(),
@@ -647,7 +678,21 @@ async function main(): Promise<void> {
     } catch (e: any) {
       // AC-4: Mark keepalive as failed so next success triggers sync
       lastKeepaliveOk = false
-      console.error('[sync-daemon] keepalive FAILED:', e.message)
+      consecutiveKeepaliveFailures++
+      console.error(`[sync-daemon] keepalive FAILED (${consecutiveKeepaliveFailures}/${MAX_KEEPALIVE_FAILURES_BEFORE_RECYCLE}):`, e.message)
+
+      // BKL-SYNC-CHROME-LEAK: After N consecutive failures, the browser pipe is likely dead.
+      // Trigger proactive recycle instead of waiting for the 12h timer.
+      if (consecutiveKeepaliveFailures >= MAX_KEEPALIVE_FAILURES_BEFORE_RECYCLE && !recycleRunning) {
+        console.warn(`[sync-daemon] keepalive: ${consecutiveKeepaliveFailures} consecutive failures — triggering proactive recycle`)
+        consecutiveKeepaliveFailures = 0
+        try {
+          await proactiveRecycle()
+          console.log('[sync-daemon] keepalive-triggered recycle completed')
+        } catch (recycleErr: any) {
+          console.error(`[sync-daemon] keepalive-triggered recycle failed: ${recycleErr?.message}`)
+        }
+      }
       writeFileSync(KEEPALIVE_STATUS_FILE, JSON.stringify({
         lastRun: new Date().toISOString(),
         status: 'failed',

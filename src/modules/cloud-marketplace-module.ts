@@ -312,9 +312,9 @@ function mergeCloudSections(allSections: CloudSection[]): CloudSection[] {
     }
   }
 
-  // Deduplicate within each provider
+  // Split compound offerings, then deduplicate within each provider
   for (const section of byProvider.values()) {
-    section.offerings = dedupeByName(section.offerings)
+    section.offerings = dedupeByName(splitCompoundOfferings(section.offerings as (CloudOffering & { description: string })[]))
     section.programs = dedupeByName(section.programs)
     section.incentives = dedupeByName(section.incentives)
     section.newCountries = [...new Set(section.newCountries)]
@@ -324,10 +324,126 @@ function mergeCloudSections(allSections: CloudSection[]): CloudSection[] {
   return Array.from(byProvider.values())
 }
 
+// ── Canonical product name normalization (#704) ──────────────────────────────
+
+/**
+ * Maps known product name variants to canonical forms.
+ * Order matters: more specific patterns (RHEL SAP, RHEL AI, RHAIE) must be
+ * checked before broader ones (RHEL) to avoid false matches.
+ */
+const CANONICAL_NAME_RULES: { patterns: RegExp[]; canonical: string }[] = [
+  // RHAIE — Gemini hallucinated expansions. Must be before RHEL AI.
+  {
+    patterns: [/^rhaie\b/i],
+    canonical: 'Red Hat Enterprise Linux AI (RHEL AI)',
+  },
+  // RHEL AI variants — must be before base RHEL
+  {
+    patterns: [
+      /^rhel\s+ai\b/i,
+      /^red\s+hat\s+enterprise\s+linux\s+ai\b/i,
+      /^red\s+hat\s+ai\b/i,
+    ],
+    canonical: 'Red Hat Enterprise Linux AI (RHEL AI)',
+  },
+  // RHEL SAP variants — must be before base RHEL
+  {
+    patterns: [
+      /^rhel\s+(?:for\s+)?sap\b/i,
+      /^red\s+hat\s+enterprise\s+linux\s+(?:for\s+)?sap\b/i,
+    ],
+    canonical: 'Red Hat Enterprise Linux for SAP',
+  },
+  // Base RHEL — after SAP/AI variants
+  {
+    patterns: [
+      /^rhel$/i,
+      /^red\s+hat\s+enterprise\s+linux$/i,
+    ],
+    canonical: 'Red Hat Enterprise Linux (RHEL)',
+  },
+  // OpenShift / ROSA
+  {
+    patterns: [
+      /^rosa$/i,
+      /^openshift$/i,
+      /^red\s+hat\s+openshift\b/i,
+    ],
+    canonical: 'Red Hat OpenShift',
+  },
+  // Ansible variants
+  {
+    patterns: [
+      /^aap$/i,
+      /^ansible\s+as\s+a\s+service$/i,
+      /^ansible\s+automation\s+platform\b/i,
+      /^red\s+hat\s+ansible\s+automation\s+platform\b/i,
+    ],
+    canonical: 'Red Hat Ansible Automation Platform',
+  },
+  // RHACM
+  {
+    patterns: [
+      /^rhacm$/i,
+      /^advanced\s+cluster\s+management\b/i,
+      /^red\s+hat\s+advanced\s+cluster\s+management\b/i,
+    ],
+    canonical: 'Red Hat Advanced Cluster Management',
+  },
+  // RHLS
+  {
+    patterns: [
+      /^rhls$/i,
+      /^red\s+hat\s+learning\s+subscription\b/i,
+    ],
+    canonical: 'Red Hat Learning Subscription',
+  },
+]
+
+/**
+ * Normalize a product name to its canonical form.
+ * Returns the original name if no mapping matches.
+ */
+export function normalizeOfferingName(name: string): string {
+  const trimmed = name.trim()
+  for (const rule of CANONICAL_NAME_RULES) {
+    for (const pattern of rule.patterns) {
+      if (pattern.test(trimmed)) {
+        return rule.canonical
+      }
+    }
+  }
+  return trimmed
+}
+
+/**
+ * Split compound offerings like "RHEL, RHEL SAP, RHEL Arm" into individual items.
+ * Each segment is normalized. The description from the original item is preserved.
+ * Only splits when the entry contains comma or semicolon separators.
+ */
+export function splitCompoundOfferings<T extends { name: string; description: string }>(items: T[]): T[] {
+  const result: T[] = []
+  for (const item of items) {
+    // Only split if the name contains comma or semicolon
+    if (/[,;]/.test(item.name)) {
+      const segments = item.name.split(/[,;]/).map(s => s.trim()).filter(Boolean)
+      if (segments.length > 1) {
+        for (const seg of segments) {
+          result.push({ ...item, name: normalizeOfferingName(seg) })
+        }
+        continue
+      }
+    }
+    // Single entry — just normalize
+    result.push({ ...item, name: normalizeOfferingName(item.name) })
+  }
+  return result
+}
+
 function dedupeByName<T extends { name: string }>(items: T[]): T[] {
   const seen = new Set<string>()
   return items.filter(item => {
-    const key = item.name.toLowerCase().trim()
+    const key = normalizeOfferingName(item.name).toLowerCase().trim()
     if (seen.has(key)) return false
     seen.add(key)
     return true
