@@ -304,3 +304,150 @@ describe('Cloud marketplace name normalization (#704)', () => {
     })
   })
 })
+
+// ── #704: Purchasing recommendation synthesis ──────────────────────────────
+
+const { generatePurchasingRecommendation } = await import('../../src/modules/cloud-marketplace-module.ts')
+
+describe('Cloud marketplace purchasing recommendation (#704)', () => {
+
+  describe('generatePurchasingRecommendation()', () => {
+
+    test('AC-3: expiring incentives rank highest (rank 1)', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.8, timestamp: '',
+          metadata: {
+            provider: 'AWS', hasCloudSpend: true, hasCloudIntel: true, acvPlus: 50000,
+            incentives: [{ name: 'AWS Marketplace Credit', value: '2% TCV credits', validThrough: '2026-12-31' }],
+            programs: [], offerings: [],
+          },
+        },
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.65, timestamp: '',
+          metadata: {
+            provider: 'Google', hasCloudSpend: false, hasCloudIntel: true, acvPlus: 0,
+            incentives: [], programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'fred-hutch')
+      expect(result).toBeDefined()
+      expect(result.length).toBeGreaterThanOrEqual(2)
+      const awsRec = result.find((r: any) => r.recommendedProvider === 'AWS')
+      expect(awsRec).toBeDefined()
+      expect(awsRec!.rank).toBe(1)
+      const googleRec = result.find((r: any) => r.recommendedProvider === 'Google')
+      expect(googleRec).toBeDefined()
+      expect(googleRec!.rank).toBeGreaterThan(awsRec!.rank)
+    })
+
+    test('AC-3: active CCSP spend ranks second (rank 2) over tech-stack only', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.8, timestamp: '',
+          metadata: {
+            provider: 'Microsoft', hasCloudSpend: true, hasCloudIntel: true, acvPlus: 400000,
+            incentives: [], programs: [], offerings: [],
+          },
+        },
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.65, timestamp: '',
+          metadata: {
+            provider: 'Google', hasCloudSpend: false, hasCloudIntel: true, acvPlus: 0,
+            incentives: [], programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'fred-hutch')
+      const msRec = result.find((r: any) => r.recommendedProvider === 'Microsoft')
+      const googleRec = result.find((r: any) => r.recommendedProvider === 'Google')
+      expect(msRec!.rank).toBeLessThan(googleRec!.rank)
+    })
+
+    test('AC-2: conversationOpener is a non-empty descriptive string', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.8, timestamp: '',
+          metadata: {
+            provider: 'AWS', hasCloudSpend: true, hasCloudIntel: true, acvPlus: 50000,
+            incentives: [{ name: 'Credit Incentive', value: '2% TCV', validThrough: '2026-12-31' }],
+            programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'fred-hutch')
+      expect(result[0].conversationOpener).toBeTruthy()
+      expect(typeof result[0].conversationOpener).toBe('string')
+      expect(result[0].conversationOpener.length).toBeGreaterThan(20)
+    })
+
+    test('AC-5: fallback opener for tech-stack-only provider', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.65, timestamp: '',
+          metadata: {
+            provider: 'Google', hasCloudSpend: false, hasCloudIntel: true, acvPlus: 0,
+            incentives: [], programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'fred-hutch')
+      expect(result[0].conversationOpener).toContain('Position Red Hat on Google')
+    })
+
+    test('returns empty array when no cloud signals', () => {
+      const result = generatePurchasingRecommendation([], 'fred-hutch')
+      expect(result).toEqual([])
+    })
+
+    test('incentive opener mentions the incentive name and value', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.8, timestamp: '',
+          metadata: {
+            provider: 'AWS', hasCloudSpend: true, hasCloudIntel: true, acvPlus: 75000,
+            incentives: [{ name: 'Marketplace Credit Incentive', value: '2% TCV credits', validThrough: '2026-12-31' }],
+            programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'test-customer')
+      expect(result[0].conversationOpener).toContain('Marketplace Credit Incentive')
+    })
+
+    test('spend opener mentions ACV dollar amount', () => {
+      const signals = [
+        {
+          source: 'cloud-marketplace', type: 'product-intel', headline: '', detail: '', rawRelevance: 0.8, timestamp: '',
+          metadata: {
+            provider: 'Microsoft', hasCloudSpend: true, hasCloudIntel: true, acvPlus: 400000,
+            incentives: [], programs: [], offerings: [],
+          },
+        },
+      ]
+      const result = generatePurchasingRecommendation(signals as any, 'test-customer')
+      expect(result[0].conversationOpener).toContain('400,000')
+    })
+  })
+
+  describe('signal metadata includes recommendation fields (AC-1)', () => {
+
+    test('signals() output includes recommendedProvider, providerRank, conversationOpener in metadata', () => {
+      expect(content).toContain('recommendedProvider')
+      expect(content).toContain('providerRank')
+      expect(content).toContain('conversationOpener')
+    })
+  })
+
+  describe('template renders recommendation section (AC-4)', () => {
+
+    test('cloud template renders Purchasing Recommendation heading', () => {
+      const templatePath = resolve(import.meta.dir, '../../src/lib/templates/cloud.ts')
+      const templateContent = readFileSync(templatePath, 'utf-8')
+      expect(templateContent).toContain('Purchasing Recommendation')
+      expect(templateContent).toContain('recommendedProvider')
+      expect(templateContent).toContain('conversationOpener')
+    })
+  })
+})

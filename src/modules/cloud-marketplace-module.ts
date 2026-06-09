@@ -440,6 +440,59 @@ export function splitCompoundOfferings<T extends { name: string; description: st
   return result
 }
 
+/**
+ * #704: Generate purchasing recommendations ranked by actionability.
+ * Ranking: (1) expiring incentives, (2) active CCSP spend, (3) tech-stack intel only.
+ * Returns per-provider recommendation with conversationOpener.
+ */
+export function generatePurchasingRecommendation(
+  signals: import('../feature-module-registry.ts').Signal[],
+  _customerSlug: string,
+): Array<{ recommendedProvider: string; conversationOpener: string; rank: number }> {
+  const cloudSignals = signals.filter(s =>
+    s.source === 'cloud-marketplace' && s.type === 'product-intel' && s.metadata?.provider
+  )
+  if (cloudSignals.length === 0) return []
+
+  // Score each provider for ranking
+  const scored = cloudSignals.map(s => {
+    const m = s.metadata ?? {}
+    const provider = String(m.provider)
+    const incentives = Array.isArray(m.incentives) ? m.incentives as Array<{ name?: string; value?: string; validThrough?: string }> : []
+    const hasSpend = Boolean(m.hasCloudSpend)
+    const acv = Number(m.acvPlus) || 0
+    const hasIncentives = incentives.length > 0
+
+    // Priority: incentives > spend > intel-only
+    let priority = 3 // tech-stack only
+    if (hasIncentives) priority = 1
+    else if (hasSpend) priority = 2
+
+    // Build conversation opener
+    let conversationOpener: string
+    if (hasIncentives) {
+      const topIncentive = incentives[0]
+      const valuePart = topIncentive.value ? ` (${topIncentive.value})` : ''
+      const spendPart = hasSpend && acv > 0 ? `$${Math.round(acv).toLocaleString()} in ${provider} marketplace spend` : `${provider} marketplace`
+      conversationOpener = `Customer has ${spendPart}. The ${topIncentive.name || 'active incentive'}${valuePart} offers an opportunity — ask about consolidating Red Hat subscriptions through ${provider} Marketplace to maximize their committed spend.`
+    } else if (hasSpend && acv > 0) {
+      conversationOpener = `Customer has $${Math.round(acv).toLocaleString()} in ${provider} marketplace spend. Existing ${provider} relationship means Red Hat purchases can be consolidated through their marketplace agreement — ask about expanding Red Hat footprint via ${provider} Marketplace.`
+    } else {
+      conversationOpener = `Position Red Hat on ${provider} — customer uses ${provider} but has no Red Hat marketplace spend yet. Lead with marketplace purchasing to align Red Hat subscriptions with their existing cloud commitment.`
+    }
+
+    return { recommendedProvider: provider, conversationOpener, priority, rank: 0 }
+  })
+
+  // Sort by priority (lower = better), assign ranks
+  scored.sort((a, b) => a.priority - b.priority)
+  scored.forEach((s, i) => { s.rank = i + 1 })
+
+  return scored.map(({ recommendedProvider, conversationOpener, rank }) => ({
+    recommendedProvider, conversationOpener, rank,
+  }))
+}
+
 function dedupeByName<T extends { name: string }>(items: T[]): T[] {
   const seen = new Set<string>()
   return items.filter(item => {
@@ -1072,6 +1125,18 @@ FeatureModuleRegistry.register({
           url: ne.url,
           metadata: { eventType: ne.eventType, newsletterSource: true, date: ne.date },
         })
+      }
+    }
+
+    // #704: Add purchasing recommendation metadata to product-intel signals
+    const productIntelSignals = signals.filter(s => s.type === 'product-intel')
+    const recommendations = generatePurchasingRecommendation(productIntelSignals, customerSlug)
+    for (const rec of recommendations) {
+      const sig = signals.find(s => s.type === 'product-intel' && s.metadata?.provider === rec.recommendedProvider)
+      if (sig?.metadata) {
+        sig.metadata.recommendedProvider = rec.recommendedProvider
+        sig.metadata.providerRank = rec.rank
+        sig.metadata.conversationOpener = rec.conversationOpener
       }
     }
 

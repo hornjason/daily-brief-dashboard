@@ -28,6 +28,18 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
 
   const lines: string[] = []
 
+  // #704: Purchasing Recommendation — render top-ranked provider recommendation above catalog
+  const recommended = sorted
+    .filter(s => s.metadata?.recommendedProvider && s.metadata?.conversationOpener)
+    .sort((a, b) => (Number(a.metadata?.providerRank) || 99) - (Number(b.metadata?.providerRank) || 99))
+  if (recommended.length > 0) {
+    const top = recommended[0]
+    lines.push('## Purchasing Recommendation')
+    lines.push('')
+    lines.push(`**Recommended: ${String(top.metadata!.recommendedProvider)}** — ${String(top.metadata!.conversationOpener)}`)
+    lines.push('')
+  }
+
   for (const s of sorted) {
     const m = s.metadata ?? {}
     const provider = String(m.provider)
