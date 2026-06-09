@@ -572,9 +572,10 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       try {
         const result = await callGemini(focusedPrompt, providerText.slice(0, 10_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 5_000), {
           callType: `cloud-marketplace-${provider.toLowerCase()}`,
+          model: 'lite',
           responseSchema: RESPONSE_SCHEMA,
           deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
-          timeoutMs: 180_000,
+          timeoutMs: 60_000,
           temperature: 0.1,
         })
 
