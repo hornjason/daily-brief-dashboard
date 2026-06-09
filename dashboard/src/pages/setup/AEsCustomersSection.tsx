@@ -676,17 +676,36 @@ function AutoBootstrapForm({
     return null
   }, [territoryInput, territoryAeMap])
 
+  // AE name from the dropdown's territory data — takes priority over matchedAe
+  // Fixes overlap bug: when two AEs share a territory code (e.g. TERR03),
+  // matchedAe returns the first-configured AE. This memo returns the name
+  // from the actual dropdown selection instead. (daily-brief-dashboard#4)
+  const selectedTerritoryAeName = useMemo(() => {
+    if (!terrNum) return ''
+    const entry = podTerritoryNames.find(t => t.num === terrNum)
+    return entry?.aeName ?? ''
+  }, [terrNum, podTerritoryNames])
+
   // Auto-fill AE name + accounts whenever territory resolves to a known AE (always overwrite)
   useEffect(() => {
+    // Priority 1: dropdown's own AE name (handles overlapping territory codes)
+    if (selectedTerritoryAeName) {
+      setAeName(selectedTerritoryAeName)
+      // Still use matchedAe's accounts if available (accounts come from configured AEs)
+      if (matchedAe?.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
+      setForceRebootstrap(false)
+      return
+    }
+    // Priority 2: reverse-lookup from configured AEs (original behavior)
     if (!matchedAe) return
     setAeName(matchedAe.name)
     if (matchedAe.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
     setForceRebootstrap(false)  // reset force flag when territory changes to a new AE
-  }, [matchedAe])
+  }, [selectedTerritoryAeName, matchedAe])
 
   // Live territory lookup — fires when territoryInput changes and no match in knownAes
   useEffect(() => {
-    if (!territoryInput || matchedAe) return
+    if (!territoryInput || selectedTerritoryAeName || matchedAe) return
     // territoryInput may be comma-separated; look up the first one
     const firstTerritory = territoryInput.split(',')[0].trim()
     if (!firstTerritory) return
