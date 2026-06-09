@@ -529,6 +529,18 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
         ) as CloudSection[]
       } catch (e: any) {
         console.warn(`[cloud-marketplace] ${provider} extraction failed: ${e.message}`)
+        // Fallback: use previous cache data for this provider if available
+        try {
+          const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
+          if (existsSync(cachePath)) {
+            const prev = JSON.parse(readFileSync(cachePath, 'utf-8'))
+            const prevProvider = (prev.clouds ?? []).find((c: any) => c.provider === provider)
+            if (prevProvider && (prevProvider.offerings?.length > 0 || prevProvider.programs?.length > 0)) {
+              console.log(`[cloud-marketplace] ${provider}: using cached fallback (${prevProvider.offerings?.length ?? 0} offerings, ${prevProvider.programs?.length ?? 0} programs)`)
+              return [prevProvider] as CloudSection[]
+            }
+          }
+        } catch {}
         return [] as CloudSection[]
       }
     })()

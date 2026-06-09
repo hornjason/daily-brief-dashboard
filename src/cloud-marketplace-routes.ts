@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { toSlug } from './cache-layer.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CACHE_PATH = resolve(CACHE_DIR, 'cloud-marketplace', 'latest.json')
@@ -43,16 +44,12 @@ export function createCloudMarketplaceRouter(): Hono {
     const customerSlug = toSlug(customerName)
 
     try {
-      // Get cloud-marketplace module signals for this customer
-      const mod = FeatureModuleRegistry.get('cloud-marketplace')
-      if (!mod || !mod.signals) {
-        return c.json({ providers: [], newsletterDate: null, cachedAt: null })
-      }
-
-      const signals = await mod.signals(customerSlug)
+      // Layer 3 compliant: go through the signal registry, not mod.signals() directly (#701)
+      const { registrySignals } = await loadCustomerSignals(customerSlug, { ensureFresh: true })
+      const cloudSignals = registrySignals.filter(s => s.source === 'cloud-marketplace')
 
       // Filter to summary signals only
-      const summarySignals = signals.filter(s => s.metadata?.offeringType === 'summary')
+      const summarySignals = cloudSignals.filter(s => s.metadata?.offeringType === 'summary')
 
       // Sort: hasCloudSpend first, then hasCloudIntel
       summarySignals.sort((a, b) => {
