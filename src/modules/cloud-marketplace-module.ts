@@ -559,9 +559,11 @@ function extractProviderHtmlBlocks(html: string, provider: string, maxChars: num
 async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
   const providers = ['AWS', 'Google', 'Microsoft']
 
-  // Per-provider focused extraction — sequential to avoid rate limits
+  // Per-provider extraction — sequential with inter-call delay to avoid Vertex quota throttling
   const extractions: CloudSection[][] = []
-  for (const provider of providers) {
+  for (let pi = 0; pi < providers.length; pi++) {
+    if (pi > 0) await new Promise(r => setTimeout(r, 10_000))
+    const provider = providers[pi]
     const extraction = await (async () => {
       const providerText = extractProviderLines(slideText, provider)
       const providerHtml = extractProviderHtmlBlocks(htmlBody, provider)
