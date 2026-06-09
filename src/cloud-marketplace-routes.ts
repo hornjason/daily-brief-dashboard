@@ -73,6 +73,9 @@ export function createCloudMarketplaceRouter(): Hono {
         incentives: s.metadata?.incentives ?? [],
         newCountries: s.metadata?.newCountries ?? [],
         partnerships: s.metadata?.partnerships ?? [],
+        providerRank: s.metadata?.providerRank ?? 99,
+        recommendedProvider: s.metadata?.recommendedProvider ?? null,
+        conversationOpener: s.metadata?.conversationOpener ?? null,
       }))
 
       // Read cache file for newsletterDate, cachedAt, and cmFolderId
