@@ -506,7 +506,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
       return extractionJson
     }
   )
-  if (!gateResult.passed) {
+  if (!gateResult.scorecard.passed) {
     console.warn(`[cloud-marketplace] quality gate: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold} — proceeding with best result`)
   }
 
