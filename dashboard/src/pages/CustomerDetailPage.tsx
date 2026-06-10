@@ -1310,6 +1310,31 @@ export function CustomerDetailPage() {
     }
   }, [customerName])
 
+  // Per-customer refresh (ADR-037 F5) with completion feedback (#759)
+  const [customerRefreshing, setCustomerRefreshing] = useState(false)
+  const [refreshResult, setRefreshResult] = useState<'success' | 'error' | null>(null)
+  const handleRefreshCustomer = async () => {
+    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    setCustomerRefreshing(true)
+    setRefreshResult(null)
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(slug)}/refresh-all`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        console.error('Customer refresh failed:', (data as { error?: string }).error)
+        setRefreshResult('error')
+      } else {
+        setRefreshResult('success')
+        setTimeout(() => setRefreshResult(null), 3000)
+      }
+    } catch (err) {
+      console.error('Network error refreshing customer:', err)
+      setRefreshResult('error')
+    } finally {
+      setCustomerRefreshing(false)
+    }
+  }
+
   const health = getHealth(sse.cases)
 
   const sectionLoading = sse.loading
@@ -1428,6 +1453,19 @@ export function CustomerDetailPage() {
               </div>
             )}
             <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+
+            {/* Refresh This Customer (ADR-037 F5) */}
+            <button
+              onClick={handleRefreshCustomer}
+              disabled={customerRefreshing}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-text-secondary transition-all disabled:opacity-50"
+              title="Refresh all data sources for this customer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${customerRefreshing ? 'animate-spin' : ''}`} />
+              {customerRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            {refreshResult === 'success' && <span className="text-green-400 text-xs ml-1">Refreshed</span>}
+            {refreshResult === 'error' && <span className="text-red-400 text-xs ml-1">Refresh failed</span>}
 
             {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
               <AccountCountPill accountNumbers={meta.accountNumbers.map(String)} />
