@@ -182,7 +182,7 @@ export function extractTeamMembers(
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function normalizeTerritoryCustomerName(raw: string): string {
+export function normalizeTerritoryCustomerName(raw: string): string {
   let name = raw.trim()
   if (!name) return ''
   name = name.replace(/\s*-\s*[A-Z]{2}(\/[A-Z]{2})?$/, '')
@@ -804,6 +804,12 @@ export async function runTerritorySyncOrchestration(): Promise<{
     const { persistTeamCache } = await import('./account-team.ts')
     persistTeamCache(mergedTeamData)
   }
+
+  // Clear territory lookup caches so subsequent lookups pick up fresh data (#736)
+  try {
+    const { clearTerritoryCaches } = await import('./dashboard-service.ts')
+    clearTerritoryCaches()
+  } catch { /* dashboard-service may not be initialized yet — non-fatal */ }
 
   console.log(`[territory-sync] complete: +${allToAdd.length} added, ${allToRemove.length} flagged for review, ${allUnchanged.length} unchanged`)
 

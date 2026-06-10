@@ -23,7 +23,7 @@ import { sanitizeErr } from './utils.ts'
 import { callGemini } from './gemini-call.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
-import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, enterpriseTerritoryKey } from './territory-sync.ts'
+import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, enterpriseTerritoryKey, podPrefixFromTabTitle, normalizeTerritoryCustomerName } from './territory-sync.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { buildTodaysMeetings } from './lib/todays-meetings.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
@@ -51,6 +51,12 @@ const POD_SUMMARY_TTL = 30_000
 const territoryCacheMap = new Map<string, { data: unknown; cachedAt: number }>()
 const TERRITORY_CACHE_TTL_MS = 60 * 60 * 1000
 const territoryNamesCacheMap = new Map<string, { data: unknown; cachedAt: number }>()
+
+/** Clear territory caches after a sync so lookups pick up fresh data. */
+export function clearTerritoryCaches(): void {
+  territoryCacheMap.clear()
+  territoryNamesCacheMap.clear()
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MORNING_SYNTHESIS_TTL_MS = 4 * 60 * 60 * 1000 // 4 hours
@@ -369,36 +375,8 @@ export function getTerritorySheetId(): string {
   }
 }
 
-export function normalizeTerritoryCustomerName(raw: string): string {
-  let name = raw.trim()
-  if (!name) return ''
-  name = name.replace(/\s*-\s*[A-Z]{2}(\/[A-Z]{2})?$/, '')
-  name = name.replace(/\s*\([^)]*\)\s*$/, '')
-  const legalSuffixes = [
-    /,?\s+L\.?L\.?P\.?$/i, /,?\s+P\.?T\.?Y\.?\s+LTD\.?$/i,
-    /,?\s+L\.?P\.?$/i,     /,?\s+INC\.?$/i, /,?\s+LLC\.?$/i,
-    /,?\s+LTD\.?$/i,       /,?\s+CORP\.?$/i, /,?\s+CO\.?$/i,
-    /,?\s+PLC\.?$/i,
-  ]
-  for (const re of legalSuffixes) name = name.replace(re, '')
-  name = name.trim().replace(/,+$/, '').trim()
-  name = name.replace(/^[=+\-@]+/, '')
-  name = name.trim()
-  name = name.split(/\s+/).map(word => {
-    if (/\d/.test(word) || /[a-z]/.test(word) || /\.[a-zA-Z]/.test(word)) return word
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  }).join(' ')
-  return name
-}
-
-export function podPrefixFromTabTitle(tabTitle: string): string {
-  const t = tabTitle.toLowerCase()
-  if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
-  if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
-  if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTH_CENTRAL'
-  if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTH_CENTRAL'
-  return ''
-}
+// normalizeTerritoryCustomerName — imported from territory-sync.ts (#735)
+// podPrefixFromTabTitle — imported from territory-sync.ts (#734)
 
 /**
  * Derive a pod key from an East-style territory code embedded in an AE cell.
@@ -1090,8 +1068,8 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
           if (tabPodKey) break
         }
       }
-      if (!tabPodKey) {
-        tabPodKey = podPrefixFromTabTitle(tabTitle)
+      if (!tabPodKey && region) {
+        tabPodKey = podPrefixFromTabTitle(tabTitle, region)
       }
 
       if (tabPodKey !== pod) continue
@@ -1184,7 +1162,7 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
 
   // Derive the pod key from the territory string (strip _TERR\d+ suffix)
   const podFromTerritory = requestedTerritory.replace(/_TERR\d+$/, '')
-  const { sheetId, regionType } = getSheetAndTypeForPod(podFromTerritory)
+  const { sheetId, regionType, region } = getSheetAndTypeForPod(podFromTerritory)
 
   // Get all tab names
   const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
@@ -1283,7 +1261,7 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
         if (tabPodKey) break
       }
     }
-    if (!tabPodKey) tabPodKey = podPrefixFromTabTitle(tabTitle)
+    if (!tabPodKey && region) tabPodKey = podPrefixFromTabTitle(tabTitle, region)
     if (!tabPodKey || tabPodKey !== podFromTerritory) continue
 
     // Matched tab — full fetch

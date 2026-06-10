@@ -11,9 +11,13 @@
  *   isJunkCustomerName                    — filter junk customer names from territory cells
  */
 
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import { normalizeCustomerName } from '../lib/customer-folder.ts'
+import { podPrefixFromTabTitle } from '../territory-sync.ts'
+import { normalizeSettings, type RegionConfig } from '../region-config.ts'
 import type { PipelineRecord } from '../pipeline.ts'
 import type { SfReportRow } from '../sf-scraper.ts'
 
@@ -127,23 +131,23 @@ export async function readAEsFromTerritorySheet(
       })
     : candidateTabs
 
-  // West-style fallback: derive pod key from tab title for cells that
-  // contain only a bare "Terr01" without a full embedded code.
-  const podPrefixFromTab = (tabTitle: string): string => {
-    const t = tabTitle.toLowerCase()
-    if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
-    if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
-    if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTH_CENTRAL'
-    if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTH_CENTRAL'
-    if (t.includes('tola')) return 'CENTRAL_ENT_TOLA'
-    return ''
-  }
+  // Resolve region from settings by matching the territory sheet ID (#734)
+  let matchedRegion: RegionConfig | undefined
+  try {
+    const CONFIG_DIR = process.env.CONFIG_DIR ?? 'data/config'
+    const settingsRaw = JSON.parse(readFileSync(resolve(CONFIG_DIR, 'settings.json'), 'utf-8'))
+    const settings = normalizeSettings(settingsRaw)
+    matchedRegion = settings.regions.find(r => {
+      const m = r.territorySheetUrl?.match(/spreadsheets\/d\/([^/]+)/)
+      return m && m[1] === territorySheetId
+    })
+  } catch { /* settings not available — podPrefixFromTabTitle will be skipped */ }
 
   // Accumulate per-AE data: name → { territories, customerNames }
   const aeMap = new Map<string, { territories: Set<string>; customerNames: Set<string> }>()
 
   for (const tabTitle of filteredTabs) {
-    const tabFallbackPodKey = podPrefixFromTab(tabTitle)
+    const tabFallbackPodKey = matchedRegion ? podPrefixFromTabTitle(tabTitle, matchedRegion) : ''
     const resp = await sheetsClient.spreadsheets.values.get({
       spreadsheetId: territorySheetId,
       range: `'${tabTitle}'!A1:Z60`,
