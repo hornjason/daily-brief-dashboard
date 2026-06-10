@@ -73,6 +73,128 @@ import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { TopPlaysCard } from '../components/TopPlaysCard'
 
+// ── Staleness indicators (ADR-037 F6) ────────────────────────────────────────
+
+/** Section-to-module mapping for freshness lookup */
+const SECTION_MODULE_MAP: Record<string, string> = {
+  'tech-stack': 'tech-stack',
+  'cases': 'cases',
+  'pipeline': 'pipeline',
+  'financials': 'cloud-marketplace',
+  'cloud-marketplace': 'cloud-marketplace',
+  'competitive-intel': 'competitive-intel',
+  'subscriptions': 'subscriptions',
+  'product-intel': 'customer-product-intel',
+  'intelligence': 'intelligence',
+  'activity-timeline': 'emails',
+  'product-qa': 'tech-stack',
+}
+
+interface FreshnessModule {
+  lastRefreshed: string | null
+  level: 'fresh' | 'expiring-soon' | 'stale' | 'unknown'
+  ttlMs?: number
+}
+
+interface RefreshStatusModule {
+  status: string
+  durationMs?: number
+  reason?: string
+}
+
+interface RefreshStatus {
+  inProgress: string | null
+  modules: Record<string, RefreshStatusModule>
+}
+
+function useModuleFreshness() {
+  const [freshness, setFreshness] = useState<Record<string, FreshnessModule>>({})
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    async function fetchFreshness() {
+      try {
+        const res = await fetch('/api/admin/freshness')
+        if (!res.ok) return
+        const data = await res.json()
+        if (active) setFreshness(data.modules ?? data)
+      } catch { /* silently fail */ }
+    }
+
+    async function fetchRefreshStatus() {
+      try {
+        const res = await fetch('/api/admin/refresh-all/status')
+        if (!res.ok) return
+        const data = await res.json()
+        if (active) setRefreshStatus(data)
+      } catch { /* silently fail */ }
+    }
+
+    fetchFreshness()
+    fetchRefreshStatus()
+
+    const interval = setInterval(() => {
+      fetchFreshness()
+      fetchRefreshStatus()
+    }, 30_000)
+
+    return () => { active = false; clearInterval(interval) }
+  }, [])
+
+  return { freshness, refreshStatus }
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return ''
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 60_000) return 'just now'
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`
+  return `${Math.round(ms / 86_400_000)}d ago`
+}
+
+function StalenessIndicator({
+  sectionName,
+  freshness,
+  refreshStatus,
+}: {
+  sectionName: string
+  freshness: Record<string, FreshnessModule>
+  refreshStatus: RefreshStatus | null
+}) {
+  const moduleName = SECTION_MODULE_MAP[sectionName]
+  if (!moduleName) return null
+
+  // Check if this module is currently being refreshed
+  const isRefreshing = refreshStatus?.inProgress === moduleName ||
+    refreshStatus?.modules?.[moduleName]?.status === 'in-progress' ||
+    refreshStatus?.modules?.[moduleName]?.status === 'pending'
+
+  if (isRefreshing) {
+    return (
+      <span className="text-xs text-blue-400 flex items-center gap-1">
+        <RefreshCw className="w-3 h-3 animate-spin" />
+        Refreshing...
+      </span>
+    )
+  }
+
+  const mod = freshness[moduleName]
+  if (!mod) return null
+
+  const isStale = mod.level === 'stale'
+  const timeStr = relativeTime(mod.lastRefreshed)
+  if (!timeStr) return null
+
+  return (
+    <span className={`text-xs ${isStale ? 'text-amber-400' : 'text-text-secondary/60'}`}>
+      Updated {timeStr}{isStale ? ' (stale)' : ''}
+    </span>
+  )
+}
+
 // ── Config / provider setup ───────────────────────────────────────────────────
 
 interface ProviderInfo { vars: string[]; snippet: string; description: string }
@@ -1216,6 +1338,9 @@ export function CustomerDetailPage() {
   const sse = useCustomerSSE(customerName)
   const accountInfo = useAccountInfo(customerName)
 
+  // Per-section staleness (ADR-037 F6)
+  const { freshness, refreshStatus } = useModuleFreshness()
+
   // Fetch tabs from Feature Module Registry (GitHub Issue #240)
   const [tabs, setTabs] = useState<TabEntry[]>([
     { id: 'overview', label: 'Overview', order: 0 },
@@ -1653,6 +1778,7 @@ export function CustomerDetailPage() {
             title="Product Intelligence"
             icon={<Package className="w-4 h-4" />}
             summaryText="Product lifecycle and intel"
+            summaryExtra={<StalenessIndicator sectionName="product-intel" freshness={freshness} refreshStatus={refreshStatus} />}
           >
             <div className="p-4">
               <ProductIntelSection
@@ -1669,6 +1795,7 @@ export function CustomerDetailPage() {
             title="Cloud Spend & Pipeline"
             icon={<Cloud className="w-4 h-4" />}
             summaryText="CCSP revenue and open opps"
+            summaryExtra={<StalenessIndicator sectionName="financials" freshness={freshness} refreshStatus={refreshStatus} />}
           >
             <div className="p-4 space-y-4">
               <CloudSpendCard customerName={customerName} />
@@ -1682,6 +1809,7 @@ export function CustomerDetailPage() {
             title="Activity"
             icon={<Clock className="w-4 h-4" />}
             summaryText={`Meetings, emails, docs`}
+            summaryExtra={<StalenessIndicator sectionName="activity-timeline" freshness={freshness} refreshStatus={refreshStatus} />}
           >
             <div className="p-0">
               <ActivityTimeline
@@ -1700,6 +1828,7 @@ export function CustomerDetailPage() {
             title="Product Q&A"
             icon={<Sparkles className="w-4 h-4" />}
             summaryText="Ask about this customer's products"
+            summaryExtra={<StalenessIndicator sectionName="product-qa" freshness={freshness} refreshStatus={refreshStatus} />}
           >
             <div className="p-4">
               <ProductQueryPanel customerName={customerName} />
@@ -1718,6 +1847,7 @@ export function CustomerDetailPage() {
             <div className="flex items-center gap-2 mb-4">
               <Cloud className="w-4 h-4 text-accent" />
               <h2 className="text-base font-semibold text-text-primary">Cloud Marketplace</h2>
+              <StalenessIndicator sectionName="cloud-marketplace" freshness={freshness} refreshStatus={refreshStatus} />
             </div>
             <CloudMarketplaceDetail customerName={customerName} />
           </div>
