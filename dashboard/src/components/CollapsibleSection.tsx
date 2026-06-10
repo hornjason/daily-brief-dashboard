@@ -19,6 +19,8 @@ interface CollapsibleSectionProps {
   icon?: ReactNode
   /** Short summary text shown when collapsed, e.g. "3 contacts" */
   summaryText?: string
+  /** Extra ReactNode rendered after summaryText (e.g. staleness indicator) */
+  summaryExtra?: ReactNode
   /** Whether section starts collapsed (default: true) */
   defaultCollapsed?: boolean
   children: ReactNode
@@ -39,6 +41,7 @@ export function CollapsibleSection({
   title,
   icon,
   summaryText,
+  summaryExtra,
   defaultCollapsed = true,
   children,
 }: CollapsibleSectionProps) {
@@ -63,6 +66,9 @@ export function CollapsibleSection({
         <span className="text-sm font-semibold text-text-primary">{title}</span>
         {collapsed && summaryText && (
           <span className="text-xs text-text-secondary ml-1">{summaryText}</span>
+        )}
+        {summaryExtra && (
+          <span className="ml-1">{summaryExtra}</span>
         )}
         <span className="ml-auto text-text-secondary">
           {collapsed

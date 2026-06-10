@@ -30,7 +30,7 @@ import { BookOfBusinessPage } from './pages/BookOfBusinessPage'
 import { MeetingPrepPage } from './pages/MeetingPrepPage'
 import { PortfolioTriagePage } from './pages/PortfolioTriagePage'
 import { formatRelTime } from './lib/format'
-import { ChevronUp } from 'lucide-react'
+import { ChevronUp, RefreshCw as RefreshCwIcon, X } from 'lucide-react'
 import type { AccountInfo, SupportCase, PodInfo, CCSPSummary, PipelineSummary } from './types'
 
 interface RhStatus {
@@ -86,6 +86,80 @@ function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus;
           {status.hasSession ? 'Reconnect' : 'Connect'}
         </button>
       )}
+    </div>
+  )
+}
+
+// ── Refresh Progress Banner (ADR-037 F6) ────────────────────────────────────
+
+interface RefreshManifest {
+  startedAt: string
+  trigger: string
+  totalModules: number
+  completed: number
+  failed: number
+  skipped: number
+  inProgress: string | null
+  modules: Record<string, { status: string; durationMs?: number; reason?: string }>
+}
+
+function RefreshProgressBanner() {
+  const [manifest, setManifest] = useState<RefreshManifest | null>(null)
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('refreshBannerDismissed') === 'true')
+
+  useEffect(() => {
+    if (dismissed) return
+
+    let active = true
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/admin/refresh-all/status')
+        if (!res.ok) return
+        const data: RefreshManifest = await res.json()
+        if (active) setManifest(data)
+      } catch {
+        // Silently fail — no banner if endpoint unavailable
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 5_000)
+    return () => { active = false; clearInterval(interval) }
+  }, [dismissed])
+
+  // Determine if refresh is active
+  const isActive = manifest && (
+    manifest.inProgress !== null ||
+    Object.values(manifest.modules).some(m => m.status === 'pending' || m.status === 'in-progress')
+  )
+
+  if (dismissed || !manifest || !isActive) return null
+
+  const done = manifest.completed + manifest.failed + manifest.skipped
+
+  const handleDismiss = () => {
+    sessionStorage.setItem('refreshBannerDismissed', 'true')
+    setDismissed(true)
+  }
+
+  return (
+    <div className="bg-blue-900/40 border-b border-blue-700/50 px-6 py-2.5 flex items-center gap-3 text-sm">
+      <RefreshCwIcon className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
+      <span className="text-blue-300 font-medium">
+        Data refresh in progress &mdash; {done}/{manifest.totalModules} modules updated
+      </span>
+      {manifest.inProgress && (
+        <span className="text-blue-300/60 text-xs">({manifest.inProgress})</span>
+      )}
+      <div className="flex-1" />
+      <button
+        onClick={handleDismiss}
+        className="text-blue-400 hover:text-blue-300 transition-colors"
+        aria-label="Dismiss refresh notification"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   )
 }
@@ -420,6 +494,7 @@ function Dashboard() {
           />
         )}
         <UpdateBanner />
+        <RefreshProgressBanner />
         {rhStatus && !isL3Only && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}
