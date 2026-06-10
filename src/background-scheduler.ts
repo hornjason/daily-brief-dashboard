@@ -5,6 +5,7 @@ import { DATA_DIR, CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { createHash } from 'crypto'
 import { customers, aes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
+import { checkModuleStaleness } from './staleness-monitor.ts'
 import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight, setLastSkipReason } from './scraper-manager.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
@@ -1274,6 +1275,9 @@ export function initBackgroundScheduler(opts: {
           refreshCCSP().catch((e: any) => console.error('[refresh] CCSP failed:', e?.message ?? e))
         }
       }
+
+      // ── ADR-037 F3: Staleness check on every heartbeat tick ─────────────────
+      checkModuleStaleness()
 
       // ── Session health watchdog ─────────────────────────────────────────────
       // Runs on every heartbeat tick. Fires static ntfy alerts (no interpolation
