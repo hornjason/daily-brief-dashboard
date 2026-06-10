@@ -188,13 +188,22 @@ export function getAccountTeam(customer: Customer, filter?: AccountTeamFilter): 
  */
 export function persistTeamCache(teamData: Record<string, TerritoryTeamEntry>): void {
   const teamCachePath = resolve(CACHE_DIR, 'territory-teams.json')
+  // Merge with existing data so single-region syncs don't wipe other regions
+  let existing: Record<string, TerritoryTeamEntry> = {}
+  try {
+    if (existsSync(teamCachePath)) {
+      const raw = JSON.parse(readFileSync(teamCachePath, 'utf-8')) as TerritoryTeamsCache
+      existing = raw.teams ?? {}
+    }
+  } catch { /* start fresh on parse error */ }
+  const merged = { ...existing, ...teamData }
   const cache: TerritoryTeamsCache = {
     updatedAt: new Date().toISOString(),
-    teams: teamData,
+    teams: merged,
   }
   writeJsonAtomic(teamCachePath, cache)
   teamCacheData = cache  // update in-memory cache directly
-  console.log(`[account-team] persisted team data for ${Object.keys(teamData).length} territories`)
+  console.log(`[account-team] persisted team data for ${Object.keys(teamData).length} new territories (${Object.keys(merged).length} total)`)
 }
 
 /**
