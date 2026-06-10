@@ -16,6 +16,7 @@ import { extractNewsletterEvents } from '../newsletter-events.ts'
 import { CONFIG_DIR } from '../lib/paths.ts'
 import { validateAndRetry } from '../gemini-quality-gate.ts'
 import { cloudMarketplaceValidator } from '../quality-validators/cloud-marketplace-validator.ts'
+import { schedulerRegistry } from '../scheduler-registry.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -448,12 +449,25 @@ export function splitCompoundOfferings<T extends { name: string; description: st
  */
 export function generatePurchasingRecommendation(
   signals: import('../feature-module-registry.ts').Signal[],
-  _customerSlug: string,
+  customerSlug: string,
 ): Array<{ recommendedProvider: string; conversationOpener: string; rank: number }> {
   const cloudSignals = signals.filter(s =>
     s.source === 'cloud-marketplace' && s.type === 'product-intel' && s.metadata?.provider
   )
   if (cloudSignals.length === 0) return []
+
+  // #722: Read customer business objectives for contextual openers
+  let businessObjective: string | null = null
+  try {
+    const intelPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`)
+    if (existsSync(intelPath)) {
+      const intel = JSON.parse(readFileSync(intelPath, 'utf-8'))
+      const objectives = intel.priorities ?? intel.objectives ?? intel.businessObjectives ?? []
+      if (Array.isArray(objectives) && objectives.length > 0) {
+        businessObjective = typeof objectives[0] === 'string' ? objectives[0] : objectives[0]?.name ?? objectives[0]?.title ?? null
+      }
+    }
+  } catch {}
 
   // Score each provider for ranking
   const scored = cloudSignals.map(s => {
@@ -465,21 +479,23 @@ export function generatePurchasingRecommendation(
     const hasIncentives = incentives.length > 0
 
     // Priority: incentives > spend > intel-only
-    let priority = 3 // tech-stack only
+    let priority = 3
     if (hasIncentives) priority = 1
     else if (hasSpend) priority = 2
 
-    // Build conversation opener
+    // Build conversation opener — tie to business objective when available
     let conversationOpener: string
+    const objTieback = businessObjective ? ` This aligns with their objective: "${businessObjective}."` : ''
+
     if (hasIncentives) {
       const topIncentive = incentives[0]
       const valuePart = topIncentive.value ? ` (${topIncentive.value})` : ''
       const spendPart = hasSpend && acv > 0 ? `$${Math.round(acv).toLocaleString()} in ${provider} marketplace spend` : `${provider} marketplace`
-      conversationOpener = `Customer has ${spendPart}. The ${topIncentive.name || 'active incentive'}${valuePart} offers an opportunity — ask about consolidating Red Hat subscriptions through ${provider} Marketplace to maximize their committed spend.`
+      conversationOpener = `Customer has ${spendPart}. The ${topIncentive.name || 'active incentive'}${valuePart} can fund Red Hat solutions through ${provider} Marketplace.${objTieback}`
     } else if (hasSpend && acv > 0) {
-      conversationOpener = `Customer has $${Math.round(acv).toLocaleString()} in ${provider} marketplace spend. Existing ${provider} relationship means Red Hat purchases can be consolidated through their marketplace agreement — ask about expanding Red Hat footprint via ${provider} Marketplace.`
+      conversationOpener = `Customer has $${Math.round(acv).toLocaleString()} in ${provider} marketplace spend — consolidate Red Hat purchases through their existing ${provider} agreement.${objTieback}`
     } else {
-      conversationOpener = `Position Red Hat on ${provider} — customer uses ${provider} but has no Red Hat marketplace spend yet. Lead with marketplace purchasing to align Red Hat subscriptions with their existing cloud commitment.`
+      conversationOpener = `Customer uses ${provider} but has no Red Hat marketplace spend yet. Lead with committed spend drawdown — their existing ${provider} commitment can cover Red Hat purchases.${objTieback}`
     }
 
     return { recommendedProvider: provider, conversationOpener, priority, rank: 0 }
@@ -616,7 +632,7 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
   // Per-provider extraction — sequential with inter-call delay to avoid Vertex quota throttling
   const extractions: CloudSection[][] = []
   for (let pi = 0; pi < providers.length; pi++) {
-    if (pi > 0) await new Promise(r => setTimeout(r, 10_000))
+    if (pi > 0) await new Promise(r => setTimeout(r, 15_000))
     const provider = providers[pi]
     const extraction = await (async () => {
       const providerText = extractProviderLines(slideText, provider)
@@ -884,7 +900,6 @@ FeatureModuleRegistry.register({
   scope: 'customer',
   signalRole: 'trigger',
   signalAudience: 'customer-specific',
-  refreshInterval: 7 * 24 * 60 * 60 * 1000,
 
   cachePaths: () => ['data/cache/cloud-marketplace/latest.json'],
   cacheTtlMs: CLOUD_MARKETPLACE_TTL_MS,
@@ -945,6 +960,18 @@ FeatureModuleRegistry.register({
         console.warn(`[cloud-marketplace] Gemini returned 0 clouds but cache has ${existing.clouds.length} — keeping existing cache`)
         FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: 'extraction returned 0 clouds' })
         return
+      }
+
+      // #724: Per-provider regression guard — preserve previous data for providers that regressed
+      if (existing?.clouds?.length && clouds.length > 0) {
+        for (const prev of existing.clouds) {
+          const curr = clouds.find(c => c.provider === prev.provider)
+          if (prev.offerings.length >= 3 && (!curr || curr.offerings.length === 0)) {
+            console.warn(`[cloud-marketplace] ${prev.provider}: regression detected (${prev.offerings.length}→${curr?.offerings.length ?? 0}) — keeping previous data`)
+            if (!curr) clouds.push(prev)
+            else Object.assign(curr, prev)
+          }
+        }
       }
 
       // Filter expired programs/incentives at cache-write time (#708)
@@ -1151,5 +1178,17 @@ FeatureModuleRegistry.register({
     }
 
     return signals
+  },
+})
+
+// #721: SchedulerRegistry integration (ADR-028)
+schedulerRegistry.register({
+  name: 'cloud-marketplace-refresh',
+  type: 'interval',
+  intervalMs: 7 * 24 * 60 * 60 * 1000,
+  enabled: true,
+  run: async () => {
+    const mod = FeatureModuleRegistry.getModule('cloud-marketplace')
+    if (mod?.syncNow) await mod.syncNow('')
   },
 })

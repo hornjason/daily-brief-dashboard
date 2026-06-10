@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake, ExternalLink } from 'lucide-react'
+import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake, ExternalLink, Zap } from 'lucide-react'
 
 interface CloudOffering {
   name: string
@@ -46,6 +46,8 @@ interface CloudProvider {
   incentives: CloudIncentive[]
   newCountries: string[]
   partnerships: string[]
+  providerRank?: number
+  conversationOpener?: string | null
 }
 
 interface CloudMarketplaceData {
@@ -126,7 +128,18 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
         </p>
       )}
 
-      {data.providers.map(provider => {
+      {/* #725: Purchasing recommendation banner */}
+      {data.providers[0]?.conversationOpener && (
+        <div className="bg-accent/10 border border-accent/20 rounded-xl p-4 mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap className="w-4 h-4 text-accent" />
+            <span className="text-xs font-semibold text-accent uppercase tracking-wider">Purchasing Recommendation</span>
+          </div>
+          <p className="text-sm text-text-primary">{data.providers[0].conversationOpener}</p>
+        </div>
+      )}
+
+      {[...data.providers].sort((a, b) => (a.providerRank ?? 99) - (b.providerRank ?? 99)).map(provider => {
         const isExpanded = expandedProviders.has(provider.provider)
         const colorClass = PROVIDER_COLORS[provider.provider] ?? 'text-text-primary bg-border/30 border-border'
 
@@ -219,7 +232,9 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                           </p>
                           {inc.description && <p className="text-xs text-text-secondary mt-1">{inc.description}</p>}
                           {inc.value && (
-                            <p className="text-xs text-success font-medium mt-1">{inc.value}</p>
+                            <p className={`text-xs mt-1 ${
+                              /\$|credit/i.test(inc.value) ? 'text-green-400 font-bold' : 'text-success font-medium'
+                            }`}>{inc.value}</p>
                           )}
                         </div>
                       ))}
