@@ -5,7 +5,7 @@ import { google } from 'googleapis'
 import { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
 import { GOOGLE_OAUTH_CLIENT } from './google-oauth-config.ts'
-import { normalizeSettings } from './region-config.ts'
+import { normalizeSettings, type RegionConfig } from './region-config.ts'
 import { readSettingsFromDrive } from './drive-config-sync.ts'
 import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
 import type { Customer } from './types.ts'
@@ -45,11 +45,83 @@ export function initSetupRoutes(opts: {
   ADMIN_EMAIL = opts.adminEmail
 }
 
+// ── Drive merge helpers (#737, #738) — exported for unit testing ─────────────
+
+/**
+ * #737 — Compare local vs Drive regions and decide whether to merge.
+ *
+ * Returns { action, changed, merged }:
+ *   - action: 'skip' if regions are identical, 'merge' if different
+ *   - changed: human-readable list of what changed (for logging)
+ *   - merged: Drive regions with local-only fields preserved (AC-3)
+ */
+export function computeDriveMerge(
+  localRegions: RegionConfig[],
+  driveRegions: RegionConfig[],
+): { action: 'skip' | 'merge'; changed: string[]; merged?: RegionConfig[] } {
+  const localHash = JSON.stringify(localRegions)
+  const driveHash = JSON.stringify(driveRegions)
+
+  if (localHash === driveHash) {
+    return { action: 'skip', changed: [] }
+  }
+
+  // Compute what changed for logging
+  const changed: string[] = []
+  const driveIds = new Set(driveRegions.map(r => r.id))
+  const localIds = new Set(localRegions.map(r => r.id))
+
+  for (const id of driveIds) {
+    if (!localIds.has(id)) changed.push(`added region: ${id}`)
+  }
+  for (const id of localIds) {
+    if (!driveIds.has(id)) changed.push(`removed region: ${id}`)
+  }
+  for (const dr of driveRegions) {
+    const lr = localRegions.find(r => r.id === dr.id)
+    if (lr && JSON.stringify(lr) !== JSON.stringify(dr)) {
+      changed.push(`modified region: ${dr.id}`)
+    }
+  }
+
+  // Merge: Drive regions win, but preserve local-only fields (AC-3)
+  const merged = driveRegions.map(dr => {
+    const lr = localRegions.find(r => r.id === dr.id)
+    if (!lr) return dr
+    const result = { ...dr }
+    for (const [key, value] of Object.entries(lr)) {
+      if (!(key in dr) || (dr as any)[key] === undefined || (dr as any)[key] === '') {
+        if (value !== undefined && value !== '') {
+          (result as any)[key] = value
+        }
+      }
+    }
+    return result
+  })
+
+  return { action: 'merge', changed, merged }
+}
+
+/**
+ * #738 — Deduplicate parentFolderIds across all regions.
+ * Returns unique non-empty parentFolderIds so we read from each
+ * distinct CommandCenter folder (defensive for future multi-folder setups).
+ */
+export function getUniqueParentFolderIds(regions: RegionConfig[]): string[] {
+  const ids = regions
+    .map(r => r.parentFolderId)
+    .filter(id => id && id.length > 0)
+  return [...new Set(ids)]
+}
+
 /**
  * Drive config merge — fetch Config/settings.json from Drive at startup
  * if parentFolderId is set for any region. Merges Drive regions[] into
  * local settings.json (Drive wins on regions[], local wins on everything else).
  * Best-effort: errors are logged but never crash the server.
+ *
+ * #737: Compares local vs Drive regions before merging — skips if identical.
+ * #738: Reads from ALL unique parentFolderIds, not just the first region.
  */
 export async function runStartupDriveMerge(): Promise<void> {
   const SETTINGS_PATH_SRV = resolve(SRV_CONFIG_DIR, 'settings.json')
@@ -61,24 +133,46 @@ export async function runStartupDriveMerge(): Promise<void> {
       return // No settings.json yet — skip
     }
     const settings = normalizeSettings(raw)
-    const regionsWithParent = settings.regions.filter(r => r.parentFolderId)
-    if (regionsWithParent.length === 0) return
-    const region = regionsWithParent[0]
-    let driveSettings: Record<string, unknown>
-    try {
-      driveSettings = await readSettingsFromDrive(region.parentFolderId!)
-    } catch {
-      // Config/ or settings.json missing — skip merge silently (matches prior behavior).
+
+    // #738: Read from ALL unique parentFolderIds, not just the first region
+    const uniqueParentIds = getUniqueParentFolderIds(settings.regions)
+    if (uniqueParentIds.length === 0) return
+
+    // Read Drive settings from each unique parentFolderId and merge regions
+    let allDriveRegions: RegionConfig[] = []
+    for (const parentFolderId of uniqueParentIds) {
+      let driveSettings: Record<string, unknown>
+      try {
+        driveSettings = await readSettingsFromDrive(parentFolderId)
+      } catch {
+        // Config/ or settings.json missing for this folder — skip silently
+        console.warn(`[startup] Drive Config/settings.json not found for folder ${parentFolderId}, skipping`)
+        continue
+      }
+      const driveNorm = normalizeSettings(driveSettings)
+      if (driveNorm.regions.length > 0) {
+        allDriveRegions = allDriveRegions.concat(driveNorm.regions)
+      }
+    }
+
+    if (allDriveRegions.length === 0) return
+
+    // #737: Compare before merging — skip if identical
+    const mergeResult = computeDriveMerge(settings.regions, allDriveRegions)
+    if (mergeResult.action === 'skip') {
+      console.log('[startup] Drive Config/settings.json matches local — no merge needed')
       return
     }
-    // Deep-merge: Drive wins on regions[], local wins on everything else.
-    // Validate Drive data through normalizeSettings before merging.
-    const driveNorm = normalizeSettings(driveSettings)
-    if (driveNorm.regions.length > 0) {
-      raw.regions = driveNorm.regions
-      writeJsonAtomic(SETTINGS_PATH_SRV, raw)
-      console.log('[startup] Merged regions from Drive Config/settings.json')
+
+    // Log what changed before applying (#737 AC-2)
+    for (const change of mergeResult.changed) {
+      console.log(`[startup] Drive merge: ${change}`)
     }
+
+    // Apply merged regions (Drive wins, local-only fields preserved)
+    raw.regions = mergeResult.merged ?? allDriveRegions
+    writeJsonAtomic(SETTINGS_PATH_SRV, raw)
+    console.log('[startup] Merged regions from Drive Config/settings.json')
   } catch (e) {
     console.warn('[startup] Drive config merge skipped:', (e as Error).message)
   }
