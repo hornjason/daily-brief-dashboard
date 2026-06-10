@@ -662,7 +662,6 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
     try {
       const result = await callGemini(focusedPrompt, providerText.slice(0, 10_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 5_000), {
         callType: `cloud-marketplace-aws`,
-        model: 'lite',
         responseSchema: RESPONSE_SCHEMA,
         deltaKey: `cloud-marketplace-aws`,
         timeoutMs: 120_000,
@@ -700,7 +699,6 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
     try {
       const result = await callGemini(combinedPrompt, combinedText, {
         callType: `cloud-marketplace-google-microsoft`,
-        model: 'lite',
         responseSchema: RESPONSE_SCHEMA,
         deltaKey: `cloud-marketplace-google-microsoft`,
         timeoutMs: 120_000,

@@ -244,7 +244,6 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'customer-product-intel-expansion',
       customerName,
-      model: 'lite',
       temperature: 0.3,
       timeoutMs: 30_000,
       deltaKey: `expansion:${slug}:${customerSlug}`,

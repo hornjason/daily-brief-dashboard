@@ -143,7 +143,6 @@ Generate 3 talking points that connect the evidence to specific conversation sta
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-intelligence',
       customerName,
-      model: 'lite',
       temperature: 0.3,
     })
 
