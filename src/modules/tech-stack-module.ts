@@ -409,6 +409,7 @@ FeatureModuleRegistry.register({
   scope: 'customer',
   signalRole: 'trigger',
   signalAudience: 'customer-specific',
+  usesGemini: true,
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   accountTab: {

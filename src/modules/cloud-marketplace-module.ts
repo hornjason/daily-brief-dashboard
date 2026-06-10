@@ -949,6 +949,7 @@ FeatureModuleRegistry.register({
   scope: 'portfolio',
   signalRole: 'trigger',
   signalAudience: 'customer-specific',
+  usesGemini: true,
 
   cachePaths: () => ['data/cache/cloud-marketplace/latest.json'],
   cacheTtlMs: CLOUD_MARKETPLACE_TTL_MS,

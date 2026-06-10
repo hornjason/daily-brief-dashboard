@@ -144,9 +144,14 @@ function DataSourceCard({
     <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <Circle className={`w-2.5 h-2.5 fill-current ${statusColor}`} />
+          <Circle
+            className={`w-2.5 h-2.5 fill-current ${statusColor}`}
+            aria-label={`Status: ${source.status}`}
+            role="img"
+          />
           <div>
             <span className="text-sm font-medium text-gray-200">{displayName}</span>
+            <span className="sr-only"> ({source.status})</span>
             {source.sourceDescription && (
               <div className="text-xs text-gray-500">{source.sourceDescription}</div>
             )}

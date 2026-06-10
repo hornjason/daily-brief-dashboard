@@ -159,6 +159,7 @@ FeatureModuleRegistry.register({
   scope: 'portfolio',
   signalRole: 'enrichment',
   signalAudience: 'all',
+  usesGemini: true,
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: () => ['data/cache/competitive-intel/decks.json'],

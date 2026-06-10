@@ -22,13 +22,11 @@ import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { CACHE_DIR } from './lib/paths.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── ADR-037 F2: refreshAllModules types & constants ─────────────────────────
 
-const GEMINI_MODULES = new Set([
-  'cloud-marketplace', 'competitive-intel', 'tech-stack',
-  'intelligence', 'customer-product-intel',
-])
+// Gemini modules are identified by usesGemini: true in their registry entry (ADR-037)
 const GEMINI_INTER_CALL_DELAY = 15_000
 const GEMINI_PER_MODULE_TIMEOUT = 60_000
 const GEMINI_TOTAL_CAP = 5 * 60_000
@@ -105,13 +103,14 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   }
 
   _refreshAllRunning = true
+  try {
   const startedAt = new Date().toISOString()
 
   const allModules = FeatureModuleRegistry.getRegisteredModules()
 
-  // Split into fast (non-Gemini) and Gemini queues
-  const fastModules = allModules.filter(m => !GEMINI_MODULES.has(m.name))
-  const geminiModules = allModules.filter(m => GEMINI_MODULES.has(m.name))
+  // Split into fast (non-Gemini) and Gemini queues — registry-driven via usesGemini field
+  const fastModules = allModules.filter(m => !m.usesGemini)
+  const geminiModules = allModules.filter(m => m.usesGemini)
 
   const manifest: RefreshManifest = {
     startedAt,
@@ -146,9 +145,9 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
         FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
       } catch (e: any) {
         const durationMs = Date.now() - modStart
-        manifest.modules[mod.name] = { status: 'failed', durationMs, error: e?.message ?? String(e) }
+        manifest.modules[mod.name] = { status: 'failed', durationMs, error: sanitizeErr(e) }
         manifest.failed++
-        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: sanitizeErr(e) })
       }
     })
   )
@@ -179,12 +178,13 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
 
     try {
       // Race the module sync against a per-module timeout
+      let timer: ReturnType<typeof setTimeout>
       await Promise.race([
         mod.syncNow(''),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), GEMINI_PER_MODULE_TIMEOUT)
-        ),
-      ])
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('timeout')), GEMINI_PER_MODULE_TIMEOUT)
+        }),
+      ]).finally(() => clearTimeout(timer!))
 
       const durationMs = Date.now() - modStart
       manifest.modules[mod.name] = { status: 'done', durationMs }
@@ -210,9 +210,11 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
 
   manifest.inProgress = null
   writeManifest(manifest)
-  _refreshAllRunning = false
 
   return manifest
+  } finally {
+    _refreshAllRunning = false
+  }
 }
 
 // ── Cache hierarchy constants (BKL-INGEST-10) ──────────────────────────────
@@ -680,7 +682,7 @@ export function createRefreshRouter(): Hono {
         FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
       } catch (e: any) {
         console.warn(`[refresh:customer] ${mod.name} failed for ${slug}:`, e?.message)
-        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: sanitizeErr(e) })
         failed++
       }
     }

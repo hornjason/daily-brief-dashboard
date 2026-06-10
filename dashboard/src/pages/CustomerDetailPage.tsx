@@ -1435,19 +1435,26 @@ export function CustomerDetailPage() {
     }
   }, [customerName])
 
-  // Per-customer refresh (ADR-037 F5)
+  // Per-customer refresh (ADR-037 F5) with completion feedback (#759)
   const [customerRefreshing, setCustomerRefreshing] = useState(false)
+  const [refreshResult, setRefreshResult] = useState<'success' | 'error' | null>(null)
   const handleRefreshCustomer = async () => {
     const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     setCustomerRefreshing(true)
+    setRefreshResult(null)
     try {
       const res = await fetch(`/api/customer/${encodeURIComponent(slug)}/refresh-all`, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         console.error('Customer refresh failed:', (data as { error?: string }).error)
+        setRefreshResult('error')
+      } else {
+        setRefreshResult('success')
+        setTimeout(() => setRefreshResult(null), 3000)
       }
     } catch (err) {
       console.error('Network error refreshing customer:', err)
+      setRefreshResult('error')
     } finally {
       setCustomerRefreshing(false)
     }
@@ -1582,6 +1589,8 @@ export function CustomerDetailPage() {
               <RefreshCw className={`w-3.5 h-3.5 ${customerRefreshing ? 'animate-spin' : ''}`} />
               {customerRefreshing ? 'Refreshing...' : 'Refresh'}
             </button>
+            {refreshResult === 'success' && <span className="text-green-400 text-xs ml-1">Refreshed</span>}
+            {refreshResult === 'error' && <span className="text-red-400 text-xs ml-1">Refresh failed</span>}
 
             {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
               <AccountCountPill accountNumbers={meta.accountNumbers.map(String)} />

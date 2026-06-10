@@ -98,4 +98,27 @@ describe('checkForUpgrade', () => {
     // Cold boot + dev = upgrade detected
     expect(result.upgradeDetected).toBe(true)
   })
+
+  test('handles malformed BUILD_HASH JSON gracefully', () => {
+    writeFileSync(buildHashPath, 'not valid json {{{')
+
+    const result = checkForUpgrade(buildHashPath, lastBuildHashPath)
+
+    // Falls back to dev defaults
+    expect(result.buildInfo).not.toBeNull()
+    expect(result.buildInfo!.gitSha).toBe('dev')
+    expect(result.upgradeDetected).toBe(true)
+  })
+
+  test('handles malformed .last-build-hash JSON gracefully', () => {
+    const currentHash = { gitSha: 'abc1234', timestamp: '2026-06-10T14:30:00Z', imageTag: 'v2.1.0' }
+    writeFileSync(buildHashPath, JSON.stringify(currentHash))
+    writeFileSync(lastBuildHashPath, 'corrupted data')
+
+    const result = checkForUpgrade(buildHashPath, lastBuildHashPath)
+
+    // Treats corrupted last-hash as cold boot → upgrade detected
+    expect(result.upgradeDetected).toBe(true)
+    expect(result.newSha).toBe('abc1234')
+  })
 })

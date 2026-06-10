@@ -209,6 +209,8 @@ export interface FeatureModule {
   signalRole?: 'trigger' | 'enrichment'
   /** ADR-032a: Default audience for signals from this module */
   signalAudience?: 'all' | 'customer-specific'
+  /** ADR-037: true if syncNow calls Gemini — routed to sequential queue in refreshAllModules */
+  usesGemini?: boolean
 }
 
 export interface ModuleStatus {

@@ -147,7 +147,8 @@ function RefreshProgressBanner() {
     <div className="bg-blue-900/40 border-b border-blue-700/50 px-6 py-2.5 flex items-center gap-3 text-sm">
       <RefreshCwIcon className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
       <span className="text-blue-300 font-medium">
-        Data refresh in progress &mdash; {done}/{manifest.totalModules} modules updated
+        Data refresh in progress &mdash; {manifest.completed}/{manifest.totalModules} modules updated
+        {manifest.failed > 0 && <span className="text-amber-400 ml-1">({manifest.failed} failed)</span>}
       </span>
       {manifest.inProgress && (
         <span className="text-blue-300/60 text-xs">({manifest.inProgress})</span>

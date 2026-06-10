@@ -17,8 +17,9 @@ function makeMockModule(name: string, opts: {
   syncDelay?: number
   syncError?: boolean
   scope?: 'portfolio' | 'customer' | 'both'
+  usesGemini?: boolean
 } = {}): FeatureModule {
-  const { syncDelay = 5, syncError = false, scope = 'portfolio' } = opts
+  const { syncDelay = 5, syncError = false, scope = 'portfolio', usesGemini = false } = opts
   return {
     name,
     cachePaths: () => [],
@@ -29,6 +30,7 @@ function makeMockModule(name: string, opts: {
       if (syncError) throw new Error(`${name} sync failed`)
     },
     scope,
+    usesGemini,
   }
 }
 
@@ -77,7 +79,7 @@ describe('refreshAllModules', () => {
   test('Gemini modules run sequentially', async () => {
     // Register one fast and one Gemini module
     FeatureModuleRegistry.register(makeMockModule('subscriptions', { syncDelay: 5 }))
-    FeatureModuleRegistry.register(makeMockModule('cloud-marketplace', { syncDelay: 5 }))
+    FeatureModuleRegistry.register(makeMockModule('cloud-marketplace', { syncDelay: 5, usesGemini: true }))
 
     const { refreshAllModules } = await import('../../src/refresh-engine.ts')
     const manifest = await refreshAllModules('gemini-test')
@@ -145,6 +147,35 @@ describe('refreshAllModules', () => {
     const { getRefreshManifest } = await import('../../src/refresh-engine.ts')
     const manifest = getRefreshManifest()
     expect(manifest).toBeNull()
+  })
+
+  test('usesGemini flag routes modules to sequential queue', async () => {
+    // Verify that usesGemini modules are separated from fast batch
+    const callOrder: string[] = []
+    const makeTracked = (name: string, gemini: boolean): FeatureModule => ({
+      name,
+      cachePaths: () => [],
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async () => { callOrder.push(name) },
+      scope: 'portfolio',
+      usesGemini: gemini,
+    })
+
+    FeatureModuleRegistry.register(makeTracked('fast-a', false))
+    FeatureModuleRegistry.register(makeTracked('fast-b', false))
+    FeatureModuleRegistry.register(makeTracked('gemini-mod', true))
+
+    const { refreshAllModules } = await import('../../src/refresh-engine.ts')
+    const manifest = await refreshAllModules('routing-test')
+
+    expect(manifest.completed).toBe(3)
+    // Gemini module should run after fast batch completes
+    expect(callOrder).toContain('fast-a')
+    expect(callOrder).toContain('fast-b')
+    expect(callOrder).toContain('gemini-mod')
+    // Gemini module is always last (runs after fast batch settles)
+    expect(callOrder.indexOf('gemini-mod')).toBe(callOrder.length - 1)
   })
 
   test('manifest has correct schema', async () => {
