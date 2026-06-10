@@ -40,6 +40,7 @@ import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
 import { isAnyRunning } from './lib/run-coordinator.ts'
 import { writeSyncStateFlow, todaySyncRan } from './sync-state.ts'
 import { isPrimary as nodeIsPrimary } from './lib/node-role.ts'
+import { runHealthProbes } from './startup-health-probe.ts'
 
 // ── BKL-SYNC-L3-02: Primary-node predicate — gates L4 writer scheduler paths ──
 // NODE_ROLE=primary → this node is the L4 leader (Mac Mini sync daemon).
@@ -662,6 +663,9 @@ export function initBackgroundScheduler(opts: {
 
   // Validate cached account numbers — warn/clear false positives before scrapes start
   validateCachedAccountNumbers()
+
+  // Run health probes early — after defaults load, before module catch-up (#746)
+  runHealthProbes().catch((e: any) => console.error('[health] probe run failed:', e?.message ?? e))
 
   // On startup: check if this is a fresh install or normal restart
   // If any module has no timestamp, run the cascade

@@ -35,6 +35,7 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { getAccountTeam, persistTeamCache } from './account-team.ts'
 import { toSlug } from './cache-layer.ts'
 import { computeDealAttribution } from './lib/deal-attribution.ts'
+import { getHealthResults } from './startup-health-probe.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -69,6 +70,9 @@ export const APP_VERSION: string = (() => {
 
 export function createAdminRouter(): Hono {
   const r = new Hono()
+
+  // GET /api/admin/health — startup health probe results (#746)
+  r.get('/api/admin/health', (c) => c.json(getHealthResults()))
 
   // GET /api/status/telemetry — summary stats per service (last run, success rate, avg duration)
   r.get('/api/status/telemetry', (c) => c.json(getTelemetrySummary()))
