@@ -15,6 +15,7 @@ import { recordCcspRefreshAt } from './ccsp-scraper.ts'
 import { recordSupportableRefreshAt } from './supportable-scraper.ts'
 import { emitCacheLevel } from './ingest-events.js'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
+import { getStalenessMap } from './staleness-monitor.ts'
 import { normalizeSettings } from './region-config.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
@@ -649,9 +650,13 @@ export function createRefreshRouter(): Hono {
     return c.json(manifest)
   })
   router.post('/api/admin/refresh-all', async (c) => {
-    // Trigger refreshAllModules as non-blocking background task
     void refreshAllModules('manual')
     return c.json({ ok: true, message: 'Refresh started' })
+  })
+
+  // ── ADR-037 F3: Module freshness / staleness endpoint ───────────────────
+  router.get('/api/admin/freshness', (c) => {
+    return c.json(getStalenessMap())
   })
 
   return router
