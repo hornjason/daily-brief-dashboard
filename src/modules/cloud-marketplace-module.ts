@@ -73,6 +73,7 @@ interface CloudMarketplaceCache {
   cachedAt: string
   newsletterHtml?: string
   rawSlideContent?: string
+  cmFolderId?: string
 }
 
 // ── Gmail newsletter extraction ────────────────────────────────────────────────
@@ -975,6 +976,9 @@ FeatureModuleRegistry.register({
         const parentId = getPodBookingsFolderId()
         if (parentId) {
           const cmFolder = await ensureCloudMarketplaceFolder(parentId)
+          // #699 GAP-16: Persist cmFolderId in cache for Drive linkbacks
+          cache.cmFolderId = cmFolder
+          writeCloudMarketplaceCache(cache)
           await copySlideDecksToFolder(cmFolder, fileIds)
           await uploadCloudMarketplaceJson(cmFolder, cache)
           console.log('[cloud-marketplace] synced to Drive successfully')
@@ -1085,6 +1089,11 @@ FeatureModuleRegistry.register({
       // #479: Use first offering or program URL as representative link
       const representativeUrl = cloud.offerings.find(o => o.url)?.url ?? activePrograms.find(p => p.url)?.url
 
+      // #466: Drive folder URL for linkbacks
+      const driveFolderUrl = marketplaceCache.cmFolderId
+        ? `https://drive.google.com/drive/folders/${marketplaceCache.cmFolderId}`
+        : undefined
+
       signals.push({
         source: 'cloud-marketplace',
         type: 'product-intel',
@@ -1107,6 +1116,7 @@ FeatureModuleRegistry.register({
           newCountries: cloud.newCountries,
           partnerships: cloud.partnerships,
           sourceNoteId: `cloud-marketplace-${cloud.provider.toLowerCase()}-${marketplaceCache.newsletterDate}`,
+          driveFolderUrl,
         },
       })
     }

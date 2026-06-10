@@ -28,16 +28,17 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
 
   const lines: string[] = []
 
-  // #704: Purchasing Recommendation — render top-ranked provider recommendation above catalog
-  const recommended = sorted
-    .filter(s => s.metadata?.recommendedProvider && s.metadata?.conversationOpener)
-    .sort((a, b) => (Number(a.metadata?.providerRank) || 99) - (Number(b.metadata?.providerRank) || 99))
-  if (recommended.length > 0) {
-    const top = recommended[0]
-    lines.push('## Purchasing Recommendation')
-    lines.push('')
-    lines.push(`**Recommended: ${String(top.metadata!.recommendedProvider)}** — ${String(top.metadata!.conversationOpener)}`)
-    lines.push('')
+  // #702 Fix 8: Staleness warning when newsletter data is >14 days old
+  const firstSignal = sorted[0]
+  if (firstSignal?.timestamp) {
+    const dataDate = new Date(firstSignal.timestamp)
+    const now = new Date()
+    const daysDiff = Math.floor((now.getTime() - dataDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysDiff > 14) {
+      const dateStr = dataDate.toISOString().slice(0, 10)
+      lines.push(`> Warning: Newsletter data is from ${dateStr} — may be outdated. Refresh for latest.`)
+      lines.push('')
+    }
   }
 
   for (const s of sorted) {
@@ -70,18 +71,25 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
       lines.push(line)
     }
 
-    // Offerings — summary count only, not full catalog
+    // #699 GAP-14: List offering names, not just count
+    // #702 Fix 5: Mark pending offerings
     const offerings = Array.isArray(m.offerings) ? m.offerings : []
     if (offerings.length) {
-      const available = offerings.filter((o: any) => o.availability?.toLowerCase()?.includes('available today')).length
-      const privateOffer = offerings.filter((o: any) => {
-        const a = (o.availability ?? '').toLowerCase()
-        return a.includes('private offer') || a.includes('subscription')
-      }).length
-      const parts: string[] = []
-      if (available) parts.push(`${available} available today`)
-      if (privateOffer) parts.push(`${privateOffer} via private offer`)
-      lines.push(`- ${offerings.length} Red Hat offerings on ${provider} Marketplace (${parts.join(', ')})`)
+      const namedOfferings = offerings.map((o: any) => {
+        let name = o.name ?? 'Unknown'
+        // #702 Fix 5: Append (Pending) for review/preview/coming soon offerings
+        const avail = (o.availability ?? '').toLowerCase()
+        if (avail.includes('review') || avail.includes('preview') || avail.includes('coming soon')) {
+          name += ' (Pending)'
+        }
+        return name
+      })
+      const top3 = namedOfferings.slice(0, 3)
+      const remaining = namedOfferings.length - 3
+      const displayNames = remaining > 0
+        ? `${top3.join(', ')} + ${remaining} more`
+        : top3.join(', ')
+      lines.push(`- Red Hat offerings on ${provider}: ${displayNames}`)
     }
 
     // New countries
@@ -90,6 +98,13 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
       lines.push(`- Newly available in: ${countries.join(', ')}`)
     }
 
+    lines.push('')
+  }
+
+  // #466: Drive linkback — show link to source materials folder
+  const driveFolderUrl = sorted.find(s => s.metadata?.driveFolderUrl)?.metadata?.driveFolderUrl
+  if (driveFolderUrl) {
+    lines.push(`[View source materials](${driveFolderUrl})`)
     lines.push('')
   }
 

@@ -18,6 +18,7 @@ import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent, checkStoredDocsTrashed, discoverExistingIntelDocs, getIntelligenceCacheEntry, writeIntelligenceDiscoveryCache } from './account-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, writeSheetCache, readSheetCache, readPipelineCache, readCCSPCache, toSlug } from './cache-layer.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
@@ -420,8 +421,7 @@ export function createCustomerRouter(): Hono {
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
     const slug = toSlug(customer.name)
-    const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-    const registrySignals = await FeatureModuleRegistry.collectAllSignals(slug)
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
 
     const sourceFilter = c.req.query('source')
     let filtered = registrySignals
