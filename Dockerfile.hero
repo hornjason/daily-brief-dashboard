@@ -30,6 +30,9 @@ COPY . .
 # Build the React/Vite frontend
 RUN cd dashboard && bun run build
 
+# Capture git SHA for BUILD_HASH (ADR-037, F1)
+RUN git rev-parse --short HEAD > /tmp/git-sha 2>/dev/null || echo "unknown" > /tmp/git-sha
+
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 # No Playwright, no Chromium, no VNC — hero install is a pure HTTP server.
@@ -78,6 +81,11 @@ LABEL org.opencontainers.image.licenses=MIT
 
 # Default environment — loaded by entrypoint.sh, overridden by user's --env-file
 COPY defaults.env /app/defaults.env
+
+# ── BUILD_HASH for upgrade detection (ADR-037, F1, #748) ─────────────────────
+COPY --from=builder /tmp/git-sha /tmp/git-sha
+ARG IMAGE_TAG=dev
+RUN echo "{\"gitSha\":\"$(cat /tmp/git-sha)\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"imageTag\":\"${IMAGE_TAG:-dev}\"}" > /app/BUILD_HASH
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

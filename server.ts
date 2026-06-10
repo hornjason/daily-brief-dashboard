@@ -117,6 +117,17 @@ reconcileConfig()
 // ── Load shared state from server-state.ts ──────────────────────────────────
 loadServerState()
 
+// ── ADR-037 Layer 3: Build hash upgrade detection (#748) ────────────────────
+import { checkForUpgrade } from './src/build-hash.ts'
+{
+  const upgradeResult = checkForUpgrade()
+  if (upgradeResult.upgradeDetected) {
+    console.log(`[startup] Upgrade detected (old: ${upgradeResult.oldSha ?? 'none'} → new: ${upgradeResult.newSha}). Background refresh will start.`)
+  } else {
+    console.log(`[startup] No upgrade detected (build: ${upgradeResult.buildInfo?.gitSha ?? 'unknown'}).`)
+  }
+}
+
 /** Extract Tableau territory segment from a full Tableau dashboard URL. */
 function extractTableauTerritory(url: string): string | null {
   // URL form: .../CloudConsumption/{guid}/{territory}?...
