@@ -24,6 +24,21 @@ if [ -f /app/defaults.env ]; then
   done < /app/defaults.env
 fi
 
+# ── Forced config migrations (#746) ───────────────────────────────────────────
+# Override known-bad values that break on managed GCP billing accounts.
+# These run BEFORE Node starts so the app never sees the bad value.
+# Add new migrations here when vendor/org policy changes break existing configs.
+if [ "$GEMINI_MODEL" = "gemini-2.5-flash" ] || [ "$GEMINI_MODEL" = "gemini-2.5-flash-lite" ]; then
+  echo "[entrypoint] MIGRATION: GEMINI_MODEL=$GEMINI_MODEL blocked by org policy — overriding to gemini-2.5-pro"
+  export GEMINI_MODEL="gemini-2.5-pro"
+fi
+if [ -n "$GEMINI_MODEL_LITE" ]; then
+  if [ "$GEMINI_MODEL_LITE" = "gemini-2.5-flash" ] || [ "$GEMINI_MODEL_LITE" = "gemini-2.5-flash-lite" ]; then
+    echo "[entrypoint] MIGRATION: GEMINI_MODEL_LITE=$GEMINI_MODEL_LITE blocked by org policy — overriding to gemini-2.5-pro"
+    export GEMINI_MODEL_LITE="gemini-2.5-pro"
+  fi
+fi
+
 # ── OAuth keys (#109) ─────────────────────────────────────────────────────────
 # OAuth client credentials are bundled in src/google-oauth-config.ts (council
 # decision 2026-05-11). No file provisioning needed — the server reads from
