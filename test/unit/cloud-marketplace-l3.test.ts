@@ -304,3 +304,107 @@ describe('Cloud marketplace name normalization (#704)', () => {
     })
   })
 })
+
+// ── #694: Debug endpoint uses loadCustomerSignals ───────────────────────────
+
+describe('Debug endpoint uses loadCustomerSignals (#694)', () => {
+  const routesContent = readFileSync(resolve(import.meta.dir, '../../src/customer-routes.ts'), 'utf-8')
+
+  test('AC-1: debug endpoint imports and uses loadCustomerSignals', () => {
+    expect(routesContent).toContain("import { loadCustomerSignals } from './lib/signal-loader.ts'")
+    // The debug endpoint should use loadCustomerSignals, not direct collectAllSignals
+    const debugBlock = routesContent.slice(routesContent.indexOf('signals/debug'))
+    expect(debugBlock).toContain('loadCustomerSignals')
+  })
+
+  test('AC-1: debug endpoint does NOT use direct FeatureModuleRegistry.collectAllSignals', () => {
+    const debugStart = routesContent.indexOf('signals/debug')
+    const debugEnd = routesContent.indexOf('router.', debugStart + 1)
+    const debugBlock = routesContent.slice(debugStart, debugEnd > 0 ? debugEnd : undefined)
+    expect(debugBlock).not.toContain('FeatureModuleRegistry.collectAllSignals')
+  })
+})
+
+// ── #699 GAP-16: cmFolderId in cache ────────────────────────────────────────
+
+describe('cmFolderId in cache (#699 GAP-16)', () => {
+
+  test('AC-2: CloudMarketplaceCache interface includes cmFolderId', () => {
+    const cacheInterface = content.match(/interface CloudMarketplaceCache \{[\s\S]*?\}/)
+    expect(cacheInterface).not.toBeNull()
+    expect(cacheInterface![0]).toContain('cmFolderId')
+  })
+
+  test('AC-2: syncNow writes cmFolderId to cache', () => {
+    const syncSection = content.slice(content.indexOf('ensureCloudMarketplaceFolder'))
+    expect(syncSection).toContain('cache.cmFolderId')
+  })
+})
+
+// ── #699 GAP-14: Template lists offering names ──────────────────────────────
+
+describe('Template lists offering names (#699 GAP-14)', () => {
+  const templateContent = readFileSync(resolve(import.meta.dir, '../../src/lib/templates/cloud.ts'), 'utf-8')
+
+  test('AC-3: template shows offering names instead of just count', () => {
+    expect(templateContent).toContain('namedOfferings')
+    expect(templateContent).toContain('top3')
+    expect(templateContent).toContain('Red Hat offerings on ${provider}:')
+  })
+
+  test('AC-3: template does NOT show old count-only format', () => {
+    expect(templateContent).not.toContain('Red Hat offerings on ${provider} Marketplace (')
+  })
+})
+
+// ── #702: Pending indicator, staleness warning ──────────────────────────────
+
+describe('Cloud marketplace template enhancements (#702)', () => {
+  const templateContent = readFileSync(resolve(import.meta.dir, '../../src/lib/templates/cloud.ts'), 'utf-8')
+
+  test('AC-4: pending offerings marked with (Pending)', () => {
+    expect(templateContent).toContain("'review'")
+    expect(templateContent).toContain("'preview'")
+    expect(templateContent).toContain("'coming soon'")
+    expect(templateContent).toContain("(Pending)")
+  })
+
+  test('AC-6: staleness warning when newsletter data >14 days old', () => {
+    expect(templateContent).toContain('daysDiff > 14')
+    expect(templateContent).toContain('may be outdated')
+    expect(templateContent).toContain('Refresh for latest')
+  })
+})
+
+// ── #702 item 7: Baseline offerings have URLs ───────────────────────────────
+
+describe('Baseline offerings have URLs (#702)', () => {
+
+  test('AC-5: all baseline offerings have url field', () => {
+    const baselinePath = resolve(import.meta.dir, '../../config-templates/cloud-marketplace-baseline.json')
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    for (const p of baseline.providers) {
+      for (const o of p.offerings) {
+        expect(o.url).toBeDefined()
+        expect(typeof o.url).toBe('string')
+        expect(o.url.startsWith('https://')).toBe(true)
+      }
+    }
+  })
+})
+
+// ── #466: Drive linkbacks ───────────────────────────────────────────────────
+
+describe('Drive linkbacks (#466)', () => {
+  const templateContent = readFileSync(resolve(import.meta.dir, '../../src/lib/templates/cloud.ts'), 'utf-8')
+
+  test('AC-7: signal metadata includes driveFolderUrl', () => {
+    expect(content).toContain('driveFolderUrl')
+    expect(content).toContain('drive.google.com/drive/folders/')
+  })
+
+  test('AC-8: template renders Drive link', () => {
+    expect(templateContent).toContain('driveFolderUrl')
+    expect(templateContent).toContain('View source materials')
+  })
+})

@@ -29,19 +29,23 @@
       "offerings": [
         {
           "name": "Red Hat Enterprise Linux (RHEL)",
-          "description": "Enterprise Linux platform available on AWS Marketplace with multiple instance types and billing options."
+          "description": "Enterprise Linux platform available on AWS Marketplace with multiple instance types and billing options.",
+          "url": "https://aws.amazon.com/marketplace/pp/prodview-kv75jvmjgfgv4"
         },
         {
           "name": "Red Hat OpenShift",
-          "description": "Managed OpenShift container platform via ROSA (Red Hat OpenShift Service on AWS)."
+          "description": "Managed OpenShift container platform via ROSA (Red Hat OpenShift Service on AWS).",
+          "url": "https://aws.amazon.com/rosa/"
         },
         {
           "name": "Red Hat Ansible Automation Platform",
-          "description": "IT automation platform available on AWS Marketplace for infrastructure and application automation."
+          "description": "IT automation platform available on AWS Marketplace for infrastructure and application automation.",
+          "url": "https://aws.amazon.com/marketplace/pp/prodview-rli5nmxldoan4"
         },
         {
           "name": "Red Hat Enterprise Linux for SAP",
-          "description": "RHEL optimized for SAP HANA and SAP S/4HANA workloads on AWS."
+          "description": "RHEL optimized for SAP HANA and SAP S/4HANA workloads on AWS.",
+          "url": "https://aws.amazon.com/marketplace/pp/prodview-bfwiq6mfxru2g"
         }
       ]
     },
@@ -64,19 +68,23 @@
       "offerings": [
         {
           "name": "Red Hat Enterprise Linux (RHEL)",
-          "description": "Enterprise Linux platform available on Google Cloud Marketplace."
+          "description": "Enterprise Linux platform available on Google Cloud Marketplace.",
+          "url": "https://console.cloud.google.com/marketplace/product/rhel-cloud/rhel"
         },
         {
           "name": "Red Hat OpenShift",
-          "description": "OpenShift container platform available on Google Cloud Marketplace."
+          "description": "OpenShift container platform available on Google Cloud Marketplace.",
+          "url": "https://console.cloud.google.com/marketplace/product/redhat-marketplace/red-hat-openshift"
         },
         {
           "name": "Red Hat Ansible Automation Platform",
-          "description": "IT automation platform available on Google Cloud Marketplace."
+          "description": "IT automation platform available on Google Cloud Marketplace.",
+          "url": "https://console.cloud.google.com/marketplace/product/redhat-marketplace/red-hat-ansible-automation-platform"
         },
         {
           "name": "Red Hat Enterprise Linux for SAP",
-          "description": "RHEL optimized for SAP workloads on Google Cloud."
+          "description": "RHEL optimized for SAP workloads on Google Cloud.",
+          "url": "https://console.cloud.google.com/marketplace/product/rhel-sap-cloud/rhel-for-sap"
         }
       ]
     },
@@ -99,23 +107,28 @@
       "offerings": [
         {
           "name": "Red Hat Enterprise Linux (RHEL)",
-          "description": "Enterprise Linux platform available on Azure Marketplace."
+          "description": "Enterprise Linux platform available on Azure Marketplace.",
+          "url": "https://azuremarketplace.microsoft.com/en-us/marketplace/apps/redhat.rhel-20190605"
         },
         {
           "name": "Red Hat OpenShift",
-          "description": "Azure Red Hat OpenShift (ARO) — managed OpenShift on Azure."
+          "description": "Azure Red Hat OpenShift (ARO) — managed OpenShift on Azure.",
+          "url": "https://azure.microsoft.com/en-us/products/openshift"
         },
         {
           "name": "Red Hat Ansible Automation Platform",
-          "description": "IT automation platform available on Azure Marketplace."
+          "description": "IT automation platform available on Azure Marketplace.",
+          "url": "https://azuremarketplace.microsoft.com/en-us/marketplace/apps/redhat.ansible-on-azure"
         },
         {
           "name": "Red Hat Enterprise Linux for SAP",
-          "description": "RHEL optimized for SAP workloads on Azure."
+          "description": "RHEL optimized for SAP workloads on Azure.",
+          "url": "https://azuremarketplace.microsoft.com/en-us/marketplace/apps/redhat.rhel-sap-apps"
         },
         {
           "name": "Red Hat Enterprise Linux for HPC on Azure",
-          "description": "RHEL optimized for high-performance computing workloads on Azure."
+          "description": "RHEL optimized for high-performance computing workloads on Azure.",
+          "url": "https://azuremarketplace.microsoft.com/en-us/marketplace/apps/redhat.rhel-hpc"
         }
       ]
     }
