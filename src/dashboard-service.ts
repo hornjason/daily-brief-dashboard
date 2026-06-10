@@ -1169,6 +1169,9 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
   const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
 
   if (regionType === 'enterprise') {
+    if (!aeName) {
+      console.warn(`[territory-lookup] DEPRECATED: enterprise lookup without aeName — results may be wrong for overlapping territory codes. Pass aeName query param.`)
+    }
     // Enterprise path: find the enterprise tab, extract AE map, match by terr number
     const terrNumMatch = requestedTerritory.match(/_TERR(\d+)$/)
     if (!terrNumMatch) throw new Error(`Cannot parse territory number from ${requestedTerritory}`)

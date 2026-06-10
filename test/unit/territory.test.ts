@@ -195,3 +195,65 @@ describe('enterpriseTerritoryKey — prefix routing (#635)', () => {
     expect(enterpriseTerritoryKey(fourPodRegion, 'Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
   })
 })
+
+// ── #742: enterpriseTerritoryKey — prefix sorting longest-first ──────────────
+
+describe('enterpriseTerritoryKey — prefix routing (#742)', () => {
+  const makeRegion = (pods: Record<string, { sfReportId: string; label: string; hidden?: boolean; prefixes?: string[] }>): RegionConfig => ({
+    id: 'central-enterprise',
+    label: 'Central Enterprise',
+    type: 'enterprise',
+    territorySheetUrl: '',
+    podBookingsFolderId: '',
+    parentFolderId: '',
+    pods,
+  })
+
+  test('AC-1: prefixes sorted longest-first — High_Plains matches before Plains', () => {
+    const region = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_P: { sfReportId: 'r2', label: 'Plains', hidden: true, prefixes: ['Plains'] },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+    })
+    // High_Plains must route to HP, not P (substring collision prevented)
+    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    // Plains still routes to P
+    expect(enterpriseTerritoryKey(region, 'Plains_Terr01')).toBe('CENTRAL_ENT_TOLA_P_TERR01')
+  })
+
+  test('AC-2: "Plains" prefix does not match "High_Plains" territory', () => {
+    const region = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_P: { sfReportId: 'r2', label: 'Plains', hidden: true, prefixes: ['Plains'] },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+    })
+    const result = enterpriseTerritoryKey(region, 'High_Plains_Terr05')
+    expect(result).not.toContain('_P_TERR')
+    expect(result).toBe('CENTRAL_ENT_TOLA_HP_TERR05')
+  })
+
+  test('AC-3: existing routing unchanged for non-colliding prefixes', () => {
+    const region = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+    })
+    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(region, 'TOLA_Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
+    expect(enterpriseTerritoryKey(region, 'Terr05')).toBe('CENTRAL_ENT_TOLA_TERR05')
+  })
+
+  test('bare Terr code routes to default (non-prefix) pod', () => {
+    const region = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+    })
+    expect(enterpriseTerritoryKey(region, 'Terr04')).toBe('CENTRAL_ENT_TOLA_TERR04')
+  })
+
+  test('prefix matching is case-insensitive', () => {
+    const region = makeRegion({
+      CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
+      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+    })
+    expect(enterpriseTerritoryKey(region, 'high_plains_Terr07')).toBe('CENTRAL_ENT_TOLA_HP_TERR07')
+  })
+})

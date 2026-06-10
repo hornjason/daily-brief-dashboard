@@ -648,12 +648,7 @@ function AutoBootstrapForm({
     if (!pod) return []
     // Prefer live sheet data
     if (podTerritoryNames.length > 0) {
-      return podTerritoryNames.map(({ num, aeName, key, keys }) => ({
-        num,
-        label: `${aeName} (${num.replace(/,/g, ', ')})`,
-        key,
-        keys,
-      }))
+      return podTerritoryNames.map(({ num, aeName }) => ({ num, label: aeName }))
     }
     // Fall back to knownAes (populated aes.json)
     const knownForPod = knownAes

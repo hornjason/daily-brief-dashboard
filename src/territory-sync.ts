@@ -303,6 +303,9 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
       // Skip placeholder entries
       if (/^TBH$/i.test(aeName.trim())) continue
 
+      if (out[aeName]) {
+        console.warn(`[territory-sync] duplicate AE name in sheet: "${aeName}" — merging territories`)
+      }
       if (!out[aeName]) out[aeName] = []
       if (!out[aeName].includes(terrCode)) out[aeName].push(terrCode)
     }
@@ -390,8 +393,15 @@ export function enterpriseTerritoryKey(region: RegionConfig, terrCode: string): 
   const fallbackBase = region.id.toUpperCase().replace(/-/g, '_')
 
   // Declarative prefix routing: match terrCode against pod prefixes
+  // Sort pods by prefix length (longest first) to prevent substring collision (#742)
   let base = fallbackBase
-  for (const [key, pod] of Object.entries(region.pods)) {
+  const sortedPods = Object.entries(region.pods)
+    .sort(([, a], [, b]) => {
+      const aMax = Math.max(0, ...(a.prefixes?.map(p => p.length) ?? []))
+      const bMax = Math.max(0, ...(b.prefixes?.map(p => p.length) ?? []))
+      return bMax - aMax
+    })
+  for (const [key, pod] of sortedPods) {
     if (pod.prefixes?.some(p => terrCode.toLowerCase().startsWith(p.toLowerCase() + '_'))) {
       base = key
       break
