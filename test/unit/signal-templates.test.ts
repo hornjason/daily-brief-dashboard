@@ -163,7 +163,7 @@ describe('templateCloudMarketplace', () => {
     expect(result).toContain('$125,000 Red Hat marketplace spend')
     expect(result).toContain('Program: Commit')
     expect(result).toContain('Program: EDP')
-    expect(result).toContain('Red Hat offerings on AWS Marketplace')
+    expect(result).toContain('Red Hat offerings on AWS:')
   })
 
   test('filters out providers without spend or intel', () => {
