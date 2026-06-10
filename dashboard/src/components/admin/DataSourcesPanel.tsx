@@ -205,6 +205,8 @@ function SourceGroupSection({
 export function DataSourcesPanel() {
   const [sources, setSources] = useState<DataSourceStatus[]>([])
   const [refreshing, setRefreshing] = useState<Record<string, boolean>>({})
+  const [refreshAllInProgress, setRefreshAllInProgress] = useState(false)
+  const [refreshAllProgress, setRefreshAllProgress] = useState<{ completed: number; total: number } | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -223,6 +225,45 @@ export function DataSourcesPanel() {
     const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [loadData])
+
+  // Poll refresh-all status while in progress
+  useEffect(() => {
+    if (!refreshAllInProgress) return
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch('/api/admin/refresh-all/status')
+        if (!res.ok) return
+        const manifest = await res.json()
+        const done = manifest.completed + manifest.failed + manifest.skipped
+        setRefreshAllProgress({ completed: done, total: manifest.totalModules })
+        if (manifest.inProgress === null && manifest.totalModules > 0 && done >= manifest.totalModules) {
+          setRefreshAllInProgress(false)
+          setRefreshAllProgress(null)
+          loadData()
+        }
+      } catch {
+        // Polling failure is non-fatal
+      }
+    }, 3000)
+    return () => clearInterval(poll)
+  }, [refreshAllInProgress, loadData])
+
+  const handleRefreshAll = async () => {
+    setRefreshAllInProgress(true)
+    setRefreshAllProgress({ completed: 0, total: 0 })
+    try {
+      const res = await fetch('/api/admin/refresh-all', { method: 'POST' })
+      if (!res.ok) {
+        console.error('Refresh All failed:', await res.text())
+        setRefreshAllInProgress(false)
+        setRefreshAllProgress(null)
+      }
+    } catch (err) {
+      console.error('Network error starting Refresh All:', err)
+      setRefreshAllInProgress(false)
+      setRefreshAllProgress(null)
+    }
+  }
 
   const handleRefreshSource = async (source: DataSourceStatus) => {
     if (!source.refreshEndpoint) return
@@ -249,6 +290,22 @@ export function DataSourcesPanel() {
 
   return (
     <div className="space-y-3">
+      {/* Refresh All button */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleRefreshAll}
+          disabled={refreshAllInProgress}
+          className="px-3 py-1.5 text-sm font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshAllInProgress ? 'animate-spin' : ''}`} />
+          {refreshAllInProgress
+            ? (refreshAllProgress && refreshAllProgress.total > 0
+              ? `Refreshing... ${refreshAllProgress.completed}/${refreshAllProgress.total} modules`
+              : 'Refresh in progress...')
+            : 'Refresh All'}
+        </button>
+      </div>
+
       {SOURCE_GROUPS.map(group => (
         <SourceGroupSection
           key={group.label}
