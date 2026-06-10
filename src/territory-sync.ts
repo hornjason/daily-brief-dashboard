@@ -602,15 +602,11 @@ async function syncEnterpriseRegion(
   }
 
   const aeTerrMap = extractEnterpriseAeMap(enterpriseRows)
-  // aeTerrMap is the enterprise source of truth for AE → territories. For
-  // now we map it to the same shape the commercial path returns so callers
-  // don't change. Account-level extraction on enterprise sheets is a
-  // follow-up — this parser's job is the AE/territory mapping.
   const toAdd: Array<{ name: string; ae: string }> = []
   const toRemove: Array<{ name: string; ae: string }> = []
   const unchanged: string[] = []
 
-  // Extract team member data from enterprise sheet (same label→name pattern as commercial)
+  // Extract team member data from enterprise sheet (same label->name pattern as commercial)
   const teamDataByTerritory: Record<string, import('./types.ts').TerritoryTeamEntry> = {}
 
   // Find the "Account Executive" header row to determine accountsStartIdx
@@ -654,11 +650,32 @@ async function syncEnterpriseRegion(
     }
   }
 
-  for (const ae of aes) {
-    const mappedTerrs = aeTerrMap[ae.name]
-    if (!mappedTerrs) continue
-    const aeCustomers = customers.filter(c => c.ae === ae.name)
-    for (const c of aeCustomers) unchanged.push(c.name)
+  // Extract customer accounts per AE and diff against current customers (#731)
+  for (const [aeName, _terrCodes] of Object.entries(aeTerrMap)) {
+    const accounts = extractEnterpriseAeAccounts(enterpriseRows, aeName)
+    // Find which AE config this maps to (by name match)
+    const matchedAe = aes.find(a => a.name.toLowerCase().trim() === aeName.toLowerCase().trim())
+    if (!matchedAe) continue
+
+    const sheetAccountsLower = new Set(accounts.map(a => a.toLowerCase()))
+    const aeCustomers = customers.filter(c => c.ae === matchedAe.name)
+    const currentNamesLower = new Set(aeCustomers.map(c => c.name.toLowerCase()))
+
+    // New accounts in sheet but not in current customers
+    for (const account of accounts) {
+      if (!currentNamesLower.has(account.toLowerCase())) {
+        toAdd.push({ name: account, ae: matchedAe.name })
+      }
+    }
+
+    // Current customers not in sheet = removals
+    for (const cust of aeCustomers) {
+      if (!sheetAccountsLower.has(cust.name.toLowerCase())) {
+        toRemove.push({ name: cust.name, ae: matchedAe.name })
+      } else {
+        unchanged.push(cust.name)
+      }
+    }
   }
 
   return { toAdd, toRemove, unchanged, teamData: Object.keys(teamDataByTerritory).length > 0 ? teamDataByTerritory : undefined }
@@ -699,28 +716,54 @@ export async function runTerritorySyncOrchestration(): Promise<{
     return { added: 0, flagged: 0, unchanged: 0 }
   }
 
-  const result = await syncTerritorySheet(aes, currentCustomers)
+  // Iterate ALL configured regions and merge results (#732)
+  const settings = normalizeSettings(loadSettingsRaw())
+  const allToAdd: Array<{ name: string; ae: string }> = []
+  const allToRemove: Array<{ name: string; ae: string }> = []
+  const allUnchanged: string[] = []
+  let mergedTeamData: Record<string, import('./types.ts').TerritoryTeamEntry> = {}
+
+  for (const region of settings.regions) {
+    console.log(`[territory-sync] Syncing region: ${region.label} (${region.id})`)
+    const result = await syncTerritorySheet(aes, currentCustomers, region.id)
+    allToAdd.push(...result.toAdd)
+    allToRemove.push(...result.toRemove)
+    allUnchanged.push(...result.unchanged)
+    if (result.teamData) mergedTeamData = { ...mergedTeamData, ...result.teamData }
+  }
+
+  console.log(`[territory-sync] All regions synced: ${settings.regions.length} region(s)`)
+
+  // Dry-run mode: log proposed changes without applying (#731)
+  const isDryRun = process.env.TERRITORY_SYNC_DRY_RUN === 'true'
+  if (isDryRun) {
+    console.log(`[territory-sync] DRY RUN — would add ${allToAdd.length} customers, remove ${allToRemove.length}`)
+    for (const c of allToAdd) console.log(`  + ${c.name} (${c.ae})`)
+    for (const c of allToRemove) console.log(`  - ${c.name} (${c.ae})`)
+    console.log(`[territory-sync] DRY RUN complete — no changes applied`)
+    return { added: allToAdd.length, flagged: allToRemove.length, unchanged: allUnchanged.length }
+  }
 
   // Auto-add new customers
-  if (result.toAdd.length > 0) {
-    console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
-    const updated = [...currentCustomers, ...result.toAdd]
+  if (allToAdd.length > 0) {
+    console.log(`[territory-sync] adding ${allToAdd.length} new customers`)
+    const updated = [...currentCustomers, ...allToAdd]
     writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
     // Update in-memory state
     const { setCustomers } = await import('./server-state.ts')
     setCustomers(updated)
-    console.log(`[territory-sync] customers updated: ${result.toAdd.map((c: any) => c.name).join(', ')}`)
+    console.log(`[territory-sync] customers updated: ${allToAdd.map((c: any) => c.name).join(', ')}`)
   }
 
   // Write removal/reassignment notifications (never auto-delete)
-  if (result.toRemove.length > 0) {
+  if (allToRemove.length > 0) {
     let existing: { updatedAt: string; pending: TerritoryNotification[] } = { updatedAt: '', pending: [] }
     try {
       if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
         existing = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
       }
     } catch {}
-    const newNotifications: TerritoryNotification[] = result.toRemove.map((c: any) => ({
+    const newNotifications: TerritoryNotification[] = allToRemove.map((c: any) => ({
       type: 'removal' as const,
       customer: c.name,
       ae: c.ae,
@@ -757,16 +800,16 @@ export async function runTerritorySyncOrchestration(): Promise<{
   }
 
   // Persist team data to cache
-  if (result.teamData && Object.keys(result.teamData).length > 0) {
+  if (Object.keys(mergedTeamData).length > 0) {
     const { persistTeamCache } = await import('./account-team.ts')
-    persistTeamCache(result.teamData)
+    persistTeamCache(mergedTeamData)
   }
 
-  console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
+  console.log(`[territory-sync] complete: +${allToAdd.length} added, ${allToRemove.length} flagged for review, ${allUnchanged.length} unchanged`)
 
   return {
-    added: result.toAdd.length,
-    flagged: result.toRemove.length,
-    unchanged: result.unchanged.length,
+    added: allToAdd.length,
+    flagged: allToRemove.length,
+    unchanged: allUnchanged.length,
   }
 }
