@@ -22,7 +22,7 @@ const adoptCcspContext = (_ctx: any): void => {}
 const runCcspScrape = async (..._args: any[]): Promise<any[]> => []
 const writeCcspSheet = async (..._args: any[]): Promise<string> => ''
 const ccspScrapeRunning = false
-import { syncTerritorySheet } from './territory-sync.ts'
+import { runTerritorySyncOrchestration } from './territory-sync.ts'
 import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
 import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, readCCSPCache, writeBriefCache, cleanOrphanedCacheFiles } from './cache-layer.ts'
@@ -921,14 +921,6 @@ export function initBackgroundScheduler(opts: {
 
   // Territory sync — daily 1:45am ET (primary only)
   if (isPrimary) {
-    const TERRITORY_NOTIFICATIONS_PATH = resolve(CACHE_DIR, 'territory-notifications.json')
-    interface TerritoryNotification {
-      type: 'removal' | 'reassignment'
-      customer: string
-      ae: string
-      detectedAt: string
-    }
-
     schedulerRegistry.register({
       name: 'territory-sync',
       type: 'daily',
@@ -936,83 +928,8 @@ export function initBackgroundScheduler(opts: {
       minute: 45,
       enabled: () => getSchedulerConfig().territoryEnabled,
       run: async () => {
-        console.log('[territory-sync] starting territory sheet sync…')
-        // Pre-flight: check Google auth token exists
-        const tokenPath = process.env.GOOGLE_UNIFIED_TOKEN_PATH
-        if (tokenPath && !existsSync(tokenPath)) {
-          console.warn('[territory-sync] Google auth token missing — skipping')
-          return
-        }
-
-        const { aes, customers: currentCustomers, CUSTOMERS_PATH } = await import('./server-state.ts')
-        if (!aes.length) {
-          console.log('[territory-sync] no AEs configured — skipping')
-          return
-        }
-
-        const result = await syncTerritorySheet(aes, currentCustomers)
-
-        // Auto-add new customers
-        if (result.toAdd.length > 0) {
-          console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
-          const updated = [...currentCustomers, ...result.toAdd]
-          writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
-          const { setCustomers } = await import('./server-state.ts')
-          setCustomers(updated)
-          console.log(`[territory-sync] customers updated: ${result.toAdd.map((c: any) => c.name).join(', ')}`)
-        }
-
-        // Write removal/reassignment notifications (never auto-delete)
-        if (result.toRemove.length > 0) {
-          let existing: { updatedAt: string; pending: TerritoryNotification[] } = { updatedAt: '', pending: [] }
-          try {
-            if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
-              existing = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
-            }
-          } catch {}
-          const newNotifications: TerritoryNotification[] = result.toRemove.map((c: any) => ({
-            type: 'removal' as const,
-            customer: c.name,
-            ae: c.ae,
-            detectedAt: new Date().toISOString(),
-          }))
-          const existingKeys = new Set(existing.pending.map((n: any) => `${n.customer}::${n.ae}`))
-          const fresh = newNotifications.filter((n: any) => !existingKeys.has(`${n.customer}::${n.ae}`))
-          const updated = {
-            updatedAt: new Date().toISOString(),
-            pending: [...existing.pending, ...fresh],
-          }
-          writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
-          console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
-        }
-
-        // Clean old notifications (30 day retention)
-        try {
-          if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
-            const notifications = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
-            const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
-            const cleaned = notifications.pending.filter((n: any) => {
-              const detectedTime = new Date(n.detectedAt).getTime()
-              return detectedTime > thirtyDaysAgo
-            })
-            if (cleaned.length < notifications.pending.length) {
-              const updated = { ...notifications, pending: cleaned }
-              writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
-              console.log(`[territory-sync] cleaned ${notifications.pending.length - cleaned.length} old notifications (>30 days)`)
-            }
-          }
-        } catch (e: any) {
-          console.warn(`[territory-sync] notification cleanup failed: ${e.message}`)
-        }
-
-        // Persist team data to cache
-        if (result.teamData && Object.keys(result.teamData).length > 0) {
-          const { persistTeamCache } = await import('./account-team.ts')
-          persistTeamCache(result.teamData)
-        }
-
+        await runTerritorySyncOrchestration()
         updateSchedulerField('territoryLastRun', new Date().toISOString())
-        console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
       },
     })
 

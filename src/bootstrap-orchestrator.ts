@@ -21,18 +21,7 @@ import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets,
 const runCcspScrape = async (..._args: any[]): Promise<any[]> => { throw new Error('[L4-stub] runCcspScrape invoked on hero install') }
 const writeCcspSheet = async (..._args: any[]): Promise<string> => { throw new Error('[L4-stub] writeCcspSheet invoked on hero install') }
 const consumeTableauSessionExpired = (): boolean => { console.warn('[L4-stub] consumeTableauSessionExpired invoked on hero install'); return false }
-const parseTerritoryParts = (territory: string): {
-  pod: string; subregion: string; segment: string; subsegment: string; region: string
-} => {
-  const parts = territory.split('_')
-  return {
-    pod: parts[0] ?? '',
-    subregion: parts[3] ?? '',
-    segment: parts[2] ?? '',
-    subsegment: parts[4] ?? '',
-    region: parts[0] ?? '',
-  }
-}
+import { parseTerritoryParts } from './lib/territory.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache } from './cache-layer.ts'
