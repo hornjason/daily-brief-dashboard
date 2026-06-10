@@ -476,7 +476,9 @@ export function generatePurchasingRecommendation(
         for (const pattern of priorityPatterns) {
           const match = pattern.exec(text)
           if (match?.[1]) {
-            businessObjective = match[1].trim().replace(/^[-•*]\s*/, '').slice(0, 100)
+            const raw = match[1].trim().replace(/^[-•*]\s*/, '')
+            const sentenceEnd = raw.search(/[.!?]/)
+            businessObjective = sentenceEnd > 10 ? raw.slice(0, sentenceEnd + 1) : raw.slice(0, 200)
             break
           }
         }
