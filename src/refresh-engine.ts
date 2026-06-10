@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { Hono } from 'hono'
 import { google } from 'googleapis'
@@ -19,6 +19,200 @@ import { normalizeSettings } from './region-config.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { CACHE_DIR } from './lib/paths.ts'
+
+// ── ADR-037 F2: refreshAllModules types & constants ─────────────────────────
+
+const GEMINI_MODULES = new Set([
+  'cloud-marketplace', 'competitive-intel', 'tech-stack',
+  'intelligence', 'customer-product-intel',
+])
+const GEMINI_INTER_CALL_DELAY = 15_000
+const GEMINI_PER_MODULE_TIMEOUT = 60_000
+const GEMINI_TOTAL_CAP = 5 * 60_000
+
+function getManifestPath(): string {
+  return resolve(process.env.CACHE_DIR ?? CACHE_DIR, 'refresh-manifest.json')
+}
+
+export interface ModuleRefreshStatus {
+  status: 'done' | 'failed' | 'skipped' | 'skipped-timeout' | 'in-progress' | 'pending'
+  durationMs?: number
+  reason?: string
+  error?: string
+}
+
+export interface RefreshManifest {
+  startedAt: string
+  trigger: string
+  totalModules: number
+  completed: number
+  failed: number
+  skipped: number
+  inProgress: string | null
+  modules: Record<string, ModuleRefreshStatus>
+}
+
+// ── In-memory mutex ─────────────────────────────────────────────────────────
+
+let _refreshAllRunning = false
+
+/** Test-only: reset the refresh mutex. */
+export function _resetRefreshMutex(): void {
+  _refreshAllRunning = false
+}
+
+// ── Manifest I/O ────────────────────────────────────────────────────────────
+
+function writeManifest(manifest: RefreshManifest): void {
+  try {
+    writeJsonAtomic(getManifestPath(), manifest)
+  } catch (e: any) {
+    console.warn('[refreshAll] failed to write manifest:', e.message)
+  }
+}
+
+export function getRefreshManifest(): RefreshManifest | null {
+  try {
+    const path = getManifestPath()
+    if (!existsSync(path)) return null
+    return JSON.parse(readFileSync(path, 'utf-8')) as RefreshManifest
+  } catch {
+    return null
+  }
+}
+
+// ── refreshAllModules (ADR-037 Layer 3, F2) ─────────────────────────────────
+
+export async function refreshAllModules(trigger: string): Promise<RefreshManifest> {
+  // Mutex: if already running, return current manifest from disk
+  if (_refreshAllRunning) {
+    const existing = getRefreshManifest()
+    if (existing) return existing
+    // Fallback: return a minimal in-progress manifest
+    return {
+      startedAt: new Date().toISOString(),
+      trigger,
+      totalModules: 0,
+      completed: 0,
+      failed: 0,
+      skipped: 0,
+      inProgress: null,
+      modules: {},
+    }
+  }
+
+  _refreshAllRunning = true
+  const startedAt = new Date().toISOString()
+
+  const allModules = FeatureModuleRegistry.getRegisteredModules()
+
+  // Split into fast (non-Gemini) and Gemini queues
+  const fastModules = allModules.filter(m => !GEMINI_MODULES.has(m.name))
+  const geminiModules = allModules.filter(m => GEMINI_MODULES.has(m.name))
+
+  const manifest: RefreshManifest = {
+    startedAt,
+    trigger,
+    totalModules: allModules.length,
+    completed: 0,
+    failed: 0,
+    skipped: 0,
+    inProgress: null,
+    modules: {},
+  }
+
+  // Initialize all module statuses as pending
+  for (const mod of allModules) {
+    manifest.modules[mod.name] = { status: 'pending' }
+  }
+
+  writeManifest(manifest)
+
+  // ── Fast batch: parallel via Promise.allSettled ────────────────────────
+
+  const fastResults = await Promise.allSettled(
+    fastModules.map(async (mod) => {
+      const modStart = Date.now()
+      manifest.modules[mod.name] = { status: 'in-progress' }
+
+      try {
+        await mod.syncNow('')
+        const durationMs = Date.now() - modStart
+        manifest.modules[mod.name] = { status: 'done', durationMs }
+        manifest.completed++
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
+      } catch (e: any) {
+        const durationMs = Date.now() - modStart
+        manifest.modules[mod.name] = { status: 'failed', durationMs, error: e?.message ?? String(e) }
+        manifest.failed++
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+      }
+    })
+  )
+
+  writeManifest(manifest)
+
+  console.log(`[refreshAll] fast batch: ${manifest.completed}/${fastModules.length} done, ${manifest.failed} failed.`)
+
+  // ── Gemini queue: sequential with delay, timeout, and total cap ────────
+
+  const geminiStart = Date.now()
+  let geminiDone = 0
+
+  for (const mod of geminiModules) {
+    // Check 5-min total cap
+    const totalElapsed = Date.now() - geminiStart
+    if (totalElapsed >= GEMINI_TOTAL_CAP) {
+      manifest.modules[mod.name] = { status: 'skipped-timeout', reason: '5-min cap reached' }
+      manifest.skipped++
+      continue
+    }
+
+    manifest.inProgress = mod.name
+    manifest.modules[mod.name] = { status: 'in-progress' }
+    writeManifest(manifest)
+
+    const modStart = Date.now()
+
+    try {
+      // Race the module sync against a per-module timeout
+      await Promise.race([
+        mod.syncNow(''),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), GEMINI_PER_MODULE_TIMEOUT)
+        ),
+      ])
+
+      const durationMs = Date.now() - modStart
+      manifest.modules[mod.name] = { status: 'done', durationMs }
+      manifest.completed++
+      geminiDone++
+      FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
+    } catch (e: any) {
+      const durationMs = Date.now() - modStart
+      manifest.modules[mod.name] = { status: 'failed', durationMs, error: e?.message ?? String(e) }
+      manifest.failed++
+      FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+    }
+
+    // Inter-call delay (skip after last module)
+    if (geminiModules.indexOf(mod) < geminiModules.length - 1) {
+      await new Promise(r => setTimeout(r, GEMINI_INTER_CALL_DELAY))
+    }
+  }
+
+  console.log(`[refreshAll] Gemini queue: ${geminiDone}/${geminiModules.length} done.`)
+
+  // ── Finalize ──────────────────────────────────────────────────────────
+
+  manifest.inProgress = null
+  writeManifest(manifest)
+  _refreshAllRunning = false
+
+  return manifest
+}
 
 // ── Cache hierarchy constants (BKL-INGEST-10) ──────────────────────────────
 // L1 disk-cache TTL: if the local cache is younger than this, skip the L2
@@ -435,5 +629,30 @@ export function createRefreshRouter(): Hono {
       return c.json({ ok: false, error: e.message }, 500)
     }
   })
+  router.post('/api/refresh/rh-product-catalog', async (c) => {
+    const mod = FeatureModuleRegistry.get('rh-product-catalog')
+    if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
+    try {
+      await mod.syncNow('')
+      FeatureModuleRegistry.recordOutcome('rh-product-catalog', { success: true })
+      return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      FeatureModuleRegistry.recordOutcome('rh-product-catalog', { success: false, error: e.message })
+      return c.json({ ok: false, error: e.message }, 500)
+    }
+  })
+
+  // ── ADR-037 F2: Refresh-all routes ──────────────────────────────────────
+  router.get('/api/admin/refresh-all/status', (c) => {
+    const manifest = getRefreshManifest()
+    if (!manifest) return c.json({ error: 'No refresh manifest found' }, 404)
+    return c.json(manifest)
+  })
+  router.post('/api/admin/refresh-all', async (c) => {
+    // Trigger refreshAllModules as non-blocking background task
+    void refreshAllModules('manual')
+    return c.json({ ok: true, message: 'Refresh started' })
+  })
+
   return router
 }
