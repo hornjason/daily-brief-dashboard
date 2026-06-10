@@ -22,7 +22,7 @@ import { createRegionAccessRouter } from './src/region-access-routes.ts'
 import { initAuthRoutes, createAuthRouter } from './src/auth-routes.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
-import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
+import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline, refreshAllModules } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask } from './src/background-scheduler.ts'
@@ -124,7 +124,8 @@ import { checkForUpgrade } from './src/build-hash.ts'
 {
   const upgradeResult = checkForUpgrade()
   if (upgradeResult.upgradeDetected) {
-    console.log(`[startup] Upgrade detected (old: ${upgradeResult.oldSha ?? 'none'} → new: ${upgradeResult.newSha}). Background refresh will start.`)
+    console.log(`[startup] Upgrade detected (old: ${upgradeResult.oldSha ?? 'none'} → new: ${upgradeResult.newSha}). Background refresh started.`)
+    void refreshAllModules('upgrade')
   } else {
     console.log(`[startup] No upgrade detected (build: ${upgradeResult.buildInfo?.gitSha ?? 'unknown'}).`)
   }
