@@ -52,6 +52,81 @@ describe('parseTerritoryParts', () => {
       /Invalid territory format/,
     )
   })
+
+  // ── #719: Multi-word enterprise subregion support ────────────────────────
+  test('#719 AC-1: multi-word enterprise subregion (HIGH_PLAINS)', () => {
+    const result = parseTerritoryParts('CENTRAL_ENT_HIGH_PLAINS_TERR03')
+    expect(result).toEqual({
+      pod: 'CENTRAL_ENT_HIGH_PLAINS_POD',
+      subregion: 'CENTRAL_ENT_HIGH_PLAINS',
+      segment: 'Enterprise',
+      subsegment: 'Enterprise',
+      region: 'CENTRAL',
+    })
+  })
+
+  test('#719 AC-2: standard 4-part enterprise no regression', () => {
+    const result = parseTerritoryParts('CENTRAL_ENT_TOLA_TERR03')
+    expect(result).toEqual({
+      pod: 'CENTRAL_ENT_TOLA_POD',
+      subregion: 'CENTRAL_ENT_TOLA',
+      segment: 'Enterprise',
+      subsegment: 'Enterprise',
+      region: 'CENTRAL',
+    })
+  })
+
+  test('#719 AC-3: 5-part commercial territory no regression', () => {
+    const result = parseTerritoryParts('WEST_COMM_CORP_NORTHWEST_TERR01')
+    expect(result).toEqual({
+      pod: 'WEST_COMM_CORP_NORTHWEST',
+      subregion: 'WEST_COMM_CORP',
+      segment: 'Commercial',
+      subsegment: 'Commercial',
+      region: 'NA_COMM_COMMERCIAL',
+    })
+  })
+})
+
+// ── #712: extractEnterpriseAeMap prefix preservation ──────────────────────
+
+describe('extractEnterpriseAeMap — prefix preservation (#712)', () => {
+  const { extractEnterpriseAeMap } = require('../../src/territory-sync.ts')
+
+  test('AC-1: combined cell preserves territory prefix (High_Plains_Terr03)', () => {
+    const rows: string[][] = [
+      ['', '', ''],
+      ['', '', ''],
+      ['', '', ''],
+      ['', 'Account Executive', 'Account Executive'],
+      ['', 'Jeff Veldhuizen\nHigh_Plains_Terr03', 'Jane Smith\nTOLA_Terr01'],
+    ]
+    const result = extractEnterpriseAeMap(rows)
+    expect(result['Jeff Veldhuizen']).toEqual(['High_Plains_Terr03'])
+    expect(result['Jane Smith']).toEqual(['TOLA_Terr01'])
+  })
+
+  test('AC-1: separate-row format preserves territory prefix', () => {
+    const rows: string[][] = [
+      ['', '', ''],
+      ['', '', ''],
+      ['', '', ''],
+      ['', 'Account Executive', ''],
+      ['', 'Jeff Veldhuizen', ''],
+      ['', 'High_Plains_Terr03', ''],
+    ]
+    const result = extractEnterpriseAeMap(rows)
+    expect(result['Jeff Veldhuizen']).toEqual(['High_Plains_Terr03'])
+  })
+
+  test('bare Terr code (no prefix) still works', () => {
+    const rows: string[][] = [
+      ['Account Executive'],
+      ['Bob Jones\nTerr05'],
+    ]
+    const result = extractEnterpriseAeMap(rows)
+    expect(result['Bob Jones']).toEqual(['Terr05'])
+  })
 })
 
 // ── enterpriseTerritoryKey — declarative prefix routing (#635) ──────────────

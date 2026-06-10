@@ -172,16 +172,18 @@ export function createDashboardRouter(): Hono {
     }
   })
 
-  // ── GET /api/territory-lookup?territory=WEST_COMM_CORP_NORTHWEST_TERR01 ──
+  // ── GET /api/territory-lookup?territory=WEST_COMM_CORP_NORTHWEST_TERR01&aeName=Jeff+Veldhuizen ──
   // Reads the territory Google Sheet live and returns { aeName, accounts } for
   // the requested territory. Does not require aes.json to be populated.
+  // When aeName is provided (enterprise), uses it to find the correct AE column directly.
   router.get('/api/territory-lookup', async (c) => {
     const requestedTerritory = c.req.query('territory')?.trim()
     if (!requestedTerritory || !/^[A-Z0-9_]+$/.test(requestedTerritory)) return c.json({ error: 'Invalid territory format' }, 400)
 
     const forceRefresh = c.req.query('force') === 'true'
+    const aeNameParam = c.req.query('aeName')?.trim() || undefined
     try {
-      const result = await lookupTerritory(requestedTerritory, forceRefresh)
+      const result = await lookupTerritory(requestedTerritory, forceRefresh, aeNameParam)
       return c.json(result)
     } catch (e: any) {
       console.error('[territory-lookup] error:', e.message)

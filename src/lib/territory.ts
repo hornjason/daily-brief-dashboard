@@ -8,15 +8,21 @@
  *
  * Commercial (5-part): WEST_COMM_CORP_NORTHWEST_TERR01
  *   subregion = WEST_COMM_CORP            (first 3 segments)
- *   pod       = WEST_COMM_CORP_NORTHWEST  (all but last segment)
+ *   pod       = WEST_COMM_CORP_NORTHWEST  (all but TERR suffix)
  *   segment   = Commercial
  *   region    = NA_COMM_COMMERCIAL
  *
  * Enterprise (4-part): CENTRAL_ENT_TOLA_TERR02
- *   subregion = CENTRAL_ENT_TOLA          (first 3 segments)
- *   pod       = CENTRAL_ENT_TOLA_POD      (first 3 + _POD suffix — required by Tableau)
+ *   subregion = CENTRAL_ENT_TOLA          (all segments before TERR)
+ *   pod       = CENTRAL_ENT_TOLA_POD      (subregion + _POD suffix — required by Tableau)
  *   segment   = Enterprise
  *   region    = CENTRAL                   (first segment)
+ *
+ * Enterprise (5-part, multi-word): CENTRAL_ENT_HIGH_PLAINS_TERR03
+ *   subregion = CENTRAL_ENT_HIGH_PLAINS   (all segments before TERR)
+ *   pod       = CENTRAL_ENT_HIGH_PLAINS_POD
+ *   segment   = Enterprise
+ *   region    = CENTRAL
  */
 export type TerritoryParts = {
   pod: string; subregion: string; segment: string; subsegment: string; region: string
@@ -30,13 +36,22 @@ export function parseTerritoryParts(territory: string): TerritoryParts {
   const segType = parts[1] ?? ''
   const isEnterprise = segType === 'ENT'
 
-  const subregion = parts.slice(0, 3).join('_')
-  // Enterprise PODs carry a _POD suffix in Tableau; commercial do not
-  const pod = isEnterprise ? subregion + '_POD' : parts.slice(0, -1).join('_')
-  const segment = isEnterprise ? 'Enterprise' : 'Commercial'
-  const region = isEnterprise ? (parts[0] ?? 'CENTRAL') : 'NA_COMM_COMMERCIAL'
+  // Strip the TERR\d+ suffix to get base parts
+  const terrIdx = parts.findIndex(p => /^TERR\d+$/i.test(p))
+  const baseParts = terrIdx >= 0 ? parts.slice(0, terrIdx) : parts.slice(0, -1)
 
-  return { pod, subregion, segment, subsegment: segment, region }
+  if (isEnterprise) {
+    // Enterprise: subregion is everything before TERR (handles multi-word like HIGH_PLAINS)
+    const subregion = baseParts.join('_')
+    const pod = subregion + '_POD'
+    const region = parts[0] ?? 'CENTRAL'
+    return { pod, subregion, segment: 'Enterprise', subsegment: 'Enterprise', region }
+  } else {
+    // Commercial: subregion is always first 3 segments; pod is everything before TERR
+    const subregion = parts.slice(0, 3).join('_')
+    const pod = baseParts.join('_')
+    return { pod, subregion, segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }
+  }
 }
 
 /**

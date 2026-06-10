@@ -1165,7 +1165,7 @@ export async function lookupTerritoryNames(pod: string, forceRefresh: boolean = 
   return result
 }
 
-export async function lookupTerritory(requestedTerritory: string, forceRefresh: boolean = false) {
+export async function lookupTerritory(requestedTerritory: string, forceRefresh: boolean = false, aeName?: string) {
   if (!requestedTerritory || !/^[A-Z0-9_]+$/.test(requestedTerritory)) {
     throw new Error('Invalid territory format')
   }
@@ -1213,9 +1213,20 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
       const fullRows: string[][] = (fullResp.data.values ?? []).map((r: any[]) =>
         r.map((cell: any) => String(cell ?? '').trim())
       )
+      // When aeName is provided, extract accounts directly for the named AE
+      // (avoids first-match ambiguity when multiple AEs share overlapping territory numbers)
+      if (aeName) {
+        const accounts = extractEnterpriseAeAccounts(fullRows, aeName)
+        console.log(`[territory-lookup] ${requestedTerritory}: ${aeName} (enterprise, aeName-targeted, ${accounts.length} accounts)`)
+        const lookupResult = { aeName, accounts, tableauTerritory: requestedTerritory }
+        territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
+        return lookupResult
+      }
+
+      // No aeName provided — fall back to first-match by territory number (backward compat)
       const aeTerrMap = extractEnterpriseAeMap(fullRows)
 
-      for (const [aeName, terrCodes] of Object.entries(aeTerrMap)) {
+      for (const [matchedAeName, terrCodes] of Object.entries(aeTerrMap)) {
         // Match by territory number (handles both "Ter01" and "Terr01" formats)
         const match = terrCodes.find(tc => {
           const m = tc.match(/(\d{1,2})/)
@@ -1223,9 +1234,9 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
         })
         if (!match) continue
         // Extract accounts for this AE from the enterprise sheet column (BKL-UX92)
-        const accounts = extractEnterpriseAeAccounts(fullRows, aeName)
-        console.log(`[territory-lookup] ${requestedTerritory}: ${aeName} (enterprise, ${accounts.length} accounts)`)
-        const lookupResult = { aeName, accounts, tableauTerritory: requestedTerritory }
+        const accounts = extractEnterpriseAeAccounts(fullRows, matchedAeName)
+        console.log(`[territory-lookup] ${requestedTerritory}: ${matchedAeName} (enterprise, ${accounts.length} accounts)`)
+        const lookupResult = { aeName: matchedAeName, accounts, tableauTerritory: requestedTerritory }
         territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
         return lookupResult
       }
