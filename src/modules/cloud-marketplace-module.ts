@@ -466,6 +466,27 @@ export function generatePurchasingRecommendation(
       if (Array.isArray(objectives) && objectives.length > 0) {
         businessObjective = typeof objectives[0] === 'string' ? objectives[0] : objectives[0]?.name ?? objectives[0]?.title ?? null
       }
+      // #726: Extract priorities from free-text company analysis (deterministic, no Gemini)
+      if (!businessObjective && intel.company) {
+        const text = String(intel.company)
+        const priorityPatterns = [
+          /(?:key priorit(?:y|ies)|strategic priorit(?:y|ies)|top priorit(?:y|ies)|business objective|strategic initiative)[:\s]+([^\n]{10,100})/gi,
+          /(?:focused on|investing in|prioritizing)[:\s]+([^\n]{10,100})/gi,
+        ]
+        for (const pattern of priorityPatterns) {
+          const match = pattern.exec(text)
+          if (match?.[1]) {
+            businessObjective = match[1].trim().replace(/^[-•*]\s*/, '').slice(0, 100)
+            break
+          }
+        }
+      }
+      if (!businessObjective && intel.strategicPosition) {
+        const firstSentence = String(intel.strategicPosition).split(/[.!?]/)[0]?.trim()
+        if (firstSentence && firstSentence.length > 10 && firstSentence.length < 200) {
+          businessObjective = firstSentence
+        }
+      }
     }
   } catch {}
 
@@ -627,54 +648,82 @@ function extractProviderHtmlBlocks(html: string, provider: string, maxChars: num
 }
 
 async function extractCloudData(slideText: string, htmlBody: string, newsletterDate: string): Promise<CloudSection[]> {
-  const providers = ['AWS', 'Google', 'Microsoft']
-
-  // Per-provider extraction — sequential with inter-call delay to avoid Vertex quota throttling
   const extractions: CloudSection[][] = []
-  for (let pi = 0; pi < providers.length; pi++) {
-    if (pi > 0) await new Promise(r => setTimeout(r, 15_000))
-    const provider = providers[pi]
-    const extraction = await (async () => {
-      const providerText = extractProviderLines(slideText, provider)
-      const providerHtml = extractProviderHtmlBlocks(htmlBody, provider)
-      console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
 
-      const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract content relevant to ${provider}'s marketplace. Include Red Hat products listed on ${provider}'s marketplace even when described alongside other cloud providers. For example, if a paragraph mentions "available on AWS, Azure, and GCP", extract that offering under ${provider}. Also extract programs, incentives, partnerships, and country availability specific to ${provider}.`
-
+  // Call 1: AWS standalone (always succeeds first)
+  {
+    const provider = 'AWS'
+    const providerText = extractProviderLines(slideText, provider)
+    const providerHtml = extractProviderHtmlBlocks(htmlBody, provider)
+    console.log(`[cloud-marketplace] ${provider}: ${providerText.length} chars of relevant slide text, ${providerHtml.length} chars HTML`)
+    const focusedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract content relevant to ${provider}'s marketplace. Include Red Hat products listed on ${provider}'s marketplace even when described alongside other cloud providers.`
+    try {
+      const result = await callGemini(focusedPrompt, providerText.slice(0, 10_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 5_000), {
+        callType: `cloud-marketplace-aws`,
+        model: 'lite',
+        responseSchema: RESPONSE_SCHEMA,
+        deltaKey: `cloud-marketplace-aws`,
+        timeoutMs: 120_000,
+        temperature: 0.1,
+      })
+      const parsed = JSON.parse(result.text)
+      const clouds = parsed.clouds ?? parsed.providers ?? (Array.isArray(parsed) ? parsed : [])
+      extractions.push(clouds.filter((c: any) => String(c.provider).toLowerCase() === 'aws') as CloudSection[])
+    } catch (e: any) {
+      console.warn(`[cloud-marketplace] AWS extraction failed: ${e.message}`)
       try {
-        const result = await callGemini(focusedPrompt, providerText.slice(0, 10_000) + '\n\nHTML CONTEXT:\n' + providerHtml.slice(0, 5_000), {
-          callType: `cloud-marketplace-${provider.toLowerCase()}`,
-          model: 'lite',
-          responseSchema: RESPONSE_SCHEMA,
-          deltaKey: `cloud-marketplace-${provider.toLowerCase()}`,
-          timeoutMs: 120_000,
-          temperature: 0.1,
-        })
+        const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
+        if (existsSync(cachePath)) {
+          const prev = JSON.parse(readFileSync(cachePath, 'utf-8'))
+          const prevProvider = (prev.clouds ?? []).find((c: any) => c.provider === 'AWS')
+          if (prevProvider) { extractions.push([prevProvider]); console.log(`[cloud-marketplace] AWS: using cached fallback`) }
+        }
+      } catch {}
+    }
+  }
 
-        const parsed = JSON.parse(result.text)
-        const clouds = parsed.clouds ?? parsed.providers ?? (Array.isArray(parsed) ? parsed : [])
-        // Filter to only this provider
-        return clouds.filter((c: any) =>
-          String(c.provider).toLowerCase() === provider.toLowerCase()
-        ) as CloudSection[]
-      } catch (e: any) {
-        console.warn(`[cloud-marketplace] ${provider} extraction failed: ${e.message}`)
-        // Fallback: use previous cache data for this provider if available
-        try {
-          const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
-          if (existsSync(cachePath)) {
-            const prev = JSON.parse(readFileSync(cachePath, 'utf-8'))
-            const prevProvider = (prev.clouds ?? []).find((c: any) => c.provider === provider)
-            if (prevProvider && (prevProvider.offerings?.length > 0 || prevProvider.programs?.length > 0)) {
-              console.log(`[cloud-marketplace] ${provider}: using cached fallback (${prevProvider.offerings?.length ?? 0} offerings, ${prevProvider.programs?.length ?? 0} programs)`)
-              return [prevProvider] as CloudSection[]
-            }
+  // 15s delay between AWS and Google+Microsoft
+  await new Promise(r => setTimeout(r, 15_000))
+
+  // Call 2: Google + Microsoft combined — reduces sequential calls from 3→2
+  {
+    const combinedProviders = ['Google', 'Microsoft']
+    const combinedText = combinedProviders.map(p => {
+      const pText = extractProviderLines(slideText, p)
+      const pHtml = extractProviderHtmlBlocks(htmlBody, p)
+      return `--- ${p} ---\n${pText.slice(0, 8_000)}\n\nHTML:\n${pHtml.slice(0, 4_000)}`
+    }).join('\n\n')
+    console.log(`[cloud-marketplace] Google+Microsoft combined: ${combinedText.length} chars`)
+    const combinedPrompt = `${EXTRACTION_PROMPT}\n\nIMPORTANT: Extract content for BOTH Google and Microsoft marketplaces. Include Red Hat products listed on each marketplace even when described alongside other cloud providers.`
+    try {
+      const result = await callGemini(combinedPrompt, combinedText, {
+        callType: `cloud-marketplace-google-microsoft`,
+        model: 'lite',
+        responseSchema: RESPONSE_SCHEMA,
+        deltaKey: `cloud-marketplace-google-microsoft`,
+        timeoutMs: 120_000,
+        temperature: 0.1,
+      })
+      const parsed = JSON.parse(result.text)
+      const clouds = parsed.clouds ?? parsed.providers ?? (Array.isArray(parsed) ? parsed : [])
+      extractions.push(clouds.filter((c: any) =>
+        ['google', 'microsoft'].includes(String(c.provider).toLowerCase())
+      ) as CloudSection[])
+    } catch (e: any) {
+      console.warn(`[cloud-marketplace] Google+Microsoft extraction failed: ${e.message}`)
+      try {
+        const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
+        if (existsSync(cachePath)) {
+          const prev = JSON.parse(readFileSync(cachePath, 'utf-8'))
+          const fallback: CloudSection[] = []
+          for (const p of combinedProviders) {
+            const prevProvider = (prev.clouds ?? []).find((c: any) => c.provider === p)
+            if (prevProvider) { fallback.push(prevProvider); console.log(`[cloud-marketplace] ${p}: using cached fallback`) }
           }
-        } catch {}
-        return [] as CloudSection[]
-      }
-    })()
-    extractions.push(extraction)
+          if (fallback.length > 0) extractions.push(fallback)
+        }
+      } catch {}
+    }
   }
 
   // Flatten and merge
@@ -935,9 +984,9 @@ FeatureModuleRegistry.register({
 
     // Clear delta cache for all cloud-marketplace keys to force re-extraction
     const deltaCacheDir = resolve('data/cache/gemini-delta')
-    for (const provider of ['aws', 'google', 'microsoft']) {
-      const deltaPath = resolve(deltaCacheDir, `cloud-marketplace-${provider}.json`)
-      try { if (existsSync(deltaPath)) { unlinkSync(deltaPath); console.log(`[cloud-marketplace] cleared delta cache for ${provider}`) } } catch {}
+    for (const key of ['aws', 'google', 'microsoft', 'google-microsoft']) {
+      const deltaPath = resolve(deltaCacheDir, `cloud-marketplace-${key}.json`)
+      try { if (existsSync(deltaPath)) { unlinkSync(deltaPath); console.log(`[cloud-marketplace] cleared delta cache for ${key}`) } } catch {}
     }
 
     console.log('[cloud-marketplace] fetching latest newsletter...')

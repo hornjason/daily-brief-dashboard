@@ -167,7 +167,7 @@ describe('Cloud marketplace extraction fixes (#703)', () => {
 
   test('syncNow clears delta cache before re-extraction', () => {
     expect(content).toContain("cleared delta cache for")
-    expect(content).toContain("cloud-marketplace-${provider}")
+    expect(content).toContain("cloud-marketplace-${key}")
   })
 })
 // ── #704: Canonical product name normalization ─────────────────────────────
