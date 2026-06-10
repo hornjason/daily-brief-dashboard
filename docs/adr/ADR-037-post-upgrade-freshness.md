@@ -1,3 +1,10 @@
+---
+doc-type: adr
+status: active
+owner: jason
+updated: 2026-06-10
+---
+
 # ADR-037: Post-Upgrade Data Freshness and Self-Healing System
 
 **Status:** Accepted

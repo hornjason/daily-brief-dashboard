@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-06-08
+updated: 2026-06-10
 ---
 
 # Design Principles — Deep Module Architecture
@@ -78,6 +78,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 14. **Does this module need scheduled execution?** (ADR-028) If a module needs to run on a timer (daily, weekly, interval), it MUST call `SchedulerRegistry.register()` instead of using `setInterval`/`setTimeout` directly. The registry provides: timer lifecycle management, enabled-check-at-fire-time, `primaryOnly` flag (skip on hero installs), status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`. Reference: `docs/adr/ADR-028-unified-scheduler-registry.md`.
 15. **Does this module produce portfolio-level data?** (ADR-029) Modules that emit signals about Red Hat products (not customer-specific data) MUST cross-reference against customer subscriptions/interests using `getCustomerProductContext(customerSlug)`. Without this, portfolio signals score as general tier (ceiling 0.35 = Noise) even when directly relevant to a customer who owns that product. With the cross-reference, matching signals get `customerSlug` set → customer tier (floor 0.50). Reference: `docs/adr/ADR-029-signal-scoring-evolution.md`.
 16. **Does this module's signal route to a named template section?** (ADR-035) Every producer module must emit signals with metadata that routes to a specific section in `routeSignal()` — never to 'other'. If the signal doesn't fit an existing section, add a new route and template function before shipping the module. Signals that fall to 'other' are invisible in deterministic output. Reference: `docs/adr/ADR-035-signal-routing-expansion.md`.
+17. **Does this module declare `cacheTtlMs` for heartbeat visibility?** (ADR-037) Every module that caches data MUST declare `cacheTtlMs` in its FeatureModuleRegistry registration. The heartbeat staleness monitor uses this to flag expired data in the admin panel. Modules without `cacheTtlMs` are invisible to staleness monitoring — their data can go stale indefinitely without warning. Reference: `docs/adr/ADR-037-post-upgrade-freshness.md`.
 
 ## Vocabulary Resolver Rule (MANDATORY)
 
@@ -356,6 +357,8 @@ Consumers select which section groups they need via options. They MUST NOT:
 - ❌ Reading L3 CSV data via static sheet IDs instead of `discoverL3Csv()` (ADR-019) — becomes stale when source files change, skips change detection, breaks on sheet re-creation.
 - ❌ Hardcoding product, competitor, or technology vocabularies as const arrays (ADR-035) — use vocabulary resolvers (`product-vocabulary.ts`, `competitive-vocabulary.ts`, `rh-product-catalog.json`). Hardcoded lists drift from source of truth, miss new products/competitors, and require code changes instead of data updates.
 - ❌ Shipping a producer module whose signals fall to 'other' in `routeSignal()` (ADR-035) — invisible in deterministic output. Every signal must route to a named section. Architecture compliance test enforces this.
+- ❌ Caching empty extraction results as "fresh" (ADR-037) — when Gemini extraction returns 0 items (timeout, API error, org policy block), do NOT write `technologies: []` or `clouds: []` to cache with a valid `cachedAt` timestamp. Empty results with valid timestamps look "fresh" to `ensureFresh()`, preventing re-extraction indefinitely. Either skip the write entirely, or mark the cache as `status: 'error'` so the next ensureFresh retries.
+- ❌ Registering a module without `cacheTtlMs` (ADR-037) — invisible to heartbeat staleness monitoring. Data can go stale for weeks without any admin panel indicator. Every cached module MUST declare its TTL.
 
 ## ADR → PRINCIPLES.md Enforcement (MANDATORY)
 
@@ -395,6 +398,7 @@ Every ADR in `docs/adr/` must include these sections:
 | 14 | ADR-028 | Use SchedulerRegistry for scheduled work |
 | 15 | ADR-029 | Portfolio modules cross-ref customer context |
 | 16 | ADR-035 | Signal routing: every module routes to a named section |
+| 17 | ADR-037 | cacheTtlMs for heartbeat visibility + no empty cache as fresh |
 
 ## Signal Scoring Quick Reference (ADR-027)
 

@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-06-08
+updated: 2026-06-10
 ---
 
 # DailyBriefDashboard — Project State
@@ -214,6 +214,9 @@ Last updated: 2026-06-08 — Documentation cascade (#683) + routing ADR (#685). 
 - `POST /api/auth/redhat/start` — RH login (headed browser)
 - `POST /api/auth/salesforce/start` — SF login
 - `GET /api/auth/salesforce/status` — SF session state
+
+### Health & Freshness
+- `GET /api/admin/health` — Startup health probe results (gemini-model, stale-caches, google-auth)
 
 ### Test Isolation (production-safe only)
 - `POST /api/__test/snapshot` — Snapshot in-memory AEs + customers (reads memory, not disk)
