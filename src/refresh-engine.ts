@@ -659,5 +659,34 @@ export function createRefreshRouter(): Hono {
     return c.json(getStalenessMap())
   })
 
+  // ── ADR-037 F5: Per-customer refresh ────────────────────────────────────
+  router.post('/api/customer/:slug/refresh-all', async (c) => {
+    const slug = c.req.param('slug')
+    const customer = customers.find(cu => {
+      const cuSlug = cu.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      return cuSlug === slug || cu.name === slug
+    })
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const modules = FeatureModuleRegistry.getRegisteredModules()
+    let refreshed = 0
+    let failed = 0
+
+    for (const mod of modules) {
+      if (!mod.syncNow) continue
+      try {
+        await mod.syncNow(customer.name)
+        refreshed++
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
+      } catch (e: any) {
+        console.warn(`[refresh:customer] ${mod.name} failed for ${slug}:`, e?.message)
+        FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+        failed++
+      }
+    }
+
+    return c.json({ ok: true, customer: customer.name, refreshed, failed })
+  })
+
   return router
 }
