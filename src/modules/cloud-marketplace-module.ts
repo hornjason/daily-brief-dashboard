@@ -897,7 +897,7 @@ FeatureModuleRegistry.register({
   name: 'cloud-marketplace',
   displayName: 'Cloud Marketplace',
   refreshEndpoint: '/api/refresh/cloud-marketplace',
-  scope: 'customer',
+  scope: 'portfolio',
   signalRole: 'trigger',
   signalAudience: 'customer-specific',
 
