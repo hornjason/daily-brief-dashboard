@@ -286,7 +286,8 @@ function extractTokens(responseBody: any): { inputTokens: number; outputTokens: 
 // ── Delta cache helpers ──────────────────────────────────────────────────────
 
 function hashInputs(systemPrompt: string, userPrompt: string, schema?: object): string {
-  const combined = SCORING_VERSION + systemPrompt + userPrompt + JSON.stringify(schema ?? '')
+  const imageTag = process.env.IMAGE_TAG ?? 'dev'
+  const combined = SCORING_VERSION + imageTag + systemPrompt + userPrompt + JSON.stringify(schema ?? '')
   return 'sha256:' + createHash('sha256').update(combined, 'utf-8').digest('hex')
 }
 
