@@ -1249,7 +1249,7 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={(e) => { e.stopPropagation(); fetchInventory() }}
+            onClick={(e) => { e.stopPropagation(); fetchData() }}
             className="p-0.5 text-text-secondary/50 hover:text-accent transition-colors"
             title="Refresh signal inventory"
           >
