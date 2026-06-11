@@ -20,9 +20,11 @@ import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { customers } from './server-state.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
-import { getOperatorProfile } from './account-team.ts'
+import { getOperatorProfile, getAccountTeam } from './account-team.ts'
 import { CONFIG_DIR } from './lib/paths.ts'
 import { callGemini } from './gemini-call.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { templateAll } from './lib/signal-templates.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
@@ -162,7 +164,19 @@ export async function generateAccountPlan(
   const aeName = customer.ae ?? 'Account Executive'
   console.log(`[acct-plan] AE for ${customerDisplayName}: ${aeName}`)
 
+  // #786: Load templateAll deterministic sections for signal context enrichment
+  let signalContext = ''
+  try {
+    const teamMembers = getAccountTeam(customer)
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name)
+    const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
+    signalContext = templateResult.deterministic || ''
+  } catch (e: any) {
+    console.warn(`[acct-plan] templateAll enrichment failed (non-fatal): ${e.message}`)
+  }
+
   // Assemble user prompt (same structure as validated in generate-test.ts)
+  const signalSection = signalContext ? `\n\n### Signal Context\n${signalContext}` : ''
   const userPrompt = `## Sample Account Plan (use as structural template)
 ${samplePlan.substring(0, 15000)}
 
@@ -175,7 +189,7 @@ ${samplePlan.substring(0, 15000)}
 ${companyIntel.substring(0, 8000)}
 
 ### Product Intelligence
-${productIntel.substring(0, 5000)}
+${productIntel.substring(0, 5000)}${signalSection}
 
 ## Account Planning Playbook (Guidance)
 ${playbook}

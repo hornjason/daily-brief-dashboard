@@ -20,6 +20,8 @@ import { toSlug } from './cache-layer.ts'
 import { getOperatorProfile } from './account-team.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { templateAll } from './lib/signal-templates.ts'
 import type { Customer } from './types.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -306,7 +308,18 @@ export async function generateValuePositioning(
     return empty
   }
 
-  const userPrompt = buildPositioningPrompt(customer.name, ctx)
+  let userPrompt = buildPositioningPrompt(customer.name, ctx)
+
+  // #786: Supplement with templateAll deterministic sections
+  try {
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name)
+    const templateResult = await templateAll(registrySignals, undefined, { format: 'brief' })
+    if (templateResult.deterministic) {
+      userPrompt += `\n\n--- Signal Context (structured) ---\n${templateResult.deterministic}`
+    }
+  } catch (e: any) {
+    console.warn(`[value-positioning] templateAll enrichment failed (non-fatal): ${e.message}`)
+  }
 
   const geminiResult = await callGemini(SYSTEM_PROMPT, userPrompt, {
     callType: 'value-positioning',

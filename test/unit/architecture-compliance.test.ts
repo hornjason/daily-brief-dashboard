@@ -485,16 +485,15 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
     expect(violations).toEqual([])
   })
 
-  test('consumers marked pending are tracked (informational)', () => {
+  test('no consumers are marked pending — all must use templateAll()', () => {
     const pending = consumers.filter(c => c.templateAllPending)
     if (pending.length > 0) {
-      console.warn('Consumers pending templateAll migration:')
+      console.warn('Consumers still pending templateAll migration:')
       for (const p of pending) {
         console.warn(`  ⚠️ ${p.name} (${p.file})`)
       }
     }
-    // Informational tracking — always passes
-    expect(true).toBe(true)
+    expect(pending).toHaveLength(0)
   })
 
   test('no consumer imports individual template functions (Layer 3 violation)', () => {

@@ -95,9 +95,9 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | Campaign (standard) | src/campaign-service.ts | ✅ | — | ✅ |
 | Meeting Prep | src/meeting-prep-service.ts | ✅ | — | ✅ |
 | Playbook | src/playbook-generator.ts | ✅ | — | ✅ |
-| Account Plan | src/account-plan.ts | ⚠️ pending | — | — |
-| Morning Summary | src/dashboard-service.ts | ⚠️ pending | — | — |
-| Value Positioning | src/value-positioning.ts | ⚠️ pending | — | — |
+| Account Plan | src/account-plan.ts | ✅ | — | — |
+| Morning Summary | src/dashboard-service.ts | ✅ | — | — |
+| Value Positioning | src/value-positioning.ts | ✅ | — | — |
 
 ## Gemini Callers — Not Consumers (Excluded from templateAll check)
 

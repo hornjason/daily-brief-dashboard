@@ -27,6 +27,8 @@ import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, e
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { buildTodaysMeetings } from './lib/todays-meetings.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { templateAll } from './lib/signal-templates.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -117,7 +119,7 @@ export function stripProductName(raw: string | string[]): string {
 
 // ── Morning synthesis cache (BKL-AI27) ────────────────────────────────────────
 
-export async function synthesizeMorningSummary(signals: { customer: string; type: string; severity: string; text: string }[]): Promise<string> {
+export async function synthesizeMorningSummary(signals: { customer: string; type: string; severity: string; text: string }[], templateAllContext?: string): Promise<string> {
   const synthCachePath = resolve(CACHE_DIR, 'morning-synthesis.json')
   // Check 4h cache
   try {
@@ -146,7 +148,8 @@ Format your response as markdown with bold headers and bullet points. Keep each 
 
 ## Watch
 - 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
-  const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
+  const templateSection = templateAllContext ? `\n\n<signal_context>\n${templateAllContext}\n</signal_context>` : ''
+  const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}${templateSection}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 
   const result = await callGemini(systemPrompt, userPrompt, {
     callType: 'daily-briefing-synthesis',
@@ -545,10 +548,26 @@ export async function buildMorningSummary(customers: Customer[]) {
     ? `All clear across ${customers.length} accounts`
     : `${attentionCount} account${attentionCount !== 1 ? 's' : ''} need attention${criticalCount ? `, ${criticalCount} critical` : ''}`
 
+  // #786: Load templateAll deterministic sections for Gemini synthesis enrichment
+  let templateAllContext = ''
+  try {
+    const templateResults = await Promise.all(
+      customers.slice(0, 10).map(async (cu) => {
+        const slug = toSlug(cu.name)
+        const { registrySignals } = await loadCustomerSignals(slug, cu.name)
+        const result = await templateAll(registrySignals, undefined, { format: 'brief' })
+        return result.deterministic ? `### ${cu.name}\n${result.deterministic}` : ''
+      })
+    )
+    templateAllContext = templateResults.filter(Boolean).join('\n\n')
+  } catch (e: any) {
+    console.warn('[dashboard-service] templateAll enrichment failed (non-fatal):', e.message)
+  }
+
   // Gemini synthesis layer (BKL-AI27) — 4h cached
   let synthesis: string | undefined
   try {
-    synthesis = await synthesizeMorningSummary(signals)
+    synthesis = await synthesizeMorningSummary(signals, templateAllContext || undefined)
   } catch (e: any) {
     console.warn('[dashboard-service] Morning synthesis failed (non-fatal):', e.message)
   }
