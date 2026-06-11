@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText, Lightbulb, Calendar, ArrowRight } from 'lucide-react'
-import { RecommendationCard, signalToRecommendation, type RecommendationCardProps } from './RecommendationCard'
+import { RecommendationCard, type RecommendationCardProps } from './RecommendationCard'
 
 /** Lightweight inline markdown renderer for constrained AI output.
  *  Handles: **bold**, ## headings, - bullets, and paragraphs. */
@@ -165,14 +165,12 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
 
     Promise.all(
       priorityCustomers.map(customer =>
-        fetch(`/api/customer/${encodeURIComponent(customer)}/signals/debug`)
-          .then(r => r.ok ? r.json() : { signals: [] })
-          .then(debugData => {
-            const recSignals = (debugData.signals ?? [])
-              .filter((s: any) => s.source === 'recommended-actions' && s.type === 'recommendation')
-              .sort((a: any, b: any) => (b.metadata?.triggerSignalCount ?? 0) - (a.metadata?.triggerSignalCount ?? 0))
-            const topRec = recSignals[0]
-            return topRec ? { customer, rec: signalToRecommendation(topRec) } : null
+        fetch(`/api/customer/${encodeURIComponent(customer)}/recommendations`)
+          .then(r => r.ok ? r.json() : { recommendations: [] })
+          .then(data => {
+            // Server returns pre-sorted, pre-flattened recommendations — no metadata parsing needed (#779)
+            const topRec = (data.recommendations ?? [])[0]
+            return topRec ? { customer, rec: topRec as RecommendationCardProps } : null
           })
           .catch(() => null)
       )

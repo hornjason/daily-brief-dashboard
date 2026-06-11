@@ -2,27 +2,28 @@ import { useState, useEffect } from 'react'
 import { Code, RefreshCw, Building2, Wrench, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import SignalWithAging from '../SignalWithAging'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types (flat structured view from server — #779 Layer 3 compliance) ───────
 
-interface TechSignal {
+interface TechStackItemView {
+  name: string
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
+  context: 'using' | 'evaluating' | 'migrating_from' | 'developing' | 'unknown'
+  category: 'proprietary' | 'industry-tool' | 'unknown'
+  infrastructure: string[]
+  redHatProducts: string[]
+  why: string
   source: string
-  type: string
-  headline: string
   detail: string
+  positioning: string
   timestamp: string
-  metadata: {
-    category?: 'proprietary' | 'industry-tool'
-    context?: 'using' | 'evaluating' | 'migrating_from' | 'developing'
-    infrastructure?: string[]
-    redHatProducts?: string[]
-    confidence?: 'HIGH' | 'MEDIUM' | 'LOW'
-    why?: string
-    source?: string
-    solutionPlayId?: string
-    solutionPlayName?: string
-    solutionTdp?: string
-    valueProps?: string[]
-  }
+}
+
+interface TechStackView {
+  items: TechStackItemView[]
+  proprietaryCount: number
+  industryToolCount: number
+  migratingCount: number
+  evaluatingCount: number
 }
 
 interface TechStackTabProps {
@@ -31,13 +32,13 @@ interface TechStackTabProps {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function confidenceColor(conf: string | undefined): string {
+function confidenceColor(conf: string): string {
   if (conf === 'HIGH') return 'bg-success/10 text-success border-success/20'
   if (conf === 'MEDIUM') return 'bg-warning/10 text-warning border-warning/20'
   return 'bg-border/40 text-text-secondary border-border'
 }
 
-function contextLabel(ctx: string | undefined): string {
+function contextLabel(ctx: string): string {
   if (ctx === 'using') return 'Using'
   if (ctx === 'evaluating') return 'Evaluating'
   if (ctx === 'migrating_from') return 'Migrating From'
@@ -45,7 +46,7 @@ function contextLabel(ctx: string | undefined): string {
   return 'Unknown'
 }
 
-function contextColor(ctx: string | undefined): string {
+function contextColor(ctx: string): string {
   if (ctx === 'evaluating') return 'bg-warning/10 text-warning border-warning/20'
   if (ctx === 'migrating_from') return 'bg-error/10 text-error border-error/20'
   if (ctx === 'developing') return 'bg-accent/10 text-accent border-accent/20'
@@ -54,28 +55,25 @@ function contextColor(ctx: string | undefined): string {
 
 // ── Tier 2 Card (Proprietary) ─────────────────────────────────────────────────
 
-function ProprietaryTechCard({ signal }: { signal: TechSignal }) {
-  const techName = signal.headline.split(' (')[0] || signal.headline
-  const { confidence, context, infrastructure, redHatProducts } = signal.metadata
-  const positioning = signal.detail.split('Red Hat positioning:')[1]?.trim() || ''
-  const description = signal.detail.split('Red Hat positioning:')[0]?.trim() || signal.detail
+function ProprietaryTechCard({ item }: { item: TechStackItemView }) {
+  const description = item.detail.split('Red Hat positioning:')[0]?.trim() || item.detail
 
   return (
-    <SignalWithAging timestamp={signal.timestamp} className="bg-surface border border-border rounded-xl p-4 space-y-3">
+    <SignalWithAging timestamp={item.timestamp} className="bg-surface border border-border rounded-xl p-4 space-y-3">
       {/* Header: name + confidence badge */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-text-primary">{techName}</h3>
-        <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(confidence)}`}>
-          {confidence ?? 'UNKNOWN'}
+        <h3 className="text-base font-semibold text-text-primary">{item.name}</h3>
+        <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(item.confidence)}`}>
+          {item.confidence}
         </span>
       </div>
 
       {/* Context badge */}
-      {context && (
+      {item.context !== 'unknown' && (
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-text-secondary">Status:</span>
           <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
-            {contextLabel(context)}
+            {contextLabel(item.context)}
           </span>
         </div>
       )}
@@ -86,19 +84,19 @@ function ProprietaryTechCard({ signal }: { signal: TechSignal }) {
       )}
 
       {/* Red Hat Positioning */}
-      {positioning && (
+      {item.positioning && (
         <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
           <p className="text-xs font-semibold text-accent mb-1">Red Hat Positioning</p>
-          <p className="text-sm text-text-primary leading-relaxed">{positioning}</p>
+          <p className="text-sm text-text-primary leading-relaxed">{item.positioning}</p>
         </div>
       )}
 
       {/* Infrastructure dependencies */}
-      {infrastructure && infrastructure.length > 0 && (
+      {item.infrastructure.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-semibold text-text-secondary">Infrastructure Dependencies</p>
           <div className="flex flex-wrap gap-1">
-            {infrastructure.map((infra, idx) => (
+            {item.infrastructure.map((infra, idx) => (
               <span key={idx} className="text-xs px-2 py-0.5 rounded bg-border/40 text-text-primary border border-border">
                 {infra}
               </span>
@@ -108,11 +106,11 @@ function ProprietaryTechCard({ signal }: { signal: TechSignal }) {
       )}
 
       {/* Red Hat Products */}
-      {redHatProducts && redHatProducts.length > 0 && (
+      {item.redHatProducts.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-semibold text-text-secondary">Complementary Red Hat Products</p>
           <div className="flex flex-wrap gap-1">
-            {redHatProducts.map((product, idx) => (
+            {item.redHatProducts.map((product, idx) => (
               <span key={idx} className="text-xs px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 uppercase font-medium">
                 {product}
               </span>
@@ -126,15 +124,13 @@ function ProprietaryTechCard({ signal }: { signal: TechSignal }) {
 
 // ── Tier 1 Row (Industry Tools) ───────────────────────────────────────────────
 
-function IndustryToolRow({ signal }: { signal: TechSignal }) {
+function IndustryToolRow({ item }: { item: TechStackItemView }) {
   const [expanded, setExpanded] = useState(false)
-  const techName = signal.headline.split(' (')[0] || signal.headline
-  const { confidence, context, why, source, redHatProducts, infrastructure } = signal.metadata
-  const description = signal.detail.split('Red Hat positioning:')[0]?.trim() || signal.detail
-  const hasExpandContent = !!(why || (source && source.startsWith('http')) || description || (redHatProducts && redHatProducts.length > 0) || (infrastructure && infrastructure.length > 0))
+  const description = item.detail.split('Red Hat positioning:')[0]?.trim() || item.detail
+  const hasExpandContent = !!(item.why || (item.source && item.source.startsWith('http')) || description || item.redHatProducts.length > 0 || item.infrastructure.length > 0)
 
   return (
-    <SignalWithAging timestamp={signal.timestamp} showTimestamp={!expanded} className="border-b border-border/40 last:border-0">
+    <SignalWithAging timestamp={item.timestamp} showTimestamp={!expanded} className="border-b border-border/40 last:border-0">
       {/* Compact row — always visible */}
       <button
         type="button"
@@ -147,39 +143,39 @@ function IndustryToolRow({ signal }: { signal: TechSignal }) {
               ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary shrink-0" />
               : <ChevronRight className="w-3.5 h-3.5 text-text-secondary shrink-0" />
           )}
-          <span className="text-sm font-medium text-text-primary truncate" title={techName}>{techName}</span>
-          {context && (
-            <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${contextColor(context)}`}>
-              {contextLabel(context)}
+          <span className="text-sm font-medium text-text-primary truncate" title={item.name}>{item.name}</span>
+          {item.context !== 'unknown' && (
+            <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${contextColor(item.context)}`}>
+              {contextLabel(item.context)}
             </span>
           )}
         </div>
-        <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(confidence)}`}>
-          {confidence ?? 'UNKNOWN'}
+        <span className={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ${confidenceColor(item.confidence)}`}>
+          {item.confidence}
         </span>
       </button>
 
       {/* Expanded detail */}
       {expanded && (
         <div className="bg-surface border border-border rounded-xl p-4 mb-2 space-y-3">
-          {why && (
+          {item.why && (
             <div>
               <p className="text-xs font-semibold text-text-secondary mb-0.5">Why</p>
-              <p className="text-sm text-text-primary leading-relaxed">{why}</p>
+              <p className="text-sm text-text-primary leading-relaxed">{item.why}</p>
             </div>
           )}
 
-          {source && source.startsWith('http') && (
+          {item.source && item.source.startsWith('http') && (
             <div>
               <p className="text-xs font-semibold text-text-secondary mb-0.5">Source</p>
               <a
-                href={source}
+                href={item.source}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm text-accent hover:text-accent/80 hover:underline transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                {new URL(source).hostname}
+                {new URL(item.source).hostname}
               </a>
             </div>
           )}
@@ -191,11 +187,11 @@ function IndustryToolRow({ signal }: { signal: TechSignal }) {
             </div>
           )}
 
-          {redHatProducts && redHatProducts.length > 0 && (
+          {item.redHatProducts.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-semibold text-text-secondary">Red Hat Products</p>
               <div className="flex flex-wrap gap-1">
-                {redHatProducts.map((product, idx) => (
+                {item.redHatProducts.map((product, idx) => (
                   <span key={idx} className="text-xs px-2 py-0.5 rounded bg-success/10 text-success border border-success/20 uppercase font-medium">
                     {product}
                   </span>
@@ -204,11 +200,11 @@ function IndustryToolRow({ signal }: { signal: TechSignal }) {
             </div>
           )}
 
-          {infrastructure && infrastructure.length > 0 && (
+          {item.infrastructure.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-semibold text-text-secondary">Infrastructure</p>
               <div className="flex flex-wrap gap-1">
-                {infrastructure.map((infra, idx) => (
+                {item.infrastructure.map((infra, idx) => (
                   <span key={idx} className="text-xs px-2 py-0.5 rounded bg-border/40 text-text-primary border border-border">
                     {infra}
                   </span>
@@ -225,21 +221,19 @@ function IndustryToolRow({ signal }: { signal: TechSignal }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function TechStackTab({ customerName }: TechStackTabProps) {
-  const [signals, setSignals] = useState<TechSignal[]>([])
+  const [view, setView] = useState<TechStackView | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  const fetchSignals = async () => {
+  const fetchData = async () => {
     try {
-      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/debug`)
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/tech-stack`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      // Filter to tech-stack source only
-      const techSignals = (json.signals ?? []).filter((s: TechSignal) => s.source === 'tech-stack')
-      setSignals(techSignals)
+      const json: TechStackView = await res.json()
+      setView(json)
     } catch (e) {
       console.error('[TechStackTab] fetch error:', e)
-      setSignals([])
+      setView(null)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -247,22 +241,22 @@ export function TechStackTab({ customerName }: TechStackTabProps) {
   }
 
   useEffect(() => {
-    fetchSignals()
+    fetchData()
   }, [customerName])
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    // Trigger module refresh
     try {
       await fetch(`/api/refresh/tech-stack?customer=${encodeURIComponent(customerName)}`, { method: 'POST' })
     } catch { /* ignore refresh errors */ }
-    // Re-fetch signals
-    await fetchSignals()
+    await fetchData()
   }
 
-  // Separate Tier 1 (industry tools) and Tier 2 (proprietary)
-  const proprietaryTech = signals.filter(s => s.metadata.category === 'proprietary')
-  const industryTools = signals.filter(s => s.metadata.category === 'industry-tool')
+  const items = view?.items ?? []
+
+  // Separate Tier 1 (industry tools) and Tier 2 (proprietary) — flat field access
+  const proprietaryTech = items.filter(i => i.category === 'proprietary')
+  const industryTools = items.filter(i => i.category === 'industry-tool')
 
   return (
     <div className="min-h-screen bg-bg p-6 space-y-6">
@@ -271,9 +265,9 @@ export function TechStackTab({ customerName }: TechStackTabProps) {
         <div className="flex items-center gap-2">
           <Code className="w-5 h-5 text-accent" />
           <h1 className="text-xl font-bold text-text-primary">Technology Stack</h1>
-          {!loading && signals.length > 0 && (
+          {!loading && items.length > 0 && (
             <span className="text-sm text-text-secondary">
-              {proprietaryTech.length} proprietary · {industryTools.length} industry tools
+              {view?.proprietaryCount ?? 0} proprietary · {view?.industryToolCount ?? 0} industry tools
             </span>
           )}
         </div>
@@ -302,7 +296,7 @@ export function TechStackTab({ customerName }: TechStackTabProps) {
       )}
 
       {/* Empty state */}
-      {!loading && signals.length === 0 && (
+      {!loading && items.length === 0 && (
         <div className="bg-surface border border-border rounded-xl p-12 text-center">
           <Code className="w-12 h-12 text-text-secondary/50 mx-auto mb-3" />
           <p className="text-base text-text-primary mb-1">No technology data detected</p>
@@ -319,8 +313,8 @@ export function TechStackTab({ customerName }: TechStackTabProps) {
             <span className="text-xs text-text-secondary">Customer-specific or custom-built</span>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {proprietaryTech.map((signal, i) => (
-              <ProprietaryTechCard key={i} signal={signal} />
+            {proprietaryTech.map((item, i) => (
+              <ProprietaryTechCard key={i} item={item} />
             ))}
           </div>
         </div>
@@ -335,8 +329,8 @@ export function TechStackTab({ customerName }: TechStackTabProps) {
             <span className="text-xs text-text-secondary">Widely-used platforms & tools</span>
           </div>
           <div className="bg-surface border border-border rounded-xl p-4">
-            {industryTools.map((signal, i) => (
-              <IndustryToolRow key={i} signal={signal} />
+            {industryTools.map((item, i) => (
+              <IndustryToolRow key={i} item={item} />
             ))}
           </div>
         </div>

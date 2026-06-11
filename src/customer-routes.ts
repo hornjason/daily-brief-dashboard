@@ -28,6 +28,9 @@ import { getAiConfig } from './ai-config.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import * as CustomerService from './customer-service.ts'
 import { getCustomerProductContext } from './lib/customer-product-context.ts'
+import { structuredTechStack } from './lib/templates/tech-structured.ts'
+import { structuredRecommendations } from './lib/templates/recommendations-structured.ts'
+import { structuredCustomerOverview } from './lib/templates/customer-overview-structured.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -962,7 +965,23 @@ export function createCustomerRouter(): Hono {
     }
   })
 
-  // ── GET /api/customer/:name/recommendations — Cross-referencing recommended actions (#482, ADR-032) ──
+  // ── GET /api/customer/:name/tech-stack — Structured tech stack view (#779, Layer 3 compliance) ──
+  router.get('/api/customer/:name/tech-stack', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    try {
+      const slug = toSlug(customer.name)
+      const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
+      const view = structuredTechStack(registrySignals)
+      return c.json(view)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/customer/:name/recommendations — Structured recommendations (#779, Layer 3 compliance) ──
   router.get('/api/customer/:name/recommendations', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
@@ -970,23 +989,29 @@ export function createCustomerRouter(): Hono {
 
     try {
       const slug = toSlug(customer.name)
-      const mod = (await import('./feature-module-registry.ts')).FeatureModuleRegistry.get('recommended-actions')
-      if (!mod?.signals) {
-        return c.json({ error: 'Recommended actions module not registered' }, 500)
-      }
-      const signals = await mod.signals(slug)
+      const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
+      const recommendations = structuredRecommendations(registrySignals)
       return c.json({
         customer: customer.name,
-        recommendations: signals.map(s => ({
-          headline: s.headline,
-          detail: s.detail,
-          score: s.score,
-          rawRelevance: s.rawRelevance,
-          url: s.url,
-          metadata: s.metadata,
-        })),
-        count: signals.length,
+        recommendations,
+        count: recommendations.length,
       })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/customer/:name/overview — Structured customer overview (#779, Layer 3 compliance) ──
+  router.get('/api/customer/:name/overview', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    try {
+      const slug = toSlug(customer.name)
+      const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
+      const overview = structuredCustomerOverview(registrySignals)
+      return c.json(overview)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

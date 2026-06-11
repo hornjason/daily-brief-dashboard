@@ -870,3 +870,45 @@ describe('Signal routing coverage — every producer routes to a named section (
     // routeSignal() needs verification against actual signal metadata.
   })
 })
+
+// ── Layer 3 — React components must NOT access signal metadata (#779) ────────
+
+describe('Layer 3 — React components must not access signal metadata (#779)', () => {
+  test('no TSX component accesses .metadata. or .metadata?. on signal objects', () => {
+    const violations: string[] = []
+
+    // Allowlist: files that may access metadata for infrastructure/debug purposes
+    const ALLOWLIST = [
+      'components/SignalDebugPanel.tsx',
+    ]
+
+    // Scan all .tsx files recursively
+    const scanDir = (dir: string, relPrefix: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = resolve(dir, entry.name)
+        const relPath = relPrefix ? `${relPrefix}/${entry.name}` : entry.name
+        if (entry.isDirectory()) {
+          scanDir(fullPath, relPath)
+        } else if (entry.name.endsWith('.tsx')) {
+          if (ALLOWLIST.includes(relPath)) continue
+          const content = readFileSync(fullPath, 'utf-8')
+          const lines = content.split('\n')
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]
+            // Skip type annotations, interfaces, comments
+            if (/^\s*(\/\/|\/\*|\*|interface |type |export type |export interface )/.test(line)) continue
+            // Check for runtime metadata access patterns
+            if (/\.\s*metadata\s*[?.]/.test(line) || /\.\s*metadata\s*\[/.test(line)) {
+              violations.push(`${relPath}:${i + 1}: ${line.trim()}`)
+            }
+          }
+        }
+      }
+    }
+
+    scanDir(resolve(DASHBOARD_DIR, 'components'), 'components')
+    scanDir(resolve(DASHBOARD_DIR, 'pages'), 'pages')
+
+    expect(violations).toEqual([])
+  })
+})

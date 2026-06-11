@@ -1187,22 +1187,34 @@ function renderTabContent(activeTab: string, customerName: string) {
 
 // ── Signal Inventory Panel (GitHub Issue #273) ─────────────────────────────
 
-const PORTFOLIO_SOURCES = ['product-lifecycle', 'product-intel', 'rh-rss', 'rh-events', 'value-maps']
+// ── Structured overview types (#779 Layer 3 compliance) ─────────────────────
+
+interface CustomerOverviewView {
+  crossRefBySource: Record<string, { subscription: number; interest: number }>
+  ownedProducts: string[]
+  expansionProducts: string[]
+}
 
 function SignalInventoryPanel({ customerName }: { customerName: string }) {
   const [inventory, setInventory] = useState<any>(null)
+  const [overview, setOverview] = useState<CustomerOverviewView | null>(null)
   const [expanded, setExpanded] = useState(false)
 
-  const fetchInventory = () => {
-    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory?detail=true`)
+  const fetchData = () => {
+    // Fetch inventory (source counts) and structured overview (cross-ref) in parallel
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory`)
       .then(r => r.ok ? r.json() : null)
       .then(setInventory)
       .catch(() => setInventory(null))
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/overview`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setOverview)
+      .catch(() => setOverview(null))
   }
 
   useEffect(() => {
-    fetchInventory()
-    const interval = setInterval(fetchInventory, 30_000)
+    fetchData()
+    const interval = setInterval(fetchData, 30_000)
     return () => clearInterval(interval)
   }, [customerName])
 
@@ -1211,31 +1223,11 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
   const sources = Object.entries(inventory.sources ?? {}) as [string, { count: number }][]
   const activeSources = sources.filter(([, v]) => v.count > 0).length
   const totalSignals = inventory.totalSignals ?? 0
-  const signals: any[] = inventory.signals ?? []
 
-  // Cross-reference match counts per portfolio source
-  const crossrefBySource: Record<string, { subscription: number; interest: number }> = {}
-  const matchedProductTypes: Record<string, 'subscription' | 'interest'> = {}
-
-  for (const s of signals) {
-    if (!PORTFOLIO_SOURCES.includes(s.source)) continue
-    if (!crossrefBySource[s.source]) crossrefBySource[s.source] = { subscription: 0, interest: 0 }
-    const matchType = s.metadata?.matchType as string | undefined
-    if (matchType === 'subscription') crossrefBySource[s.source].subscription++
-    else if (matchType === 'interest') crossrefBySource[s.source].interest++
-
-    const products = s.metadata?.redHatProducts as string[] | undefined
-    if (products && matchType) {
-      for (const p of products) {
-        if (!matchedProductTypes[p] || matchType === 'subscription') {
-          matchedProductTypes[p] = matchType as 'subscription' | 'interest'
-        }
-      }
-    }
-  }
-
-  const ownedProducts = Object.entries(matchedProductTypes).filter(([, t]) => t === 'subscription').map(([p]) => p)
-  const expansionProducts = Object.entries(matchedProductTypes).filter(([, t]) => t === 'interest').map(([p]) => p)
+  // Cross-reference data comes from the structured overview API (#779)
+  const crossrefBySource = overview?.crossRefBySource ?? {}
+  const ownedProducts = overview?.ownedProducts ?? []
+  const expansionProducts = overview?.expansionProducts ?? []
 
   // Known module names for detecting missing sources
   const ALL_MODULES = ['product-lifecycle', 'rh-rss', 'rh-events', 'ccsp', 'value-maps', 'intelligence', 'customer-docs', 'subscriptions', 'emails', 'cases', 'pipeline', 'customer-product-intel', 'account-plan']

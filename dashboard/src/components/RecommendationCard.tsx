@@ -423,29 +423,10 @@ export function RecommendationCard({
   )
 }
 
-/** Parse a raw signal object from the debug endpoint into RecommendationCardProps */
-export function signalToRecommendation(s: any): RecommendationCardProps {
-  return {
-    headline: s.headline ?? '',
-    detail: s.detail ?? '',
-    confidence: (s.metadata?.confidence ?? 'EMERGING') as 'HIGH' | 'MEDIUM' | 'EMERGING',
-    solutionName: s.metadata?.solutionName ?? '',
-    solutionType: s.metadata?.solutionType ?? 'play',
-    triggerSignalCount: s.metadata?.triggerSignalCount ?? 0,
-    redHatProducts: s.metadata?.redHatProducts ?? [],
-    actions: s.metadata?.actions ?? [],
-    assets: s.metadata?.assets ?? [],
-    triggerSignals: s.metadata?.triggerSignals ?? [],
-    play: s.metadata?.play,
-    tdp: s.metadata?.tdp,
-    customerSlug: s.metadata?.customerSlug ?? '',
-    solutionUrl: s.url ?? s.metadata?.solutionUrl ?? '',
-  }
-}
-
 /**
- * useRecommendations — Hook to fetch recommendations for a customer
- * from the signals/debug endpoint filtered to recommended-actions source.
+ * useRecommendations — Hook to fetch structured recommendations for a customer
+ * from the /api/customer/:name/recommendations endpoint (#779 Layer 3 compliance).
+ * Server-side structuredRecommendations() handles all metadata flattening.
  */
 export function useRecommendations(customerName: string) {
   const [recommendations, setRecommendations] = useState<RecommendationCardProps[]>([])
@@ -459,14 +440,11 @@ export function useRecommendations(customerName: string) {
     }
 
     setLoading(true)
-    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/debug`)
-      .then(r => r.ok ? r.json() : { signals: [] })
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/recommendations`)
+      .then(r => r.ok ? r.json() : { recommendations: [] })
       .then(data => {
-        const recSignals = (data.signals ?? [])
-          .filter((s: any) => s.source === 'recommended-actions' && s.type === 'recommendation')
-          .sort((a: any, b: any) => (b.metadata?.triggerSignalCount ?? 0) - (a.metadata?.triggerSignalCount ?? 0))
-          .map(signalToRecommendation)
-        setRecommendations(recSignals)
+        // Server returns pre-sorted, pre-flattened RecommendationView[] — no metadata parsing needed
+        setRecommendations(data.recommendations ?? [])
       })
       .catch(() => setRecommendations([]))
       .finally(() => setLoading(false))
