@@ -288,7 +288,7 @@ async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors:
         refreshed++
       }
     } catch (e: any) {
-      errors.push(`batch ${sheetId}: ${e.message}`)
+      errors.push(`batch ${sheetId}: ${sanitizeErr(e)}`)
       // If batch fails, don't lose the whole group — errors are logged but we continue
     }
   }
@@ -305,7 +305,7 @@ async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors:
       writeSheetCache(customer.name, rows)
       refreshed++
     } catch (e: any) {
-      errors.push(`${customer.name}: ${e.message}`)
+      errors.push(`${customer.name}: ${sanitizeErr(e)}`)
     }
     // Stagger only for individual calls
     await new Promise(r => setTimeout(r, 750))
@@ -328,7 +328,7 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
   try {
     await refreshCCSP(true)
     ccspOk = true
-  } catch (e: any) { errors.push(`ccsp: ${e.message}`) }
+  } catch (e: any) { errors.push(`ccsp: ${sanitizeErr(e)}`) }
 
   console.log(`[refresh] sheets=${sheetsRefreshed}/${customers.length} ccsp=${ccspOk} errors=${errors.length}`)
   return { sheets: sheetsRefreshed, ccsp: ccspOk, errors }
@@ -593,8 +593,8 @@ export function createRefreshRouter(): Hono {
       FeatureModuleRegistry.recordOutcome('news-radar', { success: failed === 0, recordCount: success })
       return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('news-radar', { success: false, error: e?.message })
-      return c.json({ ok: false, error: e?.message }, 500)
+      FeatureModuleRegistry.recordOutcome('news-radar', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
   router.post('/api/refresh/cloud-marketplace', async (c) => {
@@ -605,8 +605,8 @@ export function createRefreshRouter(): Hono {
       FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true })
       return c.json({ ok: true, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: e.message })
-      return c.json({ ok: false, error: e.message }, 500)
+      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
   router.post('/api/refresh/ecosystem-catalog', async (c) => {
@@ -617,8 +617,8 @@ export function createRefreshRouter(): Hono {
       FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: true })
       return c.json({ ok: true, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: false, error: e.message })
-      return c.json({ ok: false, error: e.message }, 500)
+      FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
   router.post('/api/refresh/saleshub-content', async (c) => {
@@ -628,8 +628,8 @@ export function createRefreshRouter(): Hono {
       await mod.syncNow('')
       return c.json({ ok: true, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: e.message })
-      return c.json({ ok: false, error: e.message }, 500)
+      FeatureModuleRegistry.recordOutcome('saleshub-content', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
   router.post('/api/refresh/rh-product-catalog', async (c) => {
@@ -640,8 +640,8 @@ export function createRefreshRouter(): Hono {
       FeatureModuleRegistry.recordOutcome('rh-product-catalog', { success: true })
       return c.json({ ok: true, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
-      FeatureModuleRegistry.recordOutcome('rh-product-catalog', { success: false, error: e.message })
-      return c.json({ ok: false, error: e.message }, 500)
+      FeatureModuleRegistry.recordOutcome('rh-product-catalog', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
 

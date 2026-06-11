@@ -127,6 +127,9 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | src/product-feature-radar.ts | Producer | Tracks product feature updates |
 | src/modules/tech-stack-module.ts | Producer | Extracts customer tech stack |
 | src/customer/doc-extractors.ts | Producer | Extracts content from customer documents |
+| src/startup-health-probe.ts | Internal | Validates Gemini model availability at startup |
+| src/lib/executive-resolver.ts | Producer | Resolves executive names from company data |
+| src/lib/attendee-profile-cache.ts | Producer | Enriches attendee profiles with Gemini |
 
 ## Consumer → ensureFresh Contract
 
