@@ -169,14 +169,14 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
           .then(r => r.ok ? r.json() : { recommendations: [] })
           .then(data => {
             // Server returns pre-sorted, pre-flattened recommendations — no metadata parsing needed (#779)
-            const topRec = (data.recommendations ?? [])[0]
-            return topRec ? { customer, rec: topRec as RecommendationCardProps } : null
+            const recs = (data.recommendations ?? []).slice(0, 2) as RecommendationCardProps[]
+            return recs.map(rec => ({ customer, rec }))
           })
           .catch(() => null)
       )
     ).then(results => {
-      const valid = results.filter((r): r is { customer: string; rec: RecommendationCardProps } => r !== null)
-      setTopRecommendations(valid.slice(0, 3))
+      const valid = results.flat().filter((r): r is { customer: string; rec: RecommendationCardProps } => r !== null)
+      setTopRecommendations(valid.slice(0, 5))
     })
   }, [data?.signals])
 
@@ -338,7 +338,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                       : 'text-text-secondary hover:text-text-primary hover:bg-border/20'
                   }`}
                 >
-                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : tab === 'recommendations' ? 'Actions' : 'Customer News'}
+                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : tab === 'recommendations' ? 'Recommendations' : 'Customer News'}
                   {count !== undefined && count > 0 && (
                     <span className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
                       tab === 'alerts' ? 'bg-health-red/20 text-health-red' : 'bg-emerald-500/20 text-emerald-400'
