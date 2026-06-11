@@ -94,16 +94,14 @@ describe('extractEmailEntities', () => {
       expect(result.productMentions).toContain('Red Hat Enterprise Linux')
     })
 
-    test('only detects products present in product-vocabulary config', () => {
-      // RHACS and RHACM are not in product-intel-config.json vocabulary;
-      // they will be detected once added to the config (#681)
+    test('detects products present in product-vocabulary config', () => {
+      // RHACS and RHACM were added to vocabulary (#681)
       const result = extractEmailEntities(
         'RHACS is handling our supply chain security and RHACM manages multi-cluster.',
         'Security review'
       )
-      // These are NOT in vocabulary, so they should NOT be detected
-      expect(result.productMentions).not.toContain('RHACS')
-      expect(result.productMentions).not.toContain('RHACM')
+      expect(result.productMentions).toContain('RHACS')
+      expect(result.productMentions).toContain('RHACM')
     })
   })
 

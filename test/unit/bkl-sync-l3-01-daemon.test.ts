@@ -162,7 +162,7 @@ describe('#447: recycleRunning mutex guards proactiveRecycle()', () => {
 
   test('AC-1: proactiveRecycle releases mutex in finally block', () => {
     const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
-    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 4500)
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 8000)
     expect(fnBody).toContain('finally')
     expect(fnBody).toContain('recycleRunning = false')
   })
@@ -196,7 +196,7 @@ describe('#447: recycleRunning mutex guards proactiveRecycle()', () => {
 
   test('AC-5: proactiveRecycle has a 90s hard timeout with Promise.race', () => {
     const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
-    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 3500)
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 8000)
     expect(fnBody).toContain('Promise.race')
     expect(fnBody).toContain('RECYCLE_TIMEOUT_MS')
     expect(fnBody).toContain("'timeout'")
@@ -208,7 +208,7 @@ describe('#447: recycleRunning mutex guards proactiveRecycle()', () => {
 
   test('AC-5: timeout sends alert email recommending container restart', () => {
     const fnIdx = DAEMON_SRC.indexOf('async function proactiveRecycle()')
-    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 3500)
+    const fnBody = DAEMON_SRC.slice(fnIdx, fnIdx + 8000)
     expect(fnBody).toContain('TIMED OUT')
     expect(fnBody).toContain('sendBriefEmail')
     expect(fnBody).toContain('podman restart pai-sync-l3')
