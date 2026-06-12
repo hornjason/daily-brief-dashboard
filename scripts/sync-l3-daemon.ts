@@ -52,6 +52,11 @@ const RECYCLE_TIMEOUT_MS = 90_000  // 90 seconds
 // (ctx.newPage() or page.close() never resolves), the mutex is released after this window.
 const KEEPALIVE_TIMEOUT_MS = 120_000  // 120 seconds
 
+// #10: Auth lifecycle — graceful shutdown before Keycloak 8h absolute timeout
+const AUTH_WARNING_MS = 7 * 60 * 60 * 1000    // 7 hours
+const AUTH_SHUTDOWN_MS = 7.5 * 60 * 60 * 1000  // 7.5 hours
+const AUTH_CHECK_INTERVAL_MS = 5 * 60 * 1000   // 5 minutes
+
 // ── #447: Cross-timer recycle mutex ──────────────────────────────────────────
 // Prevents concurrent proactiveRecycle() / recoverScrapeContext() calls from
 // Timer 1 (keepalive), Timer 5 (12h recycle), and scheduled sync (pre-sync check).
@@ -585,6 +590,10 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  // #10: Auth lifecycle — track when SSO sessions were established
+  const authStartedAt = Date.now()
+  console.log(`[sync-daemon] auth lifecycle: session started at ${new Date(authStartedAt).toISOString()} — auto-shutdown at ${new Date(authStartedAt + AUTH_SHUTDOWN_MS).toISOString()}`)
+
   // SF adopts the RH headed context — no separate Chrome launch
   const rhCtx = getScrapeContext()
   if (rhCtx) {
@@ -862,6 +871,70 @@ async function main(): Promise<void> {
       console.error('[sync-daemon] scheduled 12h browser recycle: FAILED —', e?.message ?? e)
     }
   }, RECYCLE_INTERVAL_MS)
+
+  // Timer 7: Auth lifecycle — graceful shutdown before Keycloak 8h absolute timeout
+  let authWarningEmitted = false
+  setInterval(async () => {
+    const elapsed = Date.now() - authStartedAt
+    const remainingMs = AUTH_SHUTDOWN_MS - elapsed
+    const remainingMin = Math.round(remainingMs / 60_000)
+
+    if (elapsed >= AUTH_SHUTDOWN_MS) {
+      console.log('[sync-daemon] AUTH LIFECYCLE: 7.5h reached — initiating graceful shutdown')
+
+      // Write final status
+      const statusFile = resolve(CACHE_DIR, 'keepalive-status.json')
+      writeFileSync(statusFile, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        status: 'auth-expiring',
+        authAge: `${(elapsed / 3600000).toFixed(1)}h`,
+        message: 'Graceful shutdown — Keycloak session approaching 8h absolute timeout',
+      }))
+
+      // Alert email
+      try {
+        await sendBriefEmail(
+          ALERT_EMAIL,
+          `L3 Sync Daemon - Auth Expired, Restarting — ${new Date().toISOString().slice(0, 10)}`,
+          `<html><body>
+            <h2>Sync Daemon Graceful Shutdown</h2>
+            <p>The SSO session has been active for ${(elapsed / 3600000).toFixed(1)} hours — approaching Keycloak's 8h absolute timeout.</p>
+            <p>The daemon is shutting down gracefully. The container will auto-restart.</p>
+            <h3>Action Required</h3>
+            <p>Re-authenticate via VNC: <a href="http://mini.local:6082">http://mini.local:6082</a></p>
+            <ol>
+              <li>Open VNC link above</li>
+              <li>Complete MFA for Salesforce and Tableau in the browser windows</li>
+              <li>The daemon will detect auth and trigger an immediate sync</li>
+            </ol>
+          </body></html>`,
+        )
+      } catch (emailErr: any) {
+        console.error('[sync-daemon] auth expiry email failed:', emailErr.message)
+      }
+
+      // Graceful exit — container's --restart=unless-stopped will restart us
+      process.exit(0)
+    } else if (elapsed >= AUTH_WARNING_MS && !authWarningEmitted) {
+      authWarningEmitted = true
+      console.warn(`[sync-daemon] AUTH LIFECYCLE: 7h reached — session expires in ~${remainingMin}m. Re-auth via VNC soon.`)
+
+      try {
+        await sendBriefEmail(
+          ALERT_EMAIL,
+          `L3 Sync Daemon - Auth Expiring Soon — ${new Date().toISOString().slice(0, 10)}`,
+          `<html><body>
+            <h2>SSO Session Expiring Soon</h2>
+            <p>The sync daemon's SSO session has been active for 7 hours. Keycloak's absolute timeout is ~8 hours.</p>
+            <p>The daemon will auto-restart in ~${remainingMin} minutes. You'll need to re-authenticate via VNC afterward.</p>
+            <p>VNC: <a href="http://mini.local:6082">http://mini.local:6082</a></p>
+          </body></html>`,
+        )
+      } catch (emailErr: any) {
+        console.error('[sync-daemon] auth warning email failed:', emailErr.message)
+      }
+    }
+  }, AUTH_CHECK_INTERVAL_MS)
 
   // Timer 5: daily sync at 5:30am ET
   scheduleNextSync()
