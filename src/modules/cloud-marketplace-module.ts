@@ -39,6 +39,7 @@ interface CloudOffering {
   url?: string
   pricing?: string
   availability?: string
+  sourceFileId?: string
 }
 
 interface CloudProgram {
@@ -47,6 +48,7 @@ interface CloudProgram {
   eligibility?: string
   url?: string
   validThrough?: string
+  sourceFileId?: string
 }
 
 interface CloudIncentive {
@@ -55,6 +57,7 @@ interface CloudIncentive {
   value?: string
   url?: string
   validThrough?: string
+  sourceFileId?: string
 }
 
 interface CloudSection {
@@ -160,7 +163,7 @@ async function fetchNewsletterContent(searchQuery: string): Promise<{ newsletter
             { responseType: 'text' },
           )
           const raw = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
-          if (raw.length > 100) textParts.push(raw)
+          if (raw.length > 100) textParts.push(`=== SOURCE FILE: ${fileId} ===\n${raw}`)
         } catch (dlErr: any) {
           console.warn(`[cloud-marketplace] ${fname}: raw download failed: ${sanitizeErr(dlErr.message)}`)
         }
@@ -170,7 +173,7 @@ async function fetchNewsletterContent(searchQuery: string): Promise<{ newsletter
       console.log(`[cloud-marketplace] ${fname}: exporting as ${exportMime} (${mime})`)
       const exportRes = await drive.files.export({ fileId, mimeType: exportMime }, { responseType: 'text' })
       const content = typeof exportRes.data === 'string' ? exportRes.data : String(exportRes.data)
-      textParts.push(content)
+      textParts.push(`=== SOURCE FILE: ${fileId} ===\n${content}`)
     } catch (e: any) {
       console.warn(`[cloud-marketplace] Failed to export file ${fileId}: ${sanitizeErr(e.message)}`)
     }
@@ -212,6 +215,9 @@ Return a JSON object matching this structure:
   ]
 }
 
+Each file's content is preceded by a boundary marker: === SOURCE FILE: {fileId} ===
+For each offering, program, and incentive, include a "sourceFileId" field containing the file ID from the nearest boundary marker above that content.
+
 Only include clouds that have actual content. If a cloud has no offerings/programs/incentives/countries/partnerships, omit it entirely.`
 
 // ── Provider section splitting ────────────────────────────────────────────────
@@ -246,6 +252,7 @@ const RESPONSE_SCHEMA = {
                 url: { type: 'string' },
                 pricing: { type: 'string' },
                 availability: { type: 'string' },
+                sourceFileId: { type: 'string' },
               },
               required: ['name', 'description'],
             },
@@ -260,6 +267,7 @@ const RESPONSE_SCHEMA = {
                 eligibility: { type: 'string' },
                 url: { type: 'string' },
                 validThrough: { type: 'string' },
+                sourceFileId: { type: 'string' },
               },
               required: ['name', 'description'],
             },
@@ -274,6 +282,7 @@ const RESPONSE_SCHEMA = {
                 value: { type: 'string' },
                 url: { type: 'string' },
                 validThrough: { type: 'string' },
+                sourceFileId: { type: 'string' },
               },
               required: ['name', 'description'],
             },
@@ -1238,7 +1247,7 @@ schedulerRegistry.register({
   intervalMs: 7 * 24 * 60 * 60 * 1000,
   enabled: true,
   run: async () => {
-    const mod = FeatureModuleRegistry.getModule('cloud-marketplace')
+    const mod = FeatureModuleRegistry.get('cloud-marketplace')
     if (mod?.syncNow) await mod.syncNow('')
   },
 })
