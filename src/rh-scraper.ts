@@ -20,7 +20,7 @@
  * restarts can restore session state without a fresh login.
  */
 
-import { chromium } from '@playwright/test'
+import { chromium } from './playwright-optional.ts'
 import type { BrowserContext, Page } from '@playwright/test'
 import { readFile, unlink } from 'node:fs/promises'
 import { writeJsonAtomicAsync } from './lib/atomic-write.ts'

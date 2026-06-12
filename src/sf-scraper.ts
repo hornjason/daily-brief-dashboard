@@ -15,7 +15,7 @@
  * PIPELINE_FILE_ID, preserving the column structure that parsePipelineRows expects.
  */
 
-import { chromium } from '@playwright/test'
+import { chromium } from './playwright-optional.ts'
 import type { BrowserContext, Page, Frame, Download } from '@playwright/test'
 import { unlink } from 'node:fs/promises'
 import { join } from 'node:path'

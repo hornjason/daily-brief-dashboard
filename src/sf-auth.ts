@@ -12,7 +12,7 @@
  * for two browser instances — one context, one profile, both scrapers.
  */
 
-import { chromium } from '@playwright/test'
+import { chromium } from './playwright-optional.ts'
 import type { BrowserContext } from '@playwright/test'
 import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'

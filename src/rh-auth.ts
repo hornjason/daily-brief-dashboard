@@ -5,7 +5,7 @@
  * survive browser restarts the same way a regular Chrome profile does.
  */
 
-import { chromium } from '@playwright/test'
+import { chromium } from './playwright-optional.ts'
 import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync, unlinkSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'

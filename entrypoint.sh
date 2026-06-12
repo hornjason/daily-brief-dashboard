@@ -81,44 +81,49 @@ if [ -f /app/config-templates/business-value-maps.txt ] && [ ! -f /data/cache/va
   echo "[entrypoint] Seeded business value maps to cache"
 fi
 
-# ── Virtual display ────────────────────────────────────────────────────────────
-# Clean up stale X lock files from previous run (left behind by podman restart)
-rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
-Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
-export DISPLAY=:99
+# ── Virtual display (L4 / browser-scraper images only) ─────────────────────────
+# Hero images don't ship Xvfb, openbox, or websockify — skip the entire VNC
+# stack when those binaries aren't present.
+if command -v Xvfb >/dev/null 2>&1; then
+  # Clean up stale X lock files from previous run (left behind by podman restart)
+  rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
+  Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
+  export DISPLAY=:99
 
-# BKL-M50g: Readiness probe — wait for Xvfb to be ready instead of fixed sleep
-XVFB_FAIL_THRESHOLD=10  # 10 × 0.2s — lower values cause kill-loop during Chromium automation
-XVFB_ATTEMPTS=0
-while ! test -S /tmp/.X11-unix/X99; do
-  sleep 0.2
-  XVFB_ATTEMPTS=$((XVFB_ATTEMPTS + 1))
-  if [ "$XVFB_ATTEMPTS" -ge "$XVFB_FAIL_THRESHOLD" ]; then
-    echo "[entrypoint] WARNING: Xvfb not ready after ${XVFB_FAIL_THRESHOLD} attempts — proceeding anyway"
-    break
-  fi
-done
-echo "[entrypoint] Xvfb ready (${XVFB_ATTEMPTS} probes)"
-sleep 30
+  # BKL-M50g: Readiness probe — wait for Xvfb to be ready instead of fixed sleep
+  XVFB_FAIL_THRESHOLD=10  # 10 × 0.2s — lower values cause kill-loop during Chromium automation
+  XVFB_ATTEMPTS=0
+  while ! test -S /tmp/.X11-unix/X99; do
+    sleep 0.2
+    XVFB_ATTEMPTS=$((XVFB_ATTEMPTS + 1))
+    if [ "$XVFB_ATTEMPTS" -ge "$XVFB_FAIL_THRESHOLD" ]; then
+      echo "[entrypoint] WARNING: Xvfb not ready after ${XVFB_FAIL_THRESHOLD} attempts — proceeding anyway"
+      break
+    fi
+  done
+  echo "[entrypoint] Xvfb ready (${XVFB_ATTEMPTS} probes)"
 
-# ── Window manager — gives VNC a visible desktop (not just a black screen) ──
-openbox &
+  # ── Window manager — gives VNC a visible desktop (not just a black screen) ──
+  openbox &
 
-# ── VNC server (reads the Xvfb display, streams over VNC protocol) ─────────────
-# -nopw       : no VNC password — port is bound to localhost only (see below)
-# -localhost  : only accept connections from 127.0.0.1 (websockify proxies in)
-# -forever    : keep running after the first client disconnects
-# Auto-respawn x11vnc if killed mid-session (BKL-I01)
-(while true; do
-  x11vnc -display :99 -nopw -localhost -rfbport 5900 -forever -quiet 2>/dev/null
-  echo "[entrypoint] x11vnc exited — restarting in 2s..."
-  sleep 2
-done) &
+  # ── VNC server (reads the Xvfb display, streams over VNC protocol) ───────────
+  # -nopw       : no VNC password — port is bound to localhost only (see below)
+  # -localhost  : only accept connections from 127.0.0.1 (websockify proxies in)
+  # -forever    : keep running after the first client disconnects
+  # Auto-respawn x11vnc if killed mid-session (BKL-I01)
+  (while true; do
+    x11vnc -display :99 -nopw -localhost -rfbport 5900 -forever -quiet 2>/dev/null
+    echo "[entrypoint] x11vnc exited — restarting in 2s..."
+    sleep 2
+  done) &
 
-# ── noVNC / websockify (bridges VNC TCP → WebSocket for browser access) ────────
-# Serves the HTML5 noVNC viewer at http://localhost:6080/vnc.html
-# --web path serves the noVNC static files; proxies WebSocket → VNC :5900
-websockify --web /usr/share/novnc 6080 localhost:5900 &
+  # ── noVNC / websockify (bridges VNC TCP → WebSocket for browser access) ──────
+  # Serves the HTML5 noVNC viewer at http://localhost:6080/vnc.html
+  # --web path serves the noVNC static files; proxies WebSocket → VNC :5900
+  websockify --web /usr/share/novnc 6080 localhost:5900 &
+else
+  echo "[entrypoint] Xvfb not found — skipping VNC stack (hero image)"
+fi
 
 # ── Application server or sync daemon ────────────────────────────────────────
 # SYNC_DAEMON=true → run the L3 sync daemon instead of the app server.
