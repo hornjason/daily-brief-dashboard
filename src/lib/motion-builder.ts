@@ -664,6 +664,8 @@ function buildTransformPhase(
   for (const p of products) {
     const category = String(p.properties.category ?? '').toLowerCase()
     if (category === 'proprietary' || category === 'internal') continue
+    const context = String(p.properties.context ?? 'using').toLowerCase()
+    if (context === 'developing') continue  // internal development, not a buying signal (#693)
     const name = String(p.properties.techName ?? p.name ?? '')
     contextKeywords.push(...extractKeywords(name))
   }
@@ -696,12 +698,13 @@ function buildTransformPhase(
     }
   }
 
-  // Tech stack evidence for AI-related products — exclude proprietary/internal tools
+  // Tech stack evidence for AI-related products — exclude proprietary/internal tools and developing context (#693)
   for (const p of products) {
     const name = String(p.properties.techName ?? p.name ?? '')
     const category = String(p.properties.category ?? '').toLowerCase()
     const isProprietary = category === 'proprietary' || category === 'internal'
-    if (!isProprietary && (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml'))) {
+    const pContext = String(p.properties.context ?? 'using').toLowerCase()
+    if (!isProprietary && pContext !== 'developing' && (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml'))) {
       evidence.push({
         module: 'tech-stack',
         fact: `Uses ${name}`,
@@ -907,10 +910,25 @@ function buildDisplacementPhase(
   const products = findNodesByType(graph, 'product')
   const nonRedHatProducts = products.filter(p => {
     const isRedHat = p.properties.isRedHat === true || p.properties.isRedHat === 'true'
-    return !isRedHat
+    if (isRedHat) return false
+    const context = String(p.properties.context ?? 'using').toLowerCase()
+    const category = String(p.properties.category ?? '').toLowerCase()
+    // Skip proprietary/internal tools the customer just "uses" — not displacement targets (#693)
+    if ((category === 'proprietary' || category === 'internal') && context === 'using') return false
+    // Skip "developing" context — internal development, not a buying signal (#693)
+    if (context === 'developing') return false
+    return true
   })
 
   if (nonRedHatProducts.length === 0) return null
+
+  // Sort so evaluating/migrating_from come first — buying signals prioritized (#693)
+  nonRedHatProducts.sort((a, b) => {
+    const CONTEXT_PRIORITY: Record<string, number> = { migrating_from: 0, evaluating: 1, using: 2 }
+    const aCtx = String(a.properties.context ?? 'using').toLowerCase()
+    const bCtx = String(b.properties.context ?? 'using').toLowerCase()
+    return (CONTEXT_PRIORITY[aCtx] ?? 3) - (CONTEXT_PRIORITY[bCtx] ?? 3)
+  })
 
   // Find displacement matches using normalized fuzzy matching
   const matches: Array<{ competitor: string; redHat: string; tdp: string; nodeName: string }> = []
@@ -982,11 +1000,21 @@ function buildDisplacementPhase(
   attachMaterials(tactics)
 
 
-  // Build evidence from displacement matches
-  const evidence: MotionPhase['evidence'] = matches.map(m => ({
-    module: 'tech-stack',
-    fact: `Customer uses ${m.competitor} — opportunity to displace with ${m.redHat}`,
-  }))
+  // Build evidence from displacement matches — reflect actual context (#693)
+  const evidence: MotionPhase['evidence'] = matches.map(m => {
+    // Find the product node to get its context
+    const productNode = nonRedHatProducts.find(p =>
+      String(p.properties.techName ?? p.name ?? '') === m.competitor
+    )
+    const context = String(productNode?.properties?.context ?? 'using').toLowerCase()
+    const verb = context === 'evaluating' ? 'evaluating'
+      : context === 'migrating_from' ? 'migrating from'
+      : 'uses'
+    return {
+      module: 'tech-stack' as const,
+      fact: `Customer ${verb} ${m.competitor} — opportunity to displace with ${m.redHat}`,
+    }
+  })
 
   return {
     id: 'phase-displacement',
