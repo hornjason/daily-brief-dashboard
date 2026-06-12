@@ -21,7 +21,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, fetchCalendar } from './google.ts'
 import { getRecentHistory } from './kpi-history.ts'
 import { sanitizeErr } from './utils.ts'
 import { callGemini } from './gemini-call.ts'
-import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
+import { buildContactHistory, detectGoneSilent, isInternalEmail } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, enterpriseTerritoryKey, podPrefixFromTabTitle, normalizeTerritoryCustomerName } from './territory-sync.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
@@ -538,6 +538,22 @@ export async function buildMorningSummary(customers: Customer[]) {
       signals.push({ customer: hs.name, type: 'meeting-prep', severity: 'medium', text: `Meeting today: "${ev.title}" — prepare talking points` })
     }
   }
+
+  // #789: Filter out noise signals — internal patterns and generic competitor text
+  const filteredSignals = signals.filter(s => {
+    // Skip signals whose text matches internal/operational patterns
+    if (isInternalEmail(s.text)) return false
+    // Skip competitor signals with generic or too-short text
+    if (s.type === 'competitor') {
+      if (s.text.length < 20 || s.text === 'Competitive signals detected' || s.text === 'Competitive signals detected in latest brief') {
+        return false
+      }
+    }
+    return true
+  })
+  // Replace signals array contents with filtered results
+  signals.length = 0
+  signals.push(...filteredSignals)
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2 }
   signals.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity])

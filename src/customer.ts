@@ -28,7 +28,7 @@ import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { loadProductConfig } from './product-release-radar.ts'
-import { extractEmailIntelligence, classifyEmail } from './email-extraction.ts'
+import { extractEmailIntelligence, classifyEmail, isInternalEmail } from './email-extraction.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import type { DocClassification } from './doc-extraction.ts'
 import type { EmailIntelligence, SilentContact } from './email-extraction.ts'
@@ -829,8 +829,10 @@ export async function generateBrief(
     ? upcomingMeetings.map((m) => `- ${m.title} on ${fmt(m.start)}${m.attendees?.length ? ` (${m.attendees.slice(0, 10).join(', ')})` : ''}`).join('\n')
     : 'No upcoming meetings.'
 
-  const emailLines = emails.length
-    ? emails.slice(0, getAutomationConfig().briefEmailsInPrompt).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 500)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
+  // #789: Filter internal/operational emails before brief prompt assembly
+  const customerEmails = emails.filter(e => !isInternalEmail(e.subject))
+  const emailLines = customerEmails.length
+    ? customerEmails.slice(0, getAutomationConfig().briefEmailsInPrompt).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 500)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
     : 'No recent emails.'
 
   // Documents: include content if available, otherwise just name

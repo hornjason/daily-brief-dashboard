@@ -26,9 +26,10 @@ const ccspScrapeRunning = false
 import { runTerritorySyncOrchestration } from './territory-sync.ts'
 import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
-import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, readCCSPCache, writeBriefCache, cleanOrphanedCacheFiles } from './cache-layer.ts'
+import { briefCachePath, readBriefCache, readEmailCache, readSheetCache, readPipelineCache, readCCSPCache, writeBriefCache, cleanOrphanedCacheFiles, toSlug } from './cache-layer.ts'
 import { isBriefConfigured, fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
+import { classifyEmail, isInternalEmail } from './email-extraction.ts'
 import { fetchCustomerCases, fetchCustomerSubscriptions } from './redhat.ts'
 import { fetchCustomerSheetData } from './sheets.ts'
 import { initStatusStore, recordOutcome, getStatus } from './scraper-status-store.ts'
@@ -540,10 +541,36 @@ export function scheduleEmailDelivery(): void {
         sfLink: r.sfLink,
       }))
 
+      // #789: Populate emails from cached Gmail data (was hardcoded to [])
+      const allEmails: import('./email-template.ts').BriefEmail[] = []
+      for (const c of currentCustomers as any[]) {
+        const cached = readEmailCache(toSlug(c.name))
+        if (!cached) continue
+        for (const e of cached) {
+          // Filter internal/operational emails (#789 Fix 2)
+          if (isInternalEmail(e.subject)) continue
+          const intel = classifyEmail(e.subject, e.snippet ?? '', e.from)
+          allEmails.push({
+            sender: e.from,
+            customer: e.customer ?? c.name,
+            subject: e.subject,
+            snippet: (e.snippet ?? '').slice(0, 200),
+            urgency: intel.classification === 'ACTION_REQUIRED' ? 'high'
+              : intel.classification === 'RESPONSE_NEEDED' ? 'medium'
+              : 'low',
+            gmailLink: undefined,
+          })
+        }
+      }
+      // Sort by urgency (high first) and take top 10
+      const urgencyOrder: Record<string, number> = { high: 0, medium: 1, low: 2 }
+      allEmails.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency])
+      const emails = allEmails.slice(0, 10)
+
       const briefData = {
         dateDisplay,
         meetings: [],
-        emails: [],
+        emails,
         cases: [],
         pipeline,
         customerBriefs,

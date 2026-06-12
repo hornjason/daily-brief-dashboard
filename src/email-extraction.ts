@@ -39,6 +39,44 @@ export interface SilentContact {
   currentFrequency: number
 }
 
+// ── Internal/Noise Email Detection (#789) ──────────────────────────────────
+
+/** Patterns that indicate internal/operational emails — not customer-facing. */
+const INTERNAL_PATTERNS = [
+  /\bteam meeting\b/i,
+  /\b1:1\b/i,
+  /\bone[- ]on[- ]one\b/i,
+  /\bstandup\b/i,
+  /\bstand[- ]up\b/i,
+  /\bsprint\b/i,
+  /\bplanning\b/i,
+  /\bretrospective\b/i,
+  /\bretro\b/i,
+  /\ball[- ]hands\b/i,
+  /\bsync\b/i,
+  /\bbrown bag\b/i,
+  /\blunch and learn\b/i,
+  /\booo\b/i,
+  /\bout of office\b/i,
+  /\bpto\b/i,
+  /\btime off\b/i,
+  /\binternal\b/i,
+  /\boffice hours\b/i,
+  /\btownhall\b/i,
+  /\btown hall\b/i,
+  /\bpod meeting\b/i,
+  /\bpod call\b/i,
+]
+
+/**
+ * Detect internal/operational emails that should be filtered from customer briefs.
+ * Returns true if the subject (or any text) matches internal patterns.
+ */
+export function isInternalEmail(text: string): boolean {
+  if (!text) return false
+  return INTERNAL_PATTERNS.some(p => p.test(text))
+}
+
 // ── Constants ───────────────────────────────────────────────────────────────
 
 /** Known competitors — lowercase for matching. Extend as needed. */
