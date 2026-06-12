@@ -41,40 +41,19 @@ export interface SilentContact {
 
 // ── Internal/Noise Email Detection (#789) ──────────────────────────────────
 
-/** Patterns that indicate internal/operational emails — not customer-facing. */
-const INTERNAL_PATTERNS = [
-  /\bteam meeting\b/i,
-  /\b1:1\b/i,
-  /\bone[- ]on[- ]one\b/i,
-  /\bstandup\b/i,
-  /\bstand[- ]up\b/i,
-  /\bsprint\b/i,
-  /\bplanning\b/i,
-  /\bretrospective\b/i,
-  /\bretro\b/i,
-  /\ball[- ]hands\b/i,
-  /\bsync\b/i,
-  /\bbrown bag\b/i,
-  /\blunch and learn\b/i,
-  /\booo\b/i,
-  /\bout of office\b/i,
-  /\bpto\b/i,
-  /\btime off\b/i,
-  /\binternal\b/i,
-  /\boffice hours\b/i,
-  /\btownhall\b/i,
-  /\btown hall\b/i,
-  /\bpod meeting\b/i,
-  /\bpod call\b/i,
-]
+// Statically defined in extraction layer (not config) because the vocabulary is
+// small, stable, and part of classification logic. These patterns identify Red Hat
+// internal/operational emails that should never reach customer briefs.
+const INTERNAL_PATTERN = /\b(?:team meeting|1:1|one[- ]on[- ]one|standup|stand[- ]up|sprint|planning|retrospective|retro|all[- ]hands|sync|brown bag|lunch and learn|ooo|out of office|pto|time off|internal|office hours|townhall|town hall|pod meeting|pod call)\b/i
 
 /**
  * Detect internal/operational emails that should be filtered from customer briefs.
- * Returns true if the subject (or any text) matches internal patterns.
+ * Returns true if the text matches internal patterns. Can be called on any text
+ * field — subject lines, snippets, or body previews.
  */
 export function isInternalEmail(text: string): boolean {
   if (!text) return false
-  return INTERNAL_PATTERNS.some(p => p.test(text))
+  return INTERNAL_PATTERN.test(text)
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────

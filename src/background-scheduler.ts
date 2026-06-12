@@ -544,11 +544,17 @@ export function scheduleEmailDelivery(): void {
       // #789: Populate emails from cached Gmail data (was hardcoded to [])
       const allEmails: import('./email-template.ts').BriefEmail[] = []
       for (const c of currentCustomers as any[]) {
-        const cached = readEmailCache(toSlug(c.name))
+        let cached: ReturnType<typeof readEmailCache>
+        try {
+          cached = readEmailCache(toSlug(c.name))
+        } catch (err: any) {
+          console.warn(`[morning-brief] Failed to read email cache for ${c.name}: ${err.message}`)
+          continue
+        }
         if (!cached) continue
         for (const e of cached) {
-          // Filter internal/operational emails (#789 Fix 2)
-          if (isInternalEmail(e.subject)) continue
+          // Filter internal/operational emails from subject and snippet (#789, #792)
+          if (isInternalEmail(e.subject) || isInternalEmail(e.snippet ?? '')) continue
           const intel = classifyEmail(e.subject, e.snippet ?? '', e.from)
           allEmails.push({
             sender: e.from,
@@ -558,6 +564,7 @@ export function scheduleEmailDelivery(): void {
             urgency: intel.classification === 'ACTION_REQUIRED' ? 'high'
               : intel.classification === 'RESPONSE_NEEDED' ? 'medium'
               : 'low',
+            // gmailLink: undefined — when populated, validate URL scheme (https://, mailto:) before use
             gmailLink: undefined,
           })
         }

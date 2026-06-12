@@ -1,9 +1,12 @@
 /**
  * Regression tests for #789: Morning brief content quality
- * Covers: isInternalEmail filter, email aggregation, signal noise suppression
+ * Covers: isInternalEmail filter, email aggregation, signal noise suppression,
+ *         semantic competitor validation (#793), immutable filtering (#790),
+ *         XSS escaping (#799)
  */
 import { describe, it, expect } from 'bun:test'
 import { isInternalEmail } from '../../src/email-extraction.ts'
+import { renderBriefHtml } from '../../src/email-template.ts'
 
 // ── AC-2: isInternalEmail filter ─────────────────────────────────────────────
 
@@ -119,43 +122,130 @@ describe('email aggregation', () => {
   })
 })
 
-// ── AC-3: Generic/noise signal suppression ───────────────────────────────────
+// ── AC-3: Signal suppression with semantic competitor validation (#790, #793) ─
 
 describe('morning summary signal filtering', () => {
-  it('filters out generic competitor signals with short text', () => {
-    const signals = [
-      { customer: 'Acme', type: 'case-sev1', severity: 'critical' as const, text: 'Sev1 case #123: Production outage' },
-      { customer: 'Acme', type: 'competitor', severity: 'medium' as const, text: 'Competitive signals detected' },
-      { customer: 'Beta', type: 'competitor', severity: 'medium' as const, text: 'VMware displacement opportunity — customer evaluating OpenShift vs Tanzu for container platform' },
-      { customer: 'Gamma', type: 'competitor', severity: 'medium' as const, text: 'AWS mentioned' },
-    ]
+  // #793: Semantic validation constants (must match dashboard-service.ts)
+  const COMPETITOR_BOILERPLATE = [
+    'Competitive signals detected',
+    'Competitive signals detected in latest brief',
+  ]
+  const COMPETITOR_ACTION_WORDS = [
+    'evaluating', 'migration', 'migrating', 'displacement', 'replacing', 'switching',
+    'versus', 'vs', 'compared', 'alternative', 'competing', 'threat', 'risk',
+    'losing', 'won', 'lost',
+  ]
+  const MIN_COMPETITOR_TEXT_LENGTH = 15
 
-    const filtered = signals.filter(s => {
-      // Skip competitor signals with generic/too-short text
+  function filterSignals(signals: { customer: string; type: string; severity: string; text: string }[]) {
+    return signals.filter(s => {
+      if (isInternalEmail(s.text)) return false
       if (s.type === 'competitor') {
-        if (s.text.length < 20 || s.text === 'Competitive signals detected' || s.text === 'Competitive signals detected in latest brief') {
+        const textLower = s.text.toLowerCase()
+        if (
+          s.text.length < MIN_COMPETITOR_TEXT_LENGTH ||
+          COMPETITOR_BOILERPLATE.includes(s.text) ||
+          !COMPETITOR_ACTION_WORDS.some(w => textLower.includes(w))
+        ) {
           return false
         }
       }
       return true
     })
+  }
 
-    expect(filtered).toHaveLength(2)
+  it('filters out boilerplate competitor signals', () => {
+    const signals = [
+      { customer: 'Acme', type: 'case-sev1', severity: 'critical', text: 'Sev1 case #123: Production outage' },
+      { customer: 'Acme', type: 'competitor', severity: 'medium', text: 'Competitive signals detected' },
+      { customer: 'Acme', type: 'competitor', severity: 'medium', text: 'Competitive signals detected in latest brief' },
+    ]
+    const filtered = filterSignals(signals)
+    expect(filtered).toHaveLength(1)
     expect(filtered[0].type).toBe('case-sev1')
-    expect(filtered[1].type).toBe('competitor')
-    expect(filtered[1].customer).toBe('Beta')
+  })
+
+  it('filters out competitor signals lacking action words', () => {
+    const signals = [
+      { customer: 'Gamma', type: 'competitor', severity: 'medium', text: 'Some vendor was mentioned in a chat' },
+      { customer: 'Beta', type: 'competitor', severity: 'medium', text: 'VMware displacement opportunity — customer evaluating OpenShift vs Tanzu for container platform' },
+    ]
+    const filtered = filterSignals(signals)
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].customer).toBe('Beta')
+  })
+
+  it('filters out too-short competitor signals', () => {
+    const signals = [
+      { customer: 'Gamma', type: 'competitor', severity: 'medium', text: 'AWS mentioned' },
+    ]
+    const filtered = filterSignals(signals)
+    expect(filtered).toHaveLength(0)
+  })
+
+  it('keeps competitor signals with action context', () => {
+    const actionSignals = [
+      { customer: 'A', type: 'competitor', severity: 'medium', text: 'Customer evaluating VMware alternative for containerization' },
+      { customer: 'B', type: 'competitor', severity: 'medium', text: 'Risk of losing deal to Azure migration path' },
+      { customer: 'C', type: 'competitor', severity: 'medium', text: 'Won competitive displacement vs Tanzu platform' },
+    ]
+    const filtered = filterSignals(actionSignals)
+    expect(filtered).toHaveLength(3)
+  })
+
+  it('#790: filtering returns a new array without mutating the original', () => {
+    const signals = [
+      { customer: 'Acme', type: 'renewal', severity: 'high', text: 'Subscription expiring in 45 days' },
+      { customer: 'Beta', type: 'engagement', severity: 'medium', text: 'Sprint planning discussion detected' },
+    ]
+    const original = [...signals]
+    const filtered = filterSignals(signals)
+    // Original array is unchanged
+    expect(signals).toEqual(original)
+    // Filtered has the internal pattern removed
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].type).toBe('renewal')
   })
 
   it('filters out signals matching internal email patterns', () => {
     const signals = [
-      { customer: 'Acme', type: 'engagement', severity: 'medium' as const, text: 'Sprint planning discussion detected' },
-      { customer: 'Acme', type: 'renewal', severity: 'high' as const, text: 'Subscription expiring in 45 days' },
-      { customer: 'Beta', type: 'engagement', severity: 'medium' as const, text: 'All-hands meeting scheduled' },
+      { customer: 'Acme', type: 'engagement', severity: 'medium', text: 'Sprint planning discussion detected' },
+      { customer: 'Acme', type: 'renewal', severity: 'high', text: 'Subscription expiring in 45 days' },
+      { customer: 'Beta', type: 'engagement', severity: 'medium', text: 'All-hands meeting scheduled' },
     ]
 
-    const filtered = signals.filter(s => !isInternalEmail(s.text))
+    const filtered = filterSignals(signals)
 
     expect(filtered).toHaveLength(1)
     expect(filtered[0].type).toBe('renewal')
+  })
+})
+
+// ── #799: XSS regression test ───────────────────────────────────────────────
+
+describe('email HTML escaping (#799)', () => {
+  it('email fields are HTML-escaped in rendered output', () => {
+    const maliciousEmail = {
+      sender: '<script>alert(1)</script>',
+      customer: '"><img src=x onerror=alert(1)>',
+      subject: 'Normal subject',
+      snippet: '<b>bold</b> & "quotes"',
+      urgency: 'high' as const,
+    }
+    const html = renderBriefHtml({
+      dateDisplay: 'Thursday, June 12, 2026',
+      meetings: [],
+      emails: [maliciousEmail],
+      cases: [],
+      pipeline: [],
+      customerBriefs: [],
+      sections: { meetings: false, emails: true, cases: false, pipeline: false, brief: false },
+    })
+    // Script tags must be escaped
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('&lt;script&gt;')
+    // Ampersands and quotes must be escaped
+    expect(html).toContain('&amp;')
+    expect(html).toContain('&quot;')
   })
 })

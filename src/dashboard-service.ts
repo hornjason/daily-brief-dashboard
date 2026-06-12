@@ -540,27 +540,40 @@ export async function buildMorningSummary(customers: Customer[]) {
   }
 
   // #789: Filter out noise signals — internal patterns and generic competitor text
+  // #793: Semantic validation for competitor signals instead of arbitrary length check
+  const COMPETITOR_BOILERPLATE = [
+    'Competitive signals detected',
+    'Competitive signals detected in latest brief',
+  ]
+  const COMPETITOR_ACTION_WORDS = [
+    'evaluating', 'migration', 'migrating', 'displacement', 'replacing', 'switching',
+    'versus', 'vs', 'compared', 'alternative', 'competing', 'threat', 'risk',
+    'losing', 'won', 'lost',
+  ]
+  const MIN_COMPETITOR_TEXT_LENGTH = 15
   const filteredSignals = signals.filter(s => {
     // Skip signals whose text matches internal/operational patterns
     if (isInternalEmail(s.text)) return false
-    // Skip competitor signals with generic or too-short text
+    // Skip competitor signals that are boilerplate or lack actionable context
     if (s.type === 'competitor') {
-      if (s.text.length < 20 || s.text === 'Competitive signals detected' || s.text === 'Competitive signals detected in latest brief') {
+      const textLower = s.text.toLowerCase()
+      if (
+        s.text.length < MIN_COMPETITOR_TEXT_LENGTH ||
+        COMPETITOR_BOILERPLATE.includes(s.text) ||
+        !COMPETITOR_ACTION_WORDS.some(w => textLower.includes(w))
+      ) {
         return false
       }
     }
     return true
   })
-  // Replace signals array contents with filtered results
-  signals.length = 0
-  signals.push(...filteredSignals)
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2 }
-  signals.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity])
+  filteredSignals.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity])
 
-  const criticalCount = signals.filter(s => s.severity === 'critical').length
-  const attentionCount = signals.filter(s => s.severity !== 'medium').length
-  const summary = signals.length === 0
+  const criticalCount = filteredSignals.filter(s => s.severity === 'critical').length
+  const attentionCount = filteredSignals.filter(s => s.severity !== 'medium').length
+  const summary = filteredSignals.length === 0
     ? `All clear across ${customers.length} accounts`
     : `${attentionCount} account${attentionCount !== 1 ? 's' : ''} need attention${criticalCount ? `, ${criticalCount} critical` : ''}`
 
@@ -583,7 +596,7 @@ export async function buildMorningSummary(customers: Customer[]) {
   // Gemini synthesis layer (BKL-AI27) — 4h cached
   let synthesis: string | undefined
   try {
-    synthesis = await synthesizeMorningSummary(signals, templateAllContext || undefined)
+    synthesis = await synthesizeMorningSummary(filteredSignals, templateAllContext || undefined)
   } catch (e: any) {
     console.warn('[dashboard-service] Morning synthesis failed (non-fatal):', e.message)
   }
@@ -598,7 +611,7 @@ export async function buildMorningSummary(customers: Customer[]) {
     (slug: string) => loadGraph(slug, CACHE_DIR),
   )
 
-  const response: Record<string, unknown> = { signals, summary, customerCount: customers.length }
+  const response: Record<string, unknown> = { signals: filteredSignals, summary, customerCount: customers.length }
   if (synthesis) response.synthesis = synthesis
   if (redHatIntelligence) response.redHatIntelligence = redHatIntelligence
   if (todaysMeetings.length > 0) response.todaysMeetings = todaysMeetings

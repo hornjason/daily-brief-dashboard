@@ -829,8 +829,8 @@ export async function generateBrief(
     ? upcomingMeetings.map((m) => `- ${m.title} on ${fmt(m.start)}${m.attendees?.length ? ` (${m.attendees.slice(0, 10).join(', ')})` : ''}`).join('\n')
     : 'No upcoming meetings.'
 
-  // #789: Filter internal/operational emails before brief prompt assembly
-  const customerEmails = emails.filter(e => !isInternalEmail(e.subject))
+  // #789, #792: Filter internal/operational emails (check subject + snippet)
+  const customerEmails = emails.filter(e => !isInternalEmail(e.subject) && !isInternalEmail(e.snippet ?? ''))
   const emailLines = customerEmails.length
     ? customerEmails.slice(0, getAutomationConfig().briefEmailsInPrompt).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 500)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
     : 'No recent emails.'
