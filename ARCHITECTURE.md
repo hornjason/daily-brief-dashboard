@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-06-10
+updated: 2026-06-11
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -1966,3 +1966,52 @@ Scrapes `redhat.com/en/products` for canonical product names. 41 products in see
 ### Design principle
 
 Vocabulary resolvers are the single source of truth for product and competitor names. Modules that need to match product names import from the resolver — they never maintain their own `const PRODUCTS = [...]` array. This eliminates drift between modules and ensures new products (added to config or scraped from redhat.com) are immediately available everywhere.
+
+## §33. Configured Regions and Pods (2026-06-11)
+
+Source of truth: `config/settings.json` → `regions[]` array. Update this section when regions or pods change.
+
+### West Commercial
+
+| Pod ID | Label |
+|---|---|
+| `WEST_COMM_CORP_NORTHWEST` | Northwest Corp |
+| `WEST_COMM_CORP_SOUTHWEST` | Southwest Corp |
+| `WEST_COMM_CORP_NORTH_CENTRAL` | North Central Corp |
+| `WEST_COMM_CORP_SOUTH_CENTRAL` | South Central Corp |
+
+- Type: `commercial`
+- Territory sheet: [West Commercial](https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982)
+
+### East Commercial
+
+| Pod ID | Label | Status |
+|---|---|---|
+| `EAST_COMM_CORP_POD01` | Rough Riders | Active |
+| `EAST_COMM_CORP_POD02` | Big Apple Ballers | Pending setup — no SF report or CCSP |
+| `EAST_COMM_CORP_POD03` | Pythons | Pending setup — no SF report or CCSP |
+| `EAST_COMM_CORP_POD05` | Mad Hatters | Pending setup — no SF report or CCSP |
+
+- Type: `commercial`
+- Territory sheet: [East Commercial](https://docs.google.com/spreadsheets/d/111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0/edit?gid=1703062703#gid=1703062703)
+
+### Central Enterprise – TOLA
+
+| Pod ID | Label | Notes |
+|---|---|---|
+| `CENTRAL_ENT_TOLA` | TOLA | Primary pod |
+| `CENTRAL_ENT_HIGH_PLAINS` | High Plains | Hidden; prefix routing via `High_Plains` |
+
+- Type: `enterprise`
+- Territory sheet: [TOLA](https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986)
+
+### Sync status
+
+Settings sync between instances is **not yet wired** (#788). `runStartupDriveMerge()` exists in `setup-routes.ts` but is never called. Changes to regions/pods must be manually propagated to each instance until #788 ships.
+
+### When to update this section
+
+- New region or pod added via Setup Wizard
+- Pod ID renamed (e.g., `CENTRAL_ENT_TOLA_HP` → `CENTRAL_ENT_HIGH_PLAINS`)
+- Pod status changes (pending → active, hidden toggled)
+- Territory sheet URL changes

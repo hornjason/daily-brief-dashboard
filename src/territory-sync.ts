@@ -328,6 +328,7 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
 export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): string[] {
   const maxHeaderRow = Math.min(10, rows.length)
   const targetName = aeName.toLowerCase().trim()
+  const allAccounts = new Set<string>()
 
   for (let headerRow = 0; headerRow < maxHeaderRow; headerRow++) {
     const header = rows[headerRow] ?? []
@@ -342,12 +343,10 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
       let accountsStartRow: number
 
       if (rawAeCell.includes('\n')) {
-        // Combined format: "AE Name\nTerrXX" — accounts start at headerRow+2
         colAeName = rawAeCell.split('\n')[0].trim()
         accountsStartRow = headerRow + 2
       } else {
         colAeName = rawAeCell
-        // Separate rows: scan headerRow+2..+4 for territory code; accounts start after
         accountsStartRow = headerRow + 2
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
@@ -360,28 +359,23 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
 
       if (colAeName.toLowerCase() !== targetName) continue
 
-      // Extract and normalize accounts; skip empty and placeholder cells
-      const accounts: string[] = []
       let consecutiveEmpty = 0
       for (let r = accountsStartRow; r < rows.length; r++) {
         const raw = String(rows[r]?.[col] ?? '').trim()
         if (!raw) {
           consecutiveEmpty++
-          // Stop after 3 consecutive empty rows — end of this AE's account block
           if (consecutiveEmpty >= 3) break
           continue
         }
         consecutiveEmpty = 0
         if (/^(TBH|TBD|N\/A)$/i.test(raw)) continue
         const normalized = normalizeTerritoryCustomerName(raw)
-        if (normalized) accounts.push(normalized)
+        if (normalized) allAccounts.add(normalized)
       }
-
-      return accounts
     }
   }
 
-  return []
+  return Array.from(allAccounts)
 }
 
 /**

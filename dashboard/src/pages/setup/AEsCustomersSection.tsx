@@ -695,46 +695,47 @@ function AutoBootstrapForm({
     return entry?.aeName ?? ''
   }, [terrNum, podTerritoryNames])
 
-  // Auto-fill AE name + accounts whenever territory resolves to a known AE (always overwrite)
+  // Unified auto-fill: AE name from dropdown, customer list from API (#713, #daily-brief-dashboard-4)
+  // DO NOT SPLIT INTO TWO EFFECTS — the old two-effect pattern blocks the API call when
+  // selectedTerritoryAeName is set, preventing customer list from populating.
   useEffect(() => {
-    // Priority 1: dropdown's own AE name (handles overlapping territory codes)
     if (selectedTerritoryAeName) {
       setAeName(selectedTerritoryAeName)
-      // Still use matchedAe's accounts if available (accounts come from configured AEs)
-      if (matchedAe?.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
+      setForceRebootstrap(false)
+    } else if (matchedAe) {
+      setAeName(matchedAe.name)
+      if (matchedAe.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
       setForceRebootstrap(false)
       return
     }
-    // Priority 2: reverse-lookup from configured AEs (original behavior)
-    if (!matchedAe) return
-    setAeName(matchedAe.name)
-    if (matchedAe.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
-    setForceRebootstrap(false)  // reset force flag when territory changes to a new AE
-  }, [selectedTerritoryAeName, matchedAe])
 
-  // Live territory lookup — fires when territoryInput changes and no match in knownAes
-  useEffect(() => {
-    if (!territoryInput || selectedTerritoryAeName || matchedAe) return
-    // territoryInput may be comma-separated; look up the first one
+    if (!territoryInput) return
+    const resolvedName = selectedTerritoryAeName || matchedAe?.name || ''
     const firstTerritory = territoryInput.split(',')[0].trim()
     if (!firstTerritory) return
+
     const controller = new AbortController()
     setTerritoryLoading(true)
     setTerritoryError(null)
-    fetch(`/api/territory-lookup?territory=${encodeURIComponent(firstTerritory)}`, { signal: controller.signal })
-      .then(r => r.json().catch(() => ({ error: 'Could not load territory data — check your Google connection' })))
+
+    const url = new URL('/api/territory-lookup', window.location.origin)
+    url.searchParams.set('territory', firstTerritory)
+    if (resolvedName) url.searchParams.set('aeName', resolvedName)
+
+    fetch(url.toString(), { signal: controller.signal })
+      .then(r => r.json().catch(() => ({ error: 'Could not load territory data' })))
       .then((d: { aeName?: string; accounts?: string[]; error?: string }) => {
         if (d.error) {
           setTerritoryError(d.error.includes('not found') ? null : d.error)
           return
         }
-        if (d.aeName) setAeName(d.aeName)
+        if (!selectedTerritoryAeName && d.aeName) setAeName(d.aeName)
         if (d.accounts?.length) setCustomerText(d.accounts.join('\n'))
       })
-      .catch((e) => { if (e.name !== 'AbortError') setTerritoryError('Could not load territory data — check your Google connection') })
+      .catch((e) => { if (e.name !== 'AbortError') setTerritoryError('Could not load territory data') })
       .finally(() => { if (!controller.signal.aborted) setTerritoryLoading(false) })
     return () => controller.abort()
-  }, [territoryInput, matchedAe])
+  }, [selectedTerritoryAeName, matchedAe, territoryInput])
 
   // BKL-UX85: push the derived aeName up so the shared BootstrapConfigBlock
   // can render its scaffolding preview for the single AE.

@@ -144,11 +144,11 @@ describe('enterpriseTerritoryKey — prefix routing (#635)', () => {
 
   const multiPodRegion = makeRegion({
     CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
-    CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+    CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
   })
 
   test('High_Plains_ prefix routes to HP pod', () => {
-    expect(enterpriseTerritoryKey(multiPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(multiPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR03')
   })
 
   test('TOLA_ prefix routes to default (non-prefix) pod', () => {
@@ -160,13 +160,13 @@ describe('enterpriseTerritoryKey — prefix routing (#635)', () => {
   })
 
   test('prefix matching is case-insensitive', () => {
-    expect(enterpriseTerritoryKey(multiPodRegion, 'high_plains_Terr07')).toBe('CENTRAL_ENT_TOLA_HP_TERR07')
+    expect(enterpriseTerritoryKey(multiPodRegion, 'high_plains_Terr07')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR07')
   })
 
   test('hypothetical third prefix group routes correctly', () => {
     const threePodRegion = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
       CENTRAL_ENT_TOLA_MW: { sfReportId: 'r3', label: 'Mountain West', hidden: true, prefixes: ['Mountain_West'] },
     })
     expect(enterpriseTerritoryKey(threePodRegion, 'Mountain_West_Terr02')).toBe('CENTRAL_ENT_TOLA_MW_TERR02')
@@ -185,13 +185,13 @@ describe('enterpriseTerritoryKey — prefix routing (#635)', () => {
     // This test proves AC-5: a new group just needs a prefixes entry
     const fourPodRegion = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r2', label: 'High Plains', prefixes: ['High_Plains'] },
       CENTRAL_ENT_TOLA_MW: { sfReportId: 'r3', label: 'Mountain West', prefixes: ['Mountain_West'] },
       CENTRAL_ENT_TOLA_GL: { sfReportId: 'r4', label: 'Great Lakes', prefixes: ['Great_Lakes'] },
     })
     expect(enterpriseTerritoryKey(fourPodRegion, 'Great_Lakes_Terr09')).toBe('CENTRAL_ENT_TOLA_GL_TERR09')
     expect(enterpriseTerritoryKey(fourPodRegion, 'Mountain_West_Terr02')).toBe('CENTRAL_ENT_TOLA_MW_TERR02')
-    expect(enterpriseTerritoryKey(fourPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(fourPodRegion, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR03')
     expect(enterpriseTerritoryKey(fourPodRegion, 'Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
   })
 })
@@ -213,10 +213,10 @@ describe('enterpriseTerritoryKey — prefix routing (#742)', () => {
     const region = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
       CENTRAL_ENT_TOLA_P: { sfReportId: 'r2', label: 'Plains', hidden: true, prefixes: ['Plains'] },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
     })
     // High_Plains must route to HP, not P (substring collision prevented)
-    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR03')
     // Plains still routes to P
     expect(enterpriseTerritoryKey(region, 'Plains_Terr01')).toBe('CENTRAL_ENT_TOLA_P_TERR01')
   })
@@ -225,19 +225,19 @@ describe('enterpriseTerritoryKey — prefix routing (#742)', () => {
     const region = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
       CENTRAL_ENT_TOLA_P: { sfReportId: 'r2', label: 'Plains', hidden: true, prefixes: ['Plains'] },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r3', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
     })
     const result = enterpriseTerritoryKey(region, 'High_Plains_Terr05')
     expect(result).not.toContain('_P_TERR')
-    expect(result).toBe('CENTRAL_ENT_TOLA_HP_TERR05')
+    expect(result).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR05')
   })
 
   test('AC-3: existing routing unchanged for non-colliding prefixes', () => {
     const region = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
     })
-    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_TOLA_HP_TERR03')
+    expect(enterpriseTerritoryKey(region, 'High_Plains_Terr03')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR03')
     expect(enterpriseTerritoryKey(region, 'TOLA_Terr01')).toBe('CENTRAL_ENT_TOLA_TERR01')
     expect(enterpriseTerritoryKey(region, 'Terr05')).toBe('CENTRAL_ENT_TOLA_TERR05')
   })
@@ -252,8 +252,8 @@ describe('enterpriseTerritoryKey — prefix routing (#742)', () => {
   test('prefix matching is case-insensitive', () => {
     const region = makeRegion({
       CENTRAL_ENT_TOLA: { sfReportId: 'r1', label: 'TOLA' },
-      CENTRAL_ENT_TOLA_HP: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
+      CENTRAL_ENT_HIGH_PLAINS: { sfReportId: 'r2', label: 'High Plains', hidden: true, prefixes: ['High_Plains'] },
     })
-    expect(enterpriseTerritoryKey(region, 'high_plains_Terr07')).toBe('CENTRAL_ENT_TOLA_HP_TERR07')
+    expect(enterpriseTerritoryKey(region, 'high_plains_Terr07')).toBe('CENTRAL_ENT_HIGH_PLAINS_TERR07')
   })
 })

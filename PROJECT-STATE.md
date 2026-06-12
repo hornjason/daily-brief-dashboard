@@ -278,7 +278,9 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 **ADR-019 (2026-05-12):** L3 refresh reads daily CSVs directly from Drive (SF-PIPELINE-*, CCSP-*) instead of static Google Sheet IDs. Self-healing discovery — always grabs most recent CSV by modifiedTime. Subscription sheet remains static.
 
-**Multi-Region Architecture (3 regions, 9 pods configured):**
+**Multi-Region Architecture (3 regions, 10 pods configured):**
+
+Full reference with territory sheet links: **ARCHITECTURE.md §33**
 
 - **West Commercial** (4 pods — all active, L3 sync operational):
   - `WEST_COMM_CORP_NORTHWEST` — Northwest Corp
@@ -287,15 +289,17 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
   - `WEST_COMM_CORP_SOUTH_CENTRAL` — South Central Corp
 
 - **East Commercial** (4 pods configured):
-  - `EAST_COMM_CORP_POD01` — Rough Riders
-  - `EAST_COMM_CORP_POD02` — No sfReportId (skipped in L3 sync)
-  - `EAST_COMM_CORP_POD03` — No sfReportId (skipped in L3 sync)
-  - `EAST_COMM_CORP_POD05` — No sfReportId (skipped in L3 sync)
+  - `EAST_COMM_CORP_POD01` — Rough Riders (active)
+  - `EAST_COMM_CORP_POD02` — Big Apple Ballers (pending setup)
+  - `EAST_COMM_CORP_POD03` — Pythons (pending setup)
+  - `EAST_COMM_CORP_POD05` — Mad Hatters (pending setup)
 
-- **Central Enterprise TOLA** (1 pod — active, L3 sync operational):
-  - `CENTRAL_ENT_TOLA` — TOLA POD
+- **Central Enterprise – TOLA** (2 pods):
+  - `CENTRAL_ENT_TOLA` — TOLA (active)
+  - `CENTRAL_ENT_HIGH_PLAINS` — High Plains (hidden; prefix routing)
 
 **L3 Sync:** Daily via sync-l3-daemon.ts. Drive folder: `14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo`
+**Settings sync:** Not yet wired (#788) — changes must be manually propagated between instances.
 
 ---
 
