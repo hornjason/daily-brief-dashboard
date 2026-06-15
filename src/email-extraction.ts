@@ -44,7 +44,15 @@ export interface SilentContact {
 // Statically defined in extraction layer (not config) because the vocabulary is
 // small, stable, and part of classification logic. These patterns identify Red Hat
 // internal/operational emails that should never reach customer briefs.
+// Performance: single compiled alternation regex handles 23 patterns efficiently.
+// If count grows beyond ~50, consider Set-based word lookup for O(n) vs O(n*m).
 const INTERNAL_PATTERN = /\b(?:team meeting|1:1|one[- ]on[- ]one|standup|stand[- ]up|sprint|planning|retrospective|retro|all[- ]hands|sync|brown bag|lunch and learn|ooo|out of office|pto|time off|internal|office hours|townhall|town hall|pod meeting|pod call)\b/i
+
+const INTERNAL_ALLOWLIST = [
+  /\bplanning\s+(?:workshop|session|meeting\s+with|review\s+with)/i,
+  /\bsync\s+(?:with|between)/i,
+  /\bretro(?:fit|grade|active)/i,
+]
 
 /**
  * Detect internal/operational emails that should be filtered from customer briefs.
@@ -53,7 +61,9 @@ const INTERNAL_PATTERN = /\b(?:team meeting|1:1|one[- ]on[- ]one|standup|stand[-
  */
 export function isInternalEmail(text: string): boolean {
   if (!text) return false
-  return INTERNAL_PATTERN.test(text)
+  if (!INTERNAL_PATTERN.test(text)) return false
+  if (INTERNAL_ALLOWLIST.some(p => p.test(text))) return false
+  return true
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────

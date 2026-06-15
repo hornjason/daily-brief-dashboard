@@ -611,7 +611,8 @@ export async function buildMorningSummary(customers: Customer[]) {
     (slug: string) => loadGraph(slug, CACHE_DIR),
   )
 
-  const response: Record<string, unknown> = { signals: filteredSignals, summary, customerCount: customers.length }
+  const filteredCount = signals.length - filteredSignals.length
+  const response: Record<string, unknown> = { signals: filteredSignals, summary, customerCount: customers.length, filteredCount }
   if (synthesis) response.synthesis = synthesis
   if (redHatIntelligence) response.redHatIntelligence = redHatIntelligence
   if (todaysMeetings.length > 0) response.todaysMeetings = todaysMeetings

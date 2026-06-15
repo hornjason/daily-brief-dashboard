@@ -249,3 +249,62 @@ describe('email HTML escaping (#799)', () => {
     expect(html).toContain('&quot;')
   })
 })
+
+// ── #808: XSS test expansion — cases, pipeline, customer briefs ────────────
+
+describe('XSS escaping — cases (#808)', () => {
+  it('XSS in case fields is escaped', () => {
+    const data = {
+      dateDisplay: 'Test', meetings: [], emails: [], pipeline: [], customerBriefs: [],
+      sections: { meetings: false, emails: false, cases: true, pipeline: false, brief: false },
+      cases: [{ caseNumber: '<script>alert(1)</script>', title: '"><img onerror=alert(1)>', customer: 'Test', status: 'OPEN', age: '5d', priority: 'P1' }]
+    }
+    const html = renderBriefHtml(data)
+    expect(html).not.toContain('<script>alert')
+    expect(html).toContain('&lt;script&gt;')
+  })
+})
+
+describe('XSS escaping — pipeline (#808)', () => {
+  it('XSS in pipeline fields is escaped', () => {
+    const data = {
+      dateDisplay: 'Test', meetings: [], emails: [], cases: [], customerBriefs: [],
+      sections: { meetings: false, emails: false, cases: false, pipeline: true, brief: false },
+      pipeline: [{ dealName: '<script>alert(1)</script>', customer: 'Test', stage: 'Negotiate', value: '$100', changeType: 'new' as const }]
+    }
+    const html = renderBriefHtml(data)
+    expect(html).not.toContain('<script>alert')
+  })
+})
+
+describe('XSS escaping — customer briefs (#808)', () => {
+  it('XSS in customer brief fields is escaped', () => {
+    const data = {
+      dateDisplay: 'Test', meetings: [], emails: [], cases: [], pipeline: [],
+      sections: { meetings: false, emails: false, cases: false, pipeline: false, brief: true },
+      customerBriefs: [{ customerName: '<script>alert(1)</script>', briefText: '"><img onerror=alert(1)>' }]
+    }
+    const html = renderBriefHtml(data)
+    expect(html).not.toContain('<script>alert')
+  })
+})
+
+// ── #814: Internal email false positive escape hatch tests ─────────────────
+
+describe('isInternalEmail allowlist (#814)', () => {
+  it('"Cloud Planning Workshop with Fred Hutch" is NOT internal', () => {
+    expect(isInternalEmail('Cloud Planning Workshop with Fred Hutch')).toBe(false)
+  })
+
+  it('"Sprint Planning" IS internal', () => {
+    expect(isInternalEmail('Sprint Planning')).toBe(true)
+  })
+
+  it('"Sync with A10 Networks team" is NOT internal', () => {
+    expect(isInternalEmail('Sync with A10 Networks team')).toBe(false)
+  })
+
+  it('"Team sync" IS internal', () => {
+    expect(isInternalEmail('Team sync')).toBe(true)
+  })
+})

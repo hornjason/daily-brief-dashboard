@@ -104,6 +104,7 @@ interface MorningSummaryData {
   signals: Signal[]
   summary: string
   customerCount: number
+  filteredCount?: number
   synthesis?: string
   redHatIntelligence?: RedHatIntelligence
   todaysMeetings?: TodaysMeeting[]
@@ -268,7 +269,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
           <h3 className="text-base font-semibold text-text-primary">Morning Summary</h3>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-text-secondary">{data.summary}</span>
+          <span className="text-xs text-text-secondary">{data.summary}{data.filteredCount && data.filteredCount > 0 ? <span className="text-text-secondary/60 text-[11px]"> · {data.filteredCount} noise filtered</span> : null}</span>
           {data.synthesis && (
             <span
               className="relative group inline-flex items-center gap-1 px-2 py-0.5 bg-accent/15 text-accent text-xs rounded-full cursor-pointer hover:bg-accent/25 transition-colors"
