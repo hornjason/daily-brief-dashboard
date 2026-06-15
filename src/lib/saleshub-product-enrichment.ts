@@ -1,0 +1,252 @@
+/**
+ * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819)
+ *
+ * Enriches product documents (content kits, messaging guides, battlecards)
+ * using callGemini() (ADR-023). Extracts structured data with URL preservation.
+ *
+ * Each function accepts an optional geminiCaller parameter for testing
+ * (defaults to the real callGemini import).
+ */
+
+import { callGemini, type GeminiResult } from '../gemini-call.ts'
+import type {
+  ContentKitExtraction,
+  DocumentExtraction,
+  ProductEnrichment,
+} from '../types/saleshub-product-types.ts'
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+type GeminiCaller = (system: string, user: string, opts: any) => Promise<GeminiResult>
+
+interface ContentKitInput {
+  name: string
+  content: string
+  cloudProvider: string
+}
+
+interface DocumentInput {
+  name: string
+  content: string
+}
+
+interface EnrichmentDocumentInput {
+  name: string
+  content: string
+  type: string
+  cloudProvider?: string
+}
+
+// ── Prompts ─────────────────────────────────────────────────────────────────
+
+const CONTENT_KIT_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat sales content kits.
+Extract engagement data and return valid JSON only. No markdown, no explanation.`
+
+const CONTENT_KIT_USER_PROMPT = (docName: string, content: string) => `Extract structured engagement data from this sales content kit document: "${docName}"
+
+Return a JSON object with these fields:
+- actionableSteps: array of { step: string, url?: string } — preserve all URLs exactly
+- calculatorUrl: string or null — URL to any ROI/cost calculator
+- contactName: string or null — any named contact person
+- workshops: array of { name: string, url: string }
+- demos: array of { name: string, url: string }
+- battlecards: array of { name: string, url: string, competitor?: string }
+- internalMaterials: array of { name: string, url: string }
+- salesPlayAlignment: array of strings
+
+IMPORTANT: Preserve ALL URLs exactly as they appear in the document. Every link must be captured.
+
+Document content:
+${content}`
+
+const MESSAGING_GUIDE_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat messaging guides.
+Extract key messaging data and return valid JSON only. No markdown, no explanation.`
+
+const MESSAGING_GUIDE_USER_PROMPT = (docName: string, content: string) => `Extract structured messaging data from this guide: "${docName}"
+
+Return a JSON object with these fields:
+- summary: string — 1-2 sentence summary of the messaging guide
+- keyPoints: array of strings — key messaging points and value propositions
+- talkTracks: array of strings — recommended talk tracks for sales conversations
+- links: array of { name: string, url: string } — all referenced URLs
+
+Document content:
+${content}`
+
+const BATTLECARD_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat competitive battlecards.
+Extract competitive intelligence and return valid JSON only. No markdown, no explanation.`
+
+const BATTLECARD_USER_PROMPT = (docName: string, content: string) => `Extract competitive intelligence from this battlecard: "${docName}"
+
+Return a JSON object with these fields:
+- summary: string — 1-2 sentence summary of the competitive positioning
+- keyPoints: array of strings — competitive differentiators and angles
+- links: array of { name: string, url: string } — all referenced URLs
+
+Document content:
+${content}`
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * Enrich a content kit document with Gemini extraction.
+ * Returns a ContentKitExtraction or null on failure.
+ */
+export async function enrichContentKit(
+  doc: ContentKitInput,
+  gemini: GeminiCaller = callGemini,
+): Promise<ContentKitExtraction | null> {
+  try {
+    const result = await gemini(
+      CONTENT_KIT_SYSTEM_PROMPT,
+      CONTENT_KIT_USER_PROMPT(doc.name, doc.content),
+      {
+        callType: 'content-kit-extraction',
+        model: 'lite',
+        responseSchema: undefined,  // parse manually — Gemini structured output can be lossy on URLs
+      },
+    )
+
+    const parsed = JSON.parse(result.text)
+
+    return {
+      documentName: doc.name,
+      cloudProvider: doc.cloudProvider,
+      actionableSteps: parsed.actionableSteps ?? [],
+      calculatorUrl: parsed.calculatorUrl ?? null,
+      contactName: parsed.contactName ?? null,
+      contactEmail: parsed.contactEmail ?? undefined,
+      workshops: parsed.workshops ?? [],
+      demos: parsed.demos ?? [],
+      battlecards: parsed.battlecards ?? [],
+      internalMaterials: parsed.internalMaterials ?? [],
+      salesPlayAlignment: parsed.salesPlayAlignment ?? [],
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich content kit "${doc.name}": ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * Enrich a messaging guide document with Gemini extraction.
+ * Returns a DocumentExtraction or null on failure.
+ */
+export async function enrichMessagingGuide(
+  doc: DocumentInput,
+  gemini: GeminiCaller = callGemini,
+): Promise<DocumentExtraction | null> {
+  try {
+    const result = await gemini(
+      MESSAGING_GUIDE_SYSTEM_PROMPT,
+      MESSAGING_GUIDE_USER_PROMPT(doc.name, doc.content),
+      {
+        callType: 'content-kit-extraction',
+        model: 'lite',
+      },
+    )
+
+    const parsed = JSON.parse(result.text)
+
+    return {
+      documentName: doc.name,
+      summary: parsed.summary ?? '',
+      keyPoints: parsed.keyPoints ?? [],
+      talkTracks: parsed.talkTracks ?? [],
+      links: parsed.links ?? [],
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich messaging guide "${doc.name}": ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * Enrich a battlecard document with Gemini extraction.
+ * Returns a DocumentExtraction or null on failure.
+ */
+export async function enrichBattlecard(
+  doc: DocumentInput,
+  gemini: GeminiCaller = callGemini,
+): Promise<DocumentExtraction | null> {
+  try {
+    const result = await gemini(
+      BATTLECARD_SYSTEM_PROMPT,
+      BATTLECARD_USER_PROMPT(doc.name, doc.content),
+      {
+        callType: 'content-kit-extraction',
+        model: 'lite',
+      },
+    )
+
+    const parsed = JSON.parse(result.text)
+
+    return {
+      documentName: doc.name,
+      summary: parsed.summary ?? '',
+      keyPoints: parsed.keyPoints ?? [],
+      links: parsed.links ?? [],
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich battlecard "${doc.name}": ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * Enrich all documents for a product, routing each to the appropriate
+ * enrichment function based on document type.
+ *
+ * @param geminiFactory - Optional factory that returns a GeminiCaller per doc type (for testing)
+ */
+export async function enrichProductDocuments(
+  productSlug: string,
+  documents: EnrichmentDocumentInput[],
+  geminiFactory?: (docType: string) => GeminiCaller,
+): Promise<ProductEnrichment> {
+  const contentKits: ContentKitExtraction[] = []
+  const messagingGuides: DocumentExtraction[] = []
+  const battlecards: DocumentExtraction[] = []
+
+  const getGemini = (type: string): GeminiCaller =>
+    geminiFactory ? geminiFactory(type) : callGemini
+
+  for (const doc of documents) {
+    switch (doc.type) {
+      case 'content-kit': {
+        const result = await enrichContentKit(
+          { name: doc.name, content: doc.content, cloudProvider: doc.cloudProvider ?? 'unknown' },
+          getGemini('content-kit'),
+        )
+        if (result) contentKits.push(result)
+        break
+      }
+      case 'messaging-guide': {
+        const result = await enrichMessagingGuide(
+          { name: doc.name, content: doc.content },
+          getGemini('messaging-guide'),
+        )
+        if (result) messagingGuides.push(result)
+        break
+      }
+      case 'battlecard': {
+        const result = await enrichBattlecard(
+          { name: doc.name, content: doc.content },
+          getGemini('battlecard'),
+        )
+        if (result) battlecards.push(result)
+        break
+      }
+      default:
+        console.warn(`[saleshub-product-enrichment] Unknown document type "${doc.type}" for "${doc.name}" — skipping`)
+    }
+  }
+
+  return {
+    productSlug,
+    enrichedAt: new Date().toISOString(),
+    contentKits,
+    messagingGuides,
+    battlecards,
+  }
+}

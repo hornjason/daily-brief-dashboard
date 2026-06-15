@@ -82,6 +82,7 @@ import './src/modules/ma-module.ts'  // #218
 import './src/modules/partner-catalog-module.ts'  // #265
 import './src/modules/competitive-intel-module.ts'  // #319
 import './src/modules/saleshub-module.ts'  // #424
+import './src/modules/saleshub-products-module.ts'  // #819 — Product-first SalesHub
 import './src/modules/ecosystem-catalog-module.ts'  // #438
 import './src/modules/cloud-marketplace-module.ts'  // #306, #451
 import './src/modules/saleshub-content-module.ts'  // #448
