@@ -356,70 +356,117 @@ async function extractRedHeaderSections(
   //   - Content headings: h1.seismic-page-docListPicker-Viewer-title (Business decks, etc.)
   //   - Sidebar headings to SKIP: "Ask on Slack:", "Contact us:", "Content Details", etc.
 
-  const SIDEBAR_SKIP = ['ask on slack', 'contact us', 'content details', 'content properties', 'reviews', 'tdp and tactic']
-  const PRODUCT_TITLE_SKIP = ['red hat'] // Skip the product title itself
+  // DOM-container approach: Seismic DocCenter renders the main content area as a flat list
+  // of `articleSdk-theme-page-WidgetContainer` siblings. Each widget is either:
+  //   - seismic-page-widget-cover (product title)
+  //   - seismic-page-widget-paragraph (text content)
+  //   - seismic-page-widget-divider (red header bar — section separator)
+  //   - homepage-widgets-loaded (content: decks, resources, cards)
+  //   - seismic-page-widget-accordion (expandable: services, training)
+  //
+  // Pattern: divider widget → content widget(s) → next divider. Extract links from
+  // the content widget's DOM children, not by geometric positioning.
 
-  const allSectionHeaders = await page.evaluate(({ sidebarSkip, titleSkip }) => {
-    const headers: Array<{ text: string; y: number; isDivider: boolean }> = []
+  const widgetSections = await page.evaluate(() => {
+    const mainColumn = document.querySelector('.articleSdk-theme-page-doubleColumn-main')
+    if (!mainColumn) return []
 
-    // 1. Red dividers
-    const dividers = document.querySelectorAll('.seismic-page-divider-view')
-    for (const el of dividers) {
-      const text = (el.textContent || '').trim()
-      if (text.length > 2) {
-        const rect = el.getBoundingClientRect()
-        headers.push({ text, y: Math.round(rect.top + window.scrollY), isDivider: true })
+    const widgets = Array.from(mainColumn.children) as HTMLElement[]
+    const result: Array<{
+      title: string
+      widgetClass: string
+      links: Array<{ text: string; href: string }>
+      textContent: string
+      isAccordion: boolean
+    }> = []
+
+    let currentTitle = ''
+    let currentLinks: Array<{ text: string; href: string }> = []
+    let currentText = ''
+    let isAccordion = false
+
+    for (const widget of widgets) {
+      const cls = widget.className || ''
+      const isDivider = cls.includes('seismic-page-widget-divider')
+      const isCover = cls.includes('seismic-page-widget-cover')
+      const isParagraph = cls.includes('seismic-page-widget-paragraph')
+      const isAccordionWidget = cls.includes('seismic-page-widget-accordion')
+
+      if (isDivider) {
+        // Save previous section if it has content
+        if (currentTitle && (currentLinks.length > 0 || currentText)) {
+          result.push({ title: currentTitle, widgetClass: cls, links: currentLinks, textContent: currentText, isAccordion })
+        }
+        // Start new section from divider text
+        const dividerText = (widget.textContent || '').trim()
+        currentTitle = dividerText
+        currentLinks = []
+        currentText = ''
+        isAccordion = false
+        continue
+      }
+
+      if (isCover) continue // Skip product banner
+
+      // Content widget — extract links
+      if (!isDivider && currentTitle) {
+        // Handle accordion widgets specially
+        if (isAccordionWidget) {
+          isAccordion = true
+          const accTitle = widget.querySelector('.seismic-page-divider-view')
+          if (accTitle) {
+            const accText = (accTitle.textContent || '').trim()
+            if (accText) currentTitle = accText
+          }
+        }
+
+        // Extract all links from this widget
+        const anchors = widget.querySelectorAll('a[href]')
+        for (const a of anchors) {
+          const text = (a.textContent || '').trim().slice(0, 200)
+          const href = (a as HTMLAnchorElement).href || ''
+          if (text.length > 3 && href.startsWith('http') && !href.includes('/app#/workspace')) {
+            currentLinks.push({ text, href })
+          }
+        }
+
+        // Extract text content for paragraph widgets
+        if (isParagraph) {
+          const pText = (widget.textContent || '').trim()
+          if (pText.length > 10) currentText = pText.slice(0, 1000)
+        }
+      } else if (!currentTitle && (isParagraph || !isDivider)) {
+        // Content before the first divider — treat as intro
+        if (!currentTitle) currentTitle = '__pre-divider__'
+        const anchors = widget.querySelectorAll('a[href]')
+        for (const a of anchors) {
+          const text = (a.textContent || '').trim().slice(0, 200)
+          const href = (a as HTMLAnchorElement).href || ''
+          if (text.length > 3 && href.startsWith('http')) {
+            currentLinks.push({ text, href })
+          }
+        }
+        if (isParagraph) {
+          currentText = ((widget.textContent || '').trim()).slice(0, 1000)
+        }
       }
     }
 
-    // 2. Non-divider h1 headings that are content sections
-    const h1s = document.querySelectorAll('h1')
-    for (const el of h1s) {
-      const text = (el.textContent || '').trim()
-      if (text.length < 3) continue
-      const textLower = text.toLowerCase()
-      // Skip sidebar headings
-      if (sidebarSkip.some((s: string) => textLower.startsWith(s))) continue
-      // Skip the product title
-      if (titleSkip.some((s: string) => textLower.startsWith(s))) continue
-      // Skip if this is already a divider
-      if (el.classList.contains('seismic-page-divider-view')) continue
-      // Skip if it's inside a card or list item
-      if (el.closest('[class*="card"], [class*="Card"], li')) continue
-
-      const rect = el.getBoundingClientRect()
-      const y = Math.round(rect.top + window.scrollY)
-      // Only include if not already captured by a divider at the same y
-      if (!headers.some(h => Math.abs(h.y - y) < 20)) {
-        headers.push({ text, y, isDivider: false })
-      }
+    // Don't forget the last section
+    if (currentTitle && (currentLinks.length > 0 || currentText)) {
+      result.push({ title: currentTitle, widgetClass: '', links: currentLinks, textContent: currentText, isAccordion })
     }
 
-    // 3. h2 sub-section headings (for cloud provider sections)
-    const h2s = document.querySelectorAll('h2')
-    for (const el of h2s) {
-      const text = (el.textContent || '').trim()
-      if (text.length < 3) continue
-      const rect = el.getBoundingClientRect()
-      const y = Math.round(rect.top + window.scrollY)
-      if (!headers.some(h => Math.abs(h.y - y) < 20)) {
-        headers.push({ text, y, isDivider: false })
-      }
-    }
+    return result
+  })
 
-    // Sort by y-position
-    headers.sort((a, b) => a.y - b.y)
-    return headers
-  }, { sidebarSkip: SIDEBAR_SKIP, titleSkip: PRODUCT_TITLE_SKIP })
-
-  console.log(`[product-scraper] Found ${allSectionHeaders.length} section headers:`)
-  for (const h of allSectionHeaders) {
-    const marker = h.isDivider ? '🔴' : '  '
-    console.log(`  ${marker} [y=${h.y}] "${h.text.slice(0, 60)}"`)
+  console.log(`[product-scraper] Found ${widgetSections.length} widget sections:`)
+  for (const ws of widgetSections) {
+    console.log(`  "${ws.title.slice(0, 50)}" — ${ws.links.length} links, ${ws.textContent.length} chars text${ws.isAccordion ? ' [accordion]' : ''}`)
   }
 
-  if (allSectionHeaders.length < 2) {
-    console.warn('[product-scraper] Found <2 section headers. Extracting all page links as single section.')
+  if (widgetSections.length < 1) {
+    console.warn('[product-scraper] No widget sections found. Falling back to all page links.')
     const allItems = await extractLinkList(page.locator('main, [role="main"], #content, body'))
     if (allItems.length > 0) {
       sections['all-content'] = { title: 'All Content', type: 'links', items: allItems }
@@ -427,107 +474,34 @@ async function extractRedHeaderSections(
     return sections
   }
 
-  // Extract content between each pair of section headers using y-position ranges
-  for (let i = 0; i < allSectionHeaders.length; i++) {
-    const sh = allSectionHeaders[i]
-    const title = sh.text
-    if (!title || isGarbage(title)) continue
+  // Convert widget sections to ProductSection objects
+  for (const ws of widgetSections) {
+    const title = ws.title
+    if (!title || title === '__pre-divider__' || isGarbage(title)) continue
 
     const sectionKey = slugify(title)
-    const headerY = sh.y
-    const nextY = i < allSectionHeaders.length - 1 ? allSectionHeaders[i + 1].y : null
 
-    // Scroll to section to trigger lazy loading
-    try {
-      await page.evaluate((y) => window.scrollTo(0, y - 100), headerY)
-      await page.waitForTimeout(800)
-    } catch { /* scroll may fail */ }
-
-    // Extract all links and content elements between this header and the next
-    // Filter by x-position: only include elements in the main content area (left ~75% of page)
-    // This excludes sidebar ToC links that share the same y-position range
-    const sectionContent = await page.evaluate(
-      ({ headerY, nextY }) => {
-        const pageWidth = document.documentElement.clientWidth
-        const mainContentMaxX = pageWidth * 0.75 // Sidebar is roughly in the rightmost 25%
-
-        const els = document.querySelectorAll('a[href], [class*="card"], [class*="Card"], table, [role="button"][aria-expanded]')
-        const items: Array<{ tag: string; text: string; href: string }> = []
-        const seen = new Set<string>()
-        for (const el of els) {
-          const rect = el.getBoundingClientRect()
-          const scrollY = window.scrollY
-          const absTop = rect.top + scrollY
-          const absLeft = rect.left
-
-          // Must be in y-range AND in the main content area (not sidebar)
-          if (absTop > headerY && (nextY === null || absTop < nextY) && absLeft < mainContentMaxX) {
-            const text = (el.textContent ?? '').trim().slice(0, 300)
-            const href = (el as HTMLAnchorElement).href ?? ''
-            // Skip very short text, ToC navigation items, and workspace links
-            if (text.length < 4) continue
-            if (href.includes('/app#/workspace')) continue
-            // Skip items that look like other section headers (ToC leaks)
-            if (/^(Product news|Business decks|Technical decks|Key resources|Demos & Videos|Customer References|Top \w+ resources)$/i.test(text)) continue
-
-            const key = text.slice(0, 50) + '|' + href
-            if (!seen.has(key)) {
-              seen.add(key)
-              items.push({ tag: el.tagName.toLowerCase(), text, href })
-            }
-          }
-        }
-        return items
-      },
-      { headerY, nextY },
-    )
-
-    // Try structured extraction first
-    const contentContainer = page.locator(`text="${title.slice(0, 50)}"`).first().locator('xpath=following-sibling::*').first()
-    const type = await detectSectionType(contentContainer).catch(() => 'mixed' as const)
-
-    let items: SectionItem[] = []
-    let subsections: ProductSection[] | undefined
-
-    switch (type) {
-      case 'cards':
-        items = await extractCardCarousel(contentContainer).catch(() => [])
-        break
-      case 'table':
-        items = await extractDataTable(contentContainer).catch(() => [])
-        break
-      case 'accordion':
-        subsections = await extractAccordionSections(page, contentContainer).catch(() => [])
-        break
-      case 'links':
-        items = await extractLinkList(contentContainer).catch(() => [])
-        break
-      default:
-        items = await extractLinkList(contentContainer).catch(() => [])
-        break
+    // Deduplicate links
+    const seen = new Set<string>()
+    const items: SectionItem[] = []
+    for (const link of ws.links) {
+      if (isGarbage(link.text)) continue
+      const key = link.text.slice(0, 50) + '|' + link.href
+      if (seen.has(key)) continue
+      seen.add(key)
+      items.push({ name: link.text, url: link.href })
     }
 
-    // If structured extraction yielded nothing, fall back to sectionContent from JS evaluation
-    if (items.length === 0 && (!subsections || subsections.length === 0)) {
-      for (const sc of sectionContent) {
-        if (isGarbage(sc.text)) continue
-        // Deduplicate by text
-        if (items.some((it) => it.name === sc.text)) continue
-        items.push({
-          name: sc.text.slice(0, 200),
-          url: sc.href.startsWith('http') ? sc.href : undefined,
-        })
-      }
-    }
+    const type: ProductSection['type'] = ws.isAccordion ? 'accordion' : 'mixed'
 
-    if (items.length > 0 || (subsections && subsections.length > 0)) {
+    if (items.length > 0) {
       sections[sectionKey] = {
         title,
+        textContent: ws.textContent || undefined,
         type,
         items,
-        subsections: subsections?.length ? subsections : undefined,
       }
-      console.log(`[product-scraper] Section "${title}" (${type}): ${items.length} items, ${subsections?.length ?? 0} subsections`)
+      console.log(`[product-scraper] Section "${title}" (${type}): ${items.length} items`)
     }
   }
 
