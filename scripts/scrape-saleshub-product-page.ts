@@ -19,11 +19,18 @@ import { readFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
+import {
+  captureSeismicAuth,
+  parseDocumentsFromApiResponse,
+  type DocCenterDocument,
+} from './saleshub-content-discovery.ts'
 import type {
   ProductPage,
   ProductSection,
   SectionItem,
 } from '../src/types/saleshub-product-types.ts'
+
+const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -675,6 +682,64 @@ async function extractProductHeader(page: Page): Promise<{ name: string; descrip
   return { name: name || 'Unknown Product', description }
 }
 
+// ── Seismic API: Query documents by product name ────────────────────────────
+
+async function queryDocumentsByProduct(
+  page: Page,
+  authCtx: { auth: string; searchUrl: string; headers: Record<string, string> },
+  productName: string,
+): Promise<DocCenterDocument[]> {
+  const body = {
+    SearchTerm: '',
+    Page: { PageIndex: 0, PageSize: 100 },
+    Sort: 'Standard',
+    Filter: {
+      AppType: 'DocCenter',
+      SeismicProperties: [{ PropName: 'ProfileVersions', Values: [PROFILE_VERSION_ID] }],
+      ExcludedAppTypes: ['ControlCenter', 'NewsCenter', 'WorkSpace'],
+      ExcludeFolder: false,
+      Folder: { FolderPath: 'root', ProfileVersionId: PROFILE_VERSION_ID },
+      IncludeSubFolder: true,
+      CustomProperties: [
+        { PropName: 'Product', Values: [productName] },
+      ],
+    },
+    DynamicFilter: { operator: 'and', conditions: [] },
+    IncludeAppTypeFacet: true,
+    DisableDidYouMean: false,
+    SortOrder: 'default',
+    EnableMultiFacetSearch: true,
+    PermissionWorkflow: { WorkflowType: 'view' },
+    Options: { WithAggregation: false, WithDocument: true },
+  }
+
+  const response = await page.evaluate(async (args) => {
+    const res = await fetch(args.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: args.auth,
+        profileversionid: args.pvid,
+        teamsiteid: args.tsid ?? '1',
+        'x-seismic-route': args.route ?? '',
+        seismicclientname: args.client ?? '',
+      },
+      body: JSON.stringify(args.body),
+    })
+    return res.json()
+  }, {
+    url: authCtx.searchUrl,
+    auth: authCtx.auth,
+    pvid: PROFILE_VERSION_ID,
+    tsid: authCtx.headers.teamsiteid,
+    route: authCtx.headers['x-seismic-route'],
+    client: authCtx.headers.seismicclientname,
+    body,
+  })
+
+  return parseDocumentsFromApiResponse(response)
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -744,10 +809,77 @@ async function main(): Promise<void> {
     const header = await extractProductHeader(page)
     console.log(`[product-scraper] Product: "${header.name}"`)
 
-    // Extract red header sections
+    // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
     const sections = await extractRedHeaderSections(page)
-    console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections`)
+    console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
+
+    // Query Seismic API for document list by product name
+    console.log('[product-scraper] Capturing Seismic auth for API queries...')
+    const authCtx = await captureSeismicAuth(page)
+    if (authCtx) {
+      console.log('[product-scraper] Querying Seismic API for product documents...')
+      try {
+        const apiDocs = await queryDocumentsByProduct(page, authCtx, header.name)
+        console.log(`[product-scraper] API returned ${apiDocs.length} documents for "${header.name}"`)
+
+        // Group documents by content type → create/enhance sections
+        const docsByType = new Map<string, DocCenterDocument[]>()
+        for (const doc of apiDocs) {
+          const type = doc.contentType || 'Other'
+          if (!docsByType.has(type)) docsByType.set(type, [])
+          docsByType.get(type)!.push(doc)
+        }
+
+        // Map content types to section names
+        const typeToSection: Record<string, string> = {
+          'Business presentation': 'Business decks',
+          'Cheatsheet': 'Resources',
+          'Competitive review': 'Competitive',
+          'Battlecard': 'Competitive',
+          'Reference architecture': 'Technical resources',
+          'Campaign guide': 'Campaign resources',
+          'Email': 'Email templates',
+          'Template': 'Templates',
+          'Datasheet': 'Resources',
+          'Video': 'Demos & Videos',
+        }
+
+        for (const [contentType, docs] of docsByType) {
+          const sectionName = typeToSection[contentType] || contentType
+          const sectionKey = slugify(sectionName)
+
+          const items: SectionItem[] = docs.map(doc => ({
+            name: doc.name,
+            url: doc.downloadUrl || undefined,
+            itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
+            description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
+          }))
+
+          if (sections[sectionKey]) {
+            // Merge with existing section — add API docs to existing items
+            const existingNames = new Set(sections[sectionKey].items.map(i => i.name.slice(0, 50)))
+            for (const item of items) {
+              if (!existingNames.has(item.name.slice(0, 50))) {
+                sections[sectionKey].items.push(item)
+              }
+            }
+          } else {
+            sections[sectionKey] = {
+              title: sectionName,
+              type: 'cards',
+              items,
+            }
+          }
+        }
+
+        console.log(`[product-scraper] After API merge: ${Object.keys(sections).length} total sections`)
+      } catch (e: any) {
+        console.warn(`[product-scraper] Seismic API query failed — DOM-only results: ${e.message}`)
+      }
+    } else {
+      console.warn('[product-scraper] Could not capture Seismic auth — using DOM-only results')
+    }
 
     // Extract sidebar
     console.log('[product-scraper] Extracting sidebar...')
