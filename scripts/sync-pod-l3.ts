@@ -340,12 +340,10 @@ export async function syncAllPods(): Promise<SyncRunResult> {
         continue
       }
 
-      // Pod readiness: must have a Bookings GSheet in Drive
+      // #818: Bookings check is informational only — CCSP and SF pipeline are independent
       const bookingsPresent = await checkBookingsGSheetExists(region.podBookingsFolderId, podKey, pod.label)
       if (!bookingsPresent) {
-        console.log(`[sync-pod-l3] ${podKey}: no Bookings GSheet found — skipping`)
-        results.push({ podKey, status: 'skipped', reason: 'no Bookings GSheet' })
-        continue
+        console.warn(`[sync-pod-l3] ${podKey}: no Bookings GSheet — subscription data via master ingest`)
       }
 
       try {
