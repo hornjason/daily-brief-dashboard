@@ -444,8 +444,13 @@ async function extractRedHeaderSections(
     } catch { /* scroll may fail */ }
 
     // Extract all links and content elements between this header and the next
+    // Filter by x-position: only include elements in the main content area (left ~75% of page)
+    // This excludes sidebar ToC links that share the same y-position range
     const sectionContent = await page.evaluate(
       ({ headerY, nextY }) => {
+        const pageWidth = document.documentElement.clientWidth
+        const mainContentMaxX = pageWidth * 0.75 // Sidebar is roughly in the rightmost 25%
+
         const els = document.querySelectorAll('a[href], [class*="card"], [class*="Card"], table, [role="button"][aria-expanded]')
         const items: Array<{ tag: string; text: string; href: string }> = []
         const seen = new Set<string>()
@@ -453,11 +458,20 @@ async function extractRedHeaderSections(
           const rect = el.getBoundingClientRect()
           const scrollY = window.scrollY
           const absTop = rect.top + scrollY
-          if (absTop > headerY && (nextY === null || absTop < nextY)) {
+          const absLeft = rect.left
+
+          // Must be in y-range AND in the main content area (not sidebar)
+          if (absTop > headerY && (nextY === null || absTop < nextY) && absLeft < mainContentMaxX) {
             const text = (el.textContent ?? '').trim().slice(0, 300)
             const href = (el as HTMLAnchorElement).href ?? ''
+            // Skip very short text, ToC navigation items, and workspace links
+            if (text.length < 4) continue
+            if (href.includes('/app#/workspace')) continue
+            // Skip items that look like other section headers (ToC leaks)
+            if (/^(Product news|Business decks|Technical decks|Key resources|Demos & Videos|Customer References|Top \w+ resources)$/i.test(text)) continue
+
             const key = text.slice(0, 50) + '|' + href
-            if (text && !seen.has(key)) {
+            if (!seen.has(key)) {
               seen.add(key)
               items.push({ tag: el.tagName.toLowerCase(), text, href })
             }
@@ -624,15 +638,24 @@ async function extractProductHeader(page: Page): Promise<{ name: string; descrip
     }
   }
 
-  // Get description — first substantial paragraph on the page (before first section header)
+  // Get description — first substantial text block before the first red divider
   let description = ''
   try {
     description = await page.evaluate((productName) => {
-      const paragraphs = document.querySelectorAll('p, [class*="text-block"], [class*="TextBlock"]')
-      for (const p of paragraphs) {
-        const text = (p.textContent || '').trim()
-        // Find first substantial paragraph that's not the title itself
-        if (text.length > 50 && !text.startsWith(productName) && !text.includes('Skip to Main')) {
+      // Find the first red divider position
+      const firstDivider = document.querySelector('.seismic-page-divider-view')
+      const dividerY = firstDivider ? firstDivider.getBoundingClientRect().top + window.scrollY : Infinity
+
+      // Look for paragraph or text-block elements BEFORE the first divider
+      const candidates = document.querySelectorAll('p, [class*="text-block"], [class*="TextBlock"], [class*="seismic-page-text"]')
+      for (const el of candidates) {
+        const rect = el.getBoundingClientRect()
+        const y = rect.top + window.scrollY
+        if (y >= dividerY) break // Past the first divider
+        const text = (el.textContent || '').trim()
+        // Must be substantial, not the title, not navigation
+        if (text.length > 50 && !text.startsWith(productName) && !text.includes('Skip to Main') &&
+            !text.includes('All Sales Content') && !text.includes('Page RHSH')) {
           return text.slice(0, 500)
         }
       }
