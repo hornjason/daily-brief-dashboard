@@ -241,6 +241,30 @@ async function doKeepalive(): Promise<void> {
       throw new Error(`SF session expired — redirected to ${sfFinal}`)
     }
 
+    // SalesHub keepalive (#819) — verify EmployeeIDP SSO session is alive
+    console.log('[sync-daemon] keepalive: navigating SalesHub…')
+    try {
+      await page.goto('https://saleshub.redhat.com/apps/home', { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.waitForTimeout(2_000)
+      const saleshubUrl = page.url()
+      if (saleshubUrl.includes('auth/realms') || saleshubUrl.includes('sso') || saleshubUrl.includes('login')) {
+        console.warn(`[sync-daemon] keepalive: SalesHub SSO expired — redirected to ${saleshubUrl}`)
+      } else {
+        console.log('[sync-daemon] keepalive: SalesHub session alive')
+      }
+    } catch (e: any) {
+      console.warn(`[sync-daemon] keepalive: SalesHub navigation failed: ${e?.message} — non-fatal, continuing`)
+    }
+
+    // Re-export session-state.json with fresh cookies (#819)
+    try {
+      const freshState = await ctx.storageState()
+      writeFileSync(`${PROFILE_DIR}/session-state.json`, JSON.stringify(freshState), { mode: 0o600 })
+      console.log(`[sync-daemon] keepalive: session-state.json re-exported (${freshState.cookies.length} cookies)`)
+    } catch (e: any) {
+      console.warn(`[sync-daemon] keepalive: session state export failed: ${e?.message} — non-fatal`)
+    }
+
     // BKL-SYNC-CHROME-LEAK Bonus: Memory monitoring — trigger proactive recycle on high RSS
     const rss = process.memoryUsage().rss
     const rssMB = Math.round(rss / 1024 / 1024)
