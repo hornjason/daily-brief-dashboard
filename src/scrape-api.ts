@@ -1320,6 +1320,94 @@ export function registerScrapeRoutes(app: Hono): void {
       return c.json({ error: `Failed to read master sheet: ${sanitizeErr(e)}` }, 500)
     }
 
+    // ── AC-12/13: Create per-POD subscription sheets in shared folder ──────
+    // Group raw rows by ACCOUNT_POD, then write each group as a separate sheet.
+    const { headers, dataRows } = masterRaw
+    const podColIdx = headers.indexOf('ACCOUNT_POD')
+    const podSheetsCreated: string[] = []
+    const podSheetsUpdated: string[] = []
+
+    if (podColIdx >= 0) {
+      // Build pod → label mapping from settings
+      let allPodLabels: Record<string, string> = {}
+      try {
+        const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        const settings = normalizeSettings(rawSettings)
+        for (const region of settings.regions) {
+          for (const [key, pod] of Object.entries(region.pods)) {
+            allPodLabels[key] = pod.label
+          }
+        }
+      } catch { /* non-fatal */ }
+
+      // Group raw rows by ACCOUNT_POD
+      const podGroups = new Map<string, string[][]>()
+      for (const row of dataRows) {
+        const podVal = (row[podColIdx] ?? '').trim()
+        if (!podVal) continue
+        if (!podGroups.has(podVal)) podGroups.set(podVal, [])
+        podGroups.get(podVal)!.push(row)
+      }
+
+      console.log(`[master-ingest] found ${podGroups.size} pods in master sheet: ${[...podGroups.keys()].join(', ')}`)
+
+      const { google: googleapis } = await import('googleapis')
+      const { makeAuth: mkAuth, GOOGLE_UNIFIED_TOKEN_PATH: tokenPath } = await import('./google.ts')
+      const authForSheets = mkAuth(tokenPath)
+      const sheetsApi = googleapis.sheets({ version: 'v4', auth: authForSheets })
+      const driveApi = googleapis.drive({ version: 'v3', auth: authForSheets })
+
+      for (const [podVal, rows] of podGroups) {
+        // Map ACCOUNT_POD value to settings.json pod key
+        // ACCOUNT_POD can be "CENTRAL_ENT_HIGH_PLAINS_POD" or "WEST_COMM_CORP_NORTHWEST"
+        const podKeyClean = podVal.replace(/_POD$/, '')
+        const podLabel = allPodLabels[podKeyClean] || allPodLabels[podVal]
+        if (!podLabel) {
+          console.log(`[master-ingest] pod "${podVal}" not in settings.json — skipping sheet creation`)
+          continue
+        }
+
+        const sheetName = `${podLabel} POD - Subscriptions`
+        const existingSheet = podSheets.find(s => s.name === sheetName)
+
+        try {
+          let sheetId: string
+          if (existingSheet) {
+            sheetId = existingSheet.sheetId
+            podSheetsUpdated.push(sheetName)
+          } else {
+            const created = await driveApi.files.create({
+              requestBody: {
+                name: sheetName,
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+                parents: [podBookingsFolderId],
+              },
+              fields: 'id',
+            })
+            sheetId = created.data.id!
+            podSheetsCreated.push(sheetName)
+            console.log(`[master-ingest] created POD sheet: "${sheetName}" (${sheetId})`)
+          }
+
+          // Write headers + rows
+          const allRows = [headers, ...rows]
+          await sheetsApi.spreadsheets.values.update({
+            spreadsheetId: sheetId,
+            range: 'Sheet1!A1',
+            valueInputOption: 'RAW',
+            requestBody: { values: allRows },
+          })
+          console.log(`[master-ingest] wrote ${rows.length} rows to "${sheetName}"`)
+
+          await new Promise(r => setTimeout(r, 1_500))
+        } catch (e: any) {
+          console.error(`[master-ingest] POD sheet write failed for "${sheetName}": ${sanitizeErr(e)}`)
+        }
+      }
+    } else {
+      console.warn(`[master-ingest] ACCOUNT_POD column not found in master sheet — skipping per-POD sheet creation`)
+    }
+
     const overwritten: string[] = []
     const created: string[] = []
     const skipped: string[] = []
@@ -1441,6 +1529,8 @@ export function registerScrapeRoutes(app: Hono): void {
       overwritten,
       created,
       skipped,
+      podSheetsCreated,
+      podSheetsUpdated,
     })
   })
 
