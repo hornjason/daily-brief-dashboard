@@ -75,7 +75,6 @@
         "CENTRAL_ENT_HIGH_PLAINS": {
           "sfReportId": "00OPe00000odJCVMA2",
           "label": "High Plains",
-          "hidden": true,
           "prefixes": ["High_Plains"]
         }
       }
