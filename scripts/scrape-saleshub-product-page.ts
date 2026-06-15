@@ -776,8 +776,17 @@ async function main(): Promise<void> {
   try {
     const page = await context.newPage()
 
-    // Navigate to product page
-    console.log('[product-scraper] Navigating to product page...')
+    // Step 1: Capture Seismic auth FIRST (navigates to DocCenter main page)
+    console.log('[product-scraper] Step 1: Capturing Seismic auth token...')
+    const authCtx = await captureSeismicAuth(page)
+    if (authCtx) {
+      console.log(`[product-scraper] Auth captured (${authCtx.auth.length} chars)`)
+    } else {
+      console.warn('[product-scraper] Auth capture failed — will use DOM-only extraction')
+    }
+
+    // Step 2: Navigate to product page
+    console.log('[product-scraper] Step 2: Navigating to product page...')
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
 
     // Wait for page to render -- Seismic SPA needs time to hydrate
@@ -814,11 +823,9 @@ async function main(): Promise<void> {
     const sections = await extractRedHeaderSections(page)
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
-    // Query Seismic API for document list by product name
-    console.log('[product-scraper] Capturing Seismic auth for API queries...')
-    const authCtx = await captureSeismicAuth(page)
+    // Query Seismic API for document list by product name (using auth captured in Step 1)
     if (authCtx) {
-      console.log('[product-scraper] Querying Seismic API for product documents...')
+      console.log('[product-scraper] Step 4: Querying Seismic API for product documents...')
       try {
         const apiDocs = await queryDocumentsByProduct(page, authCtx, header.name)
         console.log(`[product-scraper] API returned ${apiDocs.length} documents for "${header.name}"`)
