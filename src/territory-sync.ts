@@ -563,6 +563,10 @@ async function syncCommercialRegion(
     }
   }
 
+  // AC-3 (#720): commercial validation summary
+  const aesWithTerr = aes.filter(a => a.tableauTerritories?.length)
+  console.log(`[territory-sync] commercial validation: ${aesWithTerr.length} AEs processed, ${toAdd.length} new customers, ${toRemove.length} flagged, ${unchanged.length} unchanged`)
+
   return { toAdd, toRemove, unchanged, teamData: teamDataByTerritory }
 }
 
@@ -655,11 +659,30 @@ async function syncEnterpriseRegion(
   }
 
   // Extract customer accounts per AE and diff against current customers (#731)
-  for (const [aeName, _terrCodes] of Object.entries(aeTerrMap)) {
+  const validationWarnings: string[] = []
+  let aeParsedCount = 0
+  let aeMatchedCount = 0
+  for (const [aeName, terrCodes] of Object.entries(aeTerrMap)) {
+    aeParsedCount++
+    // AC-2 (#720): validate territory code format
+    for (const tc of terrCodes as string[]) {
+      if (!/^Terr\d{2,}$/i.test(tc)) {
+        const warning = `unexpected territory code format "${tc}" for AE "${aeName}"`
+        validationWarnings.push(warning)
+        console.warn(`[territory-sync] WARNING: ${warning}`)
+      }
+    }
     const accounts = extractEnterpriseAeAccounts(enterpriseRows, aeName)
     // Find which AE config this maps to (by name match)
     const matchedAe = aes.find(a => a.name.toLowerCase().trim() === aeName.toLowerCase().trim())
-    if (!matchedAe) continue
+    if (!matchedAe) {
+      // AC-1 (#720): warn on unmatched AE names
+      const warning = `AE "${aeName}" in territory sheet does not match any configured AE`
+      validationWarnings.push(warning)
+      console.warn(`[territory-sync] WARNING: ${warning}`)
+      continue
+    }
+    aeMatchedCount++
 
     const sheetAccountsLower = new Set(accounts.map(a => a.toLowerCase()))
     const aeCustomers = customers.filter(c => c.ae === matchedAe.name)
@@ -680,6 +703,12 @@ async function syncEnterpriseRegion(
         unchanged.push(cust.name)
       }
     }
+  }
+
+  // AC-3 (#720): validation summary
+  console.log(`[territory-sync] enterprise validation: ${aeParsedCount} AEs parsed, ${aeMatchedCount} matched configured, ${aeParsedCount - aeMatchedCount} unmatched, ${validationWarnings.length} warnings`)
+  if (validationWarnings.length > 0) {
+    console.warn(`[territory-sync] validation warnings:\n  ${validationWarnings.join('\n  ')}`)
   }
 
   return { toAdd, toRemove, unchanged, teamData: Object.keys(teamDataByTerritory).length > 0 ? teamDataByTerritory : undefined }
