@@ -1,0 +1,118 @@
+{
+  "name": "Red Hat OpenShift Virtualization",
+  "slug": "red-hat-openshift-virtualization",
+  "description": "Red Hat OpenShift Virtualization, included with Red Hat OpenShift, reduces operational overhead by giving customers one platform for virtual machines (VMs) and containers.",
+  "pageUrl": "saleshub.redhat.com/apps/doccenter/...",
+  "scrapedAt": "2026-06-15T00:00:00.000Z",
+  "tdpLinks": [
+    { "name": "Virtualization" },
+    { "name": "VM migration & modernization" }
+  ],
+  "contacts": [
+    { "name": "hybridplatforms-marketing@redhat.com", "role": "marketing" }
+  ],
+  "slackChannels": ["#forum-openshift-virtualization"],
+  "sections": {
+    "Product news": {
+      "title": "Product news",
+      "type": "text",
+      "textContent": "OpenShift Virtualization Engine (OVE) — Press Release, Blog post, Webpage, Datasheet, Overview",
+      "items": [
+        { "name": "Press Release", "url": "https://www.redhat.com/en/about/press-releases/...", "itemType": "link" },
+        { "name": "Blog post", "url": "https://www.redhat.com/en/blog/...", "itemType": "link" },
+        { "name": "Webpage", "url": "https://www.redhat.com/en/technologies/...", "itemType": "link" },
+        { "name": "Datasheet", "url": "https://www.redhat.com/en/resources/...", "itemType": "link" }
+      ]
+    },
+    "Business decks": {
+      "title": "Business decks",
+      "type": "cards",
+      "items": [
+        { "name": "Red Hat OpenShift Virtualization - Core Deck", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "deck" }
+      ]
+    },
+    "Technical decks": {
+      "title": "Technical decks",
+      "type": "cards",
+      "items": [
+        { "name": "OpenShift Virtualization - Technical", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "deck" }
+      ]
+    },
+    "Key resources": {
+      "title": "Key resources",
+      "type": "cards",
+      "items": [
+        { "name": "15 reasons to adopt Red Hat OpenShift Virtualization", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" },
+        { "name": "Get started with Red Hat OpenShift Virtualization", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" },
+        { "name": "OpenShift Virtualization Total Cost of Ownership", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" },
+        { "name": "Simplify your VM migration to Red Hat OpenShift", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" }
+      ]
+    },
+    "Demos & Videos": {
+      "title": "Demos & Videos",
+      "type": "cards",
+      "items": [
+        { "name": "Ask an OpenShift Admin (E89) | Dive into OpenShift Virtualization", "url": "https://www.youtube.com/...", "itemType": "video" },
+        { "name": "Interactive walkthrough: Migrate virtual machines", "url": "https://www.redhat.com/en/interactive-labs/...", "itemType": "lab" },
+        { "name": "Migrating Virtual Machines to Red Hat OpenShift", "url": "https://www.youtube.com/...", "itemType": "video" },
+        { "name": "Red Hat OpenShift Virtualization Demo", "url": "https://catalog.demo.redhat.com/...", "itemType": "demo" }
+      ]
+    },
+    "Customer References": {
+      "title": "Customer References",
+      "type": "mixed",
+      "items": [
+        { "name": "Virtualization Win Wires Master Index [INTERNAL]", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "case-study", "audience": "internal" },
+        { "name": "Reist uses containers and VMs together", "url": "https://www.redhat.com/en/success-stories/...", "itemType": "case-study", "audience": "external" },
+        { "name": "Case Study Universidad Finis Terrae", "url": "https://www.redhat.com/en/success-stories/...", "itemType": "case-study", "audience": "external" }
+      ]
+    },
+    "OpenShift Virtualization on OpenShift cloud services": {
+      "title": "OpenShift Virtualization on OpenShift cloud services",
+      "type": "mixed",
+      "subsections": [
+        {
+          "title": "OpenShift Virtualization on Azure Red Hat OpenShift (ARO)",
+          "type": "cards",
+          "items": [
+            { "name": "15 reasons to modernize your virtual machines to ARO", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" },
+            { "name": "OpenShift Virtualization on Azure Red Hat OpenShift", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "deck" }
+          ]
+        },
+        {
+          "title": "OpenShift Virtualization on Red Hat OpenShift Service on AWS (ROSA)",
+          "type": "cards",
+          "items": [
+            { "name": "OpenShift Virtualization on ROSA Workshop Content Kit", "url": "https://docs.google.com/document/...", "itemType": "workshop" },
+            { "name": "OpenShift Virtualization on Red Hat OpenShift Service on AWS", "url": "https://docs.google.com/document/...", "itemType": "resource" },
+            { "name": "Messaging Guide: OpenShift Virtualization on ROSA", "url": "https://docs.google.com/document/...", "itemType": "messaging-guide" }
+          ]
+        },
+        {
+          "title": "OpenShift Virtualization on Google Cloud",
+          "type": "cards",
+          "items": [
+            { "name": "Migrate VMs to Red Hat OpenShift Virtualization on Google Cloud", "url": "https://www.redhat.com/en/resources/...", "itemType": "resource" },
+            { "name": "OpenShift Virtualization on Google Cloud Customer Overview", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "deck" },
+            { "name": "INTERNAL FAQ: OpenShift Virt. on Google Cloud", "url": "https://docs.google.com/document/...", "itemType": "resource", "audience": "internal" }
+          ]
+        }
+      ],
+      "items": []
+    },
+    "Top services resources": {
+      "title": "Top services resources",
+      "type": "table",
+      "items": [
+        { "name": "OCP Pilot | Client Pitch Deck", "url": "https://saleshub.redhat.com/Link/Content/...", "itemType": "deck" }
+      ]
+    },
+    "Top training resources": {
+      "title": "Top training resources",
+      "type": "table",
+      "items": [
+        { "name": "Resource slides for Red Hat Enterprise Linux", "url": "https://www.redhat.com/en/services/training/...", "itemType": "training" }
+      ]
+    }
+  }
+}
