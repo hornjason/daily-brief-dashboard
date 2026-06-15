@@ -351,7 +351,10 @@ async function extractRedHeaderSections(
   // Try increasingly broad selectors until we find red headers.
 
   const headerCandidateSelectors = [
-    // Seismic-specific patterns (most likely)
+    // Known Seismic DocCenter section dividers (discovered from real DOM 2026-06-15)
+    '.seismic-page-divider-view',
+    '[class*="seismic-page-divider"]',
+    // Seismic-specific patterns (fallback)
     '[class*="section-header"]',
     '[class*="SectionHeader"]',
     '[class*="category-header"]',
@@ -362,7 +365,6 @@ async function extractRedHeaderSections(
     'h2[style*="background"]',
     'h3[style*="background"]',
     'div[class*="header"][style*="background"]',
-    // Broader: any element with a red-ish background (evaluated via JS below)
   ]
 
   // First pass: try class-based selectors
@@ -419,9 +421,15 @@ async function extractRedHeaderSections(
 
     // If we found red elements, use their className to build a selector
     if (redHeaderInfo.length >= 2) {
+      // Filter to divider-like elements: h1-h6 or elements with "divider" in class
+      const dividers = redHeaderInfo.filter(h =>
+        /^h[1-6]$/.test(h.tag) || h.className.includes('divider') || h.className.includes('Divider')
+      )
+      const candidates = dividers.length >= 2 ? dividers : redHeaderInfo
+
       // Group by className to find the most common pattern
       const classGroups = new Map<string, number>()
-      for (const h of redHeaderInfo) {
+      for (const h of candidates) {
         const key = h.className.split(/\s+/)[0] || h.tag
         classGroups.set(key, (classGroups.get(key) ?? 0) + 1)
       }
