@@ -220,6 +220,68 @@ For each offering, program, and incentive, include a "sourceFileId" field contai
 
 Only include clouds that have actual content. If a cloud has no offerings/programs/incentives/countries/partnerships, omit it entirely.`
 
+// ── #809: sourceFileId validation ─────────────────────────────────────────────
+
+/**
+ * Validate that a Drive file ID has the expected format.
+ * Google Drive file IDs are alphanumeric with hyphens and underscores,
+ * typically 20-60 chars. This prevents rendering malicious/hallucinated IDs as links.
+ */
+export function isValidDriveFileId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(id) && id.length >= 10 && id.length <= 100
+}
+
+// ── #802: Deterministic sourceFileId fallback ────────────────────────────────
+
+/**
+ * Build a map of fileId → text content from the slide text that uses
+ * === SOURCE FILE: {fileId} === boundary markers.
+ */
+export function buildFileIdTextMap(slideText: string): Map<string, string> {
+  const map = new Map<string, string>()
+  const sections = slideText.split(/(?==== SOURCE FILE: )/)
+  for (const section of sections) {
+    const match = section.match(/^=== SOURCE FILE: ([a-zA-Z0-9_-]+) ===\n?([\s\S]*)/)
+    if (match) {
+      map.set(match[1], match[2])
+    }
+  }
+  return map
+}
+
+/**
+ * After Gemini extraction, walk through items and assign sourceFileId
+ * for any item that is missing it, by searching the file boundary sections
+ * for the item's name.
+ */
+export function inferMissingSourceFileIds(clouds: CloudSection[], slideText: string): void {
+  const fileMap = buildFileIdTextMap(slideText)
+
+  const processItems = (items: Array<{ name: string; sourceFileId?: string }>) => {
+    for (const item of items) {
+      // #809: Strip invalid sourceFileIds
+      if (item.sourceFileId && !isValidDriveFileId(item.sourceFileId)) {
+        item.sourceFileId = undefined
+      }
+      // #802: Infer missing sourceFileId from file boundary markers
+      if (!item.sourceFileId && fileMap.size > 0) {
+        for (const [fileId, content] of fileMap) {
+          if (content.toLowerCase().includes(item.name.toLowerCase())) {
+            item.sourceFileId = fileId
+            break
+          }
+        }
+      }
+    }
+  }
+
+  for (const cloud of clouds) {
+    processItems(cloud.offerings)
+    processItems(cloud.programs)
+    processItems(cloud.incentives)
+  }
+}
+
 // ── Provider section splitting ────────────────────────────────────────────────
 
 const PROVIDER_LABELS: { key: string; patterns: RegExp[] }[] = [
@@ -742,6 +804,9 @@ async function extractCloudData(slideText: string, htmlBody: string, newsletterD
   // Merge with baseline programs (deterministic floor)
   const withBaseline = mergeWithBaseline(merged)
 
+  // #802: Assign sourceFileId for items Gemini missed, using file boundary markers
+  inferMissingSourceFileIds(withBaseline, slideText)
+
   // Validate extraction quality via ADR-024 quality gate
   const extractionJson = JSON.stringify({ clouds: withBaseline })
   const gateResult = await validateAndRetry(
@@ -1196,9 +1261,9 @@ FeatureModuleRegistry.register({
           hasCloudIntel: hasCloudIntel,
           acvPlus: cloudACV,
           cloudPartner: ccspPartner,
-          offerings: cloud.offerings.map(o => ({ name: o.name, availability: o.availability, pricing: o.pricing, url: o.url })),
-          programs: activePrograms.map(p => ({ name: p.name, eligibility: p.eligibility, url: p.url, description: p.description, validThrough: p.validThrough })),
-          incentives: activeIncentives.map(i => ({ name: i.name, value: i.value, url: i.url, description: i.description, validThrough: i.validThrough })),
+          offerings: cloud.offerings.map(o => ({ name: o.name, availability: o.availability, pricing: o.pricing, url: o.url, sourceFileId: o.sourceFileId })),
+          programs: activePrograms.map(p => ({ name: p.name, eligibility: p.eligibility, url: p.url, description: p.description, validThrough: p.validThrough, sourceFileId: p.sourceFileId })),
+          incentives: activeIncentives.map(i => ({ name: i.name, value: i.value, url: i.url, description: i.description, validThrough: i.validThrough, sourceFileId: i.sourceFileId })),
           newCountries: cloud.newCountries,
           partnerships: cloud.partnerships,
           sourceNoteId: `cloud-marketplace-${cloud.provider.toLowerCase()}-${marketplaceCache.newsletterDate}`,
