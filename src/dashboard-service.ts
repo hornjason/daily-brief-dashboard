@@ -26,6 +26,7 @@ import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts, enterpriseTerritoryKey, podPrefixFromTabTitle, normalizeTerritoryCustomerName } from './territory-sync.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { buildTodaysMeetings } from './lib/todays-meetings.ts'
+import { DISPLACEMENT_TARGETS } from './lib/motion-config.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
@@ -546,7 +547,7 @@ export async function buildMorningSummary(customers: Customer[]) {
     'Competitive signals detected in latest brief',
   ]
   // #805: Named displacement targets always pass the competitor filter
-  const DISPLACEMENT_TARGETS = ['vmware', 'terraform', 'puppet', 'chef', 'saltstack', 'docker', 'containerd', 'splunk', 'elastic', 'grafana', 'prometheus', 'pulumi', 'crossplane', 'rancher']
+  // DISPLACEMENT_TARGETS imported from motion-config.ts
   const COMPETITOR_ACTION_WORDS = [
     'evaluating', 'migration', 'migrating', 'displacement', 'replacing', 'switching',
     'versus', 'vs', 'compared', 'alternative', 'competing', 'threat', 'risk',

@@ -17,3 +17,9 @@ export const CONTEXT_VERB_MAP: Record<string, string> = {
   migrating_from: 'migrating from',
   using: 'uses',
 }
+
+/** Known displacement targets — competitor signals mentioning these bypass action-word filtering */
+export const DISPLACEMENT_TARGETS = [
+  'vmware', 'terraform', 'puppet', 'chef', 'saltstack', 'docker', 'containerd',
+  'splunk', 'elastic', 'grafana', 'prometheus', 'pulumi', 'crossplane', 'rancher',
+]
