@@ -346,157 +346,109 @@ async function extractRedHeaderSections(
 ): Promise<Record<string, ProductSection>> {
   const sections: Record<string, ProductSection> = {}
 
-  // Strategy: find all header-like elements, then filter by background color.
-  // Seismic DocCenter uses styled divs/headers for section breaks.
-  // Try increasingly broad selectors until we find red headers.
+  // Strategy: Combine red divider bars (.seismic-page-divider-view) with
+  // non-divider h1 content headings (Business decks, Key resources, etc.)
+  // to build a complete section map. Sort by y-position and extract content
+  // between each pair.
+  //
+  // Discovered from real DOM (2026-06-15):
+  //   - Red dividers: h1.seismic-page-divider-view (Product news, Customer References, etc.)
+  //   - Content headings: h1.seismic-page-docListPicker-Viewer-title (Business decks, etc.)
+  //   - Sidebar headings to SKIP: "Ask on Slack:", "Contact us:", "Content Details", etc.
 
-  const headerCandidateSelectors = [
-    // Known Seismic DocCenter section dividers (discovered from real DOM 2026-06-15)
-    '.seismic-page-divider-view',
-    '[class*="seismic-page-divider"]',
-    // Seismic-specific patterns (fallback)
-    '[class*="section-header"]',
-    '[class*="SectionHeader"]',
-    '[class*="category-header"]',
-    '[class*="CategoryHeader"]',
-    '[class*="doc-header"]',
-    '[class*="DocHeader"]',
-    // Generic styled header patterns
-    'h2[style*="background"]',
-    'h3[style*="background"]',
-    'div[class*="header"][style*="background"]',
-  ]
+  const SIDEBAR_SKIP = ['ask on slack', 'contact us', 'content details', 'content properties', 'reviews', 'tdp and tactic']
+  const PRODUCT_TITLE_SKIP = ['red hat'] // Skip the product title itself
 
-  // First pass: try class-based selectors
-  let headerLocator: Locator | null = null
-  let headerCount = 0
+  const allSectionHeaders = await page.evaluate(({ sidebarSkip, titleSkip }) => {
+    const headers: Array<{ text: string; y: number; isDivider: boolean }> = []
 
-  for (const selector of headerCandidateSelectors) {
-    const candidate = page.locator(selector)
-    const count = await candidate.count()
-    if (count >= 2) {
-      headerLocator = candidate
-      headerCount = count
-      console.log(`[product-scraper] Found ${count} headers with selector: ${selector}`)
-      break
+    // 1. Red dividers
+    const dividers = document.querySelectorAll('.seismic-page-divider-view')
+    for (const el of dividers) {
+      const text = (el.textContent || '').trim()
+      if (text.length > 2) {
+        const rect = el.getBoundingClientRect()
+        headers.push({ text, y: Math.round(rect.top + window.scrollY), isDivider: true })
+      }
     }
+
+    // 2. Non-divider h1 headings that are content sections
+    const h1s = document.querySelectorAll('h1')
+    for (const el of h1s) {
+      const text = (el.textContent || '').trim()
+      if (text.length < 3) continue
+      const textLower = text.toLowerCase()
+      // Skip sidebar headings
+      if (sidebarSkip.some((s: string) => textLower.startsWith(s))) continue
+      // Skip the product title
+      if (titleSkip.some((s: string) => textLower.startsWith(s))) continue
+      // Skip if this is already a divider
+      if (el.classList.contains('seismic-page-divider-view')) continue
+      // Skip if it's inside a card or list item
+      if (el.closest('[class*="card"], [class*="Card"], li')) continue
+
+      const rect = el.getBoundingClientRect()
+      const y = Math.round(rect.top + window.scrollY)
+      // Only include if not already captured by a divider at the same y
+      if (!headers.some(h => Math.abs(h.y - y) < 20)) {
+        headers.push({ text, y, isDivider: false })
+      }
+    }
+
+    // 3. h2 sub-section headings (for cloud provider sections)
+    const h2s = document.querySelectorAll('h2')
+    for (const el of h2s) {
+      const text = (el.textContent || '').trim()
+      if (text.length < 3) continue
+      const rect = el.getBoundingClientRect()
+      const y = Math.round(rect.top + window.scrollY)
+      if (!headers.some(h => Math.abs(h.y - y) < 20)) {
+        headers.push({ text, y, isDivider: false })
+      }
+    }
+
+    // Sort by y-position
+    headers.sort((a, b) => a.y - b.y)
+    return headers
+  }, { sidebarSkip: SIDEBAR_SKIP, titleSkip: PRODUCT_TITLE_SKIP })
+
+  console.log(`[product-scraper] Found ${allSectionHeaders.length} section headers:`)
+  for (const h of allSectionHeaders) {
+    const marker = h.isDivider ? '🔴' : '  '
+    console.log(`  ${marker} [y=${h.y}] "${h.text.slice(0, 60)}"`)
   }
 
-  // Second pass: use JavaScript to find elements with red-ish backgrounds
-  if (!headerLocator || headerCount < 2) {
-    console.log('[product-scraper] Class-based selectors found <2 headers, scanning by computed background color...')
-
-    const redHeaderInfo = await page.evaluate(() => {
-      const results: Array<{ index: number; text: string; tag: string; className: string }> = []
-      // Walk all elements and check computed background color
-      const all = document.querySelectorAll('*')
-      for (let i = 0; i < all.length; i++) {
-        const el = all[i] as HTMLElement
-        const style = window.getComputedStyle(el)
-        const bg = style.backgroundColor
-        // Match red-ish backgrounds: rgb(r, g, b) where r > 150, g < 80, b < 80
-        const match = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/)
-        if (match) {
-          const [, r, g, b] = match.map(Number)
-          if (r > 150 && g < 80 && b < 80) {
-            const text = el.textContent?.trim().slice(0, 200) ?? ''
-            if (text.length > 2) {
-              results.push({
-                index: i,
-                text,
-                tag: el.tagName.toLowerCase(),
-                className: el.className?.toString().slice(0, 200) ?? '',
-              })
-            }
-          }
-        }
-      }
-      return results
-    })
-
-    console.log(`[product-scraper] Found ${redHeaderInfo.length} elements with red backgrounds`)
-    for (const h of redHeaderInfo.slice(0, 10)) {
-      console.log(`  [${h.tag}.${h.className.slice(0, 60)}] "${h.text.slice(0, 80)}"`)
-    }
-
-    // If we found red elements, use their className to build a selector
-    if (redHeaderInfo.length >= 2) {
-      // Filter to divider-like elements: h1-h6 or elements with "divider" in class
-      const dividers = redHeaderInfo.filter(h =>
-        /^h[1-6]$/.test(h.tag) || h.className.includes('divider') || h.className.includes('Divider')
-      )
-      const candidates = dividers.length >= 2 ? dividers : redHeaderInfo
-
-      // Group by className to find the most common pattern
-      const classGroups = new Map<string, number>()
-      for (const h of candidates) {
-        const key = h.className.split(/\s+/)[0] || h.tag
-        classGroups.set(key, (classGroups.get(key) ?? 0) + 1)
-      }
-
-      // Use the most common class
-      let bestClass = ''
-      let bestCount = 0
-      for (const [cls, count] of classGroups) {
-        if (count > bestCount) {
-          bestClass = cls
-          bestCount = count
-        }
-      }
-
-      if (bestClass && bestCount >= 2) {
-        const selector = bestClass.includes(' ') ? `[class^="${bestClass}"]` : `.${bestClass}`
-        headerLocator = page.locator(selector)
-        headerCount = await headerLocator.count()
-        console.log(`[product-scraper] Using derived selector: ${selector} (${headerCount} matches)`)
-      }
-    }
-  }
-
-  // If still no headers found, fall back to extracting all page links as one section
-  if (!headerLocator || headerCount < 2) {
-    console.warn('[product-scraper] Could not identify red header bars. Extracting all page links as single section.')
+  if (allSectionHeaders.length < 2) {
+    console.warn('[product-scraper] Found <2 section headers. Extracting all page links as single section.')
     const allItems = await extractLinkList(page.locator('main, [role="main"], #content, body'))
     if (allItems.length > 0) {
-      sections['all-content'] = {
-        title: 'All Content',
-        type: 'links',
-        items: allItems,
-      }
+      sections['all-content'] = { title: 'All Content', type: 'links', items: allItems }
     }
     return sections
   }
 
-  // Extract content between each pair of headers
-  for (let i = 0; i < headerCount; i++) {
-    const header = headerLocator.nth(i)
-    const title = (await header.innerText().catch(() => '')).trim()
+  // Extract content between each pair of section headers using y-position ranges
+  for (let i = 0; i < allSectionHeaders.length; i++) {
+    const sh = allSectionHeaders[i]
+    const title = sh.text
     if (!title || isGarbage(title)) continue
 
     const sectionKey = slugify(title)
+    const headerY = sh.y
+    const nextY = i < allSectionHeaders.length - 1 ? allSectionHeaders[i + 1].y : null
 
-    // Scroll to header to trigger lazy loading
+    // Scroll to section to trigger lazy loading
     try {
-      await header.scrollIntoViewIfNeeded({ timeout: 3000 })
-      await page.waitForTimeout(800) // Allow lazy content to load
-    } catch {
-      // Scroll may fail for fixed elements
-    }
+      await page.evaluate((y) => window.scrollTo(0, y - 100), headerY)
+      await page.waitForTimeout(800)
+    } catch { /* scroll may fail */ }
 
-    // Get the bounding box of this header and the next header (or page end)
-    // to define the content region between them
-    const headerBox = await header.boundingBox()
-    let nextHeaderBox: { x: number; y: number; width: number; height: number } | null = null
-    if (i < headerCount - 1) {
-      nextHeaderBox = await headerLocator.nth(i + 1).boundingBox()
-    }
-
-    // Extract content between this header and the next using JS
+    // Extract all links and content elements between this header and the next
     const sectionContent = await page.evaluate(
       ({ headerY, nextY }) => {
-        // Find all elements whose top is between headerY and nextY
         const els = document.querySelectorAll('a[href], [class*="card"], [class*="Card"], table, [role="button"][aria-expanded]')
         const items: Array<{ tag: string; text: string; href: string }> = []
+        const seen = new Set<string>()
         for (const el of els) {
           const rect = el.getBoundingClientRect()
           const scrollY = window.scrollY
@@ -504,19 +456,20 @@ async function extractRedHeaderSections(
           if (absTop > headerY && (nextY === null || absTop < nextY)) {
             const text = (el.textContent ?? '').trim().slice(0, 300)
             const href = (el as HTMLAnchorElement).href ?? ''
-            if (text) items.push({ tag: el.tagName.toLowerCase(), text, href })
+            const key = text.slice(0, 50) + '|' + href
+            if (text && !seen.has(key)) {
+              seen.add(key)
+              items.push({ tag: el.tagName.toLowerCase(), text, href })
+            }
           }
         }
         return items
       },
-      {
-        headerY: headerBox?.y ?? 0,
-        nextY: nextHeaderBox?.y ?? null,
-      },
+      { headerY, nextY },
     )
 
-    // Build section from extracted content
-    const contentContainer = page.locator(`text="${title}"`).first().locator('xpath=following-sibling::*').first()
+    // Try structured extraction first
+    const contentContainer = page.locator(`text="${title.slice(0, 50)}"`).first().locator('xpath=following-sibling::*').first()
     const type = await detectSectionType(contentContainer).catch(() => 'mixed' as const)
 
     let items: SectionItem[] = []
@@ -583,66 +536,64 @@ async function extractSidebar(page: Page): Promise<{
     links: [] as Array<{ name: string; url?: string }>,
   }
 
-  // Try to find sidebar container
-  const sidebarSelectors = [
-    '[class*="sidebar"]',
-    '[class*="Sidebar"]',
-    '[class*="side-panel"]',
-    '[class*="SidePanel"]',
-    'aside',
-    '[role="complementary"]',
-  ]
-
-  let sidebar: Locator | null = null
-  for (const sel of sidebarSelectors) {
-    const candidate = page.locator(sel)
-    if ((await candidate.count()) > 0) {
-      sidebar = candidate.first()
-      break
-    }
-  }
-
-  if (!sidebar) {
-    console.log('[product-scraper] No sidebar found')
-    return result
-  }
-
+  // Seismic DocCenter puts TDPs, Slack, Contacts in the page body, not a CSS sidebar.
+  // Extract by searching the full page text for known patterns.
   console.log('[product-scraper] Extracting sidebar content...')
 
-  // Extract all links from sidebar
-  const allSidebarLinks = await extractLinkList(sidebar)
-
-  for (const link of allSidebarLinks) {
-    const nameLower = link.name.toLowerCase()
-
-    // Classify links
-    if (nameLower.includes('tdp') || nameLower.includes('technical decision')) {
-      result.tdpLinks.push(link)
-    } else if (nameLower.includes('slack') || nameLower.includes('#')) {
-      result.slackChannels.push(link.name)
-    } else {
-      result.links.push(link)
+  const sidebarData = await page.evaluate(() => {
+    const fullText = document.body.innerText || ''
+    const data = {
+      tdpNames: [] as string[],
+      emails: [] as string[],
+      slackChannels: [] as string[],
+      sidebarLinks: [] as Array<{name: string, url: string}>,
     }
-  }
 
-  // Extract contact info -- look for email patterns
-  const sidebarText = await sidebar.innerText().catch(() => '')
-  const emailMatches = sidebarText.match(/[\w.-]+@[\w.-]+\.\w+/g)
-  if (emailMatches) {
-    for (const email of emailMatches) {
-      result.contacts.push({ name: email.split('@')[0], email })
+    // Find TDP names — look for the "TDP and Tactic" section
+    const tdpMatch = fullText.match(/TDP and Tactic[s]?\s*\n([\s\S]*?)(?=\n(?:Product news|Business decks|$))/i)
+    if (tdpMatch) {
+      const tdpBlock = tdpMatch[1]
+      const lines = tdpBlock.split('\n').map(l => l.trim()).filter(l => l.length > 3 && !l.includes('item(s) selected'))
+      data.tdpNames = lines
     }
-  }
 
-  // Look for Slack channel patterns
-  const slackMatches = sidebarText.match(/#[a-z0-9_-]+/gi)
-  if (slackMatches) {
-    for (const ch of slackMatches) {
-      if (!result.slackChannels.includes(ch)) {
-        result.slackChannels.push(ch)
+    // Find emails
+    const emailMatches = fullText.match(/[\w.-]+@[\w.-]+\.\w+/g)
+    if (emailMatches) data.emails = [...new Set(emailMatches)]
+
+    // Find Slack channels
+    const slackMatches = fullText.match(/#[a-z][a-z0-9_-]+/gi)
+    if (slackMatches) data.slackChannels = [...new Set(slackMatches)]
+
+    // Find sidebar links (product page links, learning paths, etc.)
+    // Look for links near "Contact us" or in the right-side area
+    const rightLinks = document.querySelectorAll('[class*="navigationPicker"] a[href], [class*="brand-link"] a[href]')
+    for (const el of rightLinks) {
+      const text = (el.textContent || '').trim()
+      const href = (el as HTMLAnchorElement).href || ''
+      if (text.length > 3 && href.startsWith('http')) {
+        data.sidebarLinks.push({ name: text.slice(0, 100), url: href })
       }
     }
+
+    return data
+  })
+
+  // TDP links
+  for (const name of sidebarData.tdpNames) {
+    result.tdpLinks.push({ name })
   }
+
+  // Contacts
+  for (const email of sidebarData.emails) {
+    result.contacts.push({ name: email.split('@')[0], email })
+  }
+
+  // Slack channels
+  result.slackChannels = sidebarData.slackChannels
+
+  // Other links
+  result.links = sidebarData.sidebarLinks
 
   console.log(
     `[product-scraper] Sidebar: ${result.tdpLinks.length} TDPs, ${result.contacts.length} contacts, ${result.slackChannels.length} Slack channels, ${result.links.length} other links`,
@@ -673,24 +624,21 @@ async function extractProductHeader(page: Page): Promise<{ name: string; descrip
     }
   }
 
-  // Try to get description from a subtitle or first paragraph after title
+  // Get description — first substantial paragraph on the page (before first section header)
   let description = ''
-  const descSelectors = [
-    '[class*="subtitle"]',
-    '[class*="Subtitle"]',
-    '[class*="description"]',
-    '[class*="Description"]',
-    'h1 + p',
-    '[class*="page-title"] + p',
-  ]
-
-  for (const sel of descSelectors) {
-    const el = page.locator(sel).first()
-    if ((await el.count()) > 0) {
-      description = (await el.innerText().catch(() => '')).trim()
-      if (description) break
-    }
-  }
+  try {
+    description = await page.evaluate((productName) => {
+      const paragraphs = document.querySelectorAll('p, [class*="text-block"], [class*="TextBlock"]')
+      for (const p of paragraphs) {
+        const text = (p.textContent || '').trim()
+        // Find first substantial paragraph that's not the title itself
+        if (text.length > 50 && !text.startsWith(productName) && !text.includes('Skip to Main')) {
+          return text.slice(0, 500)
+        }
+      }
+      return ''
+    }, name)
+  } catch { /* description is optional */ }
 
   return { name: name || 'Unknown Product', description }
 }
