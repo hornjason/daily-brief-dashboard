@@ -548,7 +548,9 @@ export function scheduleEmailDelivery(): void {
         try {
           cached = readEmailCache(toSlug(c.name))
         } catch (err: any) {
-          console.warn(`[morning-brief] Failed to read email cache for ${c.name}: ${err.message}`)
+          if (err.code !== 'ENOENT' && !err.message?.includes('no such file')) {
+            console.warn(`[morning-brief] Corrupt email cache for ${c.name}: ${err.message}`)
+          }
           continue
         }
         if (!cached) continue
