@@ -443,7 +443,12 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
                     <span className="text-xs text-text-secondary bg-border/40 px-1.5 py-0.5 rounded shrink-0 mt-0.5">
                       {MODULE_LABELS[ev.module] ?? ev.module}
                     </span>
-                    <span className="flex-1">{ev.fact}</span>
+                    <span className="flex-1">
+                      {ev.fact}
+                      {(ev.fact.includes('evaluating') || ev.fact.includes('migrating from')) && (
+                        <span className="ml-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/20 text-emerald-400">buying signal</span>
+                      )}
+                    </span>
                     {ev.url && (
                       <a
                         href={ev.url}

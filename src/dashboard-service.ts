@@ -545,6 +545,8 @@ export async function buildMorningSummary(customers: Customer[]) {
     'Competitive signals detected',
     'Competitive signals detected in latest brief',
   ]
+  // #805: Named displacement targets always pass the competitor filter
+  const DISPLACEMENT_TARGETS = ['vmware', 'terraform', 'puppet', 'chef', 'saltstack', 'docker', 'containerd', 'splunk', 'elastic', 'grafana', 'prometheus', 'pulumi', 'crossplane', 'rancher']
   const COMPETITOR_ACTION_WORDS = [
     'evaluating', 'migration', 'migrating', 'displacement', 'replacing', 'switching',
     'versus', 'vs', 'compared', 'alternative', 'competing', 'threat', 'risk',
@@ -557,10 +559,12 @@ export async function buildMorningSummary(customers: Customer[]) {
     // Skip competitor signals that are boilerplate or lack actionable context
     if (s.type === 'competitor') {
       const textLower = s.text.toLowerCase()
+      // #805: Signals mentioning displacement targets bypass action-word check
+      const mentionsDisplacementTarget = DISPLACEMENT_TARGETS.some(t => textLower.includes(t))
       if (
         s.text.length < MIN_COMPETITOR_TEXT_LENGTH ||
         COMPETITOR_BOILERPLATE.includes(s.text) ||
-        !COMPETITOR_ACTION_WORDS.some(w => textLower.includes(w))
+        (!mentionsDisplacementTarget && !COMPETITOR_ACTION_WORDS.some(w => textLower.includes(w)))
       ) {
         return false
       }

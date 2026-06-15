@@ -32,6 +32,7 @@ import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
 import type { TacticOutcome } from './deal-outcome-history.ts'
 import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
 import { getDisplacementMap } from './competitive-vocabulary.ts'
+import { CONTEXT_PRIORITY, CONTEXT_VERB_MAP } from './motion-config.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -922,9 +923,8 @@ function buildDisplacementPhase(
 
   if (nonRedHatProducts.length === 0) return null
 
-  // Sort so evaluating/migrating_from come first — buying signals prioritized (#693)
+  // Sort so evaluating/migrating_from come first — buying signals prioritized (#693, #803)
   nonRedHatProducts.sort((a, b) => {
-    const CONTEXT_PRIORITY: Record<string, number> = { migrating_from: 0, evaluating: 1, using: 2 }
     const aCtx = String(a.properties.context ?? 'using').toLowerCase()
     const bCtx = String(b.properties.context ?? 'using').toLowerCase()
     return (CONTEXT_PRIORITY[aCtx] ?? 3) - (CONTEXT_PRIORITY[bCtx] ?? 3)
@@ -1007,9 +1007,7 @@ function buildDisplacementPhase(
       String(p.properties.techName ?? p.name ?? '') === m.competitor
     )
     const context = String(productNode?.properties?.context ?? 'using').toLowerCase()
-    const verb = context === 'evaluating' ? 'evaluating'
-      : context === 'migrating_from' ? 'migrating from'
-      : 'uses'
+    const verb = CONTEXT_VERB_MAP[context] ?? 'uses'
     return {
       module: 'tech-stack' as const,
       fact: `Customer ${verb} ${m.competitor} — opportunity to displace with ${m.redHat}`,
