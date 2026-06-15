@@ -394,12 +394,17 @@ async function extractRedHeaderSections(
 
       if (isDivider) {
         // Save previous section if it has content
-        if (currentTitle && (currentLinks.length > 0 || currentText)) {
+        if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentText)) {
           result.push({ title: currentTitle, widgetClass: cls, links: currentLinks, textContent: currentText, isAccordion })
         }
         // Start new section from divider text
         const dividerText = (widget.textContent || '').trim()
-        currentTitle = dividerText
+        if (dividerText.length > 2) {
+          currentTitle = dividerText
+        } else {
+          // Empty divider — next content widget provides the title
+          currentTitle = '__pending__'
+        }
         currentLinks = []
         currentText = ''
         isAccordion = false
@@ -409,15 +414,59 @@ async function extractRedHeaderSections(
       if (isCover) continue // Skip product banner
 
       // Content widget — extract links
-      if (!isDivider && currentTitle) {
-        // Handle accordion widgets specially
+      const isContentWidget = !isDivider && !isCover
+
+      if (isContentWidget) {
+        // Handle accordion widgets specially — each has its own title
         if (isAccordionWidget) {
+          // Save previous section
+          if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentText)) {
+            result.push({ title: currentTitle, widgetClass: '', links: currentLinks, textContent: currentText, isAccordion })
+          }
           isAccordion = true
           const accTitle = widget.querySelector('.seismic-page-divider-view')
-          if (accTitle) {
-            const accText = (accTitle.textContent || '').trim()
-            if (accText) currentTitle = accText
+          currentTitle = accTitle ? (accTitle.textContent || '').trim() : 'Untitled'
+          currentLinks = []
+          currentText = ''
+        }
+
+        // If title is pending (after empty divider), use this widget's own heading
+        if (currentTitle === '__pending__' || !currentTitle) {
+          // Look for h1/h2 heading inside this widget
+          const heading = widget.querySelector('h1, h2')
+          if (heading) {
+            currentTitle = (heading.textContent || '').trim()
+          } else {
+            currentTitle = 'Untitled Section'
           }
+        }
+
+        // If this widget contains MULTIPLE sub-sections (e.g., "Business decks" + "Technical decks" side by side)
+        // Check for multiple h1 headings within the widget
+        const h1s = widget.querySelectorAll('h1')
+        if (h1s.length >= 2 && !isAccordionWidget) {
+          // Multiple sub-sections in one widget — split by h1
+          for (const h1 of h1s) {
+            const subTitle = (h1.textContent || '').trim()
+            if (subTitle.length < 3) continue
+            // Find the container that holds this h1 and its content
+            const subContainer = h1.closest('[class*="docListPicker"], [class*="DocListPicker"]') || h1.parentElement
+            if (!subContainer) continue
+            const subLinks: Array<{text: string, href: string}> = []
+            const subAnchors = subContainer.querySelectorAll('a[href]')
+            for (const a of subAnchors) {
+              const text = (a.textContent || '').trim().slice(0, 200)
+              const href = (a as HTMLAnchorElement).href || ''
+              if (text.length > 3 && href.startsWith('http') && !href.includes('/app#/workspace')) {
+                subLinks.push({ text, href })
+              }
+            }
+            if (subLinks.length > 0 || subTitle) {
+              result.push({ title: subTitle, widgetClass: '', links: subLinks, textContent: '', isAccordion: false })
+            }
+          }
+          // Don't add to currentLinks — we already split into sub-sections
+          continue
         }
 
         // Extract all links from this widget
@@ -434,20 +483,6 @@ async function extractRedHeaderSections(
         if (isParagraph) {
           const pText = (widget.textContent || '').trim()
           if (pText.length > 10) currentText = pText.slice(0, 1000)
-        }
-      } else if (!currentTitle && (isParagraph || !isDivider)) {
-        // Content before the first divider — treat as intro
-        if (!currentTitle) currentTitle = '__pre-divider__'
-        const anchors = widget.querySelectorAll('a[href]')
-        for (const a of anchors) {
-          const text = (a.textContent || '').trim().slice(0, 200)
-          const href = (a as HTMLAnchorElement).href || ''
-          if (text.length > 3 && href.startsWith('http')) {
-            currentLinks.push({ text, href })
-          }
-        }
-        if (isParagraph) {
-          currentText = ((widget.textContent || '').trim()).slice(0, 1000)
         }
       }
     }
