@@ -66,7 +66,7 @@ import { enqueueScraperTask, getScraperQueueStatus } from './scraper-queue.ts'
 import { sanitizeErr } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
 import { safeCookieOp } from './browser-utils.ts'
-import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
+import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet, detectMasterSheets, formatMasterIngestSummary } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
 import { SETTINGS_PATH } from './drive-config-sync.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
@@ -1277,6 +1277,171 @@ export function registerScrapeRoutes(app: Hono): void {
     const totalMatched = summary.reduce((s, r) => s + r.customersMatched, 0)
     const totalCustomers = summary.reduce((s, r) => s + r.customersTotal, 0)
     return c.json({ aes: targetAes.length, customersTotal: totalCustomers, customersMatched: totalMatched, summary })
+  })
+
+  // ── POST /api/master-ingest — Issue #816 ──────────────────────────────────
+  // Reads a master subscription Google Sheet, splits by territory using
+  // deriveSfCustomersByTerritory(), and overwrites per-POD subscription sheets.
+  app.post('/api/master-ingest', async (c) => {
+    let body: { regionId?: string }
+    try { body = await c.req.json() } catch { body = {} }
+
+    let podBookingsFolderId: string | null = null
+    try {
+      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      const settings = normalizeSettings(JSON.parse(raw))
+      const region = getRegionById(settings, body.regionId)
+      podBookingsFolderId = region.podBookingsFolderId || null
+    } catch { /* no settings */ }
+
+    if (!podBookingsFolderId) {
+      return c.json({ error: 'podBookingsFolderId not configured' }, 400)
+    }
+
+    let podSheets: Array<{ name: string; displayName: string; sheetId: string; modifiedTime?: string }> = []
+    try {
+      podSheets = await listPodBookingSheets(podBookingsFolderId)
+    } catch (e: any) {
+      return c.json({ error: `Failed to list sheets: ${sanitizeErr(e)}` }, 500)
+    }
+
+    const masters = detectMasterSheets(podSheets)
+    if (!masters.length) {
+      return c.json({ error: 'No master sheet found in pod bookings folder' }, 404)
+    }
+
+    const masterSheet = masters[0]
+    console.log(`[master-ingest] using master sheet: "${masterSheet.name}" (${masterSheet.sheetId})`)
+
+    let masterRaw: Awaited<ReturnType<typeof fetchSfBookingsRaw>>
+    try {
+      masterRaw = await fetchSfBookingsRaw(masterSheet.sheetId, true)
+    } catch (e: any) {
+      return c.json({ error: `Failed to read master sheet: ${sanitizeErr(e)}` }, 500)
+    }
+
+    const overwritten: string[] = []
+    const created: string[] = []
+    const skipped: string[] = []
+    let totalRows = 0
+
+    for (let aeIdx = 0; aeIdx < aes.length; aeIdx++) {
+      if (aeIdx > 0) await new Promise(r => setTimeout(r, 3_000))
+
+      const ae = aes[aeIdx]
+      const territories = ae.tableauTerritories ?? []
+
+      if (!territories.length) {
+        skipped.push(ae.name)
+        continue
+      }
+
+      const existingCustomers = customers.filter(cu => cu.ae === ae.name)
+      const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
+        masterRaw, territories, existingCustomers, ae.name, false,
+      )
+
+      if (results.length === 0) {
+        console.log(`[master-ingest] ${ae.name}: 0 customers from master — skipping`)
+        skipped.push(ae.name)
+        continue
+      }
+
+      const hasRows = results.some(r => r.rows.length > 0)
+      if (!hasRows) {
+        const existingCacheHasData = existingCustomers.some(cu => {
+          const cache = readSheetCache(cu.name)
+          return cache && cache.rows.length > 0
+        })
+        if (existingCacheHasData) {
+          console.warn(`[master-ingest] ${ae.name}: 0 subscription rows but existing cache has data — skipping (stale guard)`)
+          skipped.push(ae.name)
+          continue
+        }
+      }
+
+      if (newCustomers.length > 0 || aliasedCustomers.length > 0) {
+        const allCustomers = [...customers]
+        for (const nc of newCustomers) {
+          if (!allCustomers.some(c => c.name === nc.name)) {
+            allCustomers.push(nc)
+            console.log(`[master-ingest] new customer: ${nc.name} (${ae.name})`)
+          }
+        }
+        for (const ac of aliasedCustomers) {
+          const idx = allCustomers.findIndex(c => c.name === ac.name)
+          if (idx !== -1) allCustomers[idx] = ac
+        }
+        saveCustomers(allCustomers)
+
+        if (ae.driveFolderId) {
+          for (const nc of newCustomers) {
+            try {
+              const folderId = await driveClient.ensureChildFolder(ae.driveFolderId, nc.name)
+              patchCustomer(nc.name, { driveFolderId: folderId })
+            } catch (e: any) {
+              console.warn(`[master-ingest] folder creation failed for ${nc.name}: ${e.message}`)
+            }
+          }
+        }
+      }
+
+      for (const name of ccspOnly) patchCustomer(name, { ccspCustomer: true })
+      for (const name of matched) patchCustomer(name, { ccspCustomer: false })
+
+      try {
+        const spreadsheetId = await writeSubscriptionSheet(
+          results,
+          ae.name,
+          ae.driveFolderId,
+          ae.subscriptionSheetId || undefined,
+        )
+
+        if (!ae.subscriptionSheetId) {
+          patchAe(ae.name, { subscriptionSheetId: spreadsheetId })
+          created.push(ae.name)
+        } else {
+          overwritten.push(ae.name)
+        }
+
+        totalRows += results.reduce((sum, r) => sum + r.rows.length, 0)
+        console.log(`[master-ingest] ${ae.name}: ${matched.length} customers → sheet ${spreadsheetId}`)
+      } catch (e: any) {
+        console.error(`[master-ingest] ${ae.name}: write failed — ${sanitizeErr(e)}`)
+        skipped.push(ae.name)
+      }
+    }
+
+    const summaryMsg = formatMasterIngestSummary({
+      totalTerritories: aes.length - skipped.length,
+      totalRows,
+      overwritten,
+      created,
+      skipped,
+    })
+    console.log(summaryMsg)
+
+    try {
+      const statusPath = resolve(process.env.CACHE_DIR ?? 'data/cache', 'master-ingest-status.json')
+      writeFileSync(statusPath, JSON.stringify({
+        lastIngestAt: new Date().toISOString(),
+        masterSheetId: masterSheet.sheetId,
+        masterSheetName: masterSheet.name,
+        overwritten,
+        created,
+        skipped,
+        totalRows,
+      }))
+    } catch { /* non-fatal */ }
+
+    return c.json({
+      masterSheet: masterSheet.name,
+      totalTerritories: aes.length - skipped.length,
+      totalRows,
+      overwritten,
+      created,
+      skipped,
+    })
   })
 
   // ── SalesHub Knowledge Base status + refresh (ADR-030 Slice 5) ──────────────

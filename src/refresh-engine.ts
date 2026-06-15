@@ -16,7 +16,8 @@ import { recordSupportableRefreshAt } from './supportable-scraper.ts'
 import { emitCacheLevel } from './ingest-events.js'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { getStalenessMap } from './staleness-monitor.ts'
-import { normalizeSettings } from './region-config.ts'
+import { normalizeSettings, getRegionById } from './region-config.ts'
+import { listPodBookingSheets, detectMasterSheets } from './sf-bookings-reader.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -337,6 +338,55 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
 // ── Per-source refresh functions ────────────────────────────────────────────
 
 export async function refreshSubscriptions(force = false): Promise<void> {
+  // AC-6: Master sheet detection — check before per-AE batch path
+  try {
+    const settingsRaw = readFileSync(SETTINGS_PATH_REFRESH, 'utf-8')
+    const settings = normalizeSettings(JSON.parse(settingsRaw))
+    const region = getRegionById(settings)
+    const podBookingsFolderId = region.podBookingsFolderId
+
+    if (podBookingsFolderId) {
+      const podSheets = await listPodBookingSheets(podBookingsFolderId)
+      const masters = detectMasterSheets(podSheets)
+
+      if (masters.length > 0) {
+        const statusPath = resolve(CACHE_DIR, 'master-ingest-status.json')
+        let lastIngestAt: string | null = null
+        if (existsSync(statusPath)) {
+          try {
+            const status = JSON.parse(readFileSync(statusPath, 'utf-8'))
+            lastIngestAt = status.lastIngestAt ?? null
+          } catch { /* corrupt status */ }
+        }
+
+        const masterModified = masters[0].modifiedTime
+        const shouldIngest = !lastIngestAt || (masterModified && new Date(masterModified) > new Date(lastIngestAt))
+
+        if (shouldIngest) {
+          console.log(`[refresh:subscriptions] master sheet detected — triggering master ingest`)
+          try {
+            const port = process.env.PORT ?? '7777'
+            const resp = await fetch(`http://localhost:${port}/api/master-ingest`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            })
+            if (resp.ok) {
+              const result = await resp.json() as Record<string, unknown>
+              console.log(`[refresh:subscriptions] master ingest completed: ${result.totalRows} rows, ${result.totalTerritories} territories`)
+            } else {
+              console.warn(`[refresh:subscriptions] master ingest failed: ${resp.status}`)
+            }
+          } catch (e: any) {
+            console.warn(`[refresh:subscriptions] master ingest error: ${e.message}`)
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[refresh:subscriptions] master detection skipped: ${e.message}`)
+  }
+
   // Check if Supportable source sheet has changed before re-fetching all customers
   if (!force) {
     // L1 cache check (BKL-INGEST-10) — if ALL customers' sheet caches are < 24h,

@@ -48,7 +48,7 @@ const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours — BKL-INGEST-01: ali
  * displayName strips boilerplate suffixes ("POD", "Subscriptions", "SF Bookings", year patterns)
  * so dropdowns show clean labels like "Northwest" instead of "Northwest POD - Subscriptions".
  */
-export async function listPodBookingSheets(folderId: string): Promise<Array<{ name: string; displayName: string; sheetId: string }>> {
+export async function listPodBookingSheets(folderId: string): Promise<Array<{ name: string; displayName: string; sheetId: string; modifiedTime?: string }>> {
   // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
   // Top-level first; if empty, descend one level into subfolders.
   let pairs = await driveClient.listSpreadsheetsUnder(folderId, { maxDepth: 0 })
@@ -56,7 +56,8 @@ export async function listPodBookingSheets(folderId: string): Promise<Array<{ na
     pairs = await driveClient.listSpreadsheetsUnder(folderId, { maxDepth: 1 })
   }
 
-  return pairs.map(({ id, name: raw }) => {
+  return pairs.map((pair) => {
+    const raw = pair.name
     const displayName = raw
       .replace(/\b(POD|SF Bookings|Bookings|Subscriptions|Subscription|Report|Export|Sheet|Data)\b/gi, '')
       .replace(/\b\d{4}\b/g, '')       // strip years
@@ -64,7 +65,7 @@ export async function listPodBookingSheets(folderId: string): Promise<Array<{ na
       .replace(/\s{2,}/g, ' ')
       .trim()
       || raw  // fallback to raw if everything was stripped
-    return { name: raw, displayName, sheetId: id }
+    return { name: raw, displayName, sheetId: pair.id, modifiedTime: (pair as any).modifiedTime as string | undefined }
   })
 }
 
@@ -221,7 +222,7 @@ export async function fetchSfBookingsRaw(sheetId: string, forceRefresh = false):
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth })
   console.log(`[sf-bookings] fetching sheet ${sheetId}…`)
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A1:AE5000' })
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A:AE' })
   const rows = res.data.values ?? []
   if (rows.length < 2) throw new Error('SF bookings sheet appears empty')
 
@@ -559,4 +560,38 @@ export async function readSfBookingsSheet(
 ): Promise<SfBookingsReadResult> {
   const raw = await fetchSfBookingsRaw(sheetId)
   return mapSfBookingsToCustomers(raw, customers, activeOnly, territories)
+}
+
+// ── Master sheet detection (Issue #816) ─────────────────────────────────────
+
+export interface MasterSheetInfo {
+  name: string
+  displayName: string
+  sheetId: string
+  modifiedTime?: string
+}
+
+export function detectMasterSheets(
+  sheets: Array<{ name: string; displayName: string; sheetId: string; modifiedTime?: string }>,
+): MasterSheetInfo[] {
+  const masters = sheets.filter(s => /^master\b/i.test(s.name))
+  if (masters.length > 1) {
+    console.warn(`[master-ingest] WARNING: ${masters.length} master sheets found: ${masters.map(m => m.name).join(', ')}`)
+  }
+  return masters.sort((a, b) => {
+    if (!a.modifiedTime && !b.modifiedTime) return 0
+    if (!a.modifiedTime) return 1
+    if (!b.modifiedTime) return -1
+    return b.modifiedTime.localeCompare(a.modifiedTime)
+  })
+}
+
+export function formatMasterIngestSummary(stats: {
+  totalTerritories: number
+  totalRows: number
+  overwritten: string[]
+  created: string[]
+  skipped: string[]
+}): string {
+  return `[master-ingest] Processed ${stats.totalTerritories} territories, ${stats.totalRows} rows. Overwritten: ${stats.overwritten.join(', ') || 'none'}. Created: ${stats.created.join(', ') || 'none'}. Skipped: ${stats.skipped.join(', ') || 'none'}.`
 }

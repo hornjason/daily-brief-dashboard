@@ -9,7 +9,7 @@ import { readFileSync } from 'fs'
 import { customers, CUSTOMERS_PATH } from '../../server-state.ts'
 import { writeJsonAtomic } from '../../lib/atomic-write.ts'
 import { normalizeSettings } from '../../region-config.ts'
-import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from '../../sf-bookings-reader.ts'
+import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet, detectMasterSheets } from '../../sf-bookings-reader.ts'
 import { SETTINGS_PATH } from '../helpers.ts'
 import type { BootstrapStepDef, BootstrapContext } from './types.ts'
 
@@ -42,6 +42,13 @@ export const readSfBookingsStep: BootstrapStepDef = {
         if (podSheetId) {
           const matched = podSheets.find(s => s.sheetId === podSheetId)
           console.log(`[auto-bootstrap] Resolved POD sheet for ${aeName}: "${matched?.displayName}" (${podSheetId})`)
+        } else {
+          // #816: Fall back to master sheet when no per-POD sheet exists
+          const masters = detectMasterSheets(podSheets)
+          if (masters.length > 0) {
+            podSheetId = masters[0].sheetId
+            console.log(`[auto-bootstrap] No POD sheet found — using master sheet "${masters[0].name}" (${podSheetId})`)
+          }
         }
       }
     } catch { /* no settings file or Drive error — fall back below */ }
