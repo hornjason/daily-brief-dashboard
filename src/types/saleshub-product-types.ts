@@ -35,6 +35,10 @@ export interface SectionItem {
   audience?: string  // 'internal', 'partner', 'customer', 'external'
   driveUrl?: string
   children?: SectionItem[]
+  contentId?: string
+  versionId?: string
+  format?: string
+  localPath?: string
 }
 
 export interface ProductEnrichment {

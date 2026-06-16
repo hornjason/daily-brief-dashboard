@@ -16,7 +16,8 @@
 import { chromium } from '@playwright/test'
 import type { Page, Locator } from '@playwright/test'
 import { readFileSync, mkdirSync, existsSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, relative } from 'path'
+import type { BrowserContext } from '@playwright/test'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
 import {
@@ -37,10 +38,19 @@ const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH ?? '/ms-playwright/chromium-1208/chrome-linux/chrome'
+const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
+const MAX_DOWNLOADS_PER_PRODUCT = 100
+const SKIP_FORMATS = new Set(['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTube', 'URL'])
+const SKIP_LANGUAGE_PATTERNS = [/\bde\b|\bfr\b|\bes\b|\bit\b|\bpt\b|\bja\b|\bko\b|\bzh\b/i]
+const skipDownloads = process.argv.includes('--skip-downloads')
 
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
   'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktY'
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 200)
+}
 
 // ── Garbage Filters ──────────────────────────────────────────────────────────
 
@@ -742,6 +752,102 @@ async function queryDocumentsByProduct(
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+// ── Per-product document download (SC-2) ────────────────────────────────────
+
+async function downloadProductDocuments(
+  context: BrowserContext,
+  sections: Record<string, ProductSection>,
+  productSlug: string,
+  authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
+): Promise<void> {
+  // Collect all downloadable items across all sections
+  const downloadable: Array<{ item: SectionItem; sectionSlug: string }> = []
+
+  for (const [key, section] of Object.entries(sections)) {
+    for (const item of section.items) {
+      if (item.versionId && item.format && !SKIP_FORMATS.has(item.format)) {
+        // Skip non-English
+        const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
+        if (!isNonEnglish) {
+          downloadable.push({ item, sectionSlug: key })
+        }
+      }
+    }
+    if (section.subsections) {
+      for (const sub of section.subsections) {
+        for (const item of sub.items) {
+          if (item.versionId && item.format && !SKIP_FORMATS.has(item.format)) {
+            const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
+            if (!isNonEnglish) {
+              downloadable.push({ item, sectionSlug: slugify(sub.title) })
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (downloadable.length === 0) {
+    console.log('[product-scraper] No downloadable documents found')
+    return
+  }
+
+  const toDownload = downloadable.slice(0, MAX_DOWNLOADS_PER_PRODUCT)
+  console.log(`[product-scraper] ${toDownload.length} documents to download (${downloadable.length} total, cap ${MAX_DOWNLOADS_PER_PRODUCT})`)
+
+  const productDir = resolve('config-templates', 'saleshub-products', productSlug)
+  const dlPage = await context.newPage()
+  let downloaded = 0
+  let skipped = 0
+  let errors = 0
+
+  for (let i = 0; i < toDownload.length; i++) {
+    const { item, sectionSlug } = toDownload[i]
+    const sectionDir = resolve(productDir, 'downloads', sectionSlug)
+    mkdirSync(sectionDir, { recursive: true })
+
+    const ext = item.format?.toLowerCase() ?? 'pdf'
+    const filename = sanitizeFilename(`${item.name}.${ext}`)
+    const localPath = resolve(sectionDir, filename)
+
+    if (existsSync(localPath)) {
+      item.localPath = relative(productDir, localPath)
+      skipped++
+      continue
+    }
+
+    try {
+      const contentTypeB64 = Buffer.from(item.itemType || 'Other').toString('base64').replace(/=/g, '%3D')
+      const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
+
+      await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await dlPage.waitForTimeout(5_000)
+
+      const downloadBtn = dlPage.locator('text=Download').first()
+      if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
+        await downloadBtn.click()
+        const dl = await downloadPromise
+        await dl.saveAs(localPath)
+        item.localPath = relative(productDir, localPath)
+        downloaded++
+        console.log(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) ✓ ${filename}`)
+      } else {
+        console.warn(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) ✗ No Download button: ${item.name}`)
+        errors++
+      }
+    } catch (e: any) {
+      console.error(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) ✗ ${item.name}: ${e.message?.slice(0, 80)}`)
+      errors++
+    }
+
+    await new Promise(r => setTimeout(r, 1_000))
+  }
+
+  await dlPage.close()
+  console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
+}
+
 async function main(): Promise<void> {
   const url = process.argv[2] || DEFAULT_URL
   console.log(`[product-scraper] Starting product page scrape`)
@@ -769,6 +875,7 @@ async function main(): Promise<void> {
 
   const context = await browser.newContext({
     storageState: sessionState,
+    acceptDownloads: true,
     userAgent:
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   })
@@ -861,6 +968,9 @@ async function main(): Promise<void> {
             url: doc.downloadUrl || undefined,
             itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
             description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
+            contentId: (doc as any).contentId || undefined,
+            versionId: doc.versionId || undefined,
+            format: (doc as any).format || undefined,
           }))
 
           if (sections[sectionKey]) {
@@ -891,6 +1001,16 @@ async function main(): Promise<void> {
     // Extract sidebar
     console.log('[product-scraper] Extracting sidebar...')
     const sidebar = await extractSidebar(page)
+
+    // Step 5: Download documents into per-product directory (SC-2)
+    if (!skipDownloads && authCtx) {
+      console.log('[product-scraper] Step 5: Downloading documents into product directory...')
+      await downloadProductDocuments(context, sections, slugify(header.name), authCtx)
+    } else if (skipDownloads) {
+      console.log('[product-scraper] Skipping downloads (--skip-downloads flag)')
+    } else {
+      console.log('[product-scraper] Skipping downloads (no auth captured)')
+    }
 
     // Build ProductPage object
     const productSlug = slugify(header.name)
