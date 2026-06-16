@@ -371,6 +371,28 @@ _Avoid_: "attendee research" (that's the action; the cache is the persistence)
 The pattern where meeting prep regeneration updates the existing Google Doc via `drive.files.update()` instead of deleting and recreating. Preserves the doc ID, URL, and sharing permissions. Required for team shareability.
 _Avoid_: "regenerate" without qualifier (could imply delete-and-recreate)
 
+### SalesHub product knowledge
+
+**Product page**:
+A SalesHub DocCenter page dedicated to a single Red Hat product (e.g., Red Hat OpenShift Virtualization). Contains curated, structured sections of sales enablement content: product news, decks, resources, training, services, cloud provider content kits, customer references, and TDP/tactic references. Each product page has a different combination of sections — no two pages are identical. The scraper discovers sections dynamically by walking red header bars in the DOM.
+_Avoid_: "product catalog entry", "product listing"
+
+**Product section**:
+A content block on a product page, visually delimited by a red header bar. Contains items of a specific type (card carousel, data table, link list, expandable accordion, or text block). The section name comes from the red bar heading. Sections are NOT hardcoded — each product page has a unique set.
+_Avoid_: "product field", "product attribute"
+
+**Content kit**:
+A structured engagement playbook document linked from a product page's cloud provider section (e.g., "OpenShift Virtualization on AWS Content Kit"). Contains actionable steps, calculator links, workshop references, battlecard links, and sales play alignment. Content kits are the highest-value documents for enrichment extraction.
+_Avoid_: "content pack", "resource bundle"
+
+**Product knowledge file** (`_product.json`):
+Per-product JSON file stored in Drive under `SalesHub Products/{product-name}/`. Contains Layer 1 data: page structure, section names, item links, inline text content, metrics, contacts, TDP references. Produced by the SalesHub product scraper on the Mac Mini. Read by hero installs via L3 Drive sync.
+_Avoid_: "product cache", "product config"
+
+**Product enrichment file** (`_enriched.json`):
+Per-product JSON file containing Gemini-extracted summaries of high-value documents (content kits, messaging guides, battlecards). Contains actionable steps, calculator URLs, workshop links, competitive angles. This is the intelligence depth that makes recommendations actionable, not just link catalogs.
+_Avoid_: "AI summary", "document analysis"
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.
