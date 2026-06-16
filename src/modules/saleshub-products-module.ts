@@ -481,16 +481,22 @@ export function createSaleshubProductsRouter() {
                 content = readFileSync(filePath, 'utf-8')
               }
               const subdirLower = dlSub.name.toLowerCase()
+              const fileLower = file.toLowerCase()
+              const combined = `${subdirLower} ${fileLower}`
+
+              // Classify document type from directory AND filename
               let docType = 'content-kit'
+              if (subdirLower.includes('messaging') || fileLower.includes('messaging guide')) docType = 'messaging-guide'
+              else if (subdirLower.includes('battlecard') || subdirLower.includes('competitive') || fileLower.includes('battlecard')) docType = 'battlecard'
+              else if (subdirLower.includes('e-book') || subdirLower.includes('ebook')) docType = 'content-kit'
+              else if (subdirLower.includes('cheatsheet') || fileLower.includes('content kit')) docType = 'content-kit'
+
+              // Detect cloud provider from directory name OR filename
               let cloudProvider: string | undefined
-              if (subdirLower.includes('messaging')) docType = 'messaging-guide'
-              else if (subdirLower.includes('battlecard') || subdirLower.includes('compete')) docType = 'battlecard'
-              else if (subdirLower.includes('cloud') || subdirLower.includes('aws') || subdirLower.includes('rosa') || subdirLower.includes('aro') || subdirLower.includes('google')) {
-                docType = 'content-kit'
-                if (subdirLower.includes('aws') || subdirLower.includes('rosa')) cloudProvider = 'AWS'
-                else if (subdirLower.includes('azure') || subdirLower.includes('aro')) cloudProvider = 'Azure'
-                else if (subdirLower.includes('google') || subdirLower.includes('gcp')) cloudProvider = 'Google Cloud'
-              }
+              if (combined.includes('aws') || combined.includes('rosa')) cloudProvider = 'AWS'
+              else if (combined.includes('azure') || combined.includes(' aro ') || combined.includes('aro ')) cloudProvider = 'Azure'
+              else if (combined.includes('google cloud') || combined.includes('gcp')) cloudProvider = 'Google Cloud'
+
               documents.push({ name: file.replace(/\.(pdf|txt|md|extracted\.json)$/, ''), content, type: docType, cloudProvider })
             }
           }
@@ -506,22 +512,17 @@ export function createSaleshubProductsRouter() {
           const filePath = resolve(subdirPath, file)
           const content = readFileSync(filePath, 'utf-8')
           const subdirLower = subdir.name.toLowerCase()
+          const fileLower = file.toLowerCase()
+          const combined = `${subdirLower} ${fileLower}`
 
-          // Determine document type from subdirectory name
-          let docType = 'content-kit'  // default
+          let docType = 'content-kit'
           let cloudProvider: string | undefined
+          if (subdirLower.includes('messaging') || fileLower.includes('messaging guide')) docType = 'messaging-guide'
+          else if (subdirLower.includes('battlecard') || subdirLower.includes('compete') || fileLower.includes('battlecard')) docType = 'battlecard'
 
-          if (subdirLower.includes('messaging')) {
-            docType = 'messaging-guide'
-          } else if (subdirLower.includes('battlecard') || subdirLower.includes('compete')) {
-            docType = 'battlecard'
-          } else if (subdirLower.includes('cloud') || subdirLower.includes('aws') || subdirLower.includes('azure') || subdirLower.includes('rosa') || subdirLower.includes('aro') || subdirLower.includes('google')) {
-            docType = 'content-kit'
-            // Extract cloud provider from subdirectory name
-            if (subdirLower.includes('aws') || subdirLower.includes('rosa')) cloudProvider = 'AWS'
-            else if (subdirLower.includes('azure') || subdirLower.includes('aro')) cloudProvider = 'Azure'
-            else if (subdirLower.includes('google') || subdirLower.includes('gcp')) cloudProvider = 'Google Cloud'
-          }
+          if (combined.includes('aws') || combined.includes('rosa')) cloudProvider = 'AWS'
+          else if (combined.includes('azure') || combined.includes(' aro ') || combined.includes('aro ')) cloudProvider = 'Azure'
+          else if (combined.includes('google cloud') || combined.includes('gcp')) cloudProvider = 'Google Cloud'
 
           documents.push({
             name: file.replace(/\.(txt|md|extracted\.json)$/, ''),
