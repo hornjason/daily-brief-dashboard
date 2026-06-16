@@ -127,7 +127,7 @@ export async function enrichContentKit(
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
-      initialResult.text,
+      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
       { validator: contentKitValidator, maxRetries: 2 },
       async (failures, _attempt) => {
         const feedback = formatFailureFeedback(failures)
@@ -146,7 +146,8 @@ export async function enrichContentKit(
       )
     }
 
-    const parsed = JSON.parse(gateResult.output)
+    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+    const parsed = JSON.parse(cleaned)
 
     return {
       documentName: doc.name,
@@ -184,7 +185,7 @@ export async function enrichMessagingGuide(
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
-      initialResult.text,
+      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
       { validator: documentExtractionValidator, maxRetries: 2 },
       async (failures, _attempt) => {
         const feedback = formatFailureFeedback(failures)
@@ -203,7 +204,8 @@ export async function enrichMessagingGuide(
       )
     }
 
-    const parsed = JSON.parse(gateResult.output)
+    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+    const parsed = JSON.parse(cleaned)
 
     return {
       documentName: doc.name,
@@ -235,7 +237,7 @@ export async function enrichBattlecard(
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
-      initialResult.text,
+      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
       { validator: documentExtractionValidator, maxRetries: 2 },
       async (failures, _attempt) => {
         const feedback = formatFailureFeedback(failures)
@@ -254,7 +256,8 @@ export async function enrichBattlecard(
       )
     }
 
-    const parsed = JSON.parse(gateResult.output)
+    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+    const parsed = JSON.parse(cleaned)
 
     return {
       documentName: doc.name,
