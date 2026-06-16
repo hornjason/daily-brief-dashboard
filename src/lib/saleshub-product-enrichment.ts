@@ -156,10 +156,10 @@ export async function enrichContentKit(
       calculatorUrl: parsed.calculatorUrl ?? null,
       contactName: parsed.contactName ?? null,
       contactEmail: parsed.contactEmail ?? undefined,
-      workshops: parsed.workshops ?? [],
-      demos: parsed.demos ?? [],
-      battlecards: parsed.battlecards ?? [],
-      internalMaterials: parsed.internalMaterials ?? [],
+      workshops: (parsed.workshops ?? []).slice(0, 5),
+      demos: (parsed.demos ?? []).slice(0, 5),
+      battlecards: (parsed.battlecards ?? []).slice(0, 5),
+      internalMaterials: (parsed.internalMaterials ?? []).slice(0, 5),
       salesPlayAlignment: parsed.salesPlayAlignment ?? [],
     }
   } catch (e: any) {

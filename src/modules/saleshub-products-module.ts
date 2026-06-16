@@ -237,7 +237,9 @@ function emitProductSignals(
       signals.push({
         source: 'saleshub-products',
         type: 'recommendation',
-        headline: `${product.name} on ${kit.cloudProvider} engagement path available`,
+        headline: kit.cloudProvider !== 'unknown'
+          ? `${product.name} on ${kit.cloudProvider} — ${kit.documentName}`
+          : `${product.name} — ${kit.documentName}`,
         detail: stepsFormatted,
         rawRelevance: 0.35,
         timestamp,
