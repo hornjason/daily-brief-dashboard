@@ -211,9 +211,9 @@ function emitProductSignals(
     })
   }
 
-  // 2. Cloud provider content kit signals (from enrichment)
+  // 2. Cloud provider content kit signals (from enrichment, cap at 5)
   if (enrichment?.contentKits) {
-    for (const kit of enrichment.contentKits) {
+    for (const kit of enrichment.contentKits.slice(0, 5)) {
       const stepsFormatted = kit.actionableSteps
         .map((s, i) => `${i + 1}. ${s.step}${s.url ? ` (${s.url})` : ''}`)
         .join('\n')

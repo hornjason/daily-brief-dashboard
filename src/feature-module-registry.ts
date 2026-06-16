@@ -65,6 +65,7 @@ const SIGNAL_BUDGETS: Record<string, number> = {
   'mergers-acquisitions': 5,
   'competitive-intel': 8,
   'recommended-actions': 5,
+  'saleshub-products': 20,
 }
 
 const DEFAULT_BUDGET = 5
