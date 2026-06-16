@@ -31,16 +31,13 @@ interface ProductData {
 let productCache: Map<string, ProductData> | null = null
 let lastLoadedAt = 0
 
-function getConfigTemplatesDir(): string {
-  // In container: CONFIG_DIR points to mounted config; otherwise use config-templates
-  if (process.env.CONFIG_DIR) {
-    return resolve(process.env.CONFIG_DIR, '..', 'config-templates')
-  }
-  return resolve('config-templates')
-}
-
 function getProductsDir(): string {
-  return resolve(getConfigTemplatesDir(), 'saleshub-products')
+  // Check mounted data path first, then app-baked path
+  if (process.env.CONFIG_DIR) {
+    const mounted = resolve(process.env.CONFIG_DIR, '..', 'config-templates', 'saleshub-products')
+    if (existsSync(mounted)) return mounted
+  }
+  return resolve('config-templates', 'saleshub-products')
 }
 
 /**
