@@ -464,6 +464,39 @@ export function createSaleshubProductsRouter() {
       const subdirs = readdirSync(productDir, { withFileTypes: true }).filter(d => d.isDirectory())
 
       for (const subdir of subdirs) {
+        if (subdir.name === 'downloads') {
+          // Scan download subdirectories for PDFs and text files
+          const dlSubdirs = readdirSync(resolve(productDir, 'downloads'), { withFileTypes: true }).filter(d => d.isDirectory())
+          for (const dlSub of dlSubdirs) {
+            const dlSubPath = resolve(productDir, 'downloads', dlSub.name)
+            const dlFiles = readdirSync(dlSubPath).filter(f =>
+              f.endsWith('.pdf') || f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')
+            )
+            for (const file of dlFiles) {
+              const filePath = resolve(dlSubPath, file)
+              let content: string
+              if (file.endsWith('.pdf')) {
+                content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+              } else {
+                content = readFileSync(filePath, 'utf-8')
+              }
+              const subdirLower = dlSub.name.toLowerCase()
+              let docType = 'content-kit'
+              let cloudProvider: string | undefined
+              if (subdirLower.includes('messaging')) docType = 'messaging-guide'
+              else if (subdirLower.includes('battlecard') || subdirLower.includes('compete')) docType = 'battlecard'
+              else if (subdirLower.includes('cloud') || subdirLower.includes('aws') || subdirLower.includes('rosa') || subdirLower.includes('aro') || subdirLower.includes('google')) {
+                docType = 'content-kit'
+                if (subdirLower.includes('aws') || subdirLower.includes('rosa')) cloudProvider = 'AWS'
+                else if (subdirLower.includes('azure') || subdirLower.includes('aro')) cloudProvider = 'Azure'
+                else if (subdirLower.includes('google') || subdirLower.includes('gcp')) cloudProvider = 'Google Cloud'
+              }
+              documents.push({ name: file.replace(/\.(pdf|txt|md|extracted\.json)$/, ''), content, type: docType, cloudProvider })
+            }
+          }
+          continue
+        }
+
         const subdirPath = resolve(productDir, subdir.name)
         const files = readdirSync(subdirPath).filter(f =>
           f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')

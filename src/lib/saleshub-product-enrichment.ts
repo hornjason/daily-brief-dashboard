@@ -32,6 +32,26 @@ interface DocumentInput {
   content: string
 }
 
+const PDF_MARKER = '[PDF:base64:'
+function isPdfContent(content: string): boolean {
+  return content.startsWith(PDF_MARKER)
+}
+function extractPdfBase64(content: string): string {
+  return content.slice(PDF_MARKER.length, -1)
+}
+function buildGeminiOpts(content: string, baseOpts: any): any {
+  if (isPdfContent(content)) {
+    return { ...baseOpts, inlineDataParts: [{ mimeType: 'application/pdf', data: extractPdfBase64(content) }] }
+  }
+  return baseOpts
+}
+function buildUserPrompt(promptFn: (name: string, content: string) => string, name: string, content: string): string {
+  if (isPdfContent(content)) {
+    return promptFn(name, '[See attached PDF document]')
+  }
+  return promptFn(name, content)
+}
+
 interface EnrichmentDocumentInput {
   name: string
   content: string
@@ -101,13 +121,10 @@ export async function enrichContentKit(
 ): Promise<ContentKitExtraction | null> {
   try {
     const systemPrompt = CONTENT_KIT_SYSTEM_PROMPT
-    const userPrompt = CONTENT_KIT_USER_PROMPT(doc.name, doc.content)
+    const userPrompt = buildUserPrompt(CONTENT_KIT_USER_PROMPT, doc.name, doc.content)
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
 
-    const initialResult = await gemini(systemPrompt, userPrompt, {
-      callType: 'content-kit-extraction',
-      model: 'lite',
-      responseSchema: undefined,  // parse manually — Gemini structured output can be lossy on URLs
-    })
+    const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
       initialResult.text,
@@ -117,7 +134,7 @@ export async function enrichContentKit(
         const retryResult = await gemini(
           systemPrompt,
           `${userPrompt}\n\n${feedback}`,
-          { callType: 'content-kit-extraction', model: 'lite' },
+          opts,
         )
         return retryResult.text
       },
@@ -161,12 +178,10 @@ export async function enrichMessagingGuide(
 ): Promise<DocumentExtraction | null> {
   try {
     const systemPrompt = MESSAGING_GUIDE_SYSTEM_PROMPT
-    const userPrompt = MESSAGING_GUIDE_USER_PROMPT(doc.name, doc.content)
+    const userPrompt = buildUserPrompt(MESSAGING_GUIDE_USER_PROMPT, doc.name, doc.content)
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
 
-    const initialResult = await gemini(systemPrompt, userPrompt, {
-      callType: 'content-kit-extraction',
-      model: 'lite',
-    })
+    const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
       initialResult.text,
@@ -176,7 +191,7 @@ export async function enrichMessagingGuide(
         const retryResult = await gemini(
           systemPrompt,
           `${userPrompt}\n\n${feedback}`,
-          { callType: 'content-kit-extraction', model: 'lite' },
+          opts,
         )
         return retryResult.text
       },
@@ -214,12 +229,10 @@ export async function enrichBattlecard(
 ): Promise<DocumentExtraction | null> {
   try {
     const systemPrompt = BATTLECARD_SYSTEM_PROMPT
-    const userPrompt = BATTLECARD_USER_PROMPT(doc.name, doc.content)
+    const userPrompt = buildUserPrompt(BATTLECARD_USER_PROMPT, doc.name, doc.content)
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
 
-    const initialResult = await gemini(systemPrompt, userPrompt, {
-      callType: 'content-kit-extraction',
-      model: 'lite',
-    })
+    const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     const gateResult = await validateAndRetry(
       initialResult.text,
@@ -229,7 +242,7 @@ export async function enrichBattlecard(
         const retryResult = await gemini(
           systemPrompt,
           `${userPrompt}\n\n${feedback}`,
-          { callType: 'content-kit-extraction', model: 'lite' },
+          opts,
         )
         return retryResult.text
       },
