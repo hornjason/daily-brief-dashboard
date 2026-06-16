@@ -9,6 +9,8 @@
  */
 
 import { callGemini, type GeminiResult } from '../gemini-call.ts'
+import { validateAndRetry } from '../gemini-quality-gate.ts'
+import { contentKitValidator, documentExtractionValidator } from '../quality-validators/product-enrichment-validator.ts'
 import type {
   ContentKitExtraction,
   DocumentExtraction,

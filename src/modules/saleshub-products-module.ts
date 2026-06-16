@@ -15,7 +15,8 @@
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadCustomerContext, matchesSubscriptionProducts } from '../lib/customer-context-loader.ts'
-import { readCCSPCache } from '../cache-layer.ts'
+import { readCCSPCache, readPipelineCache } from '../cache-layer.ts'
+import { downloadProductsFromDrive } from '../lib/saleshub-product-drive-sync.ts'
 import type { ProductPage, ProductSection, ProductEnrichment } from '../types/saleshub-product-types.ts'
 import { resolve } from 'path'
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
@@ -316,7 +317,16 @@ FeatureModuleRegistry.register({
 
   async ensureFresh(_customerSlug: string): Promise<void> {
     const productsDir = getProductsDir()
-    if (!existsSync(productsDir)) return
+    if (!existsSync(productsDir)) {
+      // No local data — try downloading from Drive
+      try {
+        await downloadProductsFromDrive()
+      } catch (e: any) {
+        console.warn(`[saleshub-products] Drive download failed in ensureFresh: ${e.message}`)
+      }
+      resetProductCache()
+      return
+    }
 
     // Check mtime of the products directory itself
     try {
@@ -324,7 +334,12 @@ FeatureModuleRegistry.register({
       if (Date.now() - stat.mtimeMs < this.cacheTtlMs!) return // fresh
     } catch { /* needs refresh */ }
 
-    // Stale — reset cache to force re-read from disk on next signals() call
+    // Stale — download from Drive, then reset cache
+    try {
+      await downloadProductsFromDrive()
+    } catch (e: any) {
+      console.warn(`[saleshub-products] Drive download failed in ensureFresh — using disk: ${e.message}`)
+    }
     resetProductCache()
   },
 
@@ -343,7 +358,15 @@ FeatureModuleRegistry.register({
   },
 
   async syncNow(_customerName: string): Promise<void> {
-    // Force re-read of product JSON files from disk
+    // Download fresh product data from Drive before re-reading
+    try {
+      const result = await downloadProductsFromDrive()
+      if (result) {
+        console.log(`[saleshub-products] Downloaded ${result.downloaded} products from Drive: ${result.products.join(', ')}`)
+      }
+    } catch (e: any) {
+      console.warn(`[saleshub-products] Drive download failed in syncNow — using disk: ${e.message}`)
+    }
     resetProductCache()
     const products = loadProducts()
 

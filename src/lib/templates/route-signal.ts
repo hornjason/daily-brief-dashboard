@@ -27,6 +27,7 @@ export function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | '
   if (signal.source === 'intelligence') return 'intelligence'
   if (signal.source === 'partner-catalog') return 'partner'
   if (signal.source === 'saleshub-tactics' || signal.source === 'saleshub-plays') return 'saleshub'
+  if (signal.source === 'saleshub-products') return 'product'
   if (signal.source === 'emails') return 'email'
 
   // Metadata-driven routing (most specific first)
