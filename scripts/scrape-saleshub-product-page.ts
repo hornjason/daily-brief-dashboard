@@ -848,37 +848,44 @@ async function downloadProductDocuments(
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 }
 
-async function main(): Promise<void> {
-  const url = process.argv[2] || DEFAULT_URL
+export async function scrapeProductPage(
+  url: string = DEFAULT_URL,
+  externalContext?: BrowserContext,
+): Promise<void> {
   console.log(`[product-scraper] Starting product page scrape`)
   console.log(`[product-scraper] URL: ${url}`)
 
-  // Load session state
-  const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
-  if (!existsSync(sessionStatePath)) {
-    throw new Error(`[product-scraper] No session-state.json at ${sessionStatePath}`)
+  let browser: any = null
+  let context: BrowserContext
+
+  if (externalContext) {
+    context = externalContext
+    console.log('[product-scraper] Using external browser context (sync daemon)')
+  } else {
+    const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
+    if (!existsSync(sessionStatePath)) {
+      throw new Error(`[product-scraper] No session-state.json at ${sessionStatePath}`)
+    }
+    const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
+    console.log(`[product-scraper] Loaded ${sessionState.cookies?.length ?? 0} cookies from session state`)
+
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: CHROMIUM_PATH,
+      args: [
+        ...BASE_CHROMIUM_ARGS,
+        '--disable-blink-features=AutomationControlled',
+        '--headless=new',
+      ],
+    })
+
+    context = await browser.newContext({
+      storageState: sessionState,
+      acceptDownloads: true,
+      userAgent:
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    })
   }
-
-  const sessionState = JSON.parse(readFileSync(sessionStatePath, 'utf-8'))
-  console.log(`[product-scraper] Loaded ${sessionState.cookies?.length ?? 0} cookies from session state`)
-
-  // Launch browser with same pattern as scrape-saleshub.ts
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROMIUM_PATH,
-    args: [
-      ...BASE_CHROMIUM_ARGS,
-      '--disable-blink-features=AutomationControlled',
-      '--headless=new',
-    ],
-  })
-
-  const context = await browser.newContext({
-    storageState: sessionState,
-    acceptDownloads: true,
-    userAgent:
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  })
 
   try {
     const page = await context.newPage()
@@ -1064,12 +1071,18 @@ async function main(): Promise<void> {
     console.log(`  ${configPath}`)
     console.log('[product-scraper] Done.')
   } finally {
-    await context.close()
-    await browser.close()
+    if (!externalContext) {
+      await context.close()
+      if (browser) await browser.close()
+    }
   }
 }
 
-main().catch((err) => {
-  console.error('[product-scraper] Fatal error:', err)
-  process.exit(1)
-})
+if (import.meta.main) {
+  const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
+  const url = args[0] || DEFAULT_URL
+  scrapeProductPage(url).catch((err) => {
+    console.error('[product-scraper] Fatal error:', err)
+    process.exit(1)
+  })
+}

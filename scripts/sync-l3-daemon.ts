@@ -20,6 +20,7 @@ import { syncAllPods } from './sync-pod-l3.ts'
 import { scrapeSalesHub } from './scrape-saleshub.ts'
 import { syncSalesHubToDrive } from './sync-saleshub-drive.ts'
 import { enrichSolutionPlays } from './enrich-solution-plays.ts'
+import { scrapeProductPage } from './scrape-saleshub-product-page.ts'
 import { isPrimary } from '../src/lib/node-role.ts'
 import { isContextHealthy, canContextRender } from './sync-l3-daemon-utils.ts'
 import { adoptSfContext } from '../src/sf-scraper.ts'
@@ -851,6 +852,18 @@ async function main(): Promise<void> {
       console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
       const enrichResult = enrichSolutionPlays()
       console.log(`[sync-daemon] saleshub enrichment — ${enrichResult.enriched}/${enrichResult.total} plays enriched`)
+
+      // Product-first scrape (#819) — uses daemon's browser context for localStorage auth
+      const scrapeCtx = getScrapeContext()
+      if (scrapeCtx) {
+        console.log('[sync-daemon] starting product page scrape (OpenShift Virtualization)...')
+        try {
+          await scrapeProductPage(undefined, scrapeCtx)
+          console.log('[sync-daemon] product page scrape complete')
+        } catch (e: any) {
+          console.warn(`[sync-daemon] product page scrape failed: ${e.message?.slice(0, 100)}`)
+        }
+      }
       await sendBriefEmail(
         ALERT_EMAIL,
         `SalesHub Sync Complete — ${new Date().toISOString().slice(0, 10)}`,
