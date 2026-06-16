@@ -446,7 +446,10 @@ export function createSaleshubProductsRouter() {
     const productDir = resolve(productsDir, slug)
     const productPath = resolve(productDir, '_product.json')
 
-    if (!existsSync(productPath)) {
+    // Also check the app-baked path for downloads (mounted path may only have _product.json)
+    const appProductDir = resolve('config-templates', 'saleshub-products', slug)
+
+    if (!existsSync(productPath) && !existsSync(resolve(appProductDir, '_product.json'))) {
       return c.json({ error: `Product not found: ${slug}` }, 404)
     }
 
@@ -458,19 +461,27 @@ export function createSaleshubProductsRouter() {
       return c.json({ error: `Failed to read product data: ${e.message}` }, 500)
     }
 
-    // Collect documents to enrich from the product directory
+    // Collect documents to enrich from the product directory (check both mounted and app-baked paths)
     const documents: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
+    const dirsToScan = [productDir]
+    if (appProductDir !== productDir && existsSync(appProductDir)) dirsToScan.push(appProductDir)
 
     // Scan for downloadable files in subdirectories
     try {
-      const subdirs = readdirSync(productDir, { withFileTypes: true }).filter(d => d.isDirectory())
+      const allSubdirs: Array<{ name: string; parentDir: string }> = []
+      for (const scanDir of dirsToScan) {
+        const subs = readdirSync(scanDir, { withFileTypes: true }).filter(d => d.isDirectory())
+        for (const s of subs) allSubdirs.push({ name: s.name, parentDir: scanDir })
+      }
+      const subdirs = allSubdirs.map(s => ({ ...s, isDirectory: () => true }))
 
       for (const subdir of subdirs) {
         if (subdir.name === 'downloads') {
           // Scan download subdirectories for PDFs and text files
-          const dlSubdirs = readdirSync(resolve(productDir, 'downloads'), { withFileTypes: true }).filter(d => d.isDirectory())
+          const downloadsPath = resolve(subdir.parentDir, 'downloads')
+          const dlSubdirs = readdirSync(downloadsPath, { withFileTypes: true }).filter(d => d.isDirectory())
           for (const dlSub of dlSubdirs) {
-            const dlSubPath = resolve(productDir, 'downloads', dlSub.name)
+            const dlSubPath = resolve(downloadsPath, dlSub.name)
             const dlFiles = readdirSync(dlSubPath).filter(f => {
               const lower = f.toLowerCase()
               return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx') ||
@@ -515,7 +526,7 @@ export function createSaleshubProductsRouter() {
           continue
         }
 
-        const subdirPath = resolve(productDir, subdir.name)
+        const subdirPath = resolve(subdir.parentDir, subdir.name)
         const files = readdirSync(subdirPath).filter(f =>
           f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')
         )
