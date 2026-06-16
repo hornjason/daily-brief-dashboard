@@ -36,7 +36,7 @@ const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
-const CHROMIUM_PATH = '/ms-playwright/chromium-1208/chrome-linux/chrome'
+const CHROMIUM_PATH = process.env.CHROMIUM_PATH ?? '/ms-playwright/chromium-1208/chrome-linux/chrome'
 
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
