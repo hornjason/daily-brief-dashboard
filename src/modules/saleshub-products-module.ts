@@ -45,7 +45,14 @@ function getProductsDir(): string {
  * Uses mtime-based reload — only rereads when files have changed.
  */
 function loadProducts(): Map<string, ProductData> {
+  // Cache staleness check — invalidate if older than cacheTtlMs (7 days)
+  const cacheTtlMs = 7 * 24 * 60 * 60 * 1000
+  if (productCache && lastLoadedAt > 0 && (Date.now() - lastLoadedAt > cacheTtlMs)) {
+    productCache = null
+  }
   if (productCache) return productCache
+
+
 
   const products = new Map<string, ProductData>()
   const productsDir = getProductsDir()
@@ -411,3 +418,123 @@ FeatureModuleRegistry.register({
     return allSignals
   },
 })
+
+// ── Enrichment endpoint (Gap 2 — GitHub Issue #819) ─────────────────────────
+
+import { Hono } from 'hono'
+import { enrichProductDocuments } from '../lib/saleshub-product-enrichment.ts'
+import { writeFileSync } from 'fs'
+
+/**
+ * Creates a Hono router with the POST /api/saleshub-products/enrich endpoint.
+ * Wire into server.ts: app.route('/', createSaleshubProductsRouter())
+ */
+export function createSaleshubProductsRouter() {
+  const router = new Hono()
+
+  router.post('/api/saleshub-products/enrich', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const slug = (body as any).slug as string | undefined
+
+    if (!slug) {
+      return c.json({ error: 'Missing required field: slug' }, 400)
+    }
+
+    const productsDir = getProductsDir()
+    const productDir = resolve(productsDir, slug)
+    const productPath = resolve(productDir, '_product.json')
+
+    if (!existsSync(productPath)) {
+      return c.json({ error: `Product not found: ${slug}` }, 404)
+    }
+
+    // Read _product.json
+    let product: ProductPage
+    try {
+      product = JSON.parse(readFileSync(productPath, 'utf-8'))
+    } catch (e: any) {
+      return c.json({ error: `Failed to read product data: ${e.message}` }, 500)
+    }
+
+    // Collect documents to enrich from the product directory
+    const documents: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
+
+    // Scan for downloadable files in subdirectories
+    try {
+      const subdirs = readdirSync(productDir, { withFileTypes: true }).filter(d => d.isDirectory())
+
+      for (const subdir of subdirs) {
+        const subdirPath = resolve(productDir, subdir.name)
+        const files = readdirSync(subdirPath).filter(f =>
+          f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')
+        )
+
+        for (const file of files) {
+          const filePath = resolve(subdirPath, file)
+          const content = readFileSync(filePath, 'utf-8')
+          const subdirLower = subdir.name.toLowerCase()
+
+          // Determine document type from subdirectory name
+          let docType = 'content-kit'  // default
+          let cloudProvider: string | undefined
+
+          if (subdirLower.includes('messaging')) {
+            docType = 'messaging-guide'
+          } else if (subdirLower.includes('battlecard') || subdirLower.includes('compete')) {
+            docType = 'battlecard'
+          } else if (subdirLower.includes('cloud') || subdirLower.includes('aws') || subdirLower.includes('azure') || subdirLower.includes('rosa') || subdirLower.includes('aro') || subdirLower.includes('google')) {
+            docType = 'content-kit'
+            // Extract cloud provider from subdirectory name
+            if (subdirLower.includes('aws') || subdirLower.includes('rosa')) cloudProvider = 'AWS'
+            else if (subdirLower.includes('azure') || subdirLower.includes('aro')) cloudProvider = 'Azure'
+            else if (subdirLower.includes('google') || subdirLower.includes('gcp')) cloudProvider = 'Google Cloud'
+          }
+
+          documents.push({
+            name: file.replace(/\.(txt|md|extracted\.json)$/, ''),
+            content,
+            type: docType,
+            cloudProvider,
+          })
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[saleshub-products] Error scanning product directory for enrichment: ${e.message}`)
+    }
+
+    if (documents.length === 0) {
+      return c.json({
+        slug,
+        enriched: false,
+        message: 'No enrichable documents found. Download documents first.',
+        documentsFound: 0,
+      })
+    }
+
+    // Run enrichment
+    try {
+      const enrichment = await enrichProductDocuments(slug, documents)
+
+      // Write _enriched.json
+      const enrichedPath = resolve(productDir, '_enriched.json')
+      writeFileSync(enrichedPath, JSON.stringify(enrichment, null, 2))
+
+      // Reset cache so next signals() call picks up enrichment
+      resetProductCache()
+
+      return c.json({
+        slug,
+        enriched: true,
+        documentsProcessed: documents.length,
+        contentKits: enrichment.contentKits.length,
+        messagingGuides: enrichment.messagingGuides.length,
+        battlecards: enrichment.battlecards.length,
+        enrichedAt: enrichment.enrichedAt,
+      })
+    } catch (e: any) {
+      return c.json({ error: `Enrichment failed: ${e.message}` }, 500)
+    }
+  })
+
+  return router
+}

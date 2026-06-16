@@ -250,6 +250,19 @@ export function hasSpecificNames(tableText: string, columnIndex: number): boolea
   return hasName
 }
 
+/** Build a minimal scorecard from a score alone (used by validators that construct checks externally) */
+export function initialScorecard(score: number): Omit<QualityScorecard, 'checks'> {
+  return {
+    contentType: '',
+    score,
+    failures: [],
+    passThreshold: 60,
+    passed: score >= 60,
+    timestamp: new Date().toISOString(),
+    attempt: 1,
+  }
+}
+
 /** Format quality check failures as structured feedback for retry prompts */
 export function formatFailureFeedback(failures: QualityCheck[]): string {
   if (failures.length === 0) return ''

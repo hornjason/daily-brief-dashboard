@@ -2,14 +2,14 @@
  * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819)
  *
  * Enriches product documents (content kits, messaging guides, battlecards)
- * using callGemini() (ADR-023). Extracts structured data with URL preservation.
+ * using callGemini() (ADR-023) with ADR-024 quality validators.
  *
  * Each function accepts an optional geminiCaller parameter for testing
  * (defaults to the real callGemini import).
  */
 
 import { callGemini, type GeminiResult } from '../gemini-call.ts'
-import { validateAndRetry } from '../gemini-quality-gate.ts'
+import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
 import { contentKitValidator, documentExtractionValidator } from '../quality-validators/product-enrichment-validator.ts'
 import type {
   ContentKitExtraction,
@@ -92,6 +92,7 @@ ${content}`
 
 /**
  * Enrich a content kit document with Gemini extraction.
+ * Uses ADR-024 validateAndRetry with contentKitValidator.
  * Returns a ContentKitExtraction or null on failure.
  */
 export async function enrichContentKit(
@@ -99,17 +100,36 @@ export async function enrichContentKit(
   gemini: GeminiCaller = callGemini,
 ): Promise<ContentKitExtraction | null> {
   try {
-    const result = await gemini(
-      CONTENT_KIT_SYSTEM_PROMPT,
-      CONTENT_KIT_USER_PROMPT(doc.name, doc.content),
-      {
-        callType: 'content-kit-extraction',
-        model: 'lite',
-        responseSchema: undefined,  // parse manually — Gemini structured output can be lossy on URLs
+    const systemPrompt = CONTENT_KIT_SYSTEM_PROMPT
+    const userPrompt = CONTENT_KIT_USER_PROMPT(doc.name, doc.content)
+
+    const initialResult = await gemini(systemPrompt, userPrompt, {
+      callType: 'content-kit-extraction',
+      model: 'lite',
+      responseSchema: undefined,  // parse manually — Gemini structured output can be lossy on URLs
+    })
+
+    const gateResult = await validateAndRetry(
+      initialResult.text,
+      { validator: contentKitValidator, maxRetries: 2 },
+      async (failures, _attempt) => {
+        const feedback = formatFailureFeedback(failures)
+        const retryResult = await gemini(
+          systemPrompt,
+          `${userPrompt}\n\n${feedback}`,
+          { callType: 'content-kit-extraction', model: 'lite' },
+        )
+        return retryResult.text
       },
     )
 
-    const parsed = JSON.parse(result.text)
+    if (!gateResult.scorecard.passed) {
+      console.warn(
+        `[saleshub-product-enrichment] Content kit "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
+      )
+    }
+
+    const parsed = JSON.parse(gateResult.output)
 
     return {
       documentName: doc.name,
@@ -132,6 +152,7 @@ export async function enrichContentKit(
 
 /**
  * Enrich a messaging guide document with Gemini extraction.
+ * Uses ADR-024 validateAndRetry with documentExtractionValidator.
  * Returns a DocumentExtraction or null on failure.
  */
 export async function enrichMessagingGuide(
@@ -139,16 +160,35 @@ export async function enrichMessagingGuide(
   gemini: GeminiCaller = callGemini,
 ): Promise<DocumentExtraction | null> {
   try {
-    const result = await gemini(
-      MESSAGING_GUIDE_SYSTEM_PROMPT,
-      MESSAGING_GUIDE_USER_PROMPT(doc.name, doc.content),
-      {
-        callType: 'content-kit-extraction',
-        model: 'lite',
+    const systemPrompt = MESSAGING_GUIDE_SYSTEM_PROMPT
+    const userPrompt = MESSAGING_GUIDE_USER_PROMPT(doc.name, doc.content)
+
+    const initialResult = await gemini(systemPrompt, userPrompt, {
+      callType: 'content-kit-extraction',
+      model: 'lite',
+    })
+
+    const gateResult = await validateAndRetry(
+      initialResult.text,
+      { validator: documentExtractionValidator, maxRetries: 2 },
+      async (failures, _attempt) => {
+        const feedback = formatFailureFeedback(failures)
+        const retryResult = await gemini(
+          systemPrompt,
+          `${userPrompt}\n\n${feedback}`,
+          { callType: 'content-kit-extraction', model: 'lite' },
+        )
+        return retryResult.text
       },
     )
 
-    const parsed = JSON.parse(result.text)
+    if (!gateResult.scorecard.passed) {
+      console.warn(
+        `[saleshub-product-enrichment] Messaging guide "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
+      )
+    }
+
+    const parsed = JSON.parse(gateResult.output)
 
     return {
       documentName: doc.name,
@@ -165,6 +205,7 @@ export async function enrichMessagingGuide(
 
 /**
  * Enrich a battlecard document with Gemini extraction.
+ * Uses ADR-024 validateAndRetry with documentExtractionValidator.
  * Returns a DocumentExtraction or null on failure.
  */
 export async function enrichBattlecard(
@@ -172,16 +213,35 @@ export async function enrichBattlecard(
   gemini: GeminiCaller = callGemini,
 ): Promise<DocumentExtraction | null> {
   try {
-    const result = await gemini(
-      BATTLECARD_SYSTEM_PROMPT,
-      BATTLECARD_USER_PROMPT(doc.name, doc.content),
-      {
-        callType: 'content-kit-extraction',
-        model: 'lite',
+    const systemPrompt = BATTLECARD_SYSTEM_PROMPT
+    const userPrompt = BATTLECARD_USER_PROMPT(doc.name, doc.content)
+
+    const initialResult = await gemini(systemPrompt, userPrompt, {
+      callType: 'content-kit-extraction',
+      model: 'lite',
+    })
+
+    const gateResult = await validateAndRetry(
+      initialResult.text,
+      { validator: documentExtractionValidator, maxRetries: 2 },
+      async (failures, _attempt) => {
+        const feedback = formatFailureFeedback(failures)
+        const retryResult = await gemini(
+          systemPrompt,
+          `${userPrompt}\n\n${feedback}`,
+          { callType: 'content-kit-extraction', model: 'lite' },
+        )
+        return retryResult.text
       },
     )
 
-    const parsed = JSON.parse(result.text)
+    if (!gateResult.scorecard.passed) {
+      console.warn(
+        `[saleshub-product-enrichment] Battlecard "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
+      )
+    }
+
+    const parsed = JSON.parse(gateResult.output)
 
     return {
       documentName: doc.name,
