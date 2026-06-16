@@ -1,6 +1,6 @@
 {
   "productSlug": "red-hat-openshift-virtualization",
-  "enrichedAt": "2026-06-16T18:18:20.376Z",
+  "enrichedAt": "2026-06-16T18:34:32.515Z",
   "contentKits": [
     {
       "documentName": "4.22.2026_PG Day_Adoption",
@@ -14,7 +14,7 @@
         },
         {
           "step": "Create an ALG Task in Red Hat Sales Cloud",
-          "url": "https://source.redhat.com/groups/sales/sales-playbooks/application-platform-adoption-playbook/adoption-led-growth-alg-sales-cloud"
+          "url": "https://source.redhat.com/groups/sales/red_hat_sales_cloud"
         },
         {
           "step": "Determine Next Steps with Account Team"
@@ -24,12 +24,6 @@
         },
         {
           "step": "Engage with Red Hat Services and/or SAAS"
-        },
-        {
-          "step": "Look at the provided spreadsheet and RHSC report (see speaker notes for detail)"
-        },
-        {
-          "step": "ADD ALG TASK where applicable (see next slide)"
         }
       ],
       "calculatorUrl": null,
@@ -37,32 +31,32 @@
       "workshops": [
         {
           "name": "Build secure streamlined developer workflows with Red Hat Advanced Developer Suite (RHADS)",
-          "url": "https://www.redhat.com/en/events/workshops/build-secure-streamlined-developer-workflows-with-red-hat-advanced-developer-suite"
+          "url": "TBD"
         }
       ],
       "demos": [
         {
           "name": "RHADS Demo",
-          "url": "https://www.redhat.com/en/technologies/developer-tools/advanced-developer-suite"
+          "url": "TBD"
         }
       ],
       "battlecards": [],
       "internalMaterials": [
         {
-          "name": "Program Source Page",
-          "url": "https://source.redhat.com/groups/sales/sales-playbooks/application-platform-adoption-playbook/jump-java-upgrade-and-modernization-program"
+          "name": "Platform Engineering Roadshow",
+          "url": "TBD"
         },
         {
-          "name": "RHADS Deeper Technical Training",
-          "url": "https://source.redhat.com/groups/PNT/RH_Training/RHADS_Deeper_Technical_Training"
+          "name": "Deeper Technical Training",
+          "url": "TBD"
         },
         {
-          "name": "Dev Spaces Quick Course",
-          "url": "https://source.redhat.com/groups/PNT/RH_Training/DevSpaces_QuickCourse"
+          "name": "Quick Course",
+          "url": "TBD"
         },
         {
-          "name": "Dev Spaces LMS Course",
-          "url": "https://source.redhat.com/groups/PNT/RH_Training/DevSpaces_LMS_Course"
+          "name": "LMS Course",
+          "url": "TBD"
         }
       ],
       "salesPlayAlignment": []
@@ -94,46 +88,10 @@
           "step": "Share and learn something from a peer about prospecting"
         },
         {
-          "step": "Link contact to account if not done already"
-        },
-        {
-          "step": "Create new Opp"
-        },
-        {
-          "step": "Convert"
-        },
-        {
-          "step": "Follow steps for Opp Creation"
-        },
-        {
-          "step": "Select \"new\" for Lead Status"
-        },
-        {
-          "step": "Insert the opportunity details summary in the Job Role field"
-        },
-        {
-          "step": "Try to list Title in Lead Information"
-        },
-        {
-          "step": "Search a current account, don't just list company as won't work. Have to do both!"
-        },
-        {
-          "step": "Select Employee Referral as the \"Lead Source\", future enhancement will have \"Tech Sales\""
-        },
-        {
-          "step": "Save!"
-        },
-        {
-          "step": "Use a new email address to log the contact"
-        },
-        {
-          "step": "Contact your AE or SSP and have them enter your lead pass as an opportunity directly (without a formal lead being passed, this should be the exception)"
-        },
-        {
-          "step": "Focus on leveraging new personas information in Sales Hub"
-        },
-        {
           "step": "Create or share content you have developed"
+        },
+        {
+          "step": "Review/Create Deal Registrations (ESA) or Share Content (Pooled Team)"
         }
       ],
       "calculatorUrl": null,
@@ -142,15 +100,15 @@
       "demos": [
         {
           "name": "RHSH - Search Demo (Streamlined) 2min",
-          "url": "RHSH - Search Demo (Streamlined) 2min"
+          "url": "https://video.redhat.com/media/RHSH+-+Search+Demo+%28Streamlined%29+2min/1_i4z9r1h4"
         },
         {
           "name": "RHSH - Pages Demo (Streamlined) 2.5mins",
-          "url": "RHSH - Pages Demo (Streamlined) 2.5mins"
+          "url": "https://video.redhat.com/media/RHSH+-+Pages+Demo+%28Streamlined%29+2.5mins/1_5n8g9x9h"
         },
         {
           "name": "RHSH - Workspace Demo (Streamlined) 1min",
-          "url": "RHSH - Workspace Demo (Streamlined) 1min"
+          "url": "https://video.redhat.com/media/RHSH+-+Workspace+Demo+%28Streamlined%29+1min/1_i2c3x1h8"
         }
       ],
       "battlecards": [],
@@ -164,36 +122,8 @@
           "url": "Sales Assistant Source Page"
         },
         {
-          "name": "#forum-sales-assistant",
-          "url": "#forum-sales-assistant"
-        },
-        {
-          "name": "Americas Internal Success Stories & Win Wires",
-          "url": "Americas Internal Success Stories & Win Wires"
-        },
-        {
-          "name": "RHSH - Search Demo (Streamlined) 2min",
-          "url": "RHSH - Search Demo (Streamlined) 2min"
-        },
-        {
-          "name": "RHSH - Pages Demo (Streamlined) 2.5mins",
-          "url": "RHSH - Pages Demo (Streamlined) 2.5mins"
-        },
-        {
-          "name": "RHSH - Workspace Demo (Streamlined) 1min",
-          "url": "RHSH - Workspace Demo (Streamlined) 1min"
-        },
-        {
-          "name": "RH Sale Hub (RHSH)",
-          "url": "RH Sale Hub"
-        },
-        {
-          "name": "2026 Reseller Rebate Guide",
-          "url": "2026 Reseller Rebate Guide"
-        },
-        {
           "name": "Red Hat Partner Rebate Guide",
-          "url": "Red Hat Partner Rebate Guide"
+          "url": "2026 Reseller Rebate Guide"
         },
         {
           "name": "Partner Deal Registration Process Guide for PAMs",
@@ -201,51 +131,35 @@
         },
         {
           "name": "PSE/AE Workflow Overview",
-          "url": "PSE/AE Workflow Overview"
+          "url": "https://video.redhat.com/media/PSEAE+Workflow+Overview/1_0w6z3g3h"
         },
         {
           "name": "PSE/AE - Find a New Deal Reg Opportunity",
-          "url": "PSE/AE - Find a New Deal Reg Opportunity"
+          "url": "https://video.redhat.com/media/PSEAE+-+Find+a+New+Deal+Reg+Opportunity/1_j6z1s8x8"
         },
         {
           "name": "PSE/AE - Review the Opportunity",
-          "url": "PSE/AE - Review the Opportunity"
+          "url": "https://video.redhat.com/media/PSEAE+-+Review+the+Opportunity/1_s8z1x3h9"
         },
         {
           "name": "PSE/AE - Approve or reject the opportunity",
-          "url": "PSE/AE - Approve or reject the opportunity"
+          "url": "https://video.redhat.com/media/PSEAE+-+Approve+or+reject+the+opportunity/1_z3s1g9h6"
         },
         {
           "name": "PAM - Workflow Overview",
-          "url": "PAM - Workflow Overview"
+          "url": "https://video.redhat.com/media/PAM+-+Workflow+Overview/1_k6h3x1d3"
         },
         {
           "name": "PAM - Review Deal Registration Opportunities",
-          "url": "PAM - Review Deal Registration Opportunities"
+          "url": "https://video.redhat.com/media/PAM+-+Review+Deal+Registration+Opportunities/1_g9z1s3h6"
         },
         {
           "name": "PAM - Locate and Assign an Account",
-          "url": "PAM - Locate and Assign an Account"
+          "url": "https://video.redhat.com/media/PAM+-+Locate+and+Assign+an+Account/1_k3h1d3f9"
         },
         {
           "name": "PAM - Request Partner Portal Access for a New...",
-          "url": "PAM - Request Partner Portal Access for a New..."
-        },
-        {
-          "name": "RHSH - Search Demo (Streamlined) 2min",
-          "url": "RHSH - Search Demo (Streamlined) 2min"
-        },
-        {
-          "name": "RHSH - Pages Demo (Streamlined) 2.5mins",
-          "url": "RHSH - Pages Demo (Streamlined) 2.5mins"
-        },
-        {
-          "name": "RHSH - Workspace Demo (Streamlined) 1min",
-          "url": "RHSH - Workspace Demo (Streamlined) 1min"
-        },
-        {
-          "name": "RH Sale Hub (RHSH)",
-          "url": "RH Sale Hub"
+          "url": "https://video.redhat.com/media/PAM+-+Request+Partner+Portal+Access+for+a+New.../1_d3f9g6j1"
         }
       ],
       "salesPlayAlignment": []
@@ -407,38 +321,34 @@
         },
         {
           "name": "YouTube",
-          "url": "https://www.youtube.com/@elastic"
+          "url": ""
         },
         {
           "name": "LinkedIn",
-          "url": "https://www.linkedin.com/company/elastic/"
+          "url": ""
         },
         {
           "name": "X",
-          "url": "https://twitter.com/elastic"
+          "url": ""
         }
       ],
       "salesPlayAlignment": []
     },
     {
       "documentName": "5 benefits of Microsoft Azure Red Hat OpenShift for Microsoft Azure Government",
-      "cloudProvider": "unknown",
+      "cloudProvider": "Azure",
       "actionableSteps": [
         {
           "step": "See the full Azure compliance documentation here."
         },
         {
-          "step": "Get started with Red Hat OpenShift and Microsoft Azure today."
+          "step": "Read how the Naval Information Warfare Center Pacific (NIWC Pacific) is transforming how it develops and deploys software to its fleet with help from Red Hat and Microsoft."
         },
         {
           "step": "Learn more about fully-managed Red Hat OpenShift service on Microsoft Azure"
         },
         {
           "step": "Find out more about Azure for U.S. Government"
-        },
-        {
-          "step": "Read how the Naval Information Warfare Center Pacific (NIWC Pacific) is transforming how it develops and deploys software to its fleet with help from Red Hat and Microsoft.",
-          "url": "https://www.redhat.com/en/resources/naval-information-warfare-center-pacific-case-study"
         }
       ],
       "calculatorUrl": null,
@@ -458,48 +368,38 @@
           "url": "Learn more about Red Hat OpenShift Virtualization."
         },
         {
-          "step": "Explore the guided walkthroughs"
+          "step": "Explore the guided walkthroughs",
+          "url": "Explore the guided walkthroughs"
         },
         {
-          "step": "Learn more"
+          "step": "Learn more",
+          "url": "Learn more"
         }
       ],
       "calculatorUrl": null,
       "contactName": null,
       "workshops": [],
-      "demos": [
-        {
-          "name": "Explore the interactive demos of Red Hat OpenShift Virtualization for step-by-step guidance on the fundamentals of using the virtualization solution.",
-          "url": "Explore the interactive demos of Red Hat OpenShift Virtualization"
-        }
-      ],
+      "demos": [],
       "battlecards": [],
       "internalMaterials": [],
       "salesPlayAlignment": []
     },
     {
       "documentName": "15 reasons to modernize your virtual machines to Microsoft Azure Red Hat OpenShift",
-      "cloudProvider": "unknown",
+      "cloudProvider": "Azure",
       "actionableSteps": [
         {
-          "step": "Read the e-book",
-          "url": "https://www.redhat.com/en/resources/openshift-virtualization-ebook"
+          "step": "Learn more about OpenShift Virtualization."
         },
         {
-          "step": "Learn more about OpenShift Virtualization.",
-          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+          "step": "Read more about Azure Red Hat OpenShift."
         },
         {
-          "step": "Read more about Azure Red Hat OpenShift.",
-          "url": "https://azure.microsoft.com/en-us/products/openshift/"
+          "step": "Get started with our self-paced online learning path for Azure Red Hat OpenShift."
         },
         {
-          "step": "Get started with our self-paced online learning path for Azure Red Hat OpenShift.",
-          "url": "https://learn.microsoft.com/en-us/training/paths/azure-red-hat-openshift-path/"
-        },
-        {
-          "step": "Experience OpenShift Virtualization at no cost: Learn more",
-          "url": "https://www.redhat.com/en/solutions/level-up-program"
+          "step": "Learn more",
+          "url": "Experience OpenShift Virtualization at no cost"
         }
       ],
       "calculatorUrl": null,
@@ -515,24 +415,23 @@
       "cloudProvider": "unknown",
       "actionableSteps": [
         {
-          "step": "Read the e-book",
-          "url": "https://www.redhat.com/en/resources/openshift-on-google-cloud-ebook"
+          "step": "Read the e-book"
         },
         {
-          "step": "Learn more about OpenShift Virtualization.",
-          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+          "step": "Learn more about Google Cloud security.",
+          "url": "https://cloud.google.com/security"
         },
         {
-          "step": "Learn more about Red Hat OpenShift Dedicated.",
-          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/dedicated"
+          "step": "Learn more about OpenShift Virtualization."
         },
         {
-          "step": "Learn more about self-managed Red Hat OpenShift.",
-          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/kubernetes"
+          "step": "Learn more about Red Hat OpenShift Dedicated."
         },
         {
-          "step": "Explore Red Hat OpenShift on Google Cloud",
-          "url": "https://cloud.google.com/openshift"
+          "step": "Learn more about self-managed Red Hat OpenShift."
+        },
+        {
+          "step": "Explore Red Hat OpenShift on Google Cloud"
         }
       ],
       "calculatorUrl": null,
@@ -546,7 +445,11 @@
     {
       "documentName": "2026 Red Hat Innovative Executives",
       "cloudProvider": "unknown",
-      "actionableSteps": [],
+      "actionableSteps": [
+        {
+          "step": "Read the success stories."
+        }
+      ],
       "calculatorUrl": null,
       "contactName": null,
       "workshops": [],
@@ -560,13 +463,16 @@
       "cloudProvider": "unknown",
       "actionableSteps": [
         {
-          "step": "Kostenlos testen"
+          "step": "Kostenlos testen",
+          "url": null
         },
         {
-          "step": "Services entdecken"
+          "step": "Services entdecken",
+          "url": null
         },
         {
-          "step": "Personalisierte Lernpfade"
+          "step": "Personalisierte Lernpfade",
+          "url": null
         }
       ],
       "calculatorUrl": null,
@@ -642,51 +548,50 @@
   "messagingGuides": [
     {
       "documentName": "[EXTERNAL] OpenShift Virtualization with Cohesity Messaging Guide",
-      "summary": "This messaging guide outlines the key benefits and talking points for the integrated solution of Red Hat OpenShift Virtualization with Cohesity DataProtect. It highlights how this collaboration enhances data resiliency, streamlines operations, and provides a scalable platform for modern virtualized environments.",
+      "summary": "This messaging guide outlines the key benefits and messaging for the integrated solution of OpenShift Virtualization with Cohesity DataProtect. It focuses on how this collaboration enhances data resiliency, streamlines operations, and provides robust data protection for modern virtualized environments.",
       "keyPoints": [
-        "Cohesity DataProtect increases data resiliency and protects Red Hat OpenShift Virtualization VMs and data, addressing challenges of modern virtualized environments.",
-        "The integrated solution offers a scalable platform that strengthens data protection, enhances security, and streamlines operations.",
-        "Red Hat OpenShift Virtualization provides a unified, scalable platform for migrating VMs, enabling modernization and consistent management across hybrid cloud environments.",
-        "Improve operational efficiency and scale for data protection through centralized management, scalable architecture, and automated workflows.",
-        "Ensure data is properly protected and can be restored quickly with advanced ransomware protection, compliance, governance capabilities, and instant mass restore functionality (future).",
-        "Achieve consistent data management and protection across environments with optimized performance and unified protection for VMs and containerized applications, including future hybrid and multi-cloud support."
+        "Cohesity DataProtect and Red Hat OpenShift Virtualization provide a unified, scalable platform for migrating VMs, enabling modernization and consistent management across hybrid cloud environments.",
+        "The solution significantly improves operational efficiency and scales for data protection through centralized management, a scalable architecture, and automated workflows.",
+        "It ensures data is properly protected and quickly restorable, offering advanced ransomware protection, compliance and governance features, and future instant mass restore functionality.",
+        "The integrated offering provides consistent data management and protection across environments with optimized performance and unified protection for VMs and containerized applications.",
+        "Differentiators against competitors like Commvault, Rubrik, and Veeam include superior cybersecurity capabilities, ease of management, reduced storage, and advanced ransomware recovery."
       ],
       "talkTracks": [
-        "IT infrastructure managers/directors looking to migrate VMs to OpenShift Virtualization.",
+        "IT Infrastructure managers/directors looking to migrate VMs to OpenShift Virtualization.",
         "IT architects evaluating alternative virtualization solutions."
       ],
       "links": [
         {
-          "name": "Cohesity GA Announcement Blog",
-          "url": "Cohesity GA Announcement Blog"
-        },
-        {
-          "name": "Cohesity Intent to Support Blog",
-          "url": "Cohesity Intent to Support Blog"
-        },
-        {
-          "name": "Virt Power 30",
-          "url": "Virt Power 30"
-        },
-        {
-          "name": "Power 90",
-          "url": "Power 90"
-        },
-        {
-          "name": "Red Hat Ecosystem catalog",
-          "url": "Red Hat Ecosystem catalog"
-        },
-        {
-          "name": "Product Roadmap",
-          "url": "Product Roadmap"
-        },
-        {
-          "name": "HERE",
+          "name": "More info HERE (Cohesity and Veritas acquisition)",
           "url": "HERE"
         },
         {
           "name": "OpenShift Virtualization Messaging Guide",
           "url": "OpenShift Virtualization Messaging Guide"
+        },
+        {
+          "name": "Cohesity GA Announcement Blog (March 2025)",
+          "url": "Cohesity GA Announcement Blog"
+        },
+        {
+          "name": "Cohesity Intent to Support Blog (July 2024)",
+          "url": "Cohesity Intent to Support Blog"
+        },
+        {
+          "name": "Cohesity on Virt Power 30 (Nov 2024)",
+          "url": "Virt Power 30"
+        },
+        {
+          "name": "Power 90 (March 27, 2025)",
+          "url": "Power 90"
+        },
+        {
+          "name": "Cohesity on Red Hat Ecosystem catalog",
+          "url": "Red Hat Ecosystem catalog"
+        },
+        {
+          "name": "Product Roadmap (About Cohesity and Veritas)",
+          "url": "Product Roadmap"
         }
       ]
     }
