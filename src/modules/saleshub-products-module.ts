@@ -570,5 +570,24 @@ export function createSaleshubProductsRouter() {
     }
   })
 
+  router.post('/api/saleshub-products/upload-to-drive', async (c) => {
+    const body = await c.req.json().catch(() => ({}))
+    const slug = (body as any).slug as string | undefined
+    if (!slug) return c.json({ error: 'Missing required field: slug' }, 400)
+
+    const productsDir = getProductsDir()
+    const productPath = resolve(productsDir, slug, '_product.json')
+    if (!existsSync(productPath)) return c.json({ error: `Product not found: ${slug}` }, 404)
+
+    const product = JSON.parse(readFileSync(productPath, 'utf-8'))
+    const enrichedPath = resolve(productsDir, slug, '_enriched.json')
+    const enrichment = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
+
+    const { uploadProductToDrive } = await import('../lib/saleshub-product-drive-sync.ts')
+    const folderId = await uploadProductToDrive(slug, product, enrichment)
+
+    return c.json({ slug, uploaded: !!folderId, driveFolderId: folderId })
+  })
+
   return router
 }
