@@ -75,6 +75,7 @@ Return a JSON object with these fields:
 - battlecards: array of { name: string, url: string, competitor?: string }
 - internalMaterials: array of { name: string, url: string }
 - salesPlayAlignment: array of strings
+- cloudProvider: string — the primary cloud provider this content targets: "AWS", "Azure", "Google Cloud", or "none" if not cloud-specific. Detect from document content, not just the title.
 
 IMPORTANT: Preserve ALL URLs exactly as they appear in the document. Every link must be captured.
 
@@ -151,7 +152,9 @@ export async function enrichContentKit(
 
     return {
       documentName: doc.name,
-      cloudProvider: doc.cloudProvider,
+      cloudProvider: (parsed.cloudProvider && parsed.cloudProvider !== 'none')
+        ? parsed.cloudProvider
+        : (doc.cloudProvider || 'unknown'),
       actionableSteps: parsed.actionableSteps ?? [],
       calculatorUrl: parsed.calculatorUrl ?? null,
       contactName: parsed.contactName ?? null,
