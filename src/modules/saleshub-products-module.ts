@@ -471,13 +471,23 @@ export function createSaleshubProductsRouter() {
           const dlSubdirs = readdirSync(resolve(productDir, 'downloads'), { withFileTypes: true }).filter(d => d.isDirectory())
           for (const dlSub of dlSubdirs) {
             const dlSubPath = resolve(productDir, 'downloads', dlSub.name)
-            const dlFiles = readdirSync(dlSubPath).filter(f =>
-              f.endsWith('.pdf') || f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')
-            )
+            const dlFiles = readdirSync(dlSubPath).filter(f => {
+              const lower = f.toLowerCase()
+              return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx') ||
+                lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.extracted.json')
+            })
             for (const file of dlFiles) {
               const filePath = resolve(dlSubPath, file)
               let content: string
-              if (file.endsWith('.pdf')) {
+              const lower = file.toLowerCase()
+              if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
+                const mimeMap: Record<string, string> = {
+                  '.pdf': 'application/pdf',
+                  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                }
+                const ext = lower.slice(lower.lastIndexOf('.'))
+                const mime = mimeMap[ext] ?? 'application/octet-stream'
                 content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
               } else {
                 content = readFileSync(filePath, 'utf-8')
@@ -499,7 +509,7 @@ export function createSaleshubProductsRouter() {
               else if (combined.includes('azure') || combined.includes(' aro ') || combined.includes('aro ')) cloudProvider = 'Azure'
               else if (combined.includes('google cloud') || combined.includes('gcp')) cloudProvider = 'Google Cloud'
 
-              documents.push({ name: file.replace(/\.(pdf|txt|md|extracted\.json)$/, ''), content, type: docType, cloudProvider })
+              documents.push({ name: file.replace(/\.(pdf|docx|pptx|txt|md|extracted\.json)$/i, ''), content, type: docType, cloudProvider })
             }
           }
           continue

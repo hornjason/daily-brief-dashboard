@@ -32,21 +32,21 @@ interface DocumentInput {
   content: string
 }
 
-const PDF_MARKER = '[PDF:base64:'
-function isPdfContent(content: string): boolean {
-  return content.startsWith(PDF_MARKER)
+const BINARY_MARKER = '[PDF:base64:'
+function isBinaryContent(content: string): boolean {
+  return content.startsWith(BINARY_MARKER)
 }
-function extractPdfBase64(content: string): string {
-  return content.slice(PDF_MARKER.length, -1)
+function extractBase64(content: string): string {
+  return content.slice(BINARY_MARKER.length, -1)
 }
 function buildGeminiOpts(content: string, baseOpts: any): any {
-  if (isPdfContent(content)) {
-    return { ...baseOpts, inlineDataParts: [{ mimeType: 'application/pdf', data: extractPdfBase64(content) }] }
+  if (isBinaryContent(content)) {
+    return { ...baseOpts, inlineDataParts: [{ mimeType: 'application/pdf', data: extractBase64(content) }] }
   }
   return baseOpts
 }
 function buildUserPrompt(promptFn: (name: string, content: string) => string, name: string, content: string): string {
-  if (isPdfContent(content)) {
+  if (isBinaryContent(content)) {
     return promptFn(name, '[See attached PDF document]')
   }
   return promptFn(name, content)
