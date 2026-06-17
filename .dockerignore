@@ -11,3 +11,4 @@ data-demo/
 config/*.json
 config/.gdrive-server-credentials.json
 config/gcp-oauth.keys.json
+config-templates/saleshub-products/*/downloads/
