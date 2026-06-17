@@ -785,23 +785,49 @@ async function downloadProductDocuments(
     }
   }
 
-  if (downloadable.length === 0) {
-    console.log('[product-scraper] No downloadable documents found')
+  // Layer 1: Filter non-downloadable formats
+  const NON_DOWNLOADABLE = new Set(['GSLIDES', 'GDOC', 'GSHEET', 'URL', 'JSON', 'LINK', 'STATIC_FOLDER'])
+  const filtered = downloadable.filter(({ item }) => {
+    const fmt = (item.format || '').toUpperCase()
+    if (NON_DOWNLOADABLE.has(fmt)) return false
+    return true
+  })
+  const skippedFormats = downloadable.length - filtered.length
+  if (skippedFormats > 0) console.log(`[product-scraper] Skipped ${skippedFormats} non-downloadable formats (GSLIDES/GDOC/URL/etc)`)
+
+  if (filtered.length === 0) {
+    console.log('[product-scraper] No downloadable documents found after filtering')
     return
   }
 
-  const toDownload = downloadable.slice(0, MAX_DOWNLOADS_PER_PRODUCT)
-  console.log(`[product-scraper] ${toDownload.length} documents to download (${downloadable.length} total, cap ${MAX_DOWNLOADS_PER_PRODUCT})`)
+  const toDownload = filtered.slice(0, MAX_DOWNLOADS_PER_PRODUCT)
+  console.log(`[product-scraper] ${toDownload.length} documents to download`)
 
-  const MAX_RETRIES = 3
   const productDir = resolve('config-templates', 'saleshub-products', productSlug)
   const dlPage = await context.newPage()
   let downloaded = 0
   let skipped = 0
   let errors = 0
+  let consecutiveFailures = 0
+  const CIRCUIT_BREAKER = 5
   const failedDownloads: Array<{ name: string; section: string; format: string; versionId: string; error: string; attempts: number }> = []
 
   for (let i = 0; i < toDownload.length; i++) {
+    // Circuit breaker: stop after 5 consecutive failures
+    if (consecutiveFailures >= CIRCUIT_BREAKER) {
+      const remaining = toDownload.length - i
+      console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — skipping remaining ${remaining} documents`)
+      for (let j = i; j < toDownload.length; j++) {
+        failedDownloads.push({
+          name: toDownload[j].item.name, section: toDownload[j].sectionSlug,
+          format: toDownload[j].item.format ?? '', versionId: toDownload[j].item.versionId ?? '',
+          error: 'Skipped (circuit breaker)', attempts: 0,
+        })
+      }
+      errors += remaining
+      break
+    }
+
     const { item, sectionSlug } = toDownload[i]
     const sectionDir = resolve(productDir, 'downloads', sectionSlug)
     mkdirSync(sectionDir, { recursive: true })
@@ -813,53 +839,43 @@ async function downloadProductDocuments(
     if (existsSync(localPath)) {
       item.localPath = relative(productDir, localPath)
       skipped++
+      consecutiveFailures = 0
       continue
     }
 
     let succeeded = false
     let lastError = ''
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const rawContentType = (item as any).seismicContentType || item.itemType || 'Other'
-        const contentTypeB64 = Buffer.from(rawContentType).toString('base64').replace(/=/g, '%3D')
-        const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
+    // Try click-to-download (single attempt, no retry on "No Download button")
+    try {
+      const rawContentType = (item as any).seismicContentType || item.itemType || 'Other'
+      const contentTypeB64 = Buffer.from(rawContentType).toString('base64').replace(/=/g, '%3D')
+      const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
 
-        await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-        await dlPage.waitForTimeout(5_000)
+      await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await dlPage.waitForTimeout(5_000)
 
-        const downloadBtn = dlPage.locator('text=Download').first()
-        if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-          const downloadPromise = dlPage.waitForEvent('download', { timeout: 120_000 })
-          await downloadBtn.click()
-          const dl = await downloadPromise
-          await dl.saveAs(localPath)
-          item.localPath = relative(productDir, localPath)
-          downloaded++
-          const retryLabel = attempt > 1 ? ` retry ${attempt}/${MAX_RETRIES}` : ''
-          console.log(`[product-scraper] Downloading (${i + 1}/${toDownload.length})${retryLabel} ✓ ${filename}`)
-          succeeded = true
-          break
-        } else {
-          lastError = `No Download button visible`
-          if (attempt < MAX_RETRIES) {
-            const backoffMs = Math.pow(2, attempt - 1) * 1_000
-            console.warn(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) retry ${attempt}/${MAX_RETRIES} ✗ No Download button: ${item.name} — retrying in ${backoffMs / 1000}s`)
-            await new Promise(r => setTimeout(r, backoffMs))
-          }
-        }
-      } catch (e: any) {
-        lastError = e.message?.slice(0, 120) ?? 'Unknown error'
-        if (attempt < MAX_RETRIES) {
-          const backoffMs = Math.pow(2, attempt - 1) * 1_000
-          console.warn(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) retry ${attempt}/${MAX_RETRIES} ✗ ${item.name}: ${lastError.slice(0, 80)} — retrying in ${backoffMs / 1000}s`)
-          await new Promise(r => setTimeout(r, backoffMs))
-        }
+      const downloadBtn = dlPage.locator('text=Download').first()
+      if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        const downloadPromise = dlPage.waitForEvent('download', { timeout: 120_000 })
+        await downloadBtn.click()
+        const dl = await downloadPromise
+        await dl.saveAs(localPath)
+        item.localPath = relative(productDir, localPath)
+        downloaded++
+        consecutiveFailures = 0
+        console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename}`)
+        succeeded = true
+      } else {
+        lastError = 'No Download button visible'
       }
+    } catch (e: any) {
+      lastError = e.message?.slice(0, 120) ?? 'Unknown error'
     }
 
     if (!succeeded) {
-      console.error(`[product-scraper] Downloading (${i + 1}/${toDownload.length}) ✗ FAILED after ${MAX_RETRIES} attempts: ${item.name}: ${lastError}`)
+      consecutiveFailures++
+      console.warn(`[product-scraper] (${i + 1}/${toDownload.length}) ✗ ${item.name.slice(0, 50)}: ${lastError.slice(0, 60)}`)
       errors++
       failedDownloads.push({
         name: item.name,
@@ -867,7 +883,7 @@ async function downloadProductDocuments(
         format: ext,
         versionId: item.versionId ?? '',
         error: lastError,
-        attempts: MAX_RETRIES,
+        attempts: 1,
       })
     }
 
