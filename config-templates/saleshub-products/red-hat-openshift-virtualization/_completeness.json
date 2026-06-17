@@ -1,0 +1,21 @@
+{
+  "product": "Red Hat OpenShift Virtualization",
+  "auditedAt": "2026-06-17",
+  "totalItemsOnPage": 148,
+  "itemsWithUrl": 48,
+  "itemsWithVersionId": 100,
+  "itemsWithNeither": 0,
+  "filesDownloaded": 79,
+  "filesInDrive": 78,
+  "enrichmentResults": {
+    "contentKits": 13,
+    "messagingGuides": 1,
+    "battlecards": 0
+  },
+  "signalsEmitted": 8,
+  "coverage": {
+    "downloadRate": "79/100 (79%)",
+    "enrichmentRate": "14/79 docs processed"
+  },
+  "gaps": []
+}
