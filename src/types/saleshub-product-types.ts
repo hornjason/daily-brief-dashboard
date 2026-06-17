@@ -47,6 +47,30 @@ export interface ProductEnrichment {
   contentKits: ContentKitExtraction[]
   messagingGuides: DocumentExtraction[]
   battlecards: DocumentExtraction[]
+  caseStudies: CaseStudyExtraction[]
+  competitiveReviews: CompetitiveReviewExtraction[]
+}
+
+export interface CaseStudyExtraction {
+  documentName: string
+  customerName: string
+  industry: string
+  challenge: string
+  solution: string
+  results: string[]
+  productsUsed: string[]
+  keyPoints: string[]
+  links: Array<{ name: string; url: string }>
+}
+
+export interface CompetitiveReviewExtraction {
+  documentName: string
+  competitor: string
+  keyDifferentiators: string[]
+  competitorWeaknesses: string[]
+  talkTracks: string[]
+  keyPoints: string[]
+  links: Array<{ name: string; url: string }>
 }
 
 export interface ContentKitExtraction {

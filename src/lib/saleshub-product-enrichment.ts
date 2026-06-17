@@ -15,6 +15,8 @@ import type {
   ContentKitExtraction,
   DocumentExtraction,
   ProductEnrichment,
+  CaseStudyExtraction,
+  CompetitiveReviewExtraction,
 } from '../types/saleshub-product-types.ts'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -104,6 +106,42 @@ const BATTLECARD_USER_PROMPT = (docName: string, content: string) => `Extract co
 Return a JSON object with these fields:
 - summary: string — 1-2 sentence summary of the competitive positioning
 - keyPoints: array of strings — competitive differentiators and angles
+- links: array of { name: string, url: string } — all referenced URLs
+
+Document content:
+${content}`
+
+const CASE_STUDY_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat customer case studies.
+Extract customer success data and return valid JSON only. No markdown, no explanation.`
+
+const CASE_STUDY_USER_PROMPT = (docName: string, content: string) => `Extract customer success data from this case study: "${docName}"
+
+Return a JSON object with these fields:
+- summary: string — 1-2 sentence summary of the customer success story
+- customerName: string — name of the customer organization
+- industry: string — customer's industry
+- challenge: string — business challenge the customer faced
+- solution: string — how Red Hat products solved it
+- results: array of strings — measurable outcomes and benefits
+- productsUsed: array of strings — Red Hat products mentioned
+- keyPoints: array of strings — key takeaways for sales conversations
+- links: array of { name: string, url: string } — all referenced URLs
+
+Document content:
+${content}`
+
+const COMPETITIVE_REVIEW_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat competitive reviews.
+Extract competitive positioning data and return valid JSON only. No markdown, no explanation.`
+
+const COMPETITIVE_REVIEW_USER_PROMPT = (docName: string, content: string) => `Extract competitive positioning from this review: "${docName}"
+
+Return a JSON object with these fields:
+- summary: string — 1-2 sentence summary of the competitive comparison
+- competitor: string — name of the competitor being compared
+- keyDifferentiators: array of strings — Red Hat advantages over the competitor
+- competitorWeaknesses: array of strings — competitor disadvantages
+- talkTracks: array of strings — recommended conversation approaches
+- keyPoints: array of strings — key competitive insights
 - links: array of { name: string, url: string } — all referenced URLs
 
 Document content:
@@ -274,6 +312,58 @@ export async function enrichBattlecard(
   }
 }
 
+export async function enrichCaseStudy(
+  doc: DocumentInput,
+  gemini: GeminiCaller = callGemini,
+): Promise<CaseStudyExtraction | null> {
+  try {
+    const userPrompt = buildUserPrompt(CASE_STUDY_USER_PROMPT, doc.name, doc.content)
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const result = await gemini(CASE_STUDY_SYSTEM_PROMPT, userPrompt, opts)
+    const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+    const parsed = JSON.parse(cleaned)
+    return {
+      documentName: doc.name,
+      customerName: parsed.customerName ?? '',
+      industry: parsed.industry ?? '',
+      challenge: parsed.challenge ?? '',
+      solution: parsed.solution ?? '',
+      results: (parsed.results ?? []).slice(0, 5),
+      productsUsed: (parsed.productsUsed ?? []).slice(0, 5),
+      keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
+      links: (parsed.links ?? []).slice(0, 5),
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich case study "${doc.name}": ${e.message}`)
+    return null
+  }
+}
+
+export async function enrichCompetitiveReview(
+  doc: DocumentInput,
+  gemini: GeminiCaller = callGemini,
+): Promise<CompetitiveReviewExtraction | null> {
+  try {
+    const userPrompt = buildUserPrompt(COMPETITIVE_REVIEW_USER_PROMPT, doc.name, doc.content)
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const result = await gemini(COMPETITIVE_REVIEW_SYSTEM_PROMPT, userPrompt, opts)
+    const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+    const parsed = JSON.parse(cleaned)
+    return {
+      documentName: doc.name,
+      competitor: parsed.competitor ?? '',
+      keyDifferentiators: (parsed.keyDifferentiators ?? []).slice(0, 5),
+      competitorWeaknesses: (parsed.competitorWeaknesses ?? []).slice(0, 5),
+      talkTracks: (parsed.talkTracks ?? []).slice(0, 5),
+      keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
+      links: (parsed.links ?? []).slice(0, 5),
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich competitive review "${doc.name}": ${e.message}`)
+    return null
+  }
+}
+
 /**
  * Enrich all documents for a product, routing each to the appropriate
  * enrichment function based on document type.
@@ -288,6 +378,8 @@ export async function enrichProductDocuments(
   const contentKits: ContentKitExtraction[] = []
   const messagingGuides: DocumentExtraction[] = []
   const battlecards: DocumentExtraction[] = []
+  const caseStudies: CaseStudyExtraction[] = []
+  const competitiveReviews: CompetitiveReviewExtraction[] = []
 
   const getGemini = (type: string): GeminiCaller =>
     geminiFactory ? geminiFactory(type) : callGemini
@@ -318,6 +410,22 @@ export async function enrichProductDocuments(
         if (result) battlecards.push(result)
         break
       }
+      case 'case-study': {
+        const result = await enrichCaseStudy(
+          { name: doc.name, content: doc.content },
+          getGemini('case-study'),
+        )
+        if (result) caseStudies.push(result)
+        break
+      }
+      case 'competitive-review': {
+        const result = await enrichCompetitiveReview(
+          { name: doc.name, content: doc.content },
+          getGemini('competitive-review'),
+        )
+        if (result) competitiveReviews.push(result)
+        break
+      }
       default:
         console.warn(`[saleshub-product-enrichment] Unknown document type "${doc.type}" for "${doc.name}" — skipping`)
     }
@@ -329,5 +437,7 @@ export async function enrichProductDocuments(
     contentKits,
     messagingGuides,
     battlecards,
+    caseStudies,
+    competitiveReviews,
   }
 }

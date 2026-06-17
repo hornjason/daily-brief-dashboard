@@ -523,9 +523,12 @@ export function createSaleshubProductsRouter() {
               // Classify document type from directory AND filename
               let docType = 'content-kit'
               if (subdirLower.includes('messaging') || fileLower.includes('messaging guide')) docType = 'messaging-guide'
-              else if (subdirLower.includes('battlecard') || subdirLower.includes('competitive') || fileLower.includes('battlecard')) docType = 'battlecard'
-              else if (subdirLower.includes('e-book') || subdirLower.includes('ebook')) docType = 'content-kit'
-              else if (subdirLower.includes('cheatsheet') || fileLower.includes('content kit')) docType = 'content-kit'
+              else if (subdirLower.includes('battlecard') || fileLower.includes('battlecard')) docType = 'battlecard'
+              else if (subdirLower.includes('competitive') || fileLower.includes('competitive') || fileLower.includes(' or openshift') || fileLower.includes(' vs ')) docType = 'competitive-review'
+              else if (subdirLower.includes('case-study') || subdirLower.includes('case_study') || fileLower.includes('case study') || fileLower.includes('win wire') || fileLower.includes('go-live')) docType = 'case-study'
+              else if (subdirLower.includes('customer-go-live') || subdirLower.includes('customer-success')) docType = 'case-study'
+              else if (fileLower.includes('content kit')) docType = 'content-kit'
+              else if (subdirLower.includes('e-book') || subdirLower.includes('ebook') || subdirLower.includes('overview')) docType = 'content-kit'
 
               // Detect cloud provider from directory name OR filename
               let cloudProvider: string | undefined
@@ -599,6 +602,8 @@ export function createSaleshubProductsRouter() {
         contentKits: enrichment.contentKits.length,
         messagingGuides: enrichment.messagingGuides.length,
         battlecards: enrichment.battlecards.length,
+        caseStudies: enrichment.caseStudies.length,
+        competitiveReviews: enrichment.competitiveReviews.length,
         enrichedAt: enrichment.enrichedAt,
       })
     } catch (e: any) {
