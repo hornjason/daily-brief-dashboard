@@ -72,6 +72,7 @@ import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
 import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { TopPlaysCard } from '../components/TopPlaysCard'
+import { ProductOpportunities } from '../components/ProductOpportunities'
 
 // ── Staleness indicators (ADR-037 F6) ────────────────────────────────────────
 
@@ -1840,6 +1841,7 @@ export function CustomerDetailPage() {
         {/* Right column — 35%, flows with main content (no independent scroll) */}
         <aside className="hidden lg:block w-[38%] p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
+          <ProductOpportunities customerName={customerName} />
           <SignalInventoryPanel customerName={customerName} />
           <IntelligenceInsightsCard customerName={customerName} />
           <AccountPlanPanel customerName={customerName} />
