@@ -411,6 +411,15 @@ export async function uploadProductFilesToDrive(
           const mimeType = MIME_MAP[ext] ?? 'application/octet-stream'
           const content = readFileSync(filePath)
 
+          // Delete existing file with same name to prevent duplicates
+          const existing = await withQuotaRetry(() => drive.files.list({
+            q: `name = '${file.replace(/'/g, "\\'")}' and '${sectionFolderId}' in parents and trashed = false`,
+            fields: 'files(id)', supportsAllDrives: true, includeItemsFromAllDrives: true,
+          }), `check ${file}`)
+          for (const f of existing.data.files ?? []) {
+            if (f.id) await drive.files.delete({ fileId: f.id, supportsAllDrives: true }).catch(() => {})
+          }
+
           await withQuotaRetry(() => drive.files.create({
             requestBody: { name: file, parents: [sectionFolderId] },
             media: { mimeType, body: Readable.from(content) },
