@@ -829,7 +829,7 @@ async function downloadProductDocuments(
 
         const downloadBtn = dlPage.locator('text=Download').first()
         if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-          const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
+          const downloadPromise = dlPage.waitForEvent('download', { timeout: 120_000 })
           await downloadBtn.click()
           const dl = await downloadPromise
           await dl.saveAs(localPath)

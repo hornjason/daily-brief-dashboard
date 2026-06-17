@@ -242,16 +242,27 @@ async function doKeepalive(): Promise<void> {
       throw new Error(`SF session expired — redirected to ${sfFinal}`)
     }
 
-    // SalesHub keepalive (#819) — verify EmployeeIDP SSO session is alive
+    // SalesHub keepalive (#819) — verify EmployeeIDP SSO + capture localStorage for DocCenter SPA
     console.log('[sync-daemon] keepalive: navigating SalesHub…')
     try {
       await page.goto('https://saleshub.redhat.com/apps/home', { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await page.waitForTimeout(2_000)
+      await page.waitForTimeout(3_000)
       const saleshubUrl = page.url()
       if (saleshubUrl.includes('auth/realms') || saleshubUrl.includes('sso') || saleshubUrl.includes('login')) {
         console.warn(`[sync-daemon] keepalive: SalesHub SSO expired — redirected to ${saleshubUrl}`)
       } else {
         console.log('[sync-daemon] keepalive: SalesHub session alive')
+        // Navigate to DocCenter to trigger SPA localStorage token writes (#829)
+        // The product scraper needs these tokens for DocListPicker content to render
+        try {
+          await page.goto('https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/main///', { waitUntil: 'networkidle', timeout: 30_000 })
+          await page.waitForFunction(() => localStorage.length > 0, { timeout: 15_000 }).catch(() => {
+            console.warn('[sync-daemon] keepalive: SalesHub localStorage not populated after 15s')
+          })
+          console.log('[sync-daemon] keepalive: DocCenter SPA initialized (localStorage captured)')
+        } catch (e: any) {
+          console.warn(`[sync-daemon] keepalive: DocCenter navigation failed: ${e?.message} — non-fatal`)
+        }
       }
     } catch (e: any) {
       console.warn(`[sync-daemon] keepalive: SalesHub navigation failed: ${e?.message} — non-fatal, continuing`)
