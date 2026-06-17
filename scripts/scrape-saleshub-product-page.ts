@@ -907,6 +907,118 @@ async function downloadProductDocuments(
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 }
 
+// ── CDS Network Interception (#833) ─────────────────────────────────────────
+
+interface CdsDocument {
+  name: string
+  format: string
+  contentId: string
+  versionId: string
+  originUrl: string
+}
+
+function setupCdsInterception(page: import('@playwright/test').Page): CdsDocument[] {
+  const documents: CdsDocument[] = []
+  page.on('response', async (res) => {
+    const url = res.url()
+    if (!url.includes('/cds/') || !url.includes('publishedcontents')) return
+    try {
+      const body = await res.json()
+      for (const doc of body?.Documents ?? []) {
+        documents.push({
+          name: doc.Name ?? '',
+          format: doc.Format ?? '',
+          contentId: doc.ContentId ?? '',
+          versionId: doc.VersionId ?? '',
+          originUrl: doc.OriginUrl ?? '',
+        })
+      }
+    } catch { /* non-JSON response */ }
+  })
+  return documents
+}
+
+// ── Delta Detection (#838) ──────────────────────────────────────────────────
+
+interface DeltaReport {
+  newItems: string[]
+  updatedItems: string[]
+  unchangedItems: string[]
+}
+
+function computeDelta(
+  cdsDocuments: CdsDocument[],
+  existingProduct: ProductPage | null,
+): DeltaReport {
+  const report: DeltaReport = { newItems: [], updatedItems: [], unchangedItems: [] }
+  if (!existingProduct) {
+    report.newItems = cdsDocuments.map(d => d.name)
+    return report
+  }
+
+  const existingByName = new Map<string, string>()
+  for (const sec of Object.values(existingProduct.sections)) {
+    for (const item of sec.items) {
+      existingByName.set(item.name.toLowerCase().slice(0, 50), item.versionId ?? '')
+    }
+  }
+
+  for (const doc of cdsDocuments) {
+    const key = doc.name.toLowerCase().slice(0, 50)
+    const existing = existingByName.get(key)
+    if (existing === undefined) {
+      report.newItems.push(doc.name)
+    } else if (existing !== doc.versionId && doc.versionId) {
+      report.updatedItems.push(doc.name)
+    } else {
+      report.unchangedItems.push(doc.name)
+    }
+  }
+
+  return report
+}
+
+// ── Completeness Validation (#837) ──────────────────────────────────────────
+
+interface CompletenessReport {
+  product: string
+  scrapedAt: string
+  cdsItemCount: number
+  domItemCount: number
+  downloadedCount: number
+  status: 'COMPLETE' | 'INCOMPLETE'
+  missingItems: Array<{ name: string; format: string; reason: string }>
+  delta?: DeltaReport
+}
+
+function generateCompletenessReport(
+  productName: string,
+  cdsDocuments: CdsDocument[],
+  domItemCount: number,
+  downloadedCount: number,
+  delta?: DeltaReport,
+): CompletenessReport {
+  const missing: CompletenessReport['missingItems'] = []
+
+  for (const doc of cdsDocuments) {
+    const isGoogleDoc = doc.originUrl.includes('docs.google.com')
+    if (!doc.versionId && !isGoogleDoc) {
+      missing.push({ name: doc.name, format: doc.format, reason: 'No versionId — not in search API index' })
+    }
+  }
+
+  return {
+    product: productName,
+    scrapedAt: new Date().toISOString(),
+    cdsItemCount: cdsDocuments.length,
+    domItemCount,
+    downloadedCount,
+    status: missing.length === 0 && domItemCount > 0 ? 'COMPLETE' : 'INCOMPLETE',
+    missingItems: missing,
+    delta,
+  }
+}
+
 export async function scrapeProductPage(
   url: string = DEFAULT_URL,
   externalContext?: BrowserContext,
@@ -948,6 +1060,18 @@ export async function scrapeProductPage(
 
   try {
     const page = await context.newPage()
+
+    // CDS interception — capture DocListPicker document inventory during page load (#833)
+    const cdsDocuments = setupCdsInterception(page)
+
+    // Load existing product data for delta detection (#838)
+    let existingProduct: ProductPage | null = null
+    try {
+      const existingPath = resolve('config-templates', 'saleshub-products', slugify(url.split('/lf')[1]?.slice(0, 20) ?? 'unknown'), '_product.json')
+      if (existsSync(existingPath)) {
+        existingProduct = JSON.parse(readFileSync(existingPath, 'utf-8'))
+      }
+    } catch { /* no existing data */ }
 
     // Step 1: Capture Seismic auth FIRST (navigates to DocCenter main page)
     console.log('[product-scraper] Step 1: Capturing Seismic auth token...')
@@ -1079,6 +1203,19 @@ export async function scrapeProductPage(
       console.log('[product-scraper] Skipping downloads (no auth captured)')
     }
 
+    // CDS inventory logging (#833)
+    if (cdsDocuments.length > 0) {
+      console.log(`[product-scraper] CDS inventory: ${cdsDocuments.length} DocListPicker documents intercepted`)
+      const googleDocs = cdsDocuments.filter(d => d.originUrl.includes('docs.google.com'))
+      console.log(`[product-scraper] CDS: ${googleDocs.length} Google Docs, ${cdsDocuments.length - googleDocs.length} Seismic-hosted`)
+    }
+
+    // Delta detection (#838)
+    const delta = computeDelta(cdsDocuments, existingProduct)
+    if (existingProduct) {
+      console.log(`[product-scraper] Delta: ${delta.newItems.length} new, ${delta.updatedItems.length} updated, ${delta.unchangedItems.length} unchanged`)
+    }
+
     // Build ProductPage object
     const productSlug = slugify(header.name)
     const productPage: ProductPage = {
@@ -1125,6 +1262,21 @@ export async function scrapeProductPage(
 
     writeJsonAtomic(cachePath, productPage)
     writeJsonAtomic(configPath, productPage)
+
+    // Write CDS inventory (#833)
+    if (cdsDocuments.length > 0) {
+      writeJsonAtomic(resolve(configOutputDir, '_cds-inventory.json'), cdsDocuments)
+    }
+
+    // Write completeness report (#837)
+    const downloaded = existsSync(resolve(configOutputDir, 'downloads'))
+      ? require('child_process').execSync(`find ${resolve(configOutputDir, 'downloads')} -type f | wc -l`).toString().trim()
+      : '0'
+    const completeness = generateCompletenessReport(
+      header.name, cdsDocuments, totalItems, parseInt(downloaded), delta,
+    )
+    writeJsonAtomic(resolve(configOutputDir, '_completeness.json'), completeness)
+    console.log(`[product-scraper] Completeness: ${completeness.status} (CDS: ${completeness.cdsItemCount}, DOM: ${completeness.domItemCount}, downloaded: ${completeness.downloadedCount}, missing: ${completeness.missingItems.length})`)
 
     console.log(`\n[product-scraper] Written to:`)
     console.log(`  ${cachePath}`)
