@@ -871,6 +871,29 @@ async function main(): Promise<void> {
         try {
           await scrapeProductPage(undefined, scrapeCtx)
           console.log('[sync-daemon] product page scrape complete')
+
+          // Auto-enrich after scrape (#835) — upload enriched data to Drive
+          try {
+            const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
+            const { uploadProductToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+            const { readFileSync, existsSync } = await import('fs')
+            const { resolve } = await import('path')
+            const productsDir = resolve('config-templates', 'saleshub-products')
+            const { readdirSync } = await import('fs')
+            const productDirs = readdirSync(productsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+            for (const pDir of productDirs) {
+              const productPath = resolve(productsDir, pDir.name, '_product.json')
+              const enrichedPath = resolve(productsDir, pDir.name, '_enriched.json')
+              if (existsSync(productPath)) {
+                const product = JSON.parse(readFileSync(productPath, 'utf-8'))
+                const enriched = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
+                await uploadProductToDrive(pDir.name, product, enriched)
+                console.log(`[sync-daemon] uploaded product data to Drive: ${pDir.name}`)
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[sync-daemon] auto-enrich/upload failed: ${e.message?.slice(0, 100)}`)
+          }
         } catch (e: any) {
           console.warn(`[sync-daemon] product page scrape failed: ${e.message?.slice(0, 100)}`)
         }
