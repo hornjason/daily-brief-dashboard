@@ -212,8 +212,21 @@ function emitProductSignals(
   }
 
   // 2. Cloud provider content kit signals (from enrichment, cap at 5)
+  // Sort by value: cloud provider > contacts > steps > generic
   if (enrichment?.contentKits) {
-    for (const kit of enrichment.contentKits.slice(0, 5)) {
+    const sorted = [...enrichment.contentKits].sort((a, b) => {
+      const scoreKit = (k: typeof a) => {
+        let s = 0
+        if (k.cloudProvider && k.cloudProvider !== 'unknown' && k.cloudProvider !== 'none') s += 10
+        if (k.contactName) s += 5
+        if (k.calculatorUrl) s += 5
+        s += Math.min(k.actionableSteps?.length ?? 0, 5)
+        s += Math.min(k.workshops?.length ?? 0, 3)
+        return s
+      }
+      return scoreKit(b) - scoreKit(a)
+    })
+    for (const kit of sorted.slice(0, 5)) {
       const stepsFormatted = kit.actionableSteps
         .map((s, i) => `${i + 1}. ${s.step}${s.url ? ` (${s.url})` : ''}`)
         .join('\n')
