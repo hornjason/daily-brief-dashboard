@@ -12,7 +12,8 @@
  *   - try/catch with warn — never throws
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs'
+import { Readable } from 'stream'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../google.ts'
@@ -371,4 +372,63 @@ export async function createProductSectionFolders(
     console.warn(`[saleshub-product-drive-sync] Section folder creation failed: ${e.message}`)
     return {}
   }
+}
+
+const MIME_MAP: Record<string, string> = {
+  pdf: 'application/pdf',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+
+export async function uploadProductFilesToDrive(
+  productSlug: string,
+  downloadsDir: string,
+): Promise<{ uploaded: number; errors: number }> {
+  const parentFolderId = getPodBookingsFolderId()
+  if (!parentFolderId) return { uploaded: 0, errors: 0 }
+
+  let uploaded = 0, errors = 0
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    const productsFolderId = await findOrCreateFolder(drive, parentFolderId, PRODUCTS_FOLDER_NAME)
+    const productFolderId = await findOrCreateFolder(drive, productsFolderId, productSlug)
+
+    if (!existsSync(downloadsDir)) return { uploaded: 0, errors: 0 }
+
+    const sectionDirs = readdirSync(downloadsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+
+    for (const sectionDir of sectionDirs) {
+      const sectionPath = resolve(downloadsDir, sectionDir.name)
+      const sectionFolderId = await findOrCreateFolder(drive, productFolderId, sectionDir.name)
+
+      const files = readdirSync(sectionPath).filter(f => !f.startsWith('.'))
+      for (const file of files) {
+        try {
+          const filePath = resolve(sectionPath, file)
+          const ext = file.split('.').pop()?.toLowerCase() ?? ''
+          const mimeType = MIME_MAP[ext] ?? 'application/octet-stream'
+          const content = readFileSync(filePath)
+
+          await withQuotaRetry(() => drive.files.create({
+            requestBody: { name: file, parents: [sectionFolderId] },
+            media: { mimeType, body: Readable.from(content) },
+            supportsAllDrives: true, fields: 'id',
+          }), `upload ${file}`)
+
+          uploaded++
+        } catch (e: any) {
+          console.warn(`[saleshub-product-drive-sync] Upload failed for ${file}: ${e.message?.slice(0, 60)}`)
+          errors++
+        }
+        await new Promise(r => setTimeout(r, 200))
+      }
+    }
+
+    console.log(`[saleshub-product-drive-sync] Uploaded ${uploaded} files for "${productSlug}" (${errors} errors)`)
+  } catch (e: any) {
+    console.warn(`[saleshub-product-drive-sync] File upload failed: ${e.message}`)
+  }
+  return { uploaded, errors }
 }

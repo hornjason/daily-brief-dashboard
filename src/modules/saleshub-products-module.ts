@@ -606,10 +606,18 @@ export function createSaleshubProductsRouter() {
     const enrichedPath = resolve(productsDir, slug, '_enriched.json')
     const enrichment = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
 
-    const { uploadProductToDrive } = await import('../lib/saleshub-product-drive-sync.ts')
+    const { uploadProductToDrive, uploadProductFilesToDrive } = await import('../lib/saleshub-product-drive-sync.ts')
     const folderId = await uploadProductToDrive(slug, product, enrichment)
 
-    return c.json({ slug, uploaded: !!folderId, driveFolderId: folderId })
+    // Also upload downloaded files if they exist
+    const appProductDir = resolve('config-templates', 'saleshub-products', slug)
+    const downloadsDir = resolve(appProductDir, 'downloads')
+    let fileResult = { uploaded: 0, errors: 0 }
+    if (existsSync(downloadsDir)) {
+      fileResult = await uploadProductFilesToDrive(product.name ?? slug, downloadsDir)
+    }
+
+    return c.json({ slug, uploaded: !!folderId, driveFolderId: folderId, files: fileResult })
   })
 
   return router
