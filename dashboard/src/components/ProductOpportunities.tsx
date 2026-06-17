@@ -5,11 +5,27 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Sparkles, RefreshCw, User } from 'lucide-react'
+import { ChevronDown, ChevronRight, Sparkles, RefreshCw, User, ExternalLink, BookOpen, Wrench } from 'lucide-react'
+
+interface ActionStep {
+  step: string
+  url?: string
+}
+
+interface ResourceItem {
+  name: string
+  url: string
+}
 
 interface SignalMetadata {
   cloudProvider?: string
   contactName?: string
+  actionableSteps?: ActionStep[]
+  calculatorUrl?: string
+  workshopUrl?: string
+  resourceType?: string
+  items?: ResourceItem[]
+  links?: ResourceItem[]
   [key: string]: unknown
 }
 
@@ -48,6 +64,7 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(true)
   const [showAll, setShowAll] = useState(false)
+  const [expandedCard, setExpandedCard] = useState<number | null>(null)
 
   const fetchSignals = useCallback(() => {
     fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/debug?source=saleshub-products`)
@@ -139,20 +156,26 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
             const cloud = signal.metadata.cloudProvider?.toLowerCase()
             const badge = cloud && cloud !== 'unknown' ? CLOUD_BADGE[cloud] : null
 
+            const isExpanded = expandedCard === i
+            const steps = signal.metadata.actionableSteps ?? []
+            const items = signal.metadata.items ?? signal.metadata.links ?? []
+            const hasDetail = steps.length > 0 || items.length > 0 || signal.metadata.contactName || signal.metadata.calculatorUrl
+
             return (
               <div key={i} className="bg-bg-tertiary/40 rounded-md p-2 space-y-1">
-                <div className="flex items-start gap-2">
+                <button
+                  onClick={() => setExpandedCard(isExpanded ? null : i)}
+                  className="flex items-start gap-2 w-full text-left"
+                >
                   {/* Score indicator */}
                   <span
                     className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${scoreColor(signal.score)}`}
                     title={`Score: ${signal.score.toFixed(2)}`}
                   />
                   <div className="flex-1 min-w-0">
-                    {/* Headline */}
                     <p className="text-sm text-text-primary leading-snug">
                       {truncate(signal.headline, 80)}
                     </p>
-                    {/* Metadata row */}
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {badge && (
                         <span className={`text-xs px-1.5 py-0.5 rounded ${badge.bg} ${badge.text} font-medium`}>
@@ -165,9 +188,61 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
                           {signal.metadata.contactName}
                         </span>
                       )}
+                      {hasDetail && !isExpanded && (
+                        <ChevronRight className="w-3 h-3 text-text-secondary/50" />
+                      )}
                     </div>
                   </div>
-                </div>
+                </button>
+
+                {/* Inline expand — steps, links, resources */}
+                {isExpanded && (
+                  <div className="ml-4 mt-1.5 space-y-2 border-l border-border/50 pl-3">
+                    {steps.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-text-secondary mb-1">Engagement Steps</p>
+                        <ol className="text-xs text-text-primary space-y-0.5 list-decimal list-inside">
+                          {steps.slice(0, 5).map((s, j) => (
+                            <li key={j}>
+                              {s.url && s.url.startsWith('http') ? (
+                                <a href={s.url} target="_blank" rel="noopener" className="text-accent hover:underline">
+                                  {s.step}
+                                </a>
+                              ) : s.step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {items.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-text-secondary mb-1">
+                          {signal.metadata.resourceType === 'training' ? 'Training Courses' : 'Resources'}
+                        </p>
+                        <ul className="text-xs space-y-0.5">
+                          {items.slice(0, 5).map((item, j) => (
+                            <li key={j} className="flex items-center gap-1">
+                              {item.url ? (
+                                <a href={item.url} target="_blank" rel="noopener" className="text-accent hover:underline flex items-center gap-1">
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                  {truncate(item.name, 60)}
+                                </a>
+                              ) : (
+                                <span className="text-text-primary">{truncate(item.name, 60)}</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {signal.metadata.calculatorUrl && (
+                      <a href={signal.metadata.calculatorUrl as string} target="_blank" rel="noopener"
+                        className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+                        <Wrench className="w-3 h-3" /> ROI Calculator
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
