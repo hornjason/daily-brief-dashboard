@@ -821,7 +821,8 @@ async function downloadProductDocuments(
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const contentTypeB64 = Buffer.from(item.itemType || 'Other').toString('base64').replace(/=/g, '%3D')
+        const rawContentType = (item as any).seismicContentType || item.itemType || 'Other'
+        const contentTypeB64 = Buffer.from(rawContentType).toString('base64').replace(/=/g, '%3D')
         const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
 
         await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
@@ -1020,7 +1021,8 @@ export async function scrapeProductPage(
             contentId: (doc as any).contentId || undefined,
             versionId: doc.versionId || undefined,
             format: (doc as any).format || undefined,
-          }))
+            seismicContentType: contentType,
+          } as any))
 
           if (sections[sectionKey]) {
             // Merge with existing section — add API docs to existing items
