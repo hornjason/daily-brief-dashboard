@@ -3,15 +3,8 @@
   "slug": "red-hat-openshift-virtualization",
   "description": "",
   "pageUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//",
-  "scrapedAt": "2026-06-15T23:46:24.386Z",
-  "tdpLinks": [
-    {
-      "name": "Virtualization"
-    },
-    {
-      "name": "VM migration & modernization"
-    }
-  ],
+  "scrapedAt": "2026-06-17T15:15:27.026Z",
+  "tdpLinks": [],
   "contacts": [
     {
       "name": "hybridplatforms-marketing",
@@ -22,11 +15,118 @@
     "#forum-openshift-virtualization"
   ],
   "sections": {
-    "product-news": {
-      "title": "Product news",
-      "textContent": "OpenShift Virtualization Engine (OVE)Press ReleaseBlog postWebpageDatasheetOverview",
-      "type": "mixed",
+    "all-content": {
+      "title": "All Content",
+      "type": "links",
       "items": [
+        {
+          "name": "Skip to Main Content",
+          "url": "https://saleshub.redhat.com#reach-skip-nav"
+        },
+        {
+          "name": "Home",
+          "url": "https://saleshub.redhat.com/apps/home"
+        },
+        {
+          "name": "DocCenter",
+          "url": "https://saleshub.redhat.com/apps/doccenter/"
+        },
+        {
+          "name": "Engagements",
+          "url": "https://saleshub.redhat.com/apps/engagementcenter/"
+        },
+        {
+          "name": "Insights",
+          "url": "https://saleshub.redhat.com/apps/insights"
+        },
+        {
+          "name": "Learning",
+          "url": "https://saleshub.redhat.com/apps/learning"
+        },
+        {
+          "name": "Skills",
+          "url": "https://saleshub.redhat.com/apps/skills"
+        },
+        {
+          "name": "WorkSpace",
+          "url": "https://saleshub.redhat.com/app#/workspace/"
+        },
+        {
+          "name": "HomePage",
+          "url": "https://saleshub.redhat.com/apps/home"
+        },
+        {
+          "name": "All Sales Content",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/profileview-landing"
+        },
+        {
+          "name": "Page RHSH",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/main/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI//"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI%25252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//"
+        },
+        {
+          "name": "Product news",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "OpenShift Virtualization Engine (OVE)",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Business decks",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Technical decks",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Key resources",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Demos & Videos",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Customer References",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "OpenShift Virtualization on OpenShift cloud services",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "OpenShift Virtualization on Azure Red Hat OpenShift (ARO)",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "OpenShift Virtualization on Red Hat OpenShift Service on AWS (ROSA)",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "OpenShift Virtualization on Google Cloud",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Top services resources",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Top training resources",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Ask on Slack:",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
+        {
+          "name": "Contact us:",
+          "url": "https://saleshub.redhat.comjavascript:void(0)"
+        },
         {
           "name": "Press Release",
           "url": "https://www.redhat.com/en/about/press-releases/red-hat-unveils-red-hat-openshift-virtualization-engine"
@@ -46,13 +146,7 @@
         {
           "name": "Overview",
           "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CT3ZlcnZpZXc%253D%252Flf1f0edbdc-0c13-4693-9281-a37b1e1542c3//"
-        }
-      ]
-    },
-    "top-services-resources": {
-      "title": "Top services resources",
-      "type": "accordion",
-      "items": [
+        },
         {
           "name": "9 essential questions to ask before a virtual machine migration",
           "url": "https://www.redhat.com/en/blog/9-essential-questions-ask-virtual-machine-migration-challenges-strategies-and-real-world-insights?extIdCarryOver=true&intcmp=7013a0000026UTXAA2&percmp=7013a0000034splAAA&sc_cid=701f2000000txokAAA"
@@ -68,13 +162,7 @@
         {
           "name": "The Total Economic Impact of Red Hat Consulting for OpenShift",
           "url": "https://www.redhat.com/rhdc/managed-files/co-forrester-tei-consulting-for-openshift-analyst-material-1396520-202409en.pdf?extIdCarryOver=true&intcmp=7013a000003Sa2oAAC&percmp=7015Y00000486qQQAQ&sc_cid=701f2000000txokAAA"
-        }
-      ]
-    },
-    "top-training-resources": {
-      "title": "Top training resources",
-      "type": "accordion",
-      "items": [
+        },
         {
           "name": "Managing Virtual Machines with Red Hat OpenShift Virtualization with Exam (DO317)",
           "url": "https://www.redhat.com/en/services/training/managing-virtual-machines-red-hat-openshift-virtualization-exam?section=overview"
@@ -90,6 +178,38 @@
         {
           "name": "Red Hat Learning Subscription",
           "url": "https://www.redhat.com/en/services/training/learning-subscription"
+        },
+        {
+          "name": "#forum-openshift-virtualization",
+          "url": "https://redhat.enterprise.slack.com/archives/C068X44C8VB"
+        },
+        {
+          "name": "hybridplatforms-marketing@redhat.com",
+          "url": "https://saleshub.redhat.commailto:hybridplatforms-marketing%40redhat.com"
+        },
+        {
+          "name": "OpenShift Virtualization Page",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+        },
+        {
+          "name": "MTV Product Page",
+          "url": "https://developers.redhat.com/products/mtv"
+        },
+        {
+          "name": "Why Migrate to Red Hat?",
+          "url": "https://www.redhat.com/en/topics/virtualization/why-migrate-your-virtual-machines-to-red-hat"
+        },
+        {
+          "name": "Virtualization migration page",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRXh0ZXJuYWwgcmVzb3VyY2U%253D%252Flf8437c0c9-4019-4041-93b9-9201cec7c430//"
+        },
+        {
+          "name": "Learning Path",
+          "url": "https://cloud.redhat.com/learn/getting-started-red-hat-openshift-virtualization"
+        },
+        {
+          "name": "Page RHSH",
+          "url": "https://saleshub.redhat.com/apps/search?appType=DocCenter&keyword=&contentType=All%20Documents&selectedProperties=Content%20Type%3APage%2520RHSH%3B&folderId=&folderName=&fromAppType=&currentTeamSiteId=&sharedTeamSiteId=&pageIndex=&ranking=&strategy="
         }
       ]
     },
@@ -100,12 +220,20 @@
         {
           "name": "(Internal Only) Red Hat Architecture - Mission Critical Application Platform",
           "itemType": "reference-architecture",
-          "description": "Confidential - Red Hat Only | 3. Propose"
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "8e3aece4-0952-45b9-b3ba-90abe1171041",
+          "versionId": "c1caa5cb-92b8-4a70-a23f-4fa066bb29b0",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
         },
         {
           "name": "(Public) Red Hat Architecture - Mission Critical Application Platform",
           "itemType": "reference-architecture",
-          "description": "General Distribution | 3. Propose"
+          "description": "General Distribution | 3. Propose",
+          "contentId": "87d7ebb0-3bd1-4e2b-a6b9-66338585a9fb",
+          "versionId": "05356977-2792-46cb-a4e0-e089c0df7aaa",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
         }
       ]
     },
@@ -116,42 +244,78 @@
         {
           "name": "1 - Elastic - Content Kit",
           "itemType": "cheatsheet",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "f8690c71-db68-4b75-8780-4cac54294768",
+          "versionId": "7ab2d17a-8a9d-49c4-b70d-f4940b79cbe8",
+          "format": "PDF",
+          "seismicContentType": "Cheatsheet",
+          "localPath": "downloads/resources/1 - Elastic - Content Kit.pdf"
         },
         {
           "name": "Baseline Discovery Questions - Modernize Infrastructure",
           "itemType": "cheatsheet",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "b04ad63f-0104-4c3a-8933-4d27b8dcadc7",
+          "versionId": "7c612196-516a-4b66-a371-88cd6349125a",
+          "format": "PDF",
+          "seismicContentType": "Cheatsheet",
+          "localPath": "downloads/resources/Baseline Discovery Questions - Modernize Infrastructure.pdf"
         },
         {
           "name": "Cheatsheet Virtualization TDP CY26",
           "itemType": "cheatsheet",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "949f5ba7-d628-42ff-b19c-dcf653bbd2d2",
+          "versionId": "8fd73e68-ff5f-429f-9672-ccf055a4756b",
+          "format": "PPTX",
+          "seismicContentType": "Cheatsheet"
         },
         {
           "name": "CitrixVDI Partner Quick Reference Card",
           "itemType": "cheatsheet",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "a1c302c8-9a5d-4b8d-ac35-91ecd0eb070a",
+          "versionId": "6c76358a-7af5-4ee6-ba78-7debe9fcfd02",
+          "format": "PPTX",
+          "seismicContentType": "Cheatsheet"
         },
         {
           "name": "CyberArk Cheat Sheet_ Quick Reference OpenShift Virt.pptx",
           "itemType": "cheatsheet",
-          "description": "Confidential - Channel NDA Required"
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "9c24d77d-bd78-4332-b97b-82a26488c7f1",
+          "versionId": "f7998d89-5abb-48b0-ade5-4f5e08773df0",
+          "format": "PPTX",
+          "seismicContentType": "Cheatsheet"
         },
         {
           "name": "Elevator Pitch - Modernize  Infrastructure",
           "itemType": "cheatsheet",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "32539277-5a5e-4fca-b4a1-88d551a0aed7",
+          "versionId": "1ccb2a15-4333-4b73-805c-22d20694e35e",
+          "format": "PDF",
+          "seismicContentType": "Cheatsheet",
+          "localPath": "downloads/resources/Elevator Pitch - Modernize  Infrastructure.pdf"
         },
         {
           "name": "Einschätzung der Virtualisierungsmigration",
           "itemType": "datasheet",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "b46a71a1-fc0f-4d6c-9677-6488573f8a69",
+          "versionId": "eee1cb43-6a9a-48cb-a9ca-90ce1527dec7",
+          "format": "PDF",
+          "seismicContentType": "Datasheet",
+          "localPath": "downloads/resources/Einschätzung der Virtualisierungsmigration.pdf"
         },
         {
           "name": "Evaluación para la migración de la virtualización",
           "itemType": "datasheet",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "f2bfad01-3def-4383-8507-1e7fe09afbb4",
+          "versionId": "9ffa21f2-5c0e-4e6b-994e-96bfbe0e25c4",
+          "format": "PDF",
+          "seismicContentType": "Datasheet"
         }
       ]
     },
@@ -162,122 +326,232 @@
         {
           "name": "15 reasons to adopt Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "94d016e4-a2a4-425b-a31e-aa2e40921b1d",
+          "versionId": "8549eb66-da20-468b-be42-2caed922cd5d",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/15 reasons to adopt Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "5 vantaggi di Red Hat OpenShift per i team delle operazioni IT",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "5cb7aafe-607b-4e87-bf9c-5c6be87ebd6d",
+          "versionId": "f343736a-e9f7-413e-8e14-fbe4f6b6010a",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "5 avantages de Red Hat OpenShift pour les équipes d'exploitation informatique",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "fc259e74-0e84-4ab8-b9bc-cd524ea7b679",
+          "versionId": "9b862b92-b7d4-471c-956d-e2e84021d9ac",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "5 Vorteile von Red Hat OpenShift für IT-Operations-Teams",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "aac3f3ba-045c-42b8-8dce-fe225f2dcda2",
+          "versionId": "1c2d536e-8ebc-4e20-9861-5fba2671b37a",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "Accelerate outcomes: Do more with Red Hat Services",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "8accb0ff-5366-4372-96e3-526e1c52f6bd",
+          "versionId": "f0489027-4efc-45a3-a250-3bbd58676a7f",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Accelerate outcomes_ Do more with Red Hat Services.pdf"
         },
         {
           "name": "Acelere os resultados: faça mais com o Red Hat Services",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "736c97b6-f171-4957-9f24-fc6044a70fc1",
+          "versionId": "e01d1ae1-838d-4b57-87e4-cef7f2df9921",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Acelere os resultados_ faça mais com o Red Hat Services.pdf"
         },
         {
           "name": "Adopte una plataforma de virtualización moderna",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "89349e55-b3b9-4436-912d-671bdaf05ceb",
+          "versionId": "9fa1be16-143c-4dbe-a8d8-ca1d7545c6e9",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "Bien débuter avec Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "73fc61f3-dfd9-4b2e-9b3d-ecfd806282fa",
+          "versionId": "eeb622e7-af27-45c0-a53a-349706fe725d",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Bien débuter avec Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Cinco benefícios do Red Hat OpenShift para equipes operacionais de TI",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "6ea09979-f9a0-4e70-b068-dce9644c1af9",
+          "versionId": "9bc18d67-b730-429b-a77f-ed7681d9a492",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "Cinco ventajas que ofrece Red Hat OpenShift a los equipos de operaciones de TI",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "ad24b430-e2be-4c3a-b3cd-aea788ef2f5e",
+          "versionId": "e70830c7-eea7-48b2-b700-78d2a77de345",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "Comece a usar o Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "59e364d8-8db6-456d-a24b-43084d3697b3",
+          "versionId": "3406274b-a1c7-45b7-9c16-8ed150855825",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Comece a usar o Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Comience a utilizar Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "abf923b0-d18b-4290-9939-3f9457f5200f",
+          "versionId": "3d033780-a575-499f-8159-f760476fc2f3",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Comience a utilizar Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Der Stand der Virtualisierung",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "6f319244-b780-460f-b0ac-5e85de39c94d",
+          "versionId": "1b5d3fce-ba0d-4439-a8d4-a7c29bb392e6",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Der Stand der Virtualisierung.pdf"
         },
         {
           "name": "Der Wert des Red Hat OpenShift Virtualization Partnernetzwerks",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "ae88ecae-5b95-473a-83d6-f2be17a1e4b2",
+          "versionId": "748a8758-6b77-4877-9f7f-8ddb0a45303d",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Der Wert des Red Hat OpenShift Virtualization Partnernetzwerks.pdf"
         },
         {
           "name": "Einstieg in Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "cca43bbc-811c-40a4-8a21-7c0ed4e0746a",
+          "versionId": "3e977d55-32dd-44c5-84c4-4b51d589e132",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Einstieg in Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "El estado de la virtualización",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "52c70ca4-fede-4847-8e63-4b2f6d200b6e",
+          "versionId": "f83d2240-9ac3-44d8-a5b2-907ac35b7933",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "El valor del ecosistema de partners de Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "3fab02f1-27f6-435f-87a9-ed843ec2954f",
+          "versionId": "d8503145-4863-4c52-9510-59141c96532b",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "Ergebnisse beschleunigen: Erreichen Sie mehr mit Red Hat Services",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "ac58cda8-a2cb-4c42-a469-6b49893007dc",
+          "versionId": "16989cf4-0233-420b-a40b-2110534217ae",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Ergebnisse beschleunigen_ Erreichen Sie mehr mit Red Hat Services.pdf"
         },
         {
           "name": "Gestisci ed esegui la migrazione dell'infrastruttura virtuale",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "dad5d5d1-1c5a-4dd9-9f59-ed236b92eee7",
+          "versionId": "2fadb55d-be0c-410d-8219-913d60dc701b",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Gestisci ed esegui la migrazione dell'infrastruttura virtuale.pdf"
         },
         {
           "name": "Get started with Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "871e09c3-13ab-47c5-a6ce-8c917659bcdc",
+          "versionId": "5e9b9a13-d7e8-486f-8075-c05e844de37e",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Get started with Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "I vantaggi dell'ecosistema dei partner di Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "bd0ba00d-a333-4b98-8679-1ea7082dd1e2",
+          "versionId": "13e7009f-494f-4df6-96e9-f1c97c59a6d7",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/I vantaggi dell'ecosistema dei partner di Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Introduzione a Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "9f59f3c3-60e7-4212-8196-d7c840a67f67",
+          "versionId": "3e638a10-f6b0-4646-93f5-fb383bd6b8c4",
+          "format": "PDF",
+          "seismicContentType": "E-book",
+          "localPath": "downloads/e-book/Introduzione a Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "L'état actuel de la virtualisation",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "1d847afa-df97-44a9-98e6-0d917d9d514e",
+          "versionId": "b85ac2bb-29da-4652-ac10-41eecc448aae",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         },
         {
           "name": "La valeur de l'écosystème de partenaires Red Hat OpenShift Virtualization",
           "itemType": "e-book",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "239af7d9-868b-4786-b9e2-b3b8efcef7f0",
+          "versionId": "26c7e12f-c53c-4e71-831d-b9fa611a732c",
+          "format": "PDF",
+          "seismicContentType": "E-book"
         }
       ]
     },
@@ -288,72 +562,138 @@
         {
           "name": "2026 Virtualization Migration Assessment - Two Slider",
           "itemType": "overview",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "27e2f2ea-7fdb-41c3-b2c4-bd3191ba90fb",
+          "versionId": "fe08f6f9-0c1c-4a96-a739-00c21ed3e3c3",
+          "format": "PPTX",
+          "seismicContentType": "Overview"
         },
         {
           "name": "Accelera l'innovazione dell'IA nel cloud con Red Hat e Google Cloud",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "894633ff-89e5-4515-b363-8717375ca4b6",
+          "versionId": "7286dbd9-8d78-45ac-a450-5e85cf87e00f",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Accelera l'innovazione dell'IA nel cloud con Red Hat e Google Cloud.pdf"
         },
         {
           "name": "Accelerate modern virtualization",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "e505fe0d-2e1b-4dff-a17f-e0d34dcbea2f",
+          "versionId": "58e27fa6-3912-453f-a2cd-baddc03a8bd3",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Accelerate modern virtualization.pdf"
         },
         {
           "name": "Accélération de la virtualisation moderne",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "4b29b0db-4a6e-406f-8af5-4df5e1b5d879",
+          "versionId": "a5c4bf24-33b3-4d6b-8c47-c58eef98271a",
+          "format": "PDF",
+          "seismicContentType": "Overview"
         },
         {
           "name": "Acelere a inovação da IA na nuvem com a Red Hat e o Google Cloud",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "f2dad4dc-a045-45f0-938e-124659b1eb21",
+          "versionId": "dd3ba8c7-a1f7-40cd-874b-f654dbf8a6a5",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Acelere a inovação da IA na nuvem com a Red Hat e o Google Cloud.pdf"
         },
         {
           "name": "Acelere a virtualização moderna",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "64d93b8d-61e4-421f-83bd-f4e18c45db6a",
+          "versionId": "22a8db8b-2cc7-45d3-ba09-0b164d19f98b",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Acelere a virtualização moderna.pdf"
         },
         {
           "name": "Adquiere valor empresarial con Red Hat OpenShift Virtualization",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "bc861121-7aa7-4ef2-b5d7-32a21fa8cc35",
+          "versionId": "96a3c15b-29f0-4600-8a71-ada11ebb3476",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Adquiere valor empresarial con Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Agilice la innovación de la IA en la nube con Google Cloud y Red Hat",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "7025f30b-41ad-460e-82b6-0ccd6c123750",
+          "versionId": "947944f7-8577-4246-a560-a676243d117f",
+          "format": "PDF",
+          "seismicContentType": "Overview"
         },
         {
           "name": "Agiliza la virtualización moderna",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "3b8abf10-ba78-4b0c-9acc-637206395dbd",
+          "versionId": "a79835c7-f9ae-42f6-8dc6-6b78fb2a710f",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Agiliza la virtualización moderna.pdf"
         },
         {
           "name": "Beschleunigte KI-Innovation in der Cloud mit Red Hat und Google Cloud",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "71e07e96-79c5-426f-8036-9dafa174e651",
+          "versionId": "6aba4b6e-f8ce-4dcd-a010-0e436042b58f",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Beschleunigte KI-Innovation in der Cloud mit Red Hat und Google Cloud.pdf"
         },
         {
           "name": "CyberArk and Red Hat: A Comprehensive Approach to Securing Virtualized Environments",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "639912bb-1b45-4847-81f8-3ae201864e8a",
+          "versionId": "b07e70fb-3080-41bf-a724-717e1b3108af",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/CyberArk and Red Hat_ A Comprehensive Approach to Securing Virtualized Environments.pdf"
         },
         {
           "name": "Elastic Red Hat JVP 02/10/25",
           "itemType": "overview",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "649ff558-c35f-4b58-868f-5d05eab078aa",
+          "versionId": "31e4c269-06fa-4c6d-89d5-aed3864a676a",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Elastic Red Hat JVP 02_10_25.pdf"
         },
         {
           "name": "Il valore di Red Hat OpenShift Virtualization per le aziende",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "f33d6a58-b65c-4248-b613-c5a2b5e10070",
+          "versionId": "32a40ffe-704e-45b3-a129-7bf2147c73b4",
+          "format": "PDF",
+          "seismicContentType": "Overview",
+          "localPath": "downloads/overview/Il valore di Red Hat OpenShift Virtualization per le aziende.pdf"
         },
         {
           "name": "La valeur ajoutée de Red Hat OpenShift Virtualization pour les entreprises",
           "itemType": "overview",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "51eb07a4-23ff-4b79-963b-1631b61a19e5",
+          "versionId": "a56dcd44-4ede-48ad-98d3-3e089d709fe9",
+          "format": "PDF",
+          "seismicContentType": "Overview"
         }
       ]
     },
@@ -364,12 +704,22 @@
         {
           "name": "[EXTERNAL] OpenShift Virtualization with Cohesity Messaging Guide",
           "itemType": "messaging-guide",
-          "description": "Confidential - Channel NDA Required"
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "5fec1c46-e9cc-46ff-bfee-875c6e7ec200",
+          "versionId": "164efa77-1511-467e-9fe3-152942c6570a",
+          "format": "PDF",
+          "seismicContentType": "Messaging guide",
+          "localPath": "downloads/messaging-guide/[EXTERNAL] OpenShift Virtualization with Cohesity Messaging Guide.pdf"
         },
         {
           "name": "Commvault and OpenShift Virtualization Messaging Guide",
           "itemType": "messaging-guide",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "5b82d42b-d16d-42c2-bba8-ae485f60ada7",
+          "versionId": "d6a2a50a-4b83-47a5-b84d-5feac882a8a2",
+          "format": "PDF",
+          "seismicContentType": "Messaging guide",
+          "localPath": "downloads/messaging-guide/Commvault and OpenShift Virtualization Messaging Guide.pdf"
         }
       ]
     },
@@ -380,27 +730,49 @@
         {
           "name": "[PARTNER] OpenShift Virtualization - Sales Motion Guidance",
           "itemType": "enablement",
-          "description": "Confidential - Channel NDA Required"
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "99fca3d3-a8a9-4aba-9c8e-72fc97000864",
+          "versionId": "69d4e138-76d2-4fce-a660-6282220bf9c5",
+          "format": "PPTX",
+          "seismicContentType": "Enablement"
         },
         {
           "name": "Bare metal subs decision tree",
           "itemType": "enablement",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "621207c3-91d6-4f2c-b711-e58cc9a9d9aa",
+          "versionId": "6b6e61f1-90e9-4dcb-8b3d-02ecb52507e2",
+          "format": "PPTX",
+          "seismicContentType": "Enablement"
         },
         {
           "name": "Citrix Virtualization Content Kit",
           "itemType": "enablement",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "80db9c68-f1ef-4139-88dd-8aff0a1e1d01",
+          "versionId": "92231bae-dd0a-4e42-b65f-d0ce7d06e52c",
+          "format": "DOCX",
+          "seismicContentType": "Enablement"
         },
         {
           "name": "Cohesity-OpenShift Virtualization CONTENT KIT",
           "itemType": "enablement",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "bfad9f8e-8ce4-4c4d-b404-54d511bd74bb",
+          "versionId": "5381231a-186d-4dee-b129-8c185bd35a16",
+          "format": "PDF",
+          "seismicContentType": "Enablement",
+          "localPath": "downloads/enablement/Cohesity-OpenShift Virtualization CONTENT KIT.pdf"
         },
         {
           "name": "ISV NotebookLMs",
           "itemType": "enablement",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "e80af75b-9861-4cd9-be9b-19dee8386e52",
+          "versionId": "850054f6-9fc2-4e2c-944a-3db76362d90a",
+          "format": "PDF",
+          "seismicContentType": "Enablement",
+          "localPath": "downloads/enablement/ISV NotebookLMs.pdf"
         }
       ]
     },
@@ -411,82 +783,156 @@
         {
           "name": "A Pontifícia Universidade Católica do Chile garantiu a continuidade de seus negócios e reduziu custos com Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "e4e84838-5f85-4305-a923-342c10c49992",
+          "versionId": "b276655c-1d12-4ef1-88bc-579319156931",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "A Universidade Finis Terrae alcançou um gerenciamento unificado graças ao Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "d2656516-402c-4bd2-9868-be82578306de",
+          "versionId": "231ccb30-9dd2-4257-908f-6be48b1dfe50",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/A Universidade Finis Terrae alcançou um gerenciamento unificado graças ao Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Advent One modernizes IT with Red Hat",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "ea3bbcbc-0c32-4982-942c-4b30674a27a9",
+          "versionId": "ec29e342-6208-4a8f-a32c-6721dee17059",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "Amway China builds a robust digital platform",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "bb6238c7-d1b8-4970-b689-7b3b5631e98a",
+          "versionId": "b8fd1b35-f2df-41ac-89bf-fe435670dd52",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Amway China builds a robust digital platform.pdf"
         },
         {
           "name": "Bank cuts VMware licensing fees and admin tasks by migrating virtual machine workloads to Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "99cea8c1-58f4-471b-960f-bf20d79d2ba6",
+          "versionId": "880b1e53-569e-4179-a636-d88ae0a47da3",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Bank cuts VMware licensing fees and admin tasks by migrating virtual machine workloads to Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Case Study  Universidad Finis Terrae",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "c4222de2-9560-4de5-96f2-6c0e0d748272",
+          "versionId": "6afbeff1-ada1-4e75-8664-97309f74f701",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Case Study  Universidad Finis Terrae.pdf"
         },
         {
           "name": "CY22-present Edge references",
           "itemType": "case-study",
-          "description": "Confidential - Red Hat Only | 2. Validate"
+          "description": "Confidential - Red Hat Only | 2. Validate",
+          "contentId": "139174d3-9e58-4ed9-bbd9-547da19b5e58",
+          "versionId": "0073c309-6421-4de6-9ef7-ebea18ef14ff",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/CY22-present Edge references.pdf"
         },
         {
           "name": "Empresas de telecom reduzem a complexidade com a Red Hat",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "fbc08e93-ea57-43f3-adaf-91db22304622",
+          "versionId": "be9add00-9a61-40a6-a993-0a879212545b",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "Finis Terrae 大学、Red Hat OpenShift Virtualization を使用して統一された管理を実現",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "dd47bdd2-32ef-43e4-ae3b-57c1c557ff15",
+          "versionId": "cdf1a2ba-f21a-4836-8455-fda67a1070dd",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Finis Terrae 大学、Red Hat OpenShift Virtualization を使用して統一された管理を実現.pdf"
         },
         {
           "name": "Healthcare organizations transform IT with Red Hat",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "13432516-50ab-4845-8b98-13a7e9509160",
+          "versionId": "5b89fe9b-9ba6-43ce-8f07-254357a4968b",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "La Pontificia Universidad Católica de Chile aseguró la continuidad de su negocio y redujo costos con Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "4645ecfa-4568-4ed8-a883-83001cc92ee3",
+          "versionId": "d87daaf9-0653-4d16-b645-728f9e64405a",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "La Universidad Finis Terrae agilizó sus operaciones con Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "79042a60-1571-4980-9f09-a79bfb41d4ab",
+          "versionId": "b506dc2c-1a41-4550-a14e-2601c8820a09",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/La Universidad Finis Terrae agilizó sus operaciones con Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "La Universidad Finis Terrae logró una gestión unificada gracias a Red Hat OpenShift Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "e4e8779c-cdb3-4956-9ef4-ef8f3a58fb44",
+          "versionId": "09337fbd-1c3c-471e-98ca-0efccb9c9680",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/La Universidad Finis Terrae logró una gestión unificada gracias a Red Hat OpenShift Virtualization.pdf"
         },
         {
           "name": "Las Cruces Public Schools Virtualization",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "be56ac5a-d766-4a7e-b8ef-dd85179a79ca",
+          "versionId": "16d014e9-9d94-4d4d-a210-bdf0a45c4b28",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Las Cruces Public Schools Virtualization.pdf"
         },
         {
           "name": "Las empresas de telecomunicaciones reducen la complejidad con Red Hat",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "26ae964c-00b8-43a7-81ab-a624a6fe6726",
+          "versionId": "bb62ad5d-86f3-4095-8ea9-9f55e60f3d80",
+          "format": "PDF",
+          "seismicContentType": "Case study"
         },
         {
           "name": "Le aziende di telecomunicazioni riducono le difficoltà con Red Hat",
           "itemType": "case-study",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "ef07e9a8-8b8f-420b-bb30-bf9a2c4cae78",
+          "versionId": "797f7ff8-161a-4e44-a076-c9b3bf2660cb",
+          "format": "PDF",
+          "seismicContentType": "Case study",
+          "localPath": "downloads/case-study/Le aziende di telecomunicazioni riducono le difficoltà con Red Hat.pdf"
         }
       ]
     },
@@ -497,17 +943,30 @@
         {
           "name": "ABU | AVA | 101 - Ansible OpenShift Virtualization Automation - Introduction",
           "itemType": "business-presentation",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "4208a97b-8187-4153-9864-022ff51faad0",
+          "versionId": "36a3e985-7ac5-4014-ae5f-5be9f645fa45",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
         },
         {
           "name": "Business Value Maps - Consolidated",
           "itemType": "business-presentation",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "3f040ad7-5404-4dc6-8d05-74cf77618f26",
+          "versionId": "78a32b01-8115-4ce8-9a98-e5733ea9df62",
+          "format": "PDF",
+          "seismicContentType": "Business presentation",
+          "localPath": "downloads/business-decks/Business Value Maps - Consolidated.pdf"
         },
         {
           "name": "Customer Facing Deck - Modernize Infrastructure",
           "itemType": "business-presentation",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "881eb1a5-c8c8-4068-8926-8831b7532eb1",
+          "versionId": "958bdef3-462c-466e-82f6-9ed418a79fb5",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
         }
       ]
     },
@@ -518,27 +977,52 @@
         {
           "name": "Amazon Web Services or OpenShift: Virtualization",
           "itemType": "competitive-review",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "9188b8d9-5b66-4b8b-b22b-c30563b23c50",
+          "versionId": "ed8f814e-d241-4e56-b02f-cc2792b29869",
+          "format": "PDF",
+          "seismicContentType": "Competitive review",
+          "localPath": "downloads/competitive/Amazon Web Services or OpenShift_ Virtualization.pdf"
         },
         {
           "name": "Google Cloud Platform or OpenShift: Virt",
           "itemType": "competitive-review",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "6bf70fdb-c057-49c4-88cf-a3ee166ca6f9",
+          "versionId": "93858c25-742a-404a-a4e7-e147156f4ae5",
+          "format": "PDF",
+          "seismicContentType": "Competitive review",
+          "localPath": "downloads/competitive/Google Cloud Platform or OpenShift_ Virt.pdf"
         },
         {
           "name": "High Availability / Disaster Recovery",
           "itemType": "competitive-review",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "a2c9fc67-f55b-4b13-b10f-acb01c4f7e02",
+          "versionId": "a6c26652-ec6b-40aa-a7b8-5dab0fdc3919",
+          "format": "PDF",
+          "seismicContentType": "Competitive review",
+          "localPath": "downloads/competitive/High Availability _ Disaster Recovery.pdf"
         },
         {
           "name": "Commvault Quick Reference Card - OpenShift Virtualization - Updated May/2025",
           "itemType": "battlecard",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "b2ba24f8-f4e8-4679-9ac7-17de2c2775cd",
+          "versionId": "75c0d7d7-3f3e-469a-86b7-7365d8e17957",
+          "format": "PDF",
+          "seismicContentType": "Battlecard",
+          "localPath": "downloads/competitive/Commvault Quick Reference Card - OpenShift Virtualization - Updated May_2025.pdf"
         },
         {
           "name": "Elastic Battlecard",
           "itemType": "battlecard",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "610c0eb5-1f27-42f8-982d-b36e7b024c85",
+          "versionId": "24bdb204-951b-499d-ab82-a1823128f184",
+          "format": "PDF",
+          "seismicContentType": "Battlecard",
+          "localPath": "downloads/competitive/Elastic Battlecard.pdf"
         }
       ]
     },
@@ -549,12 +1033,20 @@
         {
           "name": "Application Platform Journey",
           "itemType": "page-rhsh",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "e5c4c629-c070-4569-b05d-6ac4c9d7f369",
+          "versionId": "f3c46577-2a4a-45cc-82f0-1dfef39fe886",
+          "format": "JSON",
+          "seismicContentType": "Page RHSH"
         },
         {
           "name": "Container Management Journey",
           "itemType": "page-rhsh",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "fe7ab1a2-6842-4e0d-8744-3a19d8a1d6f9",
+          "versionId": "1d5416ea-1775-4dee-9e98-ba2d910431f7",
+          "format": "JSON",
+          "seismicContentType": "Page RHSH"
         }
       ]
     },
@@ -565,12 +1057,21 @@
         {
           "name": "ARO  - Experience OpenShift Virtualization Roadshow Content Kit",
           "itemType": "workshop",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "cdcddd96-b488-4d64-a9b7-3dee9ce27a68",
+          "versionId": "b6b75150-ff2f-48bb-99b2-784c21772a6c",
+          "format": "URL",
+          "seismicContentType": "Workshop"
         },
         {
           "name": "Execution guide: Red Hat & NetApp technical virtualization workshop",
           "itemType": "workshop",
-          "description": "Confidential - Channel NDA Required"
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "7bd622e9-fa98-4a7e-ba8a-70f3cd4ed594",
+          "versionId": "2b9c75e2-1232-4b59-8718-1e7fb347ed04",
+          "format": "PDF",
+          "seismicContentType": "Workshop",
+          "localPath": "downloads/workshop/Execution guide_ Red Hat & NetApp technical virtualization workshop.pdf"
         }
       ]
     },
@@ -581,7 +1082,11 @@
         {
           "name": "Ask an OpenShift Admin (E89) | Dive into OpenShift Virtualization - YouTube",
           "itemType": "url-asset",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "564282f5-ebd8-4b04-9b92-122a987ff312",
+          "versionId": "77a57e39-737b-4701-9f76-9cfd295a57c3",
+          "format": "URL",
+          "seismicContentType": "URL asset"
         }
       ]
     },
@@ -592,7 +1097,11 @@
         {
           "name": "Citrix on OpenShift Virt FAQ",
           "itemType": "faq",
-          "description": "Confidential - NDA Required"
+          "description": "Confidential - NDA Required",
+          "contentId": "c448cce8-7e47-4e60-8bf1-a6847a9d86b4",
+          "versionId": "09ac8f1e-ab37-45ef-95b2-0a5a0544a300",
+          "format": "DOCX",
+          "seismicContentType": "FAQ"
         }
       ]
     },
@@ -603,7 +1112,12 @@
         {
           "name": "Commvault-Virt CONTENT KIT",
           "itemType": "brief",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "449323fd-b82b-4cac-ad4c-ee30ca895dc9",
+          "versionId": "994f77d6-92a0-4d58-b994-292b53acb53f",
+          "format": "PDF",
+          "seismicContentType": "Brief",
+          "localPath": "downloads/brief/Commvault-Virt CONTENT KIT.pdf"
         }
       ]
     },
@@ -614,7 +1128,11 @@
         {
           "name": "Conversation Entry Points - Modernize Infrastructure",
           "itemType": "sales-conversation-guide",
-          "description": "Confidential - Channel NDA Required"
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "ad6c96b0-d977-4567-b74a-e51b9df4d4b4",
+          "versionId": "e5267045-77f6-4ec1-9396-118ed2519d9d",
+          "format": "PPTX",
+          "seismicContentType": "Sales conversation guide"
         }
       ]
     },
@@ -625,7 +1143,12 @@
         {
           "name": "Emails for Maximize Tech Investments Sales Tactic",
           "itemType": "email",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "fe976923-2361-4b71-b4db-5393263d8250",
+          "versionId": "68630560-eb68-4c43-b8f5-ff057dde5865",
+          "format": "PDF",
+          "seismicContentType": "Email",
+          "localPath": "downloads/email-templates/Emails for Maximize Tech Investments Sales Tactic.pdf"
         }
       ]
     },
@@ -636,11 +1159,19 @@
         {
           "name": "Getting started with Red Hat OpenShift Virtualization Learning Path",
           "itemType": "external-resource",
-          "description": "General Distribution"
+          "description": "General Distribution",
+          "contentId": "414373b6-90af-47ed-8fec-f7f3622d9c1e",
+          "versionId": "597c1932-8f63-4a61-9431-7dfb151a9d8e",
+          "format": "URL",
+          "seismicContentType": "External resource"
         },
         {
           "name": "Interactive walkthrough: Migrate virtual machines with Red Hat",
-          "itemType": "external-resource"
+          "itemType": "external-resource",
+          "contentId": "0eaf041c-904d-4a34-9c5d-f1eb4a064465",
+          "versionId": "5d4b34c4-42b8-4e37-86d6-b0bd290262e6",
+          "format": "URL",
+          "seismicContentType": "External resource"
         }
       ]
     },
@@ -651,42 +1182,81 @@
         {
           "name": "Go-Live + Anonymous reports - audio recording",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 4. Negotiate"
+          "description": "Confidential - Red Hat Only | 4. Negotiate",
+          "contentId": "d056e41a-a55a-4e88-b384-67cde83bc728",
+          "versionId": "3c3d7e31-b6f2-489a-96a6-cfbb9a0f150a",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live + Anonymous reports - audio recording.pdf"
         },
         {
           "name": "Go-Live + Anonymous reports - audio recordings",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 1. Discover"
+          "description": "Confidential - Red Hat Only | 1. Discover",
+          "contentId": "57dce51c-f19a-48bf-8fdf-0c68a593afe1",
+          "versionId": "bbce54d7-f4cc-443f-8840-0dc145fcecad",
+          "format": "DOCX",
+          "seismicContentType": "Customer go-live report"
         },
         {
           "name": "Go-Live Program Report: CVS - OpenShift Virt Migration from Broadcom - Healthcare - NA - 2026",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 5. Close"
+          "description": "Confidential - Red Hat Only | 5. Close",
+          "contentId": "4d26d76b-0e7f-4348-a199-77a4255af74d",
+          "versionId": "8afb6718-cf3b-4cbd-812a-34167145b7ba",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Program Report_ CVS - OpenShift Virt Migration from Broadcom - Healthcare - NA - 2026.pdf"
         },
         {
           "name": "Go-Live Program Report: General Motors - OpenShift Virt Migration Factory - Manufacturing - NA - 2026",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 1. Discover"
+          "description": "Confidential - Red Hat Only | 1. Discover",
+          "contentId": "481af593-9488-428b-9a27-9920f03016b9",
+          "versionId": "39b56fef-8b1a-40eb-a93f-9745a6e38360",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Program Report_ General Motors - OpenShift Virt Migration Factory - Manufacturing - NA - 2026.pdf"
         },
         {
           "name": "Go-Live Program Report: Nestlé Research – OCP Virtualization - EMEA - Manufacturing - Nov 2025",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 5. Close"
+          "description": "Confidential - Red Hat Only | 5. Close",
+          "contentId": "cf31e025-17d3-405e-9d52-710805cfc9ea",
+          "versionId": "b69c8176-a48f-41a2-b988-71044a0e667a",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Program Report_ Nestlé Research – OCP Virtualization - EMEA - Manufacturing - Nov 2025.pdf"
         },
         {
           "name": "Go-Live Program Report: Poste Italiane - OCP Virtualization - EMEA - FSI - Nov 2025",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 1. Discover"
+          "description": "Confidential - Red Hat Only | 1. Discover",
+          "contentId": "dba75b24-c78f-433a-8a61-a6dd5c5c7c34",
+          "versionId": "55339dbf-abea-40c7-9b64-1c7c85be6fc2",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Program Report_ Poste Italiane - OCP Virtualization - EMEA - FSI - Nov 2025.pdf"
         },
         {
           "name": "Go-Live Report: IRS - Enterprise Container Platform - NAPS - Nov 2024",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only | 1. Discover"
+          "description": "Confidential - Red Hat Only | 1. Discover",
+          "contentId": "071012df-ea1a-407d-aa4f-02fae347c01e",
+          "versionId": "8a0b5688-15f3-470b-bea9-d1bf1c3f6b3d",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Report_ IRS - Enterprise Container Platform - NAPS - Nov 2024.pdf"
         },
         {
           "name": "Go-Live Snapshot Report: Siemens - Migration of VMs to Red Hat OpenShift - Tech - May 2025",
           "itemType": "customer-go-live-report",
-          "description": "Confidential - Red Hat Only"
+          "description": "Confidential - Red Hat Only",
+          "contentId": "52b5bc59-fdfb-4679-8b28-81efb3e75eae",
+          "versionId": "4a2d75e3-2aa4-46f4-bd2c-be32ec0a6c5b",
+          "format": "PDF",
+          "seismicContentType": "Customer go-live report",
+          "localPath": "downloads/customer-go-live-report/Go-Live Snapshot Report_ Siemens - Migration of VMs to Red Hat OpenShift - Tech - May 2025.pdf"
         }
       ]
     },
@@ -697,7 +1267,12 @@
         {
           "name": "ICON Internal Win Wire",
           "itemType": "customer-success-snapshot",
-          "description": "Confidential - Red Hat Only | 4. Negotiate"
+          "description": "Confidential - Red Hat Only | 4. Negotiate",
+          "contentId": "92fc8cc5-d0df-4321-8f0b-d3bb9b5d4ced",
+          "versionId": "f17e0cae-cc0e-4970-800b-ff7e1364d9c8",
+          "format": "PDF",
+          "seismicContentType": "Customer success snapshot",
+          "localPath": "downloads/customer-success-snapshot/ICON Internal Win Wire.pdf"
         }
       ]
     },
@@ -708,7 +1283,11 @@
         {
           "name": "Introduction video: OpenShift lifecycles and EUS",
           "itemType": "video",
-          "description": "Confidential - Channel NDA Required | 1. Discover"
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "34811dbd-9ad2-4344-b57c-2a09172312b8",
+          "versionId": "2aba0779-8e65-447b-9106-9a3480fb8941",
+          "format": "MP4",
+          "seismicContentType": "Video"
         }
       ]
     }
