@@ -17,6 +17,20 @@ updated: 2026-05-03
 
 Never ask Jason "does X exist?" without checking PROJECT-STATE.md first.
 
+**Spec-driven development (MANDATORY — zero exceptions):**
+Before ANY decision, question, or implementation on a GitHub issue:
+1. Check if a spec exists: `ls docs/specs/` and check the issue body for spec references
+2. If a spec exists, **read the full spec** — not just the summary, the success criteria
+3. Re-read the relevant success criteria **before answering questions about approach** — not just at session start
+4. If your answer deviates from the spec, say so explicitly: "The spec says X, I'm suggesting Y because Z — should we update the spec?"
+5. Never propose a workaround that contradicts the spec without flagging the contradiction first
+
+**This also applies to ADRs, council decisions posted to issues, and any design doc referenced from an issue.** The issue and its linked documents are the source of truth. If you haven't read them in this session, you don't know the design intent.
+
+**Why this rule exists:** During #819, the spec clearly defined a three-layer model with per-product document downloads (SC-2) and a replacement pattern for old modules. The DA read it once, drifted, skipped Layer 2 entirely, suggested reusing old scraper downloads, and told Jason the new module runs "alongside" when the spec says "replacing." Jason corrected this three times. Specs exist to prevent exactly this kind of drift.
+
+**Product scrape completeness contract (#829):** After every product page scrape, audit what was captured vs what's visible on the page. Generate `_completeness.json` with: items found (DOM + API), items downloaded, items missed with reasons. If any visible section has 0 captured items, flag it — don't silently omit. The Seismic API does NOT return DocListPicker items (cloud provider content kits, workshops) — these are a known gap that requires SPA rendering to capture. Never report a product scrape as complete without checking for this gap.
+
 **After every ship (make rebuild) and before ending a session:** Run `/doc-hygiene` to verify all docs reflect what shipped. This is not optional — stale docs cause the same gaps as stale code.
 
 **Update `PROJECT-STATE.md` immediately when any of these happen (no exceptions, no deferring to end of session):**
