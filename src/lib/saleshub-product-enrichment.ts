@@ -402,50 +402,29 @@ export async function enrichProductDocuments(
   const getGemini = (type: string): GeminiCaller =>
     geminiFactory ? geminiFactory(type) : callGemini
 
-  for (const doc of documents) {
-    switch (doc.type) {
-      case 'content-kit': {
-        const result = await enrichContentKit(
-          { name: doc.name, content: doc.content, cloudProvider: doc.cloudProvider ?? 'unknown' },
-          getGemini('content-kit'),
-        )
-        if (result) contentKits.push(result)
-        break
+  // Process in parallel batches of 5 (#841)
+  const BATCH_SIZE = 5
+  for (let batchStart = 0; batchStart < documents.length; batchStart += BATCH_SIZE) {
+    const batch = documents.slice(batchStart, batchStart + BATCH_SIZE)
+    const results = await Promise.allSettled(batch.map(async (doc) => {
+      // Skip documents > 10MB
+      if (doc.content.length > 10_000_000) {
+        console.warn(`[saleshub-product-enrichment] Skipping "${doc.name}" — content too large (${Math.round(doc.content.length / 1_000_000)}MB)`)
+        return null
       }
-      case 'messaging-guide': {
-        const result = await enrichMessagingGuide(
-          { name: doc.name, content: doc.content },
-          getGemini('messaging-guide'),
-        )
-        if (result) messagingGuides.push(result)
-        break
+      return { doc, result: await enrichSingleDocument(doc, getGemini) }
+    }))
+
+    for (const r of results) {
+      if (r.status !== 'fulfilled' || !r.value?.result) continue
+      const { doc, result } = r.value
+      switch (doc.type) {
+        case 'content-kit': contentKits.push(result as ContentKitExtraction); break
+        case 'messaging-guide': messagingGuides.push(result as DocumentExtraction); break
+        case 'battlecard': battlecards.push(result as DocumentExtraction); break
+        case 'case-study': caseStudies.push(result as CaseStudyExtraction); break
+        case 'competitive-review': competitiveReviews.push(result as CompetitiveReviewExtraction); break
       }
-      case 'battlecard': {
-        const result = await enrichBattlecard(
-          { name: doc.name, content: doc.content },
-          getGemini('battlecard'),
-        )
-        if (result) battlecards.push(result)
-        break
-      }
-      case 'case-study': {
-        const result = await enrichCaseStudy(
-          { name: doc.name, content: doc.content },
-          getGemini('case-study'),
-        )
-        if (result) caseStudies.push(result)
-        break
-      }
-      case 'competitive-review': {
-        const result = await enrichCompetitiveReview(
-          { name: doc.name, content: doc.content },
-          getGemini('competitive-review'),
-        )
-        if (result) competitiveReviews.push(result)
-        break
-      }
-      default:
-        console.warn(`[saleshub-product-enrichment] Unknown document type "${doc.type}" for "${doc.name}" — skipping`)
     }
   }
 
@@ -457,5 +436,41 @@ export async function enrichProductDocuments(
     battlecards,
     caseStudies,
     competitiveReviews,
+  }
+}
+
+async function enrichSingleDocument(
+  doc: EnrichmentDocumentInput,
+  getGemini: (type: string) => GeminiCaller,
+): Promise<any> {
+  switch (doc.type) {
+      case 'content-kit':
+        return enrichContentKit(
+          { name: doc.name, content: doc.content, cloudProvider: doc.cloudProvider ?? 'unknown' },
+          getGemini('content-kit'),
+        )
+      case 'messaging-guide':
+        return enrichMessagingGuide(
+          { name: doc.name, content: doc.content },
+          getGemini('messaging-guide'),
+        )
+      case 'battlecard':
+        return enrichBattlecard(
+          { name: doc.name, content: doc.content },
+          getGemini('battlecard'),
+        )
+      case 'case-study':
+        return enrichCaseStudy(
+          { name: doc.name, content: doc.content },
+          getGemini('case-study'),
+        )
+      case 'competitive-review':
+        return enrichCompetitiveReview(
+          { name: doc.name, content: doc.content },
+          getGemini('competitive-review'),
+        )
+      default:
+        console.warn(`[saleshub-product-enrichment] Unknown document type "${doc.type}" for "${doc.name}" — skipping`)
+        return null
   }
 }
