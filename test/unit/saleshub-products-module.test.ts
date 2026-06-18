@@ -203,7 +203,7 @@ describe('saleshub-products-module', () => {
     expect(servicesSignals.length).toBe(1)
 
     const svc = servicesSignals[0]
-    expect(svc.headline).toContain('Services resources')
+    expect(svc.headline).toContain('consulting resources')
     expect(svc.headline).toContain('Test Product A')
     expect((svc.metadata!.items as any[]).length).toBe(1)
   })

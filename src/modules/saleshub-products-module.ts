@@ -226,7 +226,18 @@ function emitProductSignals(
       }
       return scoreKit(b) - scoreKit(a)
     })
-    for (const kit of sorted.slice(0, 5)) {
+    // Cap at 2 per cloud provider to prevent one provider dominating
+    const cloudCount = new Map<string, number>()
+    const selected: typeof sorted = []
+    for (const kit of sorted) {
+      if (selected.length >= 5) break
+      const cloud = kit.cloudProvider || 'unknown'
+      const count = cloudCount.get(cloud) ?? 0
+      if (count >= 2) continue
+      cloudCount.set(cloud, count + 1)
+      selected.push(kit)
+    }
+    for (const kit of selected) {
       const stepsFormatted = kit.actionableSteps
         .map((s, i) => `${i + 1}. ${s.step}${s.url ? ` (${s.url})` : ''}`)
         .join('\n')
@@ -295,7 +306,7 @@ function emitProductSignals(
     signals.push({
       source: 'saleshub-products',
       type: 'recommendation',
-      headline: `Services resources available for ${product.name}`,
+      headline: `Migration and consulting resources for ${product.name}`,
       detail: servicesSection.items.map(i => `- ${i.name}`).join('\n'),
       rawRelevance: 0.25,
       timestamp,

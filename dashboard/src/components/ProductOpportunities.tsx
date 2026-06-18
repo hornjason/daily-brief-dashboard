@@ -119,9 +119,16 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
     )
   }
 
-  const top3 = signals.slice(0, 3)
-  const rest = signals.slice(3)
-  const visible = showAll ? signals : top3
+  // Training and resource signals always visible — separate from content kit signals
+  const trainingAndServices = signals.filter(s =>
+    s.metadata.resourceType === 'training' || s.metadata.resourceType === 'services'
+  )
+  const contentSignals = signals.filter(s =>
+    s.metadata.resourceType !== 'training' && s.metadata.resourceType !== 'services'
+  )
+  const top3 = contentSignals.slice(0, 3)
+  const rest = contentSignals.slice(3)
+  const visible = showAll ? contentSignals : top3
 
   return (
     <div className="bg-bg-secondary/30 rounded-lg border border-border p-3">
@@ -264,6 +271,34 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
               Show less
             </button>
           )}
+
+          {/* Training and Services — always visible */}
+          {trainingAndServices.map((signal, i) => {
+            const items = signal.metadata.items ?? signal.metadata.links ?? []
+            if (items.length === 0) return null
+            const isTraining = signal.headline.includes('Training')
+            return (
+              <div key={`ts-${i}`} className="bg-bg-tertiary/40 rounded-md p-2 space-y-1 mt-2">
+                <p className="text-xs font-medium text-text-secondary">
+                  {isTraining ? 'Training Courses' : 'Resources'}
+                </p>
+                <ul className="text-xs space-y-0.5">
+                  {items.map((item, j) => (
+                    <li key={j} className="flex items-center gap-1">
+                      {item.url ? (
+                        <a href={item.url} target="_blank" rel="noopener" className="text-accent hover:underline flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                          {item.name}
+                        </a>
+                      ) : (
+                        <span className="text-text-primary">{item.name}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
