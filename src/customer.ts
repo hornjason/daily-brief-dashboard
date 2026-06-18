@@ -23,7 +23,7 @@ import { isPrimaryCalendarEvent } from './calendar-filter.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { getAiConfig, getAutomationConfig } from './ai-config.ts'
 import { callGemini } from './gemini-call.ts'
-import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
+import { rankItems, buildSynthesisPrompt, BRIEF_RESPONSE_SCHEMA, assembleBriefFromStructured } from './brief-pipeline.ts'
 import { ensureSignalsCurrent, loadCustomerSignals } from './lib/signal-loader.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
@@ -805,16 +805,27 @@ export async function generateBrief(
 
       const generationStart = Date.now()
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
-      const fullUsage: { tokensUsed?: number } = {}
-      brief = await callLLM(
+      // Use responseSchema for structured JSON output — guarantees all required sections
+      const structuredResult = await callGemini(
         'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
         synthesisPrompt,
-        'brief-synthesize',
-        customer.name,
-        fullUsage,
+        {
+          callType: 'brief-synthesize',
+          customerName: customer.name,
+          responseSchema: BRIEF_RESPONSE_SCHEMA,
+          temperature: getAiConfig().briefSynthesisTemperature,
+        },
       )
-      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
-      console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
+      let structuredBrief: Record<string, string>
+      try {
+        structuredBrief = JSON.parse(structuredResult.text)
+      } catch {
+        console.error(`[brief] Failed to parse structured Gemini response for ${customer.name}, falling back to raw text`)
+        structuredBrief = { priorityAction: '', whatChanged: structuredResult.text, nextSteps: '', whatTheyMayNotKnow: '', nextAction: '', dataFreshness: '', pipelineOpportunities: '', keyInsights: '', risksAndRenewals: '', talkingPoints: '', openCases: '' }
+      }
+      brief = assembleBriefFromStructured(structuredBrief)
+      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: structuredResult.inputTokens + structuredResult.outputTokens })
+      console.log(`[brief] Step 3 SYNTHESIZE (structured): ${brief.length} chars, 3-step pipeline complete`)
 
       // Consumer contract v1.0: Quality gate (ADR-024, AC-5)
       const qualityResult = await validateAndRetry(
@@ -823,12 +834,21 @@ export async function generateBrief(
         async (failures, attempt) => {
           const feedback = failures.map(f => `- ${f.name}: expected ${f.expected}, got ${f.actual}`).join('\n')
           const retryPrompt = `${synthesisPrompt}\n\nPREVIOUS OUTPUT FAILED QUALITY CHECK (attempt ${attempt}). Fix these issues:\n${feedback}`
-          return callLLM(
+          const retryResult = await callGemini(
             'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs. Fix the quality issues listed below.',
             retryPrompt,
-            'brief-synthesize-retry',
-            customer.name,
+            {
+              callType: 'brief-synthesize-retry',
+              customerName: customer.name,
+              responseSchema: BRIEF_RESPONSE_SCHEMA,
+              temperature: getAiConfig().briefSynthesisTemperature,
+            },
           )
+          try {
+            return assembleBriefFromStructured(JSON.parse(retryResult.text))
+          } catch {
+            return retryResult.text // fallback to raw text if JSON parse fails on retry
+          }
         }
       )
       brief = qualityResult.output
@@ -957,10 +977,23 @@ List cases with severity, days open, and product. Flag Sev1/Sev2 urgently. If no
 Keep total brief under 250 words.`
 
   try {
-    let fallbackBrief = await callLLM(
-      'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
+    // Use structured output for fallback too — guarantees section presence
+    const fallbackResult = await callGemini(
+      'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.',
       prompt,
+      {
+        callType: 'brief-synthesize-fallback',
+        customerName: customer.name,
+        responseSchema: BRIEF_RESPONSE_SCHEMA,
+        temperature: getAiConfig().briefSynthesisTemperature,
+      },
     )
+    let fallbackBrief: string
+    try {
+      fallbackBrief = assembleBriefFromStructured(JSON.parse(fallbackResult.text))
+    } catch {
+      fallbackBrief = fallbackResult.text // raw text fallback if JSON parse fails
+    }
     // Consumer contract v1.0: templateAll context in fallback path (#843)
     const { templateAll: templateAllFallback } = await import('./lib/signal-templates.ts')
     const customerSlugFallback = toSlug(customer.name)
