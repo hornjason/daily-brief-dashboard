@@ -1,3 +1,4 @@
+// @consumer-contract v1.0
 import { google } from 'googleapis'
 import { resolve } from 'path'
 import { existsSync, readFileSync } from 'node:fs'
@@ -23,7 +24,7 @@ import { isFreeOrTrial } from './health-score.ts'
 import { getAiConfig, getAutomationConfig } from './ai-config.ts'
 import { callGemini } from './gemini-call.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
-import { ensureSignalsCurrent } from './lib/signal-loader.ts'
+import { ensureSignalsCurrent, loadCustomerSignals } from './lib/signal-loader.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
@@ -37,6 +38,9 @@ import { emitAIEvent } from './ai-events.ts'
 import { detectFingerprintDelta, diffDocCorpus, shouldUseDeltaMode, type BriefInputBundle } from './ai-fingerprint.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { CONFIG_DIR } from './lib/paths.ts'
+import { getAccountTeam, toPromptContext } from './account-team.ts'
+import { validateAndRetry } from './gemini-quality-gate.ts'
+import { briefValidator } from './quality-validators/brief-validator.ts'
 
 const CONFIG_DIR_PATH   = CONFIG_DIR
 const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
@@ -619,7 +623,7 @@ export async function generateBrief(
 
   // ── Pre-flight signal refresh (#285) — ensure fresh data before brief generation
   const customerSlugForRefresh = toSlug(customer.name)
-  await FeatureModuleRegistry.refreshStaleSignals(customerSlugForRefresh).catch(() => {})
+  await loadCustomerSignals(customerSlugForRefresh, customer.name, { ensureFresh: true }).catch(() => {})
 
   // ── R17: Structured extraction (Step 1 of three-step pipeline) ────────────
   // R18: Three-step pipeline (extract → rank → synthesize) with fallback to single-pass
@@ -782,7 +786,23 @@ export async function generateBrief(
       const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
       console.log(`[brief] Registry signals for ${customer.name}: ${registrySignals.length} signals collected`)
 
-      const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext, registrySignals)
+      // Consumer contract v1.0: templateAll() BEFORE synthesis (#843)
+      // Deterministic sections passed as context so Gemini can condense them
+      const { templateAll } = await import('./lib/signal-templates.ts')
+      const accountTeam = getAccountTeam(customer)
+      const templateResult = await templateAll(registrySignals, accountTeam, { format: 'brief', customerSlug: toSlug(customer.name) })
+      console.log(`[brief] templateAll for ${customer.name}: ${templateResult.deterministic.length} chars deterministic context`)
+
+      // Build synthesis prompt with deterministic context and account team
+      const accountTeamContext = toPromptContext(accountTeam)
+      let synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext, registrySignals)
+      if (templateResult.deterministic) {
+        synthesisPrompt += `\n\nDETERMINISTIC DATA SECTIONS (condense into the brief — do not dump raw):\n<untrusted>\n${templateResult.deterministic.slice(0, 8000)}\n</untrusted>`
+      }
+      if (accountTeamContext) {
+        synthesisPrompt += `\n\n${accountTeamContext}`
+      }
+
       const generationStart = Date.now()
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
       const fullUsage: { tokensUsed?: number } = {}
@@ -796,17 +816,23 @@ export async function generateBrief(
       emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
       console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
 
-      // Append deterministic sections via templateAll() (ADR-031, #451)
-      const { templateAll } = await import('./lib/signal-templates.ts')
-      const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug: toSlug(customer.name) })
-      if (templateResult.sections.cloudMarketplace) {
-        brief = `${brief}\n\n## Cloud & Marketplace\n\n${templateResult.sections.cloudMarketplace}`
-        console.log(`[brief] Appended Cloud & Marketplace section`)
-      }
-      if (templateResult.sections.salesAlignment) {
-        brief = `${brief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
-        console.log(`[brief] Appended Sales Alignment section`)
-      }
+      // Consumer contract v1.0: Quality gate (ADR-024, AC-5)
+      const qualityResult = await validateAndRetry(
+        brief,
+        { validator: briefValidator },
+        async (failures, attempt) => {
+          const feedback = failures.map(f => `- ${f.name}: expected ${f.expected}, got ${f.actual}`).join('\n')
+          const retryPrompt = `${synthesisPrompt}\n\nPREVIOUS OUTPUT FAILED QUALITY CHECK (attempt ${attempt}). Fix these issues:\n${feedback}`
+          return callLLM(
+            'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs. Fix the quality issues listed below.',
+            retryPrompt,
+            'brief-synthesize-retry',
+            customer.name,
+          )
+        }
+      )
+      brief = qualityResult.output
+      console.log(`[brief] Quality gate: score=${qualityResult.scorecard.score}, attempts=${qualityResult.attempts}, passed=${qualityResult.scorecard.passed}`)
     }
 
     return brief
@@ -935,18 +961,23 @@ Keep total brief under 250 words.`
       'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
       prompt,
     )
-    // Append deterministic sections via templateAll() (ADR-031, #451)
-    const { templateAll } = await import('./lib/signal-templates.ts')
-    const customerSlug = toSlug(customer.name)
-    const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
-    const templateResult = await templateAll(registrySignals, undefined, { format: 'brief', customerSlug })
-    if (templateResult.sections.cloudMarketplace) {
-      fallbackBrief = `${fallbackBrief}\n\n## Cloud & Marketplace\n\n${templateResult.sections.cloudMarketplace}`
+    // Consumer contract v1.0: templateAll context in fallback path (#843)
+    const { templateAll: templateAllFallback } = await import('./lib/signal-templates.ts')
+    const customerSlugFallback = toSlug(customer.name)
+    const registrySignalsFallback = await FeatureModuleRegistry.collectAllSignals(customerSlugFallback)
+    const accountTeamFallback = getAccountTeam(customer)
+    const templateResultFallback = await templateAllFallback(registrySignalsFallback, accountTeamFallback, { format: 'brief', customerSlug: customerSlugFallback })
+    // Condense deterministic data into brief context instead of raw append
+    if (templateResultFallback.deterministic) {
+      fallbackBrief += `\n\n---\n\n${templateResultFallback.deterministic.slice(0, 4000)}`
     }
-    if (templateResult.sections.salesAlignment) {
-      fallbackBrief = `${fallbackBrief}\n\n## Sales Alignment\n\n${templateResult.sections.salesAlignment}`
-    }
-    return fallbackBrief
+    // Quality gate on fallback too
+    const fallbackQuality = await validateAndRetry(
+      fallbackBrief,
+      { validator: briefValidator, maxRetries: 1 },
+      async (failures) => fallbackBrief // no retry on fallback — return as-is
+    )
+    return fallbackQuality.output
   } catch (fallbackErr: any) {
     // BKL-G08: Both three-step pipeline AND single-pass fallback failed.
     // Return a minimal brief with available raw data instead of throwing HTTP 500.

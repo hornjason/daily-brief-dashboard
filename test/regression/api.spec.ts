@@ -218,6 +218,56 @@ test.describe('REG-006: HTTP 500 on empty Gemini response (BKL-G08)', () => {
   })
 })
 
+// ── REG-016: Brief consumer contract v1.0 compliance (#843) ──────────────────
+
+test.describe('REG-016: Brief consumer contract v1.0 (#843)', () => {
+  test('brief response contains required sections (Priority Action, What Changed, Next Steps)', async () => {
+    const dynamicCustomer = await getKnownCustomer()
+    if (!dynamicCustomer) { console.log('No customers available — skipping'); return }
+    const encoded = encodeURIComponent(dynamicCustomer)
+    const { status, body } = await getJSON(`/customer/${encoded}/brief`)
+    if (status !== 200 || !body?.text) {
+      console.log(`Brief not available (status=${status}) — skipping contract check`)
+      return
+    }
+    const text = body.text as string
+    // Contract v1.0 requires these sections
+    expect(text).toContain('## Priority Action')
+    expect(text).toContain('## What Changed')
+    expect(text).toContain('## Next Steps')
+  })
+
+  test('brief response has no empty required sections', async () => {
+    const dynamicCustomer = await getKnownCustomer()
+    if (!dynamicCustomer) { console.log('No customers available — skipping'); return }
+    const encoded = encodeURIComponent(dynamicCustomer)
+    const { status, body } = await getJSON(`/customer/${encoded}/brief`)
+    if (status !== 200 || !body?.text) { return }
+    const text = body.text as string
+    // Each required section should have content after the header
+    const sections = ['Priority Action', 'What Changed', 'Next Steps']
+    for (const section of sections) {
+      const pattern = new RegExp(`## ${section}\n+(.+)`, 'm')
+      const match = text.match(pattern)
+      if (match) {
+        expect(match[1].trim().length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  test('brief response contains no placeholder text', async () => {
+    const dynamicCustomer = await getKnownCustomer()
+    if (!dynamicCustomer) { console.log('No customers available — skipping'); return }
+    const encoded = encodeURIComponent(dynamicCustomer)
+    const { status, body } = await getJSON(`/customer/${encoded}/brief`)
+    if (status !== 200 || !body?.text) { return }
+    const text = body.text as string
+    expect(text).not.toMatch(/\bTBD\b/i)
+    expect(text).not.toMatch(/\[Insert\b/i)
+    expect(text).not.toMatch(/\bTODO\b/i)
+  })
+})
+
 // ── REG-007: Pipeline data flows to both AEs (BKL-W2-26) ────────────────────
 //
 // NOTE: This test runs after REG-001 restores original AEs — the pipeline

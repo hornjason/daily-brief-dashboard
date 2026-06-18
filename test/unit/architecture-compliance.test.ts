@@ -212,6 +212,42 @@ describe('Consumer contract compliance', () => {
     }
     expect(violations).toHaveLength(0)
   })
+
+  // Consumer contract v1.0 enforcement tests (#843)
+  test('brief-pipeline.ts and customer.ts have @consumer-contract v1.0 declaration', () => {
+    const briefPipeline = readSrc('brief-pipeline.ts')
+    const customer = readSrc('customer.ts')
+    expect(briefPipeline).toContain('@consumer-contract v1.0')
+    expect(customer).toContain('@consumer-contract v1.0')
+  })
+
+  test('customer.ts imports a quality validator', () => {
+    const content = readSrc('customer.ts')
+    expect(content).toMatch(/import.*brief-validator|import.*quality-validator/m)
+  })
+
+  test('customer.ts calls ensureFresh: true', () => {
+    const content = readSrc('customer.ts')
+    expect(content).toContain('ensureFresh: true')
+  })
+
+  test('customer.ts imports and calls getAccountTeam', () => {
+    const content = readSrc('customer.ts')
+    expect(content).toMatch(/import.*getAccountTeam/m)
+    expect(content).toContain('getAccountTeam(')
+  })
+
+  test('customer.ts imports and calls validateAndRetry', () => {
+    const content = readSrc('customer.ts')
+    expect(content).toMatch(/import.*validateAndRetry/m)
+    expect(content).toContain('validateAndRetry(')
+  })
+
+  test('brief-pipeline.ts SYNTHESIS_PROMPT contains Next Steps format section', () => {
+    const content = readSrc('brief-pipeline.ts')
+    expect(content).toContain('## Next Steps')
+    expect(content).toContain('## What They May Not Know')
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
