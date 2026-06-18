@@ -255,7 +255,7 @@ async function doKeepalive(): Promise<void> {
         // Navigate to DocCenter to trigger SPA localStorage token writes (#829)
         // The product scraper needs these tokens for DocListPicker content to render
         try {
-          await page.goto('https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/main///', { waitUntil: 'networkidle', timeout: 30_000 })
+          await page.goto('https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/main///', { waitUntil: 'networkidle', timeout: 30_000 })
           await page.waitForFunction(() => localStorage.length > 0, { timeout: 15_000 }).catch(() => {
             console.warn('[sync-daemon] keepalive: SalesHub localStorage not populated after 15s')
           })

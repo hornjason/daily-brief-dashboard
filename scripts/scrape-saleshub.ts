@@ -198,7 +198,7 @@ async function bulkDownloadByContentType(
 
   // Navigate to DocCenter fresh (clears previous filters)
   await page.goto(
-    `${SALESHUB_BASE}/apps/doccenter/${DOCCENTER_PROFILE}/main///`,
+    `${SALESHUB_BASE}/app/#/doccenter/${DOCCENTER_PROFILE}/main///`,
     { waitUntil: 'domcontentloaded', timeout: 60_000 },
   )
   await page.waitForTimeout(8_000)
@@ -615,9 +615,9 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
     // Set cheatsheet + customer deck URLs from documents
     for (const tdp of tdpNodes) {
       const cheatsheet = (tdp.documents ?? []).find(d => d.contentType?.toLowerCase().includes('cheatsheet'))
-      if (cheatsheet?.versionId) tdp.cheatsheetUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${cheatsheet.versionId}`
+      if (cheatsheet?.versionId) tdp.cheatsheetUrl = `https://saleshub.redhat.com/app/#/doccenter/${DOCCENTER_PROFILE}/doc/${cheatsheet.versionId}`
       const deck = (tdp.documents ?? []).find(d => d.contentType?.toLowerCase().includes('business presentation') && d.name.toLowerCase().includes('customer'))
-      if (deck?.versionId) tdp.customerDeckUrl = `https://saleshub.redhat.com/apps/doccenter/${DOCCENTER_PROFILE}/doc/${deck.versionId}`
+      if (deck?.versionId) tdp.customerDeckUrl = `https://saleshub.redhat.com/app/#/doccenter/${DOCCENTER_PROFILE}/doc/${deck.versionId}`
     }
 
     // Build Sales Play nodes from facet names + documents

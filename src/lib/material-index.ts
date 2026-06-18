@@ -44,8 +44,10 @@ function inferTdp(key: string): string | null {
 
 function resolveSaleshubUrl(url: string | undefined): string | undefined {
   if (!url) return undefined
-  if (url.startsWith('https://') || url.startsWith('http://')) return url
-  if (url.startsWith('/apps/')) return `https://saleshub.redhat.com${url}`
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    return url.replace('saleshub.redhat.com/apps/doccenter/', 'saleshub.redhat.com/app/#/doccenter/')
+  }
+  if (url.startsWith('/apps/')) return `https://saleshub.redhat.com/app/#${url.slice(5)}`
   return undefined
 }
 

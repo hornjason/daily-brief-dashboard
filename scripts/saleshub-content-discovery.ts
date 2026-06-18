@@ -17,7 +17,7 @@ import type { Page } from '@playwright/test'
 import type { TdpNode, SalesPlayNode } from './saleshub-knowledge-extraction.ts'
 
 const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
-const DOCCENTER_URL = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/main///`
+const DOCCENTER_URL = `https://saleshub.redhat.com/app/#/doccenter/${PROFILE_VERSION_ID}/main///`
 
 const MAX_DOCUMENT_SIZE = 200 * 1024 * 1024 // 200MB
 const MAX_EXTRACTED_CHARS = 50_000
