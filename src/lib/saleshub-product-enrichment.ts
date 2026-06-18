@@ -47,11 +47,29 @@ function buildGeminiOpts(content: string, baseOpts: any): any {
   }
   return baseOpts
 }
+function extractLinksFromHtml(html: string): string {
+  const links: string[] = []
+  const matches = html.matchAll(/<a[^>]+href="([^"]+)"[^>]*>([^<]*)<\/a>/gi)
+  for (const m of matches) {
+    let href = m[1]
+    const text = m[2].trim()
+    if (!href.startsWith('http') || text.length < 3) continue
+    // Unwrap Google redirect URLs
+    const googleRedirect = href.match(/google\.com\/url\?q=([^&]+)/)
+    if (googleRedirect) href = decodeURIComponent(googleRedirect[1])
+    links.push(`"${text}" → ${href}`)
+  }
+  if (links.length === 0) return ''
+  return `\n\nURL REFERENCE — these are the actual hyperlink URLs from the document. Use these EXACT URLs in your extraction:\n${links.join('\n')}`
+}
+
 function buildUserPrompt(promptFn: (name: string, content: string) => string, name: string, content: string): string {
   if (isBinaryContent(content)) {
     return promptFn(name, '[See attached PDF document]')
   }
-  return promptFn(name, content)
+  // For HTML content, extract URLs and append as reference
+  const urlRef = content.includes('<a ') ? extractLinksFromHtml(content) : ''
+  return promptFn(name, content) + urlRef
 }
 
 interface EnrichmentDocumentInput {
