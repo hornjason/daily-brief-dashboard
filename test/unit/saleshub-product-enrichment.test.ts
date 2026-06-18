@@ -252,3 +252,71 @@ describe('saleshub-product-enrichment', () => {
     })
   })
 })
+
+describe('deltaKey caching', () => {
+  test('enrichContentKit passes deltaKey to gemini caller', async () => {
+    let receivedOpts: any = null
+    const result = await enrichContentKit({
+      name: 'AWS Content Kit',
+      content: 'sample content',
+      cloudProvider: 'aws',
+    }, (_system, _user, opts) => {
+      receivedOpts = opts
+      return Promise.resolve({
+        text: JSON.stringify({ actionableSteps: [], calculatorUrl: null, contactName: null, workshops: [], demos: [], battlecards: [], internalMaterials: [], salesPlayAlignment: [] }),
+        cached: false, inputTokens: 50, outputTokens: 50, model: 'gemini-2.0-flash',
+      })
+    })
+    expect(receivedOpts).toBeTruthy()
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-content-kit-AWS Content Kit')
+  })
+
+  test('enrichMessagingGuide passes deltaKey to gemini caller', async () => {
+    let receivedOpts: any = null
+    await enrichMessagingGuide({
+      name: 'OCP-V Guide',
+      content: 'messaging content',
+    }, (_system, _user, opts) => {
+      receivedOpts = opts
+      return Promise.resolve({
+        text: JSON.stringify({ summary: 'test', keyPoints: ['p1'], talkTracks: [], links: [] }),
+        cached: false, inputTokens: 50, outputTokens: 50, model: 'gemini-2.0-flash',
+      })
+    })
+    expect(receivedOpts).toBeTruthy()
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-messaging-guide-OCP-V Guide')
+  })
+
+  test('enrichBattlecard passes deltaKey to gemini caller', async () => {
+    let receivedOpts: any = null
+    await enrichBattlecard({
+      name: 'VMware BC',
+      content: 'battlecard content',
+    }, (_system, _user, opts) => {
+      receivedOpts = opts
+      return Promise.resolve({
+        text: JSON.stringify({ summary: 'test', keyPoints: ['angle'], links: [] }),
+        cached: false, inputTokens: 50, outputTokens: 50, model: 'gemini-2.0-flash',
+      })
+    })
+    expect(receivedOpts).toBeTruthy()
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-battlecard-VMware BC')
+  })
+
+  test('enrichProductDocuments passes deltaKey through geminiFactory', async () => {
+    const receivedKeys: string[] = []
+    const mockGemini = (_type: string) => (_system: string, _user: string, opts: any) => {
+      if (opts?.deltaKey) receivedKeys.push(opts.deltaKey)
+      return Promise.resolve({
+        text: JSON.stringify({ actionableSteps: [{ step: 'Step 1' }], calculatorUrl: null, contactName: null, workshops: [], demos: [], battlecards: [], internalMaterials: [], salesPlayAlignment: [] }),
+        cached: false, inputTokens: 50, outputTokens: 100, model: 'gemini-2.0-flash',
+      })
+    }
+    await enrichProductDocuments('test-product', [
+      { name: 'Doc A', content: 'content a', type: 'content-kit', cloudProvider: 'aws' },
+      { name: 'Doc B', content: 'content b', type: 'messaging-guide' },
+    ], mockGemini)
+    expect(receivedKeys).toContain('saleshub-enrich-content-kit-Doc A')
+    expect(receivedKeys).toContain('saleshub-enrich-messaging-guide-Doc B')
+  })
+})

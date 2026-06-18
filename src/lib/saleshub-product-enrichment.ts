@@ -179,7 +179,7 @@ export async function enrichContentKit(
   try {
     const systemPrompt = CONTENT_KIT_SYSTEM_PROMPT
     const userPrompt = buildUserPrompt(CONTENT_KIT_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-content-kit-${doc.name}` })
 
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
@@ -239,7 +239,7 @@ export async function enrichMessagingGuide(
   try {
     const systemPrompt = MESSAGING_GUIDE_SYSTEM_PROMPT
     const userPrompt = buildUserPrompt(MESSAGING_GUIDE_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-messaging-guide-${doc.name}` })
 
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
@@ -291,7 +291,7 @@ export async function enrichBattlecard(
   try {
     const systemPrompt = BATTLECARD_SYSTEM_PROMPT
     const userPrompt = buildUserPrompt(BATTLECARD_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-battlecard-${doc.name}` })
 
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
@@ -336,7 +336,7 @@ export async function enrichCaseStudy(
 ): Promise<CaseStudyExtraction | null> {
   try {
     const userPrompt = buildUserPrompt(CASE_STUDY_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-case-study-${doc.name}` })
     const result = await gemini(CASE_STUDY_SYSTEM_PROMPT, userPrompt, opts)
     const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
     const parsed = JSON.parse(cleaned)
@@ -363,7 +363,7 @@ export async function enrichCompetitiveReview(
 ): Promise<CompetitiveReviewExtraction | null> {
   try {
     const userPrompt = buildUserPrompt(COMPETITIVE_REVIEW_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite' })
+    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-competitive-review-${doc.name}` })
     const result = await gemini(COMPETITIVE_REVIEW_SYSTEM_PROMPT, userPrompt, opts)
     const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
     const parsed = JSON.parse(cleaned)
