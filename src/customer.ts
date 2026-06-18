@@ -518,6 +518,7 @@ export async function callLLMStructured<T = any>(systemPrompt: string, userPromp
     customerName,
     temperature: getAiConfig().briefSynthesisTemperature,
     responseSchema,
+    timeoutMs: 120_000,
   })
 
   const text = result.text
@@ -814,6 +815,7 @@ export async function generateBrief(
           customerName: customer.name,
           responseSchema: BRIEF_RESPONSE_SCHEMA,
           temperature: getAiConfig().briefSynthesisTemperature,
+          timeoutMs: 120_000,
         },
       )
       let structuredBrief: Record<string, string>
@@ -842,6 +844,7 @@ export async function generateBrief(
               customerName: customer.name,
               responseSchema: BRIEF_RESPONSE_SCHEMA,
               temperature: getAiConfig().briefSynthesisTemperature,
+              timeoutMs: 120_000,
             },
           )
           try {
@@ -986,6 +989,7 @@ Keep total brief under 250 words.`
         customerName: customer.name,
         responseSchema: BRIEF_RESPONSE_SCHEMA,
         temperature: getAiConfig().briefSynthesisTemperature,
+        timeoutMs: 120_000,
       },
     )
     let fallbackBrief: string
