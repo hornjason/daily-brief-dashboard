@@ -90,7 +90,7 @@ RULES:
 - Do not include information that hasn't changed since the last brief.
 - Instead of "No pipeline opportunities" — omit the section entirely.
 - Include sections for Account Overview, Company Profile, Technology Landscape, and Pipeline Opportunities when document sources contain this intelligence.
-- Brief should be concise — 250-400 words. Delta-first. Do not expand to fill space.
+- Brief should be comprehensive but concise — 400-800 words. Delta-first. Do not expand to fill space with filler, but DO include all required FORMAT sections. The ## Next Steps and ## What They May Not Know sections are MANDATORY — never skip them.
 - End the brief with a single NEXT ACTION line (no ## header, no bullet, plain text) that the SA can copy directly into a calendar or task list. Format — NEXT ACTION: [Verb] [object] [date]. This line restates the Priority Action in its shortest copy-pasteable form.
 - Every dollar-relevant item must include the dollar figure — renewal amount, pipeline value, cloud spend, expansion estimate. Never mention a renewal or opportunity without its dollar value.
 - Include at least one evidence chain: Customer tech/situation → Business problem → Red Hat solution → Measurable outcome. This chain must be explicit, not implied.
@@ -117,13 +117,13 @@ FORMAT:
 ## Competitive Signals (only if detected)
 - [competitor mention with context] [Source: {type}]
 
-## Next Steps
+## Next Steps (MANDATORY — always include this section)
 Three ranked actions. Each names WHO (specific person from account team or customer org), WHAT (specific action), WHEN (date). Rank by deal potential.
 1. **[Name, Title]** — [action] by [date]. [Why — dollar connection].
 2. **[Name, Title]** — [action] by [date]. [Why — dollar connection].
 3. **[Name, Title]** — [action] by [date]. [Why — dollar connection].
 
-## What They May Not Know
+## What They May Not Know (MANDATORY — always include this section)
 One insight the customer hasn't surfaced — peer comparison, industry benchmark, tech stack gap. Challenger Sale principle. Be specific with data points.
 
 NEXT ACTION: [Verb] [object] [date]

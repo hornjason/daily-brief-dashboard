@@ -797,7 +797,20 @@ export async function generateBrief(
       const accountTeamContext = toPromptContext(accountTeam)
       let synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext, registrySignals)
       if (templateResult.deterministic) {
-        synthesisPrompt += `\n\nDETERMINISTIC DATA SECTIONS (condense into the brief — do not dump raw):\n<untrusted>\n${templateResult.deterministic.slice(0, 8000)}\n</untrusted>`
+        // Pre-condense Cloud & Marketplace to prevent Gemini from reproducing the raw dump.
+        // Pass only spend totals + top program per hyperscaler, not every incentive/offering.
+        const cloudSection = templateResult.sections.cloudMarketplace ?? ''
+        let condensedCloud = ''
+        if (cloudSection) {
+          const spendLines = cloudSection.match(/^.*\$[\d,]+.*spend$/gm) ?? []
+          const programLines = cloudSection.match(/^- Program:.*$/gm)?.slice(0, 3) ?? []
+          condensedCloud = `\n\nCLOUD & MARKETPLACE (condensed — show only these totals and top plays):\n${spendLines.join('\n')}\n${programLines.join('\n')}`
+        }
+        // Exclude raw cloud section from deterministic, add condensed version
+        const deterministicWithoutCloud = templateResult.deterministic
+          .replace(/## Cloud & Marketplace[\s\S]*?(?=##|$)/, '')
+          .trim()
+        synthesisPrompt += `\n\nDETERMINISTIC DATA SECTIONS (condense into the brief — do not dump raw):\n<untrusted>\n${deterministicWithoutCloud.slice(0, 6000)}\n</untrusted>${condensedCloud}`
       }
       if (accountTeamContext) {
         synthesisPrompt += `\n\n${accountTeamContext}`
