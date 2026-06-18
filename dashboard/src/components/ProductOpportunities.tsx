@@ -272,30 +272,46 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
             </button>
           )}
 
-          {/* Training and Services — always visible */}
+          {/* Training and Services — always visible, same card style as opportunities */}
           {trainingAndServices.map((signal, i) => {
             const items = signal.metadata.items ?? signal.metadata.links ?? []
             if (items.length === 0) return null
             const isTraining = signal.headline.includes('Training')
+            const tsIndex = signals.length + i
+            const isTsExpanded = expandedCard === tsIndex
+
             return (
-              <div key={`ts-${i}`} className="bg-bg-tertiary/40 rounded-md p-2 space-y-1 mt-2">
-                <p className="text-xs font-medium text-text-secondary">
-                  {isTraining ? 'Training Courses' : 'Resources'}
-                </p>
-                <ul className="text-xs space-y-0.5">
-                  {items.map((item, j) => (
-                    <li key={j} className="flex items-center gap-1">
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noopener" className="text-accent hover:underline flex items-center gap-1">
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                          {item.name}
-                        </a>
-                      ) : (
-                        <span className="text-text-primary">{item.name}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              <div key={`ts-${i}`} className="bg-bg-tertiary/40 rounded-md p-2 space-y-1">
+                <button
+                  onClick={() => setExpandedCard(isTsExpanded ? null : tsIndex)}
+                  className="flex items-start gap-2 w-full text-left"
+                >
+                  <span className="mt-1.5 w-2 h-2 rounded-full shrink-0 bg-blue-400" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-primary leading-snug font-medium">
+                      {isTraining ? 'Training Courses' : 'Migration & Consulting Resources'}
+                    </p>
+                    <span className="text-xs text-text-secondary">{items.length} resources</span>
+                  </div>
+                  {!isTsExpanded && <ChevronRight className="w-3 h-3 text-text-secondary/50 mt-1.5" />}
+                </button>
+
+                {isTsExpanded && (
+                  <div className="ml-4 mt-1.5 space-y-1 border-l border-border/50 pl-3">
+                    {items.map((item, j) => (
+                      <div key={j} className="text-xs">
+                        {item.url ? (
+                          <a href={item.url} target="_blank" rel="noopener" className="text-accent hover:underline flex items-center gap-1">
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                            {item.name}
+                          </a>
+                        ) : (
+                          <span className="text-text-primary">{item.name}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
