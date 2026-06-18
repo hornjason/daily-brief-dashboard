@@ -495,23 +495,25 @@ export function createSaleshubProductsRouter() {
           const dlSubdirs = readdirSync(downloadsPath, { withFileTypes: true }).filter(d => d.isDirectory())
           for (const dlSub of dlSubdirs) {
             const dlSubPath = resolve(downloadsPath, dlSub.name)
-            const dlFiles = readdirSync(dlSubPath).filter(f => {
+            const allFiles = readdirSync(dlSubPath)
+            // Prefer HTML files over PDF — HTML preserves hyperlinks from Google Docs
+            const htmlFiles = new Set(allFiles.filter(f => f.toLowerCase().endsWith('.html')).map(f => f.replace(/\.html$/i, '')))
+            const dlFiles = allFiles.filter(f => {
               const lower = f.toLowerCase()
-              return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx') ||
-                lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.extracted.json')
+              if (!(lower.endsWith('.html') || lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx') ||
+                lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.extracted.json'))) return false
+              // Skip PDF if HTML version exists (HTML has hyperlinks)
+              if (lower.endsWith('.pdf') && htmlFiles.has(f.replace(/\.pdf$/i, ''))) return false
+              return true
             })
             for (const file of dlFiles) {
               const filePath = resolve(dlSubPath, file)
               let content: string
               const lower = file.toLowerCase()
-              if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
-                const mimeMap: Record<string, string> = {
-                  '.pdf': 'application/pdf',
-                  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                }
-                const ext = lower.slice(lower.lastIndexOf('.'))
-                const mime = mimeMap[ext] ?? 'application/octet-stream'
+              if (lower.endsWith('.html')) {
+                // HTML files preserve hyperlinks from Google Docs — send as text
+                content = readFileSync(filePath, 'utf-8')
+              } else if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
                 content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
               } else {
                 content = readFileSync(filePath, 'utf-8')
