@@ -174,7 +174,7 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text-primary leading-snug">
-                      {truncate(signal.headline, 80)}
+                      {signal.headline}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {badge && (
