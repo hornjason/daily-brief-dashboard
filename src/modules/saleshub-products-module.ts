@@ -251,8 +251,8 @@ function emitProductSignals(
         source: 'saleshub-products',
         type: 'recommendation',
         headline: kit.cloudProvider !== 'unknown'
-          ? `${product.name} on ${kit.cloudProvider} — ${kit.documentName}`
-          : `${product.name} — ${kit.documentName}`,
+          ? `${product.name} on ${kit.cloudProvider} — ${kit.documentName.replace(/\.(html|pdf|docx|pptx)$/i, '')}`
+          : `${product.name} — ${kit.documentName.replace(/\.(html|pdf|docx|pptx)$/i, '')}`,
         detail: stepsFormatted,
         rawRelevance: 0.35,
         timestamp,
