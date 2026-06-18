@@ -58,6 +58,12 @@ const AUTH_WARNING_MS = 7 * 60 * 60 * 1000    // 7 hours
 const AUTH_SHUTDOWN_MS = 7.5 * 60 * 60 * 1000  // 7.5 hours
 const AUTH_CHECK_INTERVAL_MS = 5 * 60 * 1000   // 5 minutes
 
+// #844: Multi-product SalesHub scrape — add new products here
+const PRODUCT_PAGES = [
+  { name: 'OpenShift Virtualization', url: 'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//' },
+  { name: 'Ansible Automation Platform', url: 'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd69c2062-8583-4c77-a1bf-afca6ee943de//' },
+]
+
 // ── #447: Cross-timer recycle mutex ──────────────────────────────────────────
 // Prevents concurrent proactiveRecycle() / recoverScrapeContext() calls from
 // Timer 1 (keepalive), Timer 5 (12h recycle), and scheduled sync (pre-sync check).
@@ -864,38 +870,40 @@ async function main(): Promise<void> {
       const enrichResult = enrichSolutionPlays()
       console.log(`[sync-daemon] saleshub enrichment — ${enrichResult.enriched}/${enrichResult.total} plays enriched`)
 
-      // Product-first scrape (#819) — uses daemon's browser context for localStorage auth
+      // Product-first scrape (#819, #844) — uses daemon's browser context for localStorage auth
       const scrapeCtx = getScrapeContext()
       if (scrapeCtx) {
-        console.log('[sync-daemon] starting product page scrape (OpenShift Virtualization)...')
-        try {
-          await scrapeProductPage(undefined, scrapeCtx)
-          console.log('[sync-daemon] product page scrape complete')
-
-          // Auto-enrich after scrape (#835) — upload enriched data to Drive
+        for (const product of PRODUCT_PAGES) {
+          console.log(`[sync-daemon] starting product page scrape (${product.name})...`)
           try {
-            const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
-            const { uploadProductToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
-            const { readFileSync, existsSync } = await import('fs')
-            const { resolve } = await import('path')
-            const productsDir = resolve('config-templates', 'saleshub-products')
-            const { readdirSync } = await import('fs')
-            const productDirs = readdirSync(productsDir, { withFileTypes: true }).filter(d => d.isDirectory())
-            for (const pDir of productDirs) {
-              const productPath = resolve(productsDir, pDir.name, '_product.json')
-              const enrichedPath = resolve(productsDir, pDir.name, '_enriched.json')
-              if (existsSync(productPath)) {
-                const product = JSON.parse(readFileSync(productPath, 'utf-8'))
-                const enriched = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
-                await uploadProductToDrive(pDir.name, product, enriched)
-                console.log(`[sync-daemon] uploaded product data to Drive: ${pDir.name}`)
-              }
-            }
+            await scrapeProductPage(product.url, scrapeCtx)
+            console.log(`[sync-daemon] product page scrape complete: ${product.name}`)
           } catch (e: any) {
-            console.warn(`[sync-daemon] auto-enrich/upload failed: ${e.message?.slice(0, 100)}`)
+            console.warn(`[sync-daemon] product page scrape failed for ${product.name}: ${e.message?.slice(0, 100)}`)
+          }
+        }
+
+        // Auto-enrich after scrape (#835) — upload enriched data to Drive
+        try {
+          const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
+          const { uploadProductToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+          const { readFileSync, existsSync } = await import('fs')
+          const { resolve } = await import('path')
+          const productsDir = resolve('config-templates', 'saleshub-products')
+          const { readdirSync } = await import('fs')
+          const productDirs = readdirSync(productsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+          for (const pDir of productDirs) {
+            const productPath = resolve(productsDir, pDir.name, '_product.json')
+            const enrichedPath = resolve(productsDir, pDir.name, '_enriched.json')
+            if (existsSync(productPath)) {
+              const product = JSON.parse(readFileSync(productPath, 'utf-8'))
+              const enriched = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
+              await uploadProductToDrive(pDir.name, product, enriched)
+              console.log(`[sync-daemon] uploaded product data to Drive: ${pDir.name}`)
+            }
           }
         } catch (e: any) {
-          console.warn(`[sync-daemon] product page scrape failed: ${e.message?.slice(0, 100)}`)
+          console.warn(`[sync-daemon] auto-enrich/upload failed: ${e.message?.slice(0, 100)}`)
         }
       }
       await sendBriefEmail(
