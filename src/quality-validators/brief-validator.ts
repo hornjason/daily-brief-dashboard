@@ -22,11 +22,12 @@ import {
 const CONTENT_TYPE = 'customer-brief'
 const PASS_THRESHOLD = 70
 
-/** Sections that MUST be present in every brief */
+/** Sections that MUST be present in every brief (enforced by BRIEF_RESPONSE_SCHEMA) */
 const REQUIRED_SECTIONS = [
   'Priority Action',
   'What Changed',
   'Next Steps',
+  'What They May Not Know',
 ]
 
 /** Placeholder patterns that indicate incomplete content */
@@ -92,14 +93,24 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
-  // 5. Minimum required section count (at least 3 of the required sections)
+  // 5. What They May Not Know section exists (Challenger Sale insight)
+  const whatTheyMayNotKnow = extractMarkdownSection(output, 'What They May Not Know')
+  checks.push({
+    name: 'what-they-may-not-know-present',
+    passed: whatTheyMayNotKnow.length > 0,
+    expected: 'What They May Not Know section present',
+    actual: whatTheyMayNotKnow.length > 0 ? `${whatTheyMayNotKnow.length} chars` : 'section not found',
+    severity: 'required',
+  })
+
+  // 6. Minimum required section count (at least 4 of the required sections)
   const presentRequiredSections = REQUIRED_SECTIONS.filter(
     s => extractMarkdownSection(output, s).length > 0
   )
   checks.push({
     name: 'min-required-sections',
-    passed: presentRequiredSections.length >= 3,
-    expected: 'At least 3 required sections present',
+    passed: presentRequiredSections.length >= 4,
+    expected: 'At least 4 required sections present',
     actual: `${presentRequiredSections.length} of ${REQUIRED_SECTIONS.length} required sections found`,
     severity: 'required',
   })
