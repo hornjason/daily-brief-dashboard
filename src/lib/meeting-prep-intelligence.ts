@@ -65,6 +65,39 @@ export interface MeetingPrepBrief {
   generatedAt: string
 }
 
+// ── responseSchema (ADR-040) ─────────────────────────────────────────────────
+
+/**
+ * Structured output schema for meeting prep talking points.
+ * Forces Gemini to cite verified data or produce null instead of fabricating.
+ */
+const MEETING_PREP_BRIEF_SCHEMA = {
+  type: 'object',
+  properties: {
+    talkingPoint1: {
+      type: 'string',
+      nullable: true,
+      description: 'First talking point. Must follow evidence chain: customer situation → business impact → Red Hat solution → measurable outcome. Cite specific evidence (case business impact, subscription details, pipeline amounts). If insufficient evidence, set null.',
+    },
+    talkingPoint2: {
+      type: 'string',
+      nullable: true,
+      description: 'Second talking point. Must reference specific data from top scored tactics and evidence trail. Include WHO to ask, WHAT to say, BY WHEN. If insufficient evidence, set null.',
+    },
+    talkingPoint3: {
+      type: 'string',
+      nullable: true,
+      description: 'Third talking point. Connect to dollar figure (pipeline value, renewal amount, expansion, or cost savings from VERIFIED SOLUTION PLAYS section). Reference verified customer wins by exact name. If no dollar figure or win exists in data, set null.',
+    },
+    challengerInsight: {
+      type: 'string',
+      nullable: true,
+      description: 'ONE Challenger insight that the customer may not know about their business, industry benchmarks from VERIFIED SOLUTION PLAYS, or competitive landscape. Must cite specific customer win or real-world example with measurable metric. If no verified peer data exists, set null.',
+    },
+  },
+  required: ['talkingPoint1', 'talkingPoint2', 'talkingPoint3'],
+} as const
+
 // ── Candidate Tactics from Graph ─────────────────────────────────────────────
 
 /**
@@ -104,6 +137,7 @@ async function generateTalkingPoints(
   recentChanges: GraphDiffChange[],
   teamContext: string,
   narrativeContext: string,
+  solutionPlays: any[] | undefined,
   lastDebrief?: MeetingDebrief | null,
 ): Promise<{ talkingPoints: string[]; challengerInsight?: string; qualityScore?: number }> {
   if (scoredTactics.length === 0) {
@@ -134,7 +168,7 @@ async function generateTalkingPoints(
           .join('\n')
       : 'No recent changes detected.'
 
-  // Mission-aligned system prompt (MA-2, MA-3, MA-4, MA-5, MA-6)
+  // Mission-aligned system prompt (MA-2, MA-3, MA-4, MA-5, MA-6) + ADR-040 grounding
   const systemPrompt = `You are a meeting preparation assistant for a Red Hat Account Solution Architect.
 Generate exactly 3 concise talking points for an upcoming customer meeting.
 
@@ -147,13 +181,17 @@ Each talking point MUST:
 
 Additionally, include ONE Challenger insight — something the customer may not know about their own business, industry benchmarks, or competitive landscape that reframes their priorities.
 
-DOLLAR FIGURES: When connecting to money (pipeline, renewal, expansion), ONLY cite numbers that appear in the evidence data (pipeline amounts, renewal values, subscription costs). If no specific dollar figure exists in the evidence, frame as "industry benchmarks suggest" or "comparable customers have seen" — NEVER fabricate a precise dollar estimate like "$150k" or "$500k" without sourcing. Unsourced precise figures destroy seller credibility when challenged.
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point for a field, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
+5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
+6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
 
-CASE REFERENCES: Reference support cases by their business impact and context, NOT by internal ticket numbers. Instead of "Case 04365133: SSO login failure", say "the recent SSO login disruption on your commerce portal." The seller knows the case details from the evidence — the talking point should reference the SITUATION, not the internal tracking ID. Case numbers are internal Red Hat identifiers that feel surveillant when cited to customers.
+DOLLAR FIGURES: When connecting to money (pipeline, renewal, expansion), ONLY cite numbers that appear in the evidence data (pipeline amounts, renewal values, subscription costs). If no specific dollar figure exists in the evidence, set the field to null — NEVER fabricate a precise dollar estimate like "$150k" or "$500k" without sourcing. Unsourced precise figures destroy seller credibility when challenged.
 
-Format: Return exactly 3 talking points + 1 Challenger insight, each on its own line.
-Label the Challenger line with [CHALLENGER]:
-Do NOT use bullet points or numbered lists in your output.`
+CASE REFERENCES: Reference support cases by their business impact and context, NOT by internal ticket numbers. Instead of "Case 04365133: SSO login failure", say "the recent SSO login disruption on your commerce portal." The seller knows the case details from the evidence — the talking point should reference the SITUATION, not the internal tracking ID. Case numbers are internal Red Hat identifiers that feel surveillant when cited to customers.`
 
   const debriefBlock = lastDebrief
     ? `\nLast Meeting Notes (${new Date(lastDebrief.createdAt).toLocaleDateString()}):\n${lastDebrief.notes}${lastDebrief.nextSteps ? `\nNext steps from last meeting: ${lastDebrief.nextSteps}` : ''}\n`
@@ -161,6 +199,18 @@ Do NOT use bullet points or numbered lists in your output.`
 
   const narrativeBlock = narrativeContext
     ? `\nDeterministic Intelligence Context:\n${narrativeContext}\n`
+    : ''
+
+  // Serialize structured.solutionPlays for grounding (ADR-040)
+  const solutionPlaysBlock = solutionPlays && solutionPlays.length > 0
+    ? `\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these, do not fabricate alternatives)\n\n` +
+      solutionPlays.map(play => {
+        const wins = play.customerWins?.join(', ') || 'None'
+        const examples = play.realWorldExamples?.join(', ') || 'None'
+        const metrics = play.extractedMetrics?.join(', ') || 'None'
+        const assets = play.linkedAssets?.map(a => `${a.name} (${a.url})`).join(', ') || 'None'
+        return `### Play: "${play.playName}"\n- TDP: ${play.tdp}\n- Confidence: ${play.confidence}\n- Customer Wins: [${wins}]\n- Real-World Examples: [${examples}]\n- Extracted Metrics: [${metrics}]\n- Talk Track: ${play.talkTrack || 'N/A'}\n- Assets: [${assets}]`
+      }).join('\n\n') + '\n'
     : ''
 
   const userPrompt = `Customer: ${customerName}
@@ -171,7 +221,7 @@ ${tacticsBlock}
 
 Recent Intelligence Changes:
 ${changesBlock}
-${debriefBlock}${narrativeBlock}
+${debriefBlock}${narrativeBlock}${solutionPlaysBlock}
 Generate 3 talking points that connect the evidence to specific conversation starters, plus 1 Challenger insight.${lastDebrief ? ' Reference the last meeting notes where relevant — follow up on next steps or seller observations.' : ''}`
 
   try {
@@ -179,6 +229,7 @@ Generate 3 talking points that connect the evidence to specific conversation sta
       callType: 'meeting-prep-intelligence',
       customerName,
       temperature: 0.3,
+      responseSchema: MEETING_PREP_BRIEF_SCHEMA,
     })
 
     // Quality gate — validateAndRetry (consumer contract TC-5)
@@ -191,31 +242,43 @@ Generate 3 talking points that connect the evidence to specific conversation sta
           callType: 'meeting-prep-intelligence',
           customerName,
           temperature: 0.3,
+          responseSchema: MEETING_PREP_BRIEF_SCHEMA,
         })
         return retryResult.text
       },
     )
 
-    // Parse the validated output: separate talking points from Challenger insight
-    const lines = gateResult.output
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
+    // Parse JSON response from responseSchema (ADR-040)
+    let parsedResponse
+    try {
+      parsedResponse = JSON.parse(gateResult.output)
+    } catch (e: any) {
+      console.warn(
+        `[meeting-prep-intelligence] Failed to parse responseSchema JSON: ${e.message}`,
+      )
+      // Fallback for test mocks returning plain text - parse as lines
+      const lines = gateResult.output
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0)
 
-    const challengerLine = lines.find(l => l.startsWith('[CHALLENGER]:') || l.startsWith('[CHALLENGER]'))
-    const talkingPointLines = lines
-      .filter(l => !l.startsWith('[CHALLENGER]:') && !l.startsWith('[CHALLENGER]'))
-      .slice(0, 3)
+      return {
+        talkingPoints: lines.length > 0 ? lines : ['Unable to generate talking points from available data.'],
+        qualityScore: gateResult.scorecard.score,
+      }
+    }
 
-    const challengerInsight = challengerLine
-      ? challengerLine.replace(/^\[CHALLENGER\]:?\s*/, '').trim()
-      : undefined
+    // Extract talking points from structured JSON response
+    const talkingPoints: string[] = []
+    if (parsedResponse.talkingPoint1) talkingPoints.push(parsedResponse.talkingPoint1)
+    if (parsedResponse.talkingPoint2) talkingPoints.push(parsedResponse.talkingPoint2)
+    if (parsedResponse.talkingPoint3) talkingPoints.push(parsedResponse.talkingPoint3)
 
     return {
-      talkingPoints: talkingPointLines.length > 0
-        ? talkingPointLines
+      talkingPoints: talkingPoints.length > 0
+        ? talkingPoints
         : ['Unable to generate talking points from available data.'],
-      challengerInsight,
+      challengerInsight: parsedResponse.challengerInsight ?? undefined,
       qualityScore: gateResult.scorecard.score,
     }
   } catch (e: any) {
@@ -320,6 +383,7 @@ export async function generateMeetingPrepBrief(
     diff.changes,
     teamContext,
     templateResult.narrativeContext,
+    templateResult.structured?.solutionPlays,
     lastDebrief,
   )
 
