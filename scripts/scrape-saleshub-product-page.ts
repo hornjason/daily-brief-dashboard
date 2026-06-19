@@ -753,279 +753,289 @@ async function queryDocumentsByProduct(
 // ── Per-product document download (SC-2) ────────────────────────────────────
 
 async function downloadProductDocuments(
+  page: Page,
   context: BrowserContext,
   sections: Record<string, ProductSection>,
   productSlug: string,
   authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
 ): Promise<void> {
-  // Collect all downloadable items across all sections
-  const downloadable: Array<{ item: SectionItem; sectionSlug: string }> = []
+  // ── Phase 1: Expand all Domain accordions on the product page ────────────
+  console.log('[product-scraper] Expanding Domain accordion sections...')
 
-  for (const [key, section] of Object.entries(sections)) {
-    for (const item of section.items) {
-      if (item.versionId && item.format && !SKIP_FORMATS.has(item.format)) {
-        // Skip non-English
-        const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
-        if (!isNonEnglish) {
-          downloadable.push({ item, sectionSlug: key })
-        }
-      }
-    }
-    if (section.subsections) {
-      for (const sub of section.subsections) {
-        for (const item of sub.items) {
-          if (item.versionId && item.format && !SKIP_FORMATS.has(item.format)) {
-            const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
-            if (!isNonEnglish) {
-              downloadable.push({ item, sectionSlug: slugify(sub.title) })
-            }
-          }
-        }
-      }
-    }
+  // Scroll to the Domains section area
+  const domainsHeader = page.locator('text=Domains').first()
+  if (await domainsHeader.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await domainsHeader.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(1_000)
   }
 
-  // Layer 1: Filter non-downloadable formats
-  const NON_DOWNLOADABLE = new Set(['GSLIDES', 'GDOC', 'GSHEET', 'URL', 'JSON', 'LINK', 'STATIC_FOLDER'])
-  const filtered = downloadable.filter(({ item }) => {
-    const fmt = (item.format || '').toUpperCase()
-    if (NON_DOWNLOADABLE.has(fmt)) return false
-    return true
-  })
-  const skippedFormats = downloadable.length - filtered.length
-  if (skippedFormats > 0) console.log(`[product-scraper] Skipped ${skippedFormats} non-downloadable formats (GSLIDES/GDOC/URL/etc)`)
+  // Expand any collapsed accordion sections
+  const collapsedAccordions = page.locator(
+    '[class*="accordion"] [class*="chevron-down"], ' +
+    '[class*="accordion"][class*="collapsed"], ' +
+    '[class*="expandable"]:not([class*="expanded"])'
+  )
+  const accordionCount = await collapsedAccordions.count()
+  console.log(`[product-scraper] Found ${accordionCount} collapsed accordion sections`)
+  for (let a = 0; a < accordionCount; a++) {
+    try {
+      const accordion = collapsedAccordions.nth(a)
+      await accordion.click()
+      await page.waitForTimeout(800)
+    } catch (e: any) {
+      console.warn(`[product-scraper] Could not expand accordion ${a}: ${(e.message ?? '').slice(0, 60)}`)
+    }
+  }
+  await page.waitForTimeout(1_500)
 
-  if (filtered.length === 0) {
-    console.log('[product-scraper] No downloadable documents found after filtering')
+  // ── Phase 2: Find all DocListPicker tables on the page ───────────────────
+  // DocListPicker tables live inside accordion panels; look for table-like structures
+  const tables = page.locator(
+    'table, [class*="DocListPicker"], [class*="doclist"], [class*="doc-list"], ' +
+    '[class*="content-list"], [role="grid"], [role="table"]'
+  )
+  const tableCount = await tables.count()
+  console.log(`[product-scraper] Found ${tableCount} DocListPicker tables on page`)
+
+  if (tableCount === 0) {
+    console.log('[product-scraper] No DocListPicker tables found — skipping downloads')
     return
   }
 
-  const toDownload = filtered.slice(0, MAX_DOWNLOADS_PER_PRODUCT)
-  console.log(`[product-scraper] ${toDownload.length} documents to download`)
-
   const productDir = resolve('config-templates', 'saleshub-products', productSlug)
-  const dlPage = await context.newPage()
   let downloaded = 0
   let skipped = 0
   let errors = 0
   let consecutiveFailures = 0
   const CIRCUIT_BREAKER = 5
+  let totalProcessed = 0
   const failedDownloads: Array<{ name: string; section: string; format: string; versionId: string; error: string; attempts: number }> = []
 
-  for (let i = 0; i < toDownload.length; i++) {
-    // Circuit breaker: stop after 5 consecutive failures
-    if (consecutiveFailures >= CIRCUIT_BREAKER) {
-      const remaining = toDownload.length - i
-      console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — skipping remaining ${remaining} documents`)
-      for (let j = i; j < toDownload.length; j++) {
-        failedDownloads.push({
-          name: toDownload[j].item.name, section: toDownload[j].sectionSlug,
-          format: toDownload[j].item.format ?? '', versionId: toDownload[j].item.versionId ?? '',
-          error: 'Skipped (circuit breaker)', attempts: 0,
-        })
-      }
-      errors += remaining
-      break
+  // ── Phase 3: Process each table ──────────────────────────────────────────
+  for (let t = 0; t < tableCount; t++) {
+    if (consecutiveFailures >= CIRCUIT_BREAKER) break
+
+    const table = tables.nth(t)
+
+    // Determine section name from the nearest ancestor heading
+    let sectionName = `section-${t}`
+    try {
+      // Walk up the DOM to find the closest heading above this table
+      const headingText = await table.evaluate((el: Element) => {
+        let node: Element | null = el
+        while (node) {
+          // Check previous siblings for headings
+          let prev = node.previousElementSibling
+          while (prev) {
+            const h = prev.querySelector('h2, h3, h4, [class*="heading"], [class*="title"], [class*="header"]')
+            if (h?.textContent?.trim()) return h.textContent.trim()
+            if (prev.matches('h2, h3, h4') && prev.textContent?.trim()) return prev.textContent.trim()
+            prev = prev.previousElementSibling
+          }
+          // Check current node's heading children
+          const heading = node.querySelector('h2, h3, h4, [class*="heading"], [class*="title"]')
+          if (heading?.textContent?.trim()) return heading.textContent.trim()
+          node = node.parentElement
+        }
+        return ''
+      })
+      if (headingText) sectionName = headingText
+    } catch {
+      // Keep default section name
     }
 
-    const { item, sectionSlug } = toDownload[i]
+    const sectionSlug = slugify(sectionName)
     const sectionDir = resolve(productDir, 'downloads', sectionSlug)
     mkdirSync(sectionDir, { recursive: true })
 
-    const ext = item.format?.toLowerCase() ?? 'pdf'
-    const filename = sanitizeFilename(`${item.name}.${ext}`)
-    const localPath = resolve(sectionDir, filename)
+    // Get all rows from the table (skip header row)
+    const rows = table.locator('tr, [role="row"]')
+    const rowCount = await rows.count()
+    // Skip first row if it looks like a header (contains th or checkbox header)
+    const startRow = rowCount > 0 ? 1 : 0
+    const dataRowCount = rowCount - startRow
+    console.log(`[product-scraper] Section "${sectionName}": ${dataRowCount} document rows`)
 
-    if (existsSync(localPath)) {
-      item.localPath = relative(productDir, localPath)
-      skipped++
-      consecutiveFailures = 0
-      continue
-    }
+    for (let r = startRow; r < rowCount; r++) {
+      if (consecutiveFailures >= CIRCUIT_BREAKER) {
+        const remaining = rowCount - r
+        console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — skipping remaining ${remaining} documents in "${sectionName}"`)
+        errors += remaining
+        break
+      }
+      if (totalProcessed >= MAX_DOWNLOADS_PER_PRODUCT) {
+        console.log(`[product-scraper] Reached MAX_DOWNLOADS_PER_PRODUCT (${MAX_DOWNLOADS_PER_PRODUCT}) — stopping`)
+        break
+      }
 
-    let succeeded = false
-    let lastError = ''
+      const row = rows.nth(r)
+      totalProcessed++
 
-    // Try Seismic Library Content download API first (#847)
-    // GET /gateway/services/integration/v2/teamsites/{tsid}/files/{contentId}/versions/{versionId}/content
-    // Returns 302 → signed blob URL. Use redirect:"manual" to extract Location header.
-    const cId = item.contentId || item.versionId
-    const vId = item.versionId
-    if (cId && vId) {
+      // Get document name from row text
+      let docName = ''
       try {
-        const apiResult = await dlPage.evaluate(async (args: {
-          contentId: string; versionId: string; tsid: string
-        }) => {
-          const apiUrl = `https://saleshub.redhat.com/gateway/services/integration/v2/teamsites/${args.tsid}/files/${args.contentId}/versions/${args.versionId}/content`
-          const res = await fetch(apiUrl, { redirect: 'manual' })
-          if (res.status === 302 || res.status === 301) {
-            const blobUrl = res.headers.get('location')
-            if (blobUrl) {
-              const blobRes = await fetch(blobUrl)
-              if (blobRes.ok) {
-                const blob = await blobRes.blob()
-                const buffer = await blob.arrayBuffer()
-                return { ok: true, data: Array.from(new Uint8Array(buffer)), method: 'api-redirect' }
-              }
+        const rowText = await row.innerText()
+        // The document name is usually the main text content, strip action labels
+        docName = rowText.split('\n').filter(l => l.trim().length > 3)[0]?.trim() ?? `document-${totalProcessed}`
+      } catch {
+        docName = `document-${totalProcessed}`
+      }
+
+      // Skip non-English
+      const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(docName))
+      if (isNonEnglish) {
+        console.log(`[product-scraper] Skipping non-English: ${docName.slice(0, 50)}`)
+        continue
+      }
+
+      // Check if cached — look for any file with matching name prefix
+      const safePrefix = sanitizeFilename(docName).slice(0, 60)
+      const existingFiles = existsSync(sectionDir)
+        ? (await import('fs')).readdirSync(sectionDir).filter((f: string) => f.startsWith(safePrefix))
+        : []
+      if (existingFiles.length > 0) {
+        skipped++
+        consecutiveFailures = 0
+        continue
+      }
+
+      // ── Three-dot menu download flow ─────────────────────────────────────
+      let succeeded = false
+      let lastError = ''
+
+      try {
+        // Hover over row to reveal action icons
+        await row.hover()
+        await page.waitForTimeout(500)
+
+        // Find the three-dot menu button (... / more actions)
+        const menuSelectors = [
+          '[class*="more"]',
+          '[class*="menu"]:not([role="menu"])',
+          '[aria-label*="more" i]',
+          '[aria-label*="More"]',
+          '[aria-label*="action" i]',
+          '[class*="action"] button:last-child',
+          '[class*="kebab"]',
+          '[class*="ellipsis"]',
+        ]
+
+        let menuBtn: Locator | null = null
+        for (const sel of menuSelectors) {
+          const candidate = row.locator(sel).first()
+          if (await candidate.isVisible({ timeout: 1_000 }).catch(() => false)) {
+            menuBtn = candidate
+            break
+          }
+        }
+
+        // Fallback: last button in the row
+        if (!menuBtn) {
+          const lastBtn = row.locator('button').last()
+          if (await lastBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+            menuBtn = lastBtn
+          }
+        }
+
+        if (!menuBtn) {
+          lastError = 'No three-dot menu button found in row'
+          throw new Error(lastError)
+        }
+
+        // Click the three-dot menu
+        await menuBtn.click()
+        await page.waitForTimeout(500)
+
+        // Wait for dropdown to appear and find "Download" option
+        const dropdownSelectors = [
+          '[class*="dropdown"]',
+          '[class*="menu"][role="menu"]',
+          '[role="menu"]',
+          '[role="listbox"]',
+          '[class*="popup"]',
+          '[class*="popover"]',
+          '[class*="overlay"]',
+        ]
+
+        let downloadOption: Locator | null = null
+        for (const sel of dropdownSelectors) {
+          const dropdown = page.locator(sel)
+          if (await dropdown.isVisible({ timeout: 2_000 }).catch(() => false)) {
+            const dlOpt = dropdown.locator('text=Download').first()
+            if (await dlOpt.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              downloadOption = dlOpt
+              break
             }
           }
-          if (res.ok) {
-            const blob = await res.blob()
-            const buffer = await blob.arrayBuffer()
-            return { ok: true, data: Array.from(new Uint8Array(buffer)), method: 'api-direct' }
+        }
+
+        // Fallback: any visible "Download" text that just appeared
+        if (!downloadOption) {
+          const anyDownload = page.getByText('Download', { exact: true }).first()
+          if (await anyDownload.isVisible({ timeout: 1_000 }).catch(() => false)) {
+            downloadOption = anyDownload
           }
-          return { ok: false, data: null, method: '', status: res.status }
-        }, {
-          contentId: cId,
-          versionId: vId,
-          tsid: authCtx.headers.teamsiteid || '1',
-        })
-
-        if (apiResult.ok && apiResult.data) {
-          const { writeFileSync } = await import('fs')
-          writeFileSync(localPath, Buffer.from(apiResult.data))
-          item.localPath = relative(productDir, localPath)
-          downloaded++
-          consecutiveFailures = 0
-          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (${apiResult.method})`)
-          succeeded = true
         }
-      } catch (e: any) {
-        lastError = `API download failed: ${(e.message ?? '').slice(0, 80)}`
-      }
-    }
 
-    // Try direct Source URL if available (works for Google Doc-sourced content)
-    if (!succeeded && item.url && item.url.startsWith('http')) {
-      try {
-        const response = await dlPage.evaluate(async (url: string) => {
-          const res = await fetch(url)
-          if (!res.ok) return { ok: false, data: null }
-          const blob = await res.blob()
-          const buffer = await blob.arrayBuffer()
-          return { ok: true, data: Array.from(new Uint8Array(buffer)) }
-        }, item.url)
-
-        if (response.ok && response.data) {
-          const { writeFileSync } = await import('fs')
-          writeFileSync(localPath, Buffer.from(response.data))
-          item.localPath = relative(productDir, localPath)
-          downloaded++
-          consecutiveFailures = 0
-          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (source URL)`)
-          succeeded = true
+        if (!downloadOption) {
+          lastError = 'No "Download" option found in three-dot dropdown'
+          // Dismiss the dropdown
+          await page.keyboard.press('Escape')
+          await page.waitForTimeout(300)
+          throw new Error(lastError)
         }
-      } catch (e: any) {
-        lastError = `Source URL download failed: ${(e.message ?? '').slice(0, 80)}`
-      }
-    }
 
-    // Fallback: click-to-download via DocCenter viewer
-    if (!succeeded) try {
-      const rawContentType = (item as any).seismicContentType || item.itemType || 'Other'
-      const contentTypeB64 = Buffer.from(rawContentType).toString('base64').replace(/=/g, '%3D')
-      const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
+        // Set up download listener BEFORE clicking Download
+        const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+        await downloadOption.click()
 
-      await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await dlPage.waitForTimeout(5_000)
-
-      const downloadBtn = dlPage.locator('text=Download').first()
-      if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        const downloadPromise = dlPage.waitForEvent('download', { timeout: 120_000 })
-        await downloadBtn.click()
         const dl = await downloadPromise
+        const suggestedName = dl.suggestedFilename()
+        const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+        const filename = sanitizeFilename(`${docName}.${ext}`)
+        const localPath = resolve(sectionDir, filename)
+
         await dl.saveAs(localPath)
-        item.localPath = relative(productDir, localPath)
         downloaded++
         consecutiveFailures = 0
-        console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename}`)
+        console.log(`[product-scraper] (${totalProcessed}/${dataRowCount * tableCount}) ✓ ${filename} (three-dot menu)`)
         succeeded = true
-      } else {
-        lastError = 'No Download button visible'
-      }
-    } catch (e: any) {
-      lastError = e.message?.slice(0, 120) ?? 'Unknown error'
-    }
-
-    // ── API download fallback (#847) ──────────────────────────────────────────
-    // When click-to-download fails, try Seismic delivery API directly.
-    // The browser page already has auth cookies so page.evaluate(fetch) inherits them.
-    if (!succeeded && (item.contentId || item.versionId)) {
-      try {
-        const cId = item.contentId || item.versionId!
-        const vId = item.versionId || item.contentId!
-        const apiDownloadResult = await dlPage.evaluate(async (args: {
-          contentId: string; versionId: string; auth: string; pvid: string; tsid: string
-        }) => {
-          const urls = [
-            `https://saleshub.redhat.com/gateway/services/delivery/tenants/redhat/api/v2/content/${args.contentId}/versions/${args.versionId}/original`,
-            `https://saleshub.redhat.com/gateway/services/delivery/tenants/redhat/api/v1/content/${args.contentId}/versions/${args.versionId}/download`,
-          ]
-          for (const url of urls) {
-            try {
-              const res = await fetch(url, {
-                headers: {
-                  Authorization: args.auth,
-                  profileversionid: args.pvid,
-                  teamsiteid: args.tsid,
-                },
-              })
-              if (res.ok) {
-                const blob = await res.blob()
-                const buffer = await blob.arrayBuffer()
-                return { ok: true as const, data: Array.from(new Uint8Array(buffer)), url }
-              }
-            } catch { /* try next URL */ }
-          }
-          return { ok: false as const, data: null, url: '' }
-        }, {
-          contentId: cId,
-          versionId: vId,
-          auth: authCtx.auth,
-          pvid: PROFILE_VERSION_ID,
-          tsid: authCtx.headers.teamsiteid || '1',
-        })
-
-        if (apiDownloadResult.ok && apiDownloadResult.data) {
-          const { writeFileSync } = await import('fs')
-          writeFileSync(localPath, Buffer.from(apiDownloadResult.data))
-          item.localPath = relative(productDir, localPath)
-          downloaded++
-          consecutiveFailures = 0
-          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (API fallback)`)
-          succeeded = true
-        }
       } catch (e: any) {
-        // API fallback also failed — fall through to error tracking below
-        console.warn(`[product-scraper] API fallback failed for ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+        if (!lastError) lastError = (e.message ?? 'Unknown error').slice(0, 120)
+
+        // Dismiss any open dropdown before continuing
+        try {
+          await page.keyboard.press('Escape')
+          await page.waitForTimeout(300)
+        } catch { /* ignore */ }
       }
-    }
 
-    if (!succeeded) {
-      consecutiveFailures++
-      console.warn(`[product-scraper] (${i + 1}/${toDownload.length}) ✗ ${item.name.slice(0, 50)}: ${lastError.slice(0, 60)}`)
-      errors++
-      failedDownloads.push({
-        name: item.name,
-        section: sectionSlug,
-        format: ext,
-        versionId: item.versionId ?? '',
-        error: lastError,
-        attempts: 1,
-      })
-    }
+      if (!succeeded) {
+        consecutiveFailures++
+        console.warn(`[product-scraper] (${totalProcessed}) ✗ ${docName.slice(0, 50)}: ${lastError.slice(0, 60)}`)
+        errors++
+        failedDownloads.push({
+          name: docName,
+          section: sectionSlug,
+          format: '',
+          versionId: '',
+          error: lastError,
+          attempts: 1,
+        })
+      }
 
-    await new Promise(r => setTimeout(r, 1_000))
+      // Brief pause between rows to avoid rate-limiting
+      await new Promise(r => setTimeout(r, 1_000))
+    }
   }
 
-  await dlPage.close()
-
+  // ── Write failed downloads manifest ──────────────────────────────────────
   if (failedDownloads.length > 0) {
     const manifestPath = resolve(productDir, '_failed-downloads.json')
     writeJsonAtomic(manifestPath, {
       timestamp: new Date().toISOString(),
       productSlug,
-      totalAttempted: toDownload.length,
+      totalAttempted: totalProcessed,
       totalFailed: failedDownloads.length,
       failures: failedDownloads,
     })
@@ -1324,7 +1334,7 @@ export async function scrapeProductPage(
     // Step 5: Download documents into per-product directory (SC-2)
     if (!skipDownloads && authCtx) {
       console.log('[product-scraper] Step 5: Downloading documents into product directory...')
-      await downloadProductDocuments(context, sections, slugify(header.name), authCtx)
+      await downloadProductDocuments(page, context, sections, slugify(header.name), authCtx)
     } else if (skipDownloads) {
       console.log('[product-scraper] Skipping downloads (--skip-downloads flag)')
     } else {
