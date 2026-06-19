@@ -748,7 +748,15 @@ export async function generateBrief(
       const generationStart = Date.now()
       const deltaUsage: { tokensUsed?: number } = {}
       brief = await callLLM(
-        'You are a Red Hat Account Solution Architect AI assistant. Update customer intelligence briefs based on changed information.',
+        `You are a Red Hat Account Solution Architect AI assistant. Update customer intelligence briefs based on changed information.
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point, omit that detail rather than estimating.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. Pipeline dollar figures MUST match the amounts in the provided data. Do not round or fabricate financial figures.
+5. Support case details (severity, days open, case numbers) must be exact matches from the provided case data.
+6. Generic peer references are PROHIBITED. Either cite specific evidence from the provided data or omit the claim.`,
         deltaXml,
         'brief-delta-synthesize',
         customer.name,
@@ -808,7 +816,15 @@ export async function generateBrief(
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
       // Use responseSchema for structured JSON output — guarantees all required sections
       const structuredResult = await callGemini(
-        'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
+        `You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point, omit that detail rather than estimating.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. Pipeline dollar figures MUST match the amounts in the provided data. Do not round or fabricate financial figures.
+5. Support case details (severity, days open, case numbers) must be exact matches from the provided case data.
+6. Generic peer references are PROHIBITED. Either cite specific evidence from the provided data or omit the claim.`,
         synthesisPrompt,
         {
           callType: 'brief-synthesize',
@@ -982,7 +998,15 @@ Keep total brief under 250 words.`
   try {
     // Use structured output for fallback too — guarantees section presence
     const fallbackResult = await callGemini(
-      'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.',
+      `You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point, omit that detail rather than estimating.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. Pipeline dollar figures MUST match the amounts in the provided data. Do not round or fabricate financial figures.
+5. Support case details (severity, days open, case numbers) must be exact matches from the provided case data.
+6. Generic peer references are PROHIBITED. Either cite specific evidence from the provided data or omit the claim.`,
       prompt,
       {
         callType: 'brief-synthesize-fallback',
