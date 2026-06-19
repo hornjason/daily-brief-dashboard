@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 
 function parseBriefText(text: string): { overview: string; talkingPoints: string[] } {
-  const overviewMatch = text.match(/## Account Overview\n([\s\S]*?)(?=\n##)/)
+  const overviewMatch = text.match(/## Account Overview\n([\s\S]*?)(?=\n##)/) ?? text.match(/## Priority Action\n([\s\S]*?)(?=\n##)/)
   const overview = overviewMatch ? overviewMatch[1].replace(/\n?---\s*$/, '').trim().slice(0, 400) : ''
   const talkingMatch = text.match(/## Talking Points[^\n]*\n([\s\S]*?)(?=\n##|$)/)
   const talkingPoints = talkingMatch

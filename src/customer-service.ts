@@ -92,8 +92,8 @@ export interface CCSPSummary {
 // ── Brief Operations ──────────────────────────────────────────────────────────
 
 export function extractBriefSummary(text: string): { overview: string; talkingPoints: string[]; openCasesNote: string } {
-  // Account Overview section
-  const overviewMatch = text.match(/## Account Overview\n([\s\S]*?)(?=\n##)/)
+  // Account Overview or Priority Action section (supports both old and new brief schema #843)
+  const overviewMatch = text.match(/## Account Overview\n([\s\S]*?)(?=\n##)/) ?? text.match(/## Priority Action\n([\s\S]*?)(?=\n##)/)
   const overview = overviewMatch ? overviewMatch[1].trim().slice(0, 400) : ''
 
   // Talking Points bullets — header varies e.g. "## Talking Points & Prep (Mar 24 ...)"
@@ -103,7 +103,7 @@ export function extractBriefSummary(text: string): { overview: string; talkingPo
     : []
 
   // Open cases note
-  const casesMatch = text.match(/## Open Support Cases\n([\s\S]*?)(?=\n##)/)
+  const casesMatch = text.match(/## Open Support Cases\n([\s\S]*?)(?=\n##)/) ?? text.match(/## Open Support Cases\n([\s\S]*?)$/)
   const openCasesNote = casesMatch ? casesMatch[1].trim().slice(0, 200) : ''
 
   return { overview, talkingPoints, openCasesNote }

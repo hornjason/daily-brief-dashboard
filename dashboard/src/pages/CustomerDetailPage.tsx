@@ -530,7 +530,7 @@ function BriefSection({ name }: { name: string }) {
     return result
   }, [data?.text])
 
-  const overview = Object.entries(sections).find(([k]) => k.startsWith('Account Overview'))?.[1]?.trim() ?? ''
+  const overview = Object.entries(sections).find(([k]) => k.startsWith('Account Overview') || k.startsWith('Priority Action'))?.[1]?.trim() ?? ''
 
   // BKL-G16: Reorder brief sections by spec hierarchy
   // Priority Action > What Changed > Key Risks > Competitive Signals > Meetings > Pipeline > Cases > Subscriptions
