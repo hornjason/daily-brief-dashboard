@@ -181,9 +181,9 @@ function resolveModel(model: 'full' | 'lite' | 'pro', callType?: string): string
 function resolveTimeout(options: GeminiCallOptions): number {
   if (options.timeoutMs !== undefined) return options.timeoutMs
 
-  // Tier selection based on call characteristics
-  if (options.responseSchema) return TIMEOUT_STRUCTURED
+  // Long-form call types take precedence over responseSchema (#851)
   if (LONG_FORM_CALL_TYPES.has(options.callType)) return TIMEOUT_LONG_FORM
+  if (options.responseSchema) return TIMEOUT_STRUCTURED
   if (options.grounding) return TIMEOUT_GROUNDED
   return TIMEOUT_STANDARD
 }
