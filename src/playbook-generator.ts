@@ -40,6 +40,10 @@ import type {
   LifecycleSnapshot,
   PlaybookSource,
 } from './playbook-types.ts'
+import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
+import { playbookValidator } from './quality-validators/playbook-validator.ts'
+
+// @consumer-contract v1.0
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -529,12 +533,91 @@ Generate the 6 narrative sections plus product alignment entries as structured J
     ],
   }
 
+  // ── Step 6: Quality gate (ADR-024) ──────────────────────────────────
+
+  const gateResult = await validateAndRetry(
+    JSON.stringify(playbookState),
+    { validator: playbookValidator },
+    async (failures, attempt) => {
+      console.log(`[playbook] Quality gate retry ${attempt} for ${slug}: ${failures.length} failures`)
+      const feedback = formatFailureFeedback(failures)
+      const retryResult = await callGemini(systemPrompt, userPrompt + '\n\nQuality feedback:\n' + feedback, {
+        callType: 'playbook-generation',
+        customerName: customer.name,
+        responseSchema,
+        deltaKey: `playbook-${slug}-retry-${attempt}`,
+        temperature: 0.3,
+      })
+      // Re-parse and re-assemble with retry output
+      let retryGemini: typeof geminiData
+      try {
+        retryGemini = JSON.parse(retryResult.text)
+      } catch {
+        throw new Error('Retry produced non-JSON response')
+      }
+      const retryProducts: ProductAlignmentEntry[] = (retryGemini.productAlignment ?? []).map(gp => {
+        const pd = perProductData.find(p => p.slug === gp.productSlug)
+        const vm = pd?.valueMap ?? null
+        const pp = extractProductProofPoints(gp.productSlug, vm)
+        const sb = pd?.summary?.summaryBullets ?? []
+        const lc = pd?.lifecycle
+        const il = pd?.intel
+        return {
+          productSlug: gp.productSlug,
+          displayName: gp.displayName,
+          confidence: gp.confidence as 'HIGH' | 'MEDIUM' | 'LOW',
+          useCase: gp.useCase,
+          proofPoints: pp.length ? pp.join(' | ') : '',
+          whatsNew: sb.slice(0, 3).join('; ') || '',
+          lifecycle: lc
+            ? `v${lc.currentVersion} (GA: ${lc.gaDate?.slice(0, 10) ?? '?'}, EOL: ${lc.eolDate?.slice(0, 10) ?? '?'})${lc.nextVersion ? ` → Next: v${lc.nextVersion}` : ''}`
+            : '',
+          featureTalkingPoints: il?.featureTalkingPoints?.length
+            ? il.featureTalkingPoints.slice(0, 3).map((f: any) => `${f.feature} (${f.status}): ${f.reason}`).join('; ')
+            : '',
+          dashboardLink: `/dashboard/products/${gp.productSlug}`,
+        }
+      })
+      const retryState: PlaybookState = {
+        ...playbookState,
+        sections: {
+          ...playbookState.sections,
+          strategicPosition: defaultSection(retryGemini.strategicPosition),
+          keyRelationships: defaultSection(retryGemini.keyRelationships),
+          currentPriorities: defaultSection(retryGemini.currentPriorities),
+          productAlignment: { products: retryProducts, updatedAt: now, sourceNotes: [] },
+          expansionOpportunities: defaultSection(retryGemini.expansionOpportunities),
+          renewalsAndRisk: defaultSection(retryGemini.renewalsAndRisk),
+          swotAnalysis: defaultSection(retryGemini.swotAnalysis),
+          meddpicc: {
+            entries: (retryGemini.meddpicc ?? []).map((m: any) => ({
+              field: m.field, displayName: m.displayName,
+              status: m.status || 'unknown', evidence: m.evidence || '',
+              sourceNoteId: null, updatedAt: now,
+            })),
+            qualificationScore: Math.round(((retryGemini.meddpicc ?? []).filter((m: any) => m.status === 'confirmed').length / 8) * 100),
+            updatedAt: now, sourceNotes: [],
+          },
+        },
+      }
+      return JSON.stringify(retryState)
+    },
+  )
+
+  // Use the best output from the quality gate
+  const finalState: PlaybookState = JSON.parse(gateResult.output)
+  // Attach quality score metadata
+  ;(finalState as any).qualityScore = gateResult.scorecard.score
+  ;(finalState as any).qualityAttempts = gateResult.attempts
+
+  console.log(`[playbook] Quality gate: score ${gateResult.scorecard.score}, attempts ${gateResult.attempts}, passed ${gateResult.scorecard.passed}`)
+
   // Write to disk
-  writePlaybook(playbookState)
+  writePlaybook(finalState)
 
   console.log(`[playbook] Playbook generated for ${customer.name}: ${productEntries.length} products, ${subscriptions.length} subscriptions, ${cases.length} cases`)
 
-  return playbookState
+  return finalState
 }
 
 /**
