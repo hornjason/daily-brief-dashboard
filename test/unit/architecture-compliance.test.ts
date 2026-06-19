@@ -77,6 +77,8 @@ const CONSUMER_FILES = [
   'customer.ts',
   'campaigns-routes.ts',
   'meeting-prep-routes.ts',
+  'meeting-prep-service.ts',
+  'lib/meeting-prep-intelligence.ts',
 ]
 
 // Route files that should be thin (domain logic in service modules)
