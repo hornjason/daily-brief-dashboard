@@ -42,6 +42,79 @@ const SKIP_FORMATS = new Set(['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTu
 const SKIP_LANGUAGE_PATTERNS = [/\bde\b|\bfr\b|\bes\b|\bit\b|\bpt\b|\bja\b|\bko\b|\bzh\b/i]
 const skipDownloads = process.argv.includes('--skip-downloads')
 
+// ── Exported pure helpers (tested in saleshub-product-download.test.ts) ─────
+
+/** A downloadable item collected from product sections */
+export interface DownloadableItem {
+  name: string
+  format: string
+  sectionKey: string
+  versionId: string
+  contentId: string
+}
+
+/** Returns true if the format should be skipped (non-document formats) */
+export function isSkippedFormat(format: string): boolean {
+  if (!format) return true
+  return SKIP_FORMATS.has(format)
+}
+
+/** Returns true if the document name indicates a non-English document */
+export function isNonEnglishDoc(name: string): boolean {
+  return SKIP_LANGUAGE_PATTERNS.some(p => p.test(name))
+}
+
+/** Builds a Seismic download URL from versionId and contentId */
+export function buildDownloadUrl(versionId: string, contentId: string): string {
+  return `https://saleshub.redhat.com/api/doccenter/download/${contentId}/${versionId}`
+}
+
+/** Builds a local filesystem path for a downloaded document */
+export function buildLocalPath(
+  productDir: string,
+  sectionKey: string,
+  docName: string,
+  format: string,
+): string {
+  const sanitized = docName.replace(/[\/\\?%*:|"<>]/g, '_').slice(0, 200)
+  const ext = format.toLowerCase()
+  return `${productDir}/downloads/${sectionKey}/${sanitized}.${ext}`
+}
+
+/**
+ * Collects all downloadable items from product sections.
+ * Filters: must have versionId + contentId, non-skipped format, English-only.
+ * Deduplicates by versionId.
+ */
+export function collectDownloadableItems(
+  sections: Record<string, ProductSection>,
+): DownloadableItem[] {
+  const seen = new Set<string>()
+  const items: DownloadableItem[] = []
+
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    for (const item of section.items) {
+      const si = item as any
+      if (!si.versionId || !si.contentId) continue
+      const format = si.format ?? ''
+      if (isSkippedFormat(format)) continue
+      if (isNonEnglishDoc(item.name)) continue
+      if (seen.has(si.versionId)) continue
+      seen.add(si.versionId)
+
+      items.push({
+        name: item.name,
+        format,
+        sectionKey,
+        versionId: si.versionId,
+        contentId: si.contentId,
+      })
+    }
+  }
+
+  return items
+}
+
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
   'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//'
@@ -759,17 +832,10 @@ async function downloadProductDocuments(
   productSlug: string,
   authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
 ): Promise<void> {
-  // ── Phase 1: Expand all Domain accordions on the product page ────────────
-  console.log('[product-scraper] Expanding Domain accordion sections...')
+  // ── Phase 1: Expand all accordion sections on the product page ──────────
+  // Expand ANY collapsed accordions — not just Domain sections (AC-1, ANTI-2)
+  console.log('[product-scraper] Expanding all accordion sections on page...')
 
-  // Scroll to the Domains section area
-  const domainsHeader = page.locator('text=Domains').first()
-  if (await domainsHeader.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await domainsHeader.scrollIntoViewIfNeeded()
-    await page.waitForTimeout(1_000)
-  }
-
-  // Expand any collapsed accordion sections
   const collapsedAccordions = page.locator(
     '[class*="accordion"] [class*="chevron-down"], ' +
     '[class*="accordion"][class*="collapsed"], ' +
@@ -788,20 +854,10 @@ async function downloadProductDocuments(
   }
   await page.waitForTimeout(1_500)
 
-  // ── Phase 2: Find all DocListPicker tables on the page ───────────────────
-  // DocListPicker tables live inside accordion panels; look for table-like structures
-  const tables = page.locator(
-    'table, [class*="DocListPicker"], [class*="doclist"], [class*="doc-list"], ' +
-    '[class*="content-list"], [role="grid"], [role="table"]'
-  )
-  const tableCount = await tables.count()
-  console.log(`[product-scraper] Found ${tableCount} DocListPicker tables on page`)
-
-  if (tableCount === 0) {
-    console.log('[product-scraper] No DocListPicker tables found — skipping downloads')
-    return
-  }
-
+  // ── Phase 2: Build download queue from ALL sections ─────────────────────
+  // Iterate all sections from the scraped page data (AC-1, ANTI-2: all sections,
+  // not just Domains). Each item with a URL gets a viewer download attempt first,
+  // followed by a three-dot menu fallback if the viewer fails.
   const productDir = resolve('config-templates', 'saleshub-products', productSlug)
   let downloaded = 0
   let skipped = 0
@@ -811,222 +867,264 @@ async function downloadProductDocuments(
   let totalProcessed = 0
   const failedDownloads: Array<{ name: string; section: string; format: string; versionId: string; error: string; attempts: number }> = []
 
-  // ── Phase 3: Process each table ──────────────────────────────────────────
-  for (let t = 0; t < tableCount; t++) {
-    if (consecutiveFailures >= CIRCUIT_BREAKER) break
+  // Collect all downloadable items from ALL sections (ANTI-2: not Domain-only)
+  const downloadQueue: Array<{ item: SectionItem; sectionKey: string; sectionTitle: string }> = []
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    for (const item of section.items) {
+      // Skip items without a URL — can't download without a reference
+      if (!item.url) continue
 
-    const table = tables.nth(t)
+      // Skip formats that are not downloadable documents (AC-A1)
+      const itemFormat = ((item as any).format ?? '').toUpperCase()
+      const seismicType = ((item as any).seismicContentType ?? '').toLowerCase()
+      if (itemFormat && SKIP_FORMATS.has(itemFormat)) {
+        console.log(`[product-scraper] Skipping ${itemFormat}: ${item.name.slice(0, 50)}`)
+        continue
+      }
+      // Also check URL patterns for skip formats
+      const urlLower = item.url.toLowerCase()
+      if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
+        console.log(`[product-scraper] Skipping YouTube: ${item.name.slice(0, 50)}`)
+        continue
+      }
 
-    // Determine section name from the nearest ancestor heading
-    let sectionName = `section-${t}`
-    try {
-      // Walk up the DOM to find the closest heading above this table
-      const headingText = await table.evaluate((el: Element) => {
-        let node: Element | null = el
-        while (node) {
-          // Check previous siblings for headings
-          let prev = node.previousElementSibling
-          while (prev) {
-            const h = prev.querySelector('h2, h3, h4, [class*="heading"], [class*="title"], [class*="header"]')
-            if (h?.textContent?.trim()) return h.textContent.trim()
-            if (prev.matches('h2, h3, h4') && prev.textContent?.trim()) return prev.textContent.trim()
-            prev = prev.previousElementSibling
-          }
-          // Check current node's heading children
-          const heading = node.querySelector('h2, h3, h4, [class*="heading"], [class*="title"]')
-          if (heading?.textContent?.trim()) return heading.textContent.trim()
-          node = node.parentElement
-        }
-        return ''
-      })
-      if (headingText) sectionName = headingText
-    } catch {
-      // Keep default section name
+      // Skip non-English documents
+      const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
+      if (isNonEnglish) {
+        console.log(`[product-scraper] Skipping non-English: ${item.name.slice(0, 50)}`)
+        continue
+      }
+
+      downloadQueue.push({ item, sectionKey, sectionTitle: section.title })
+    }
+  }
+
+  console.log(`[product-scraper] Download queue: ${downloadQueue.length} items from ${Object.keys(sections).length} sections`)
+
+  // ── Phase 3: Download each item — viewer PRIMARY, three-dot FALLBACK ────
+  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+    if (consecutiveFailures >= CIRCUIT_BREAKER) {
+      console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — stopping downloads`)
+      break
+    }
+    if (totalProcessed >= MAX_DOWNLOADS_PER_PRODUCT) {
+      console.log(`[product-scraper] Reached MAX_DOWNLOADS_PER_PRODUCT (${MAX_DOWNLOADS_PER_PRODUCT}) — stopping`)
+      break
     }
 
-    const sectionSlug = slugify(sectionName)
+    totalProcessed++
+
+    // Create section-specific download directory
+    const sectionSlug = slugify(sectionTitle)
     const sectionDir = resolve(productDir, 'downloads', sectionSlug)
     mkdirSync(sectionDir, { recursive: true })
 
-    // Get all rows from the table (skip header row)
-    const rows = table.locator('tr, [role="row"]')
-    const rowCount = await rows.count()
-    // Skip first row if it looks like a header (contains th or checkbox header)
-    const startRow = rowCount > 0 ? 1 : 0
-    const dataRowCount = rowCount - startRow
-    console.log(`[product-scraper] Section "${sectionName}": ${dataRowCount} document rows`)
+    // Check if cached — look for any file with matching name prefix
+    const safePrefix = sanitizeFilename(item.name).slice(0, 60)
+    const existingFiles = existsSync(sectionDir)
+      ? (await import('fs')).readdirSync(sectionDir).filter((f: string) => f.startsWith(safePrefix))
+      : []
+    if (existingFiles.length > 0) {
+      skipped++
+      consecutiveFailures = 0
+      continue
+    }
 
-    for (let r = startRow; r < rowCount; r++) {
-      if (consecutiveFailures >= CIRCUIT_BREAKER) {
-        const remaining = rowCount - r
-        console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — skipping remaining ${remaining} documents in "${sectionName}"`)
-        errors += remaining
-        break
-      }
-      if (totalProcessed >= MAX_DOWNLOADS_PER_PRODUCT) {
-        console.log(`[product-scraper] Reached MAX_DOWNLOADS_PER_PRODUCT (${MAX_DOWNLOADS_PER_PRODUCT}) — stopping`)
-        break
-      }
+    let succeeded = false
+    let lastError = ''
 
-      const row = rows.nth(r)
-      totalProcessed++
-
-      // Get document name from row text
-      let docName = ''
+    // ── PRIMARY: Viewer click-to-download ─────────────────────────────────
+    // Open the item's viewer page in a new tab, find Download button, download.
+    // This works for Google Doc-sourced content where the viewer renders a Download button.
+    if (item.url) {
       try {
-        const rowText = await row.innerText()
-        // The document name is usually the main text content, strip action labels
-        docName = rowText.split('\n').filter(l => l.trim().length > 3)[0]?.trim() ?? `document-${totalProcessed}`
-      } catch {
-        docName = `document-${totalProcessed}`
-      }
+        const dlPage = await context.newPage()
+        try {
+          await dlPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+          await dlPage.waitForTimeout(3_000)
 
-      // Skip non-English
-      const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(docName))
-      if (isNonEnglish) {
-        console.log(`[product-scraper] Skipping non-English: ${docName.slice(0, 50)}`)
-        continue
-      }
+          // Look for a Download button on the viewer page
+          const downloadBtnSelectors = [
+            'button:has-text("Download")',
+            '[aria-label*="download" i]',
+            '[aria-label*="Download"]',
+            'a:has-text("Download")',
+            '[class*="download" i]',
+            'text=Download',
+          ]
 
-      // Check if cached — look for any file with matching name prefix
-      const safePrefix = sanitizeFilename(docName).slice(0, 60)
-      const existingFiles = existsSync(sectionDir)
-        ? (await import('fs')).readdirSync(sectionDir).filter((f: string) => f.startsWith(safePrefix))
-        : []
-      if (existingFiles.length > 0) {
-        skipped++
-        consecutiveFailures = 0
-        continue
-      }
-
-      // ── Three-dot menu download flow ─────────────────────────────────────
-      let succeeded = false
-      let lastError = ''
-
-      try {
-        // Hover over row to reveal action icons
-        await row.hover()
-        await page.waitForTimeout(500)
-
-        // Find the three-dot menu button (... / more actions)
-        const menuSelectors = [
-          '[class*="more"]',
-          '[class*="menu"]:not([role="menu"])',
-          '[aria-label*="more" i]',
-          '[aria-label*="More"]',
-          '[aria-label*="action" i]',
-          '[class*="action"] button:last-child',
-          '[class*="kebab"]',
-          '[class*="ellipsis"]',
-        ]
-
-        let menuBtn: Locator | null = null
-        for (const sel of menuSelectors) {
-          const candidate = row.locator(sel).first()
-          if (await candidate.isVisible({ timeout: 1_000 }).catch(() => false)) {
-            menuBtn = candidate
-            break
-          }
-        }
-
-        // Fallback: last button in the row
-        if (!menuBtn) {
-          const lastBtn = row.locator('button').last()
-          if (await lastBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
-            menuBtn = lastBtn
-          }
-        }
-
-        if (!menuBtn) {
-          lastError = 'No three-dot menu button found in row'
-          throw new Error(lastError)
-        }
-
-        // Click the three-dot menu
-        await menuBtn.click()
-        await page.waitForTimeout(500)
-
-        // Wait for dropdown to appear and find "Download" option
-        const dropdownSelectors = [
-          '[class*="dropdown"]',
-          '[class*="menu"][role="menu"]',
-          '[role="menu"]',
-          '[role="listbox"]',
-          '[class*="popup"]',
-          '[class*="popover"]',
-          '[class*="overlay"]',
-        ]
-
-        let downloadOption: Locator | null = null
-        for (const sel of dropdownSelectors) {
-          const dropdown = page.locator(sel)
-          if (await dropdown.isVisible({ timeout: 2_000 }).catch(() => false)) {
-            const dlOpt = dropdown.locator('text=Download').first()
-            if (await dlOpt.isVisible({ timeout: 1_000 }).catch(() => false)) {
-              downloadOption = dlOpt
+          let downloadBtn: Locator | null = null
+          for (const sel of downloadBtnSelectors) {
+            const candidate = dlPage.locator(sel).first()
+            if (await candidate.isVisible({ timeout: 2_000 }).catch(() => false)) {
+              downloadBtn = candidate
               break
             }
           }
-        }
 
-        // Fallback: any visible "Download" text that just appeared
-        if (!downloadOption) {
-          const anyDownload = page.getByText('Download', { exact: true }).first()
-          if (await anyDownload.isVisible({ timeout: 1_000 }).catch(() => false)) {
-            downloadOption = anyDownload
+          // Check if viewer page shows "Content not found" or similar error
+          const pageText = await dlPage.innerText('body').catch(() => '')
+          const isContentNotFound = /content\s+not\s+found|page\s+not\s+found|error|404/i.test(pageText.slice(0, 500))
+
+          if (downloadBtn && !isContentNotFound) {
+            const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
+            await downloadBtn.click()
+            const dl = await downloadPromise
+            const suggestedName = dl.suggestedFilename()
+            const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+            const filename = sanitizeFilename(`${item.name}.${ext}`)
+            const localPath = resolve(sectionDir, filename)
+            await dl.saveAs(localPath)
+            downloaded++
+            consecutiveFailures = 0
+            console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (viewer download)`)
+            succeeded = true
+          } else {
+            lastError = isContentNotFound ? 'Viewer: Content not found' : 'Viewer: No Download button found'
           }
+        } finally {
+          await dlPage.close()
         }
-
-        if (!downloadOption) {
-          lastError = 'No "Download" option found in three-dot dropdown'
-          // Dismiss the dropdown
-          await page.keyboard.press('Escape')
-          await page.waitForTimeout(300)
-          throw new Error(lastError)
-        }
-
-        // Set up download listener BEFORE clicking Download
-        const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
-        await downloadOption.click()
-
-        const dl = await downloadPromise
-        const suggestedName = dl.suggestedFilename()
-        const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
-        const filename = sanitizeFilename(`${docName}.${ext}`)
-        const localPath = resolve(sectionDir, filename)
-
-        await dl.saveAs(localPath)
-        downloaded++
-        consecutiveFailures = 0
-        console.log(`[product-scraper] (${totalProcessed}/${dataRowCount * tableCount}) ✓ ${filename} (three-dot menu)`)
-        succeeded = true
       } catch (e: any) {
-        if (!lastError) lastError = (e.message ?? 'Unknown error').slice(0, 120)
+        lastError = `Viewer: ${(e.message ?? 'Unknown error').slice(0, 100)}`
+      }
+    }
 
-        // Dismiss any open dropdown before continuing
+    // ── FALLBACK: Three-dot DocListPicker menu on the product page ─────────
+    // When the viewer page shows "Content not found" or lacks a Download button,
+    // try downloading via the three-dot menu in the DocListPicker table row.
+    // This path stays on the product page (ANTI-1: no navigation away).
+    if (!succeeded) {
+      console.log(`[product-scraper] (${totalProcessed}) Viewer failed: ${lastError.slice(0, 60)} — trying three-dot fallback`)
+      try {
+        // Find the document row on the product page by matching the item name
+        // Search in all DocListPicker tables on the page
+        const docRow = page.locator(`tr:has-text("${item.name.slice(0, 40).replace(/"/g, '\\"')}"), [role="row"]:has-text("${item.name.slice(0, 40).replace(/"/g, '\\"')}")`)
+          .first()
+
+        if (await docRow.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          // Hover to reveal action icons
+          await docRow.hover()
+          await page.waitForTimeout(500)
+
+          // Find the three-dot menu button
+          const menuSelectors = [
+            '[class*="more"]',
+            '[class*="menu"]:not([role="menu"])',
+            '[aria-label*="more" i]',
+            '[aria-label*="More"]',
+            '[aria-label*="action" i]',
+            '[class*="action"] button:last-child',
+            '[class*="kebab"]',
+            '[class*="ellipsis"]',
+          ]
+
+          let menuBtn: Locator | null = null
+          for (const sel of menuSelectors) {
+            const candidate = docRow.locator(sel).first()
+            if (await candidate.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              menuBtn = candidate
+              break
+            }
+          }
+
+          // Fallback: last button in the row
+          if (!menuBtn) {
+            const lastBtn = docRow.locator('button').last()
+            if (await lastBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              menuBtn = lastBtn
+            }
+          }
+
+          if (!menuBtn) {
+            lastError = 'Fallback: No three-dot menu button found in row'
+            throw new Error(lastError)
+          }
+
+          await menuBtn.click()
+          await page.waitForTimeout(500)
+
+          // Find "Download" in the dropdown
+          const dropdownSelectors = [
+            '[class*="dropdown"]',
+            '[class*="menu"][role="menu"]',
+            '[role="menu"]',
+            '[role="listbox"]',
+            '[class*="popup"]',
+            '[class*="popover"]',
+            '[class*="overlay"]',
+          ]
+
+          let downloadOption: Locator | null = null
+          for (const sel of dropdownSelectors) {
+            const dropdown = page.locator(sel)
+            if (await dropdown.isVisible({ timeout: 2_000 }).catch(() => false)) {
+              const dlOpt = dropdown.locator('text=Download').first()
+              if (await dlOpt.isVisible({ timeout: 1_000 }).catch(() => false)) {
+                downloadOption = dlOpt
+                break
+              }
+            }
+          }
+
+          if (!downloadOption) {
+            const anyDownload = page.getByText('Download', { exact: true }).first()
+            if (await anyDownload.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              downloadOption = anyDownload
+            }
+          }
+
+          if (!downloadOption) {
+            lastError = 'Fallback: No "Download" in three-dot dropdown'
+            await page.keyboard.press('Escape')
+            await page.waitForTimeout(300)
+            throw new Error(lastError)
+          }
+
+          const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+          await downloadOption.click()
+
+          const dl = await downloadPromise
+          const suggestedName = dl.suggestedFilename()
+          const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+          const filename = sanitizeFilename(`${item.name}.${ext}`)
+          const localPath = resolve(sectionDir, filename)
+          await dl.saveAs(localPath)
+          downloaded++
+          consecutiveFailures = 0
+          console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (three-dot fallback)`)
+          succeeded = true
+        } else {
+          lastError = 'Fallback: Document row not found on product page'
+        }
+      } catch (e: any) {
+        if (!lastError.startsWith('Fallback:')) {
+          lastError = `Fallback: ${(e.message ?? 'Unknown error').slice(0, 100)}`
+        }
+        // Dismiss any open dropdown
         try {
           await page.keyboard.press('Escape')
           await page.waitForTimeout(300)
         } catch { /* ignore */ }
       }
-
-      if (!succeeded) {
-        consecutiveFailures++
-        console.warn(`[product-scraper] (${totalProcessed}) ✗ ${docName.slice(0, 50)}: ${lastError.slice(0, 60)}`)
-        errors++
-        failedDownloads.push({
-          name: docName,
-          section: sectionSlug,
-          format: '',
-          versionId: '',
-          error: lastError,
-          attempts: 1,
-        })
-      }
-
-      // Brief pause between rows to avoid rate-limiting
-      await new Promise(r => setTimeout(r, 1_000))
     }
+
+    if (!succeeded) {
+      consecutiveFailures++
+      console.warn(`[product-scraper] (${totalProcessed}) FAIL ${item.name.slice(0, 50)}: ${lastError.slice(0, 80)}`)
+      errors++
+      failedDownloads.push({
+        name: item.name,
+        section: sectionKey,
+        format: (item as any).format ?? '',
+        versionId: item.versionId ?? '',
+        error: lastError,
+        attempts: 1,
+      })
+    }
+
+    // Brief pause between items to avoid rate-limiting
+    await new Promise(r => setTimeout(r, 1_000))
   }
 
   // ── Write failed downloads manifest ──────────────────────────────────────
@@ -1044,6 +1142,7 @@ async function downloadProductDocuments(
 
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 }
+
 
 // ── CDS Network Interception (#833) ─────────────────────────────────────────
 
