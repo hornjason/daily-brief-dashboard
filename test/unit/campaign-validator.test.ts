@@ -179,4 +179,146 @@ describe('campaignValidator', () => {
       expect(check?.passed).toBe(false)
     })
   })
+
+  // ── ADR-040: Structured JSON output validation ───────────────────────────
+
+  describe('structured JSON output (ADR-040)', () => {
+    const goodStructured = JSON.stringify({
+      campaignSummary: 'This campaign targets Acme Corp with Red Hat OpenShift positioning for their cloud-native transformation initiative spanning multiple business units.',
+      customerContext: 'The customer is actively evaluating container orchestration platforms after a successful Kubernetes pilot. Their VP of Infrastructure presented at KubeCon about hybrid cloud goals, and they have a $2.1M pipeline renewal coming in Q3.',
+      positioning: 'Challenger Insight: There is a hidden gap in their container security posture that becomes critical at scale. Red Hat OpenShift addresses enterprise Kubernetes needs with built-in compliance automation that generic managed Kubernetes services lack.',
+      emails: [
+        {
+          persona: 'CIO',
+          tier: 'executive',
+          subject: 'AI workload readiness depends on your container foundation',
+          body: 'Your teams are building strong container fundamentals with the Kubernetes pilot success. As Acme scales from pilot to production, the security and compliance requirements for regulated manufacturing create requirements that managed Kubernetes does not address. Based on your existing Red Hat Enterprise Linux foundation, OpenShift provides a natural extension with built-in security scanning and compliance automation. Three capabilities are particularly relevant for regulated manufacturing environments where audit trails and consistent policy enforcement are non-negotiable.',
+          peerProof: 'Acme Corp reduced deployment time by 60% after consolidating on OpenShift',
+          actionStep: 'Carolanne Farrell should schedule a briefing with their infrastructure team by next Friday to discuss the pilot-to-production transition plan',
+        },
+        {
+          persona: 'VP Infra',
+          tier: 'executive',
+          subject: 'Infrastructure costs double when container sprawl goes unmanaged',
+          body: 'Preparing infrastructure for enterprise container adoption requires planning that goes beyond the pilot phase. Your existing Red Hat Enterprise Linux deployment provides a stable foundation. OpenShift extends this with multi-cluster management, automated certificate rotation, and resource quotas that prevent the cost overruns seen in unmanaged container environments across hybrid cloud deployments.',
+          peerProof: null,
+          actionStep: 'Carolanne should connect our specialist team with David Park by end of week to review their hybrid cloud architecture requirements',
+        },
+        {
+          persona: 'Director IT',
+          tier: 'manager',
+          subject: 'From manual compliance audits to automated evidence generation',
+          body: 'Managing separate compliance workflows for containerized and traditional workloads doubles audit preparation time. Your operations team currently spends significant effort on manual compliance evidence collection. Given your foundation on Red Hat Enterprise Linux, OpenShift unifies compliance reporting across both container and VM workloads. Automated evidence generation, policy-as-code enforcement, and continuous compliance monitoring replace the quarterly scramble with continuous assurance that auditors can verify in real time.',
+          peerProof: 'Beta Inc consolidated 3 separate compliance tools into a single OpenShift-based workflow',
+          actionStep: 'Carolanne should organize a compliance automation workshop this month focused on their FDA and ISO requirements',
+        },
+        {
+          persona: 'Director Ops',
+          tier: 'manager',
+          subject: 'Automated remediation eliminates the 3am incident response pattern',
+          body: 'Your ops team is handling incident response across container and traditional infrastructure with separate tools and runbooks. This dual-stack approach creates blind spots during incidents where container issues cascade into traditional systems. Building on your Red Hat Enterprise Linux environment, Event-Driven Ansible integrated with OpenShift provides automated remediation workflows that detect, diagnose, and resolve common infrastructure issues before they page your on-call team. Self-healing infrastructure patterns reduce mean time to resolution from hours to minutes.',
+          peerProof: null,
+          actionStep: 'Carolanne should arrange a demo within two weeks showing automated remediation in a hybrid environment similar to theirs',
+        },
+      ],
+    })
+
+    it('passes on good structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      expect(scorecard.passed).toBe(true)
+      expect(scorecard.score).toBeGreaterThanOrEqual(80)
+    })
+
+    it('detects campaign summary in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'campaign-summary')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects customer context in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'customer-context')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects positioning in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'positioning')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects email template count in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'email-templates-count')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects email subject lines in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'email-subject-lines')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects email body length in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'email-body-length')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('detects action steps in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'action-step-present')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('fails on all-nulls peerProof', () => {
+      const allNulls = JSON.parse(goodStructured)
+      allNulls.emails.forEach((e: any) => { e.peerProof = null })
+      const scorecard = campaignValidator.validate(JSON.stringify(allNulls))
+      expect(scorecard.checks.find((c: any) => c.name === 'not-all-nulls')?.passed).toBe(false)
+    })
+
+    it('fails on fabricated peer references', () => {
+      const fabricated = JSON.parse(goodStructured)
+      fabricated.emails[0].peerProof = 'A major insurer improved their operations significantly'
+      const scorecard = campaignValidator.validate(JSON.stringify(fabricated))
+      expect(scorecard.checks.find((c: any) => c.name === 'no-fabricated-peers')?.passed).toBe(false)
+    })
+
+    it('fails on too few emails', () => {
+      const fewEmails = JSON.parse(goodStructured)
+      fewEmails.emails = fewEmails.emails.slice(0, 2)
+      const scorecard = campaignValidator.validate(JSON.stringify(fewEmails))
+      const check = scorecard.checks.find((c: any) => c.name === 'email-templates-count')
+      expect(check?.passed).toBe(false)
+    })
+
+    it('fails on missing campaign summary', () => {
+      const noSummary = JSON.parse(goodStructured)
+      noSummary.campaignSummary = 'Short'
+      const scorecard = campaignValidator.validate(JSON.stringify(noSummary))
+      const check = scorecard.checks.find((c: any) => c.name === 'campaign-summary')
+      expect(check?.passed).toBe(false)
+    })
+
+    it('detects no internal data leakage in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'no-internal-data')
+      expect(check?.passed).toBe(true)
+    })
+
+    it('flags internal data in structured email bodies', () => {
+      const leaky = JSON.parse(goodStructured)
+      leaky.emails[0].body = leaky.emails[0].body + ' across their 2,400 nodes with 150 subscriptions'
+      const scorecard = campaignValidator.validate(JSON.stringify(leaky))
+      const check = scorecard.checks.find((c: any) => c.name === 'no-internal-data')
+      expect(check?.passed).toBe(false)
+    })
+
+    it('detects money connection in structured output', () => {
+      const scorecard = campaignValidator.validate(goodStructured)
+      const check = scorecard.checks.find((c: any) => c.name === 'money-connection')
+      expect(check?.passed).toBe(true)
+    })
+  })
 })

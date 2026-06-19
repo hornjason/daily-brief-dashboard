@@ -36,7 +36,48 @@ import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 
-// ── Config ────────────────────────────────────────────────────────────────────
+// ── Structured output schema (ADR-040) ───────────────────────────────────────
+
+const CAMPAIGN_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    campaignSummary: {
+      type: 'STRING',
+      description: 'Campaign strategy summary. Include total pipeline value from the provided pipeline data. If no pipeline data exists, state the strategic rationale without fabricating dollar figures.',
+    },
+    customerContext: {
+      type: 'STRING',
+      description: 'What is happening NOW with this customer. Reference specific dates, active evaluations, recent emails, or pipeline opportunities from the provided context. Do not use generic strategic descriptions.',
+    },
+    positioning: {
+      type: 'STRING',
+      description: 'How Red Hat value props map to customer needs. Must include one Challenger Insight that teaches the customer something about their own business they may not know.',
+    },
+    emails: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          persona: { type: 'STRING', description: 'Target role (e.g., CIO, VP Infrastructure, Director of IT)' },
+          tier: { type: 'STRING', description: 'executive or manager' },
+          subject: { type: 'STRING', description: 'Email subject line. No product names, no company names per Rule 9.' },
+          body: { type: 'STRING', description: 'Email body following the tier structure rules. Must include relationship context referencing existing Red Hat product usage.' },
+          peerProof: {
+            type: 'STRING',
+            nullable: true,
+            description: 'Cite a SPECIFIC customer win from the VERIFIED SOLUTION PLAYS section in the prompt. Use the EXACT company name and metric. If no matching customer win exists in the provided data, set to null. NEVER fabricate a peer reference.',
+          },
+          actionStep: {
+            type: 'STRING',
+            description: 'Concrete next step: "[AE name from account team] should [specific action] by [timeframe]." Reference specific pipeline opportunities or customer situations.',
+          },
+        },
+        required: ['persona', 'tier', 'subject', 'body', 'actionStep'],
+      },
+    },
+  },
+  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +165,14 @@ export async function extractMaterialContent(fileId: string): Promise<{ title: s
 
 const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating deeply personalized email campaigns.
 
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point for a field, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
+5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
+6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
+
 ## Email Design Rules (Council-Validated, Mandatory)
 
 Every generated email MUST pass ALL of these rules:
@@ -198,6 +247,7 @@ export async function callGeminiForCampaign(opts: {
   voiceInstruction?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   emailTemplateContext?: string
+  structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
 }): Promise<string> {
   // Assemble user prompt with material + signals
   const intelligenceSummary = opts.customerSignals.intelligence?.company
@@ -233,6 +283,21 @@ export async function callGeminiForCampaign(opts: {
   })
   const personasStr = personaLines.join('\n')
 
+  // Serialize verified solution plays for peer proof grounding (ADR-040)
+  let solutionPlaysContext = ''
+  if (opts.structuredPlays && opts.structuredPlays.length > 0) {
+    solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
+    for (const play of opts.structuredPlays) {
+      solutionPlaysContext += `### Play: "${play.name}"\n`
+      solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
+      if (play.customerWins?.length) solutionPlaysContext += `- Customer Wins: ${JSON.stringify(play.customerWins)}\n`
+      if (play.realWorldExamples?.length) solutionPlaysContext += `- Real-World Examples: ${JSON.stringify(play.realWorldExamples)}\n`
+      if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
+      if (play.talkTrack) solutionPlaysContext += `- Talk Track: ${play.talkTrack.slice(0, 300)}\n`
+      solutionPlaysContext += '\n'
+    }
+  }
+
   const userPrompt = `## Material: ${opts.materialTitle}
 
 ### Material Content (first 8000 chars):
@@ -250,7 +315,7 @@ ${subscriptionsSummary}
 
 ### Additional Intelligence Signals:
 ${registrySignalsSummary}
-
+${solutionPlaysContext}
 ${opts.voiceInstruction ? `\n## Voice Instruction:\n${opts.voiceInstruction}\n` : ''}
 ${opts.emailTemplateContext ?? ''}
 ---
@@ -262,12 +327,40 @@ ${personasStr}`
   const result = await callGemini(CAMPAIGN_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-generation',
     customerName: opts.customerName,
-    temperature: 0.7,
+    temperature: 0.1,
+    responseSchema: CAMPAIGN_RESPONSE_SCHEMA,
     // No deltaKey — campaigns are customer-specific and material may change
   })
 
   if (!result.text) throw new Error('Gemini returned empty response')
-  return result.text
+
+  // Parse structured JSON response (ADR-040)
+  let parsedCampaign: any
+  try {
+    parsedCampaign = JSON.parse(result.text)
+  } catch {
+    console.warn('[campaigns] Failed to parse structured response, falling back to raw text')
+    return result.text // fallback to raw markdown
+  }
+
+  // Convert parsed JSON to markdown for downstream pipeline (HTML generation, Drive upload, cache)
+  const markdownParts: string[] = []
+  markdownParts.push(`## Campaign Summary\n\n${parsedCampaign.campaignSummary}\n`)
+  markdownParts.push(`## Customer Context\n\n${parsedCampaign.customerContext}\n`)
+  markdownParts.push(`## Positioning\n\n${parsedCampaign.positioning}\n`)
+  markdownParts.push('---\n## Email Templates\n')
+
+  for (const email of parsedCampaign.emails ?? []) {
+    markdownParts.push(`\n## ${email.persona} — ${email.tier === 'executive' ? 'Executive' : 'Manager'}\n`)
+    markdownParts.push(`\nSubject: ${email.subject}\n`)
+    markdownParts.push(`\n${email.body}\n`)
+    if (email.peerProof) {
+      markdownParts.push(`\n${email.peerProof}\n`)
+    }
+    markdownParts.push(`\n${email.actionStep}\n`)
+  }
+
+  return markdownParts.join('\n')
 }
 
 // ── Drive persistence ────────────────────────────────────────────────────────
@@ -521,7 +614,17 @@ export async function generateCampaign(
     // Solution signals unavailable — proceed without template
   }
 
-  // 4. Generate campaign via Gemini + quality gate (ADR-024)
+  // 4. Map solution plays to structured format for grounding (ADR-040)
+  const structuredPlays = (templateResult.structured?.solutionPlays ?? []).map(sp => ({
+    name: sp.playName,
+    parentTdp: sp.tdp,
+    customerWins: sp.customerWins,
+    realWorldExamples: sp.realWorldExamples,
+    extractedMetrics: sp.extractedMetrics,
+    talkTrack: sp.talkTrack,
+  }))
+
+  // 4b. Generate campaign via Gemini + quality gate (ADR-024)
   const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
     materialContent,
@@ -532,6 +635,7 @@ export async function generateCampaign(
     voiceInstruction,
     personas: config?.personas,
     emailTemplateContext,
+    structuredPlays,
   })
 
   const gateResult = await validateAndRetry(
@@ -549,6 +653,7 @@ export async function generateCampaign(
         voiceInstruction,
         personas: config?.personas,
         emailTemplateContext,
+        structuredPlays,
       })
     }
   )
