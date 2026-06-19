@@ -750,7 +750,7 @@ async function queryDocumentsByProduct(
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-// ── Per-product document download (SC-2, #847 API-based) ────────────────────
+// ── Per-product document download (SC-2) ────────────────────────────────────
 
 async function downloadProductDocuments(
   page: Page,
@@ -759,32 +759,79 @@ async function downloadProductDocuments(
   productSlug: string,
   authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
 ): Promise<void> {
-  // ── Phase 1: Collect downloadable items from API-sourced section data ──────
-  // Instead of fragile DocListPicker table + three-dot menu interactions,
-  // iterate over items that already have versionId/contentId from the Seismic API.
-  // This is generic (works for all products) and stays on the product page.
-  const downloadableItems = collectDownloadableItems(sections)
+  // ── Phase 1: Expand all accordion sections on the product page ──────────
+  // Expand ANY collapsed accordions — not just Domain sections (AC-1, ANTI-2)
+  console.log('[product-scraper] Expanding all accordion sections on page...')
 
-  console.log(`[product-scraper] Found ${downloadableItems.length} downloadable API-sourced items`)
-
-  if (downloadableItems.length === 0) {
-    console.log('[product-scraper] No downloadable items — skipping downloads')
-    return
+  const collapsedAccordions = page.locator(
+    '[class*="accordion"] [class*="chevron-down"], ' +
+    '[class*="accordion"][class*="collapsed"], ' +
+    '[class*="expandable"]:not([class*="expanded"])'
+  )
+  const accordionCount = await collapsedAccordions.count()
+  console.log(`[product-scraper] Found ${accordionCount} collapsed accordion sections`)
+  for (let a = 0; a < accordionCount; a++) {
+    try {
+      const accordion = collapsedAccordions.nth(a)
+      await accordion.click()
+      await page.waitForTimeout(800)
+    } catch (e: any) {
+      console.warn(`[product-scraper] Could not expand accordion ${a}: ${(e.message ?? '').slice(0, 60)}`)
+    }
   }
+  await page.waitForTimeout(1_500)
 
+  // ── Phase 2: Build download queue from ALL sections ─────────────────────
+  // Iterate all sections from the scraped page data (AC-1, ANTI-2: all sections,
+  // not just Domains). Each item with a URL gets a viewer download attempt first,
+  // followed by a three-dot menu fallback if the viewer fails.
   const productDir = resolve('config-templates', 'saleshub-products', productSlug)
   let downloaded = 0
   let skipped = 0
   let errors = 0
   let consecutiveFailures = 0
-  const CIRCUIT_BREAKER = 10  // Higher threshold for API downloads (more reliable than UI)
+  const CIRCUIT_BREAKER = 5
   let totalProcessed = 0
   const failedDownloads: Array<{ name: string; section: string; format: string; versionId: string; error: string; attempts: number }> = []
 
-  // ── Phase 2: Download each item via Seismic API ───────────────────────────
-  for (const item of downloadableItems) {
+  // Collect all downloadable items from ALL sections (ANTI-2: not Domain-only)
+  const downloadQueue: Array<{ item: SectionItem; sectionKey: string; sectionTitle: string }> = []
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    for (const item of section.items) {
+      // Skip items without a URL — can't download without a reference
+      if (!item.url) continue
+
+      // Skip formats that are not downloadable documents (AC-A1)
+      const itemFormat = ((item as any).format ?? '').toUpperCase()
+      const seismicType = ((item as any).seismicContentType ?? '').toLowerCase()
+      if (itemFormat && SKIP_FORMATS.has(itemFormat)) {
+        console.log(`[product-scraper] Skipping ${itemFormat}: ${item.name.slice(0, 50)}`)
+        continue
+      }
+      // Also check URL patterns for skip formats
+      const urlLower = item.url.toLowerCase()
+      if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
+        console.log(`[product-scraper] Skipping YouTube: ${item.name.slice(0, 50)}`)
+        continue
+      }
+
+      // Skip non-English documents
+      const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
+      if (isNonEnglish) {
+        console.log(`[product-scraper] Skipping non-English: ${item.name.slice(0, 50)}`)
+        continue
+      }
+
+      downloadQueue.push({ item, sectionKey, sectionTitle: section.title })
+    }
+  }
+
+  console.log(`[product-scraper] Download queue: ${downloadQueue.length} items from ${Object.keys(sections).length} sections`)
+
+  // ── Phase 3: Download each item — viewer PRIMARY, three-dot FALLBACK ────
+  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
     if (consecutiveFailures >= CIRCUIT_BREAKER) {
-      console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — stopping`)
+      console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — stopping downloads`)
       break
     }
     if (totalProcessed >= MAX_DOWNLOADS_PER_PRODUCT) {
@@ -794,19 +841,12 @@ async function downloadProductDocuments(
 
     totalProcessed++
 
-    // Build local path and check cache
-    const localPath = buildLocalPath(productDir, item.sectionKey, item.name, item.format)
-    const sectionDir = resolve(productDir, 'downloads', item.sectionKey)
+    // Create section-specific download directory
+    const sectionSlug = slugify(sectionTitle)
+    const sectionDir = resolve(productDir, 'downloads', sectionSlug)
     mkdirSync(sectionDir, { recursive: true })
 
-    // Check if already cached
-    if (existsSync(localPath)) {
-      skipped++
-      consecutiveFailures = 0
-      continue
-    }
-
-    // Also check by name prefix (handles slight name variations)
+    // Check if cached — look for any file with matching name prefix
     const safePrefix = sanitizeFilename(item.name).slice(0, 60)
     const existingFiles = existsSync(sectionDir)
       ? (await import('fs')).readdirSync(sectionDir).filter((f: string) => f.startsWith(safePrefix))
@@ -817,138 +857,201 @@ async function downloadProductDocuments(
       continue
     }
 
-    // ── API-based download ──────────────────────────────────────────────────
     let succeeded = false
     let lastError = ''
 
-    // Strategy 1: Use Seismic download API via page.evaluate(fetch(...))
-    // The browser context has auth cookies; we use page.evaluate to make
-    // an authenticated fetch call without navigating away from the page.
-    const downloadUrl = buildDownloadUrl(item.versionId, item.contentId)
-
-    try {
-      const result = await page.evaluate(async (args: { url: string; auth: string; versionId: string; contentId: string }) => {
-        try {
-          const res = await fetch(args.url, {
-            method: 'GET',
-            headers: {
-              Authorization: args.auth,
-            },
-          })
-
-          if (!res.ok) {
-            // Try alternative download URL patterns
-            const altUrls = [
-              `https://saleshub.redhat.com/gateway/services/bss/tenants/redhat/api/download/v1/blob/${args.versionId}`,
-              `https://saleshub.redhat.com/gateway/services/content/tenants/redhat/api/v1/content/${args.contentId}/versions/${args.versionId}/download`,
-            ]
-
-            for (const altUrl of altUrls) {
-              const altRes = await fetch(altUrl, {
-                method: 'GET',
-                headers: { Authorization: args.auth },
-              })
-              if (altRes.ok) {
-                const buffer = await altRes.arrayBuffer()
-                return {
-                  ok: true,
-                  data: Array.from(new Uint8Array(buffer)),
-                  size: buffer.byteLength,
-                  url: altUrl,
-                }
-              }
-            }
-
-            return { ok: false, status: res.status, error: `HTTP ${res.status}` }
-          }
-
-          const buffer = await res.arrayBuffer()
-          return {
-            ok: true,
-            data: Array.from(new Uint8Array(buffer)),
-            size: buffer.byteLength,
-            url: args.url,
-          }
-        } catch (e: any) {
-          return { ok: false, status: -1, error: e.message?.slice(0, 100) ?? 'Unknown error' }
-        }
-      }, {
-        url: downloadUrl,
-        auth: authCtx.auth,
-        versionId: item.versionId,
-        contentId: item.contentId,
-      })
-
-      if (result.ok && (result as any).data && (result as any).size > 0) {
-        // Write file to disk
-        const { writeFileSync } = await import('fs')
-        writeFileSync(localPath, Buffer.from((result as any).data))
-        downloaded++
-        consecutiveFailures = 0
-        succeeded = true
-        console.log(`[product-scraper] (${totalProcessed}/${downloadableItems.length}) OK ${item.name.slice(0, 50)}.${item.format.toLowerCase()} (${Math.round((result as any).size / 1024)}KB via API)`)
-      } else {
-        lastError = `API download failed: ${(result as any).error ?? (result as any).status ?? 'unknown'}`
-      }
-    } catch (e: any) {
-      lastError = `API fetch error: ${(e.message ?? 'Unknown error').slice(0, 100)}`
-    }
-
-    // Strategy 2: If API download failed, try DocCenter page download via new tab
-    // Opens document in a new tab to avoid navigating away from the product page
-    if (!succeeded) {
+    // ── PRIMARY: Viewer click-to-download ─────────────────────────────────
+    // Open the item's viewer page in a new tab, find Download button, download.
+    // This works for Google Doc-sourced content where the viewer renders a Download button.
+    if (item.url) {
       try {
-        const seismicContentType = (sections[item.sectionKey]?.items?.find(
-          (i: any) => i.versionId === item.versionId,
-        ) as any)?.seismicContentType ?? item.format
-
-        const contentTypeB64 = Buffer.from(seismicContentType).toString('base64').replace(/=/g, '%3D')
-        const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`
-
-        // Open document page in new tab to avoid losing the product page
         const dlPage = await context.newPage()
         try {
-          await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-          await dlPage.waitForTimeout(5_000)
+          await dlPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+          await dlPage.waitForTimeout(3_000)
 
-          // Try to find and click download button
-          const downloadBtn = dlPage.locator('button:has-text("Download"), a:has-text("Download"), [aria-label="Download"], [title="Download"]').first()
-          if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+          // Look for a Download button on the viewer page
+          const downloadBtnSelectors = [
+            'button:has-text("Download")',
+            '[aria-label*="download" i]',
+            '[aria-label*="Download"]',
+            'a:has-text("Download")',
+            '[class*="download" i]',
+            'text=Download',
+          ]
+
+          let downloadBtn: Locator | null = null
+          for (const sel of downloadBtnSelectors) {
+            const candidate = dlPage.locator(sel).first()
+            if (await candidate.isVisible({ timeout: 2_000 }).catch(() => false)) {
+              downloadBtn = candidate
+              break
+            }
+          }
+
+          // Check if viewer page shows "Content not found" or similar error
+          const pageText = await dlPage.innerText('body').catch(() => '')
+          const isContentNotFound = /content\s+not\s+found|page\s+not\s+found|error|404/i.test(pageText.slice(0, 500))
+
+          if (downloadBtn && !isContentNotFound) {
             const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
             await downloadBtn.click()
             const dl = await downloadPromise
+            const suggestedName = dl.suggestedFilename()
+            const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+            const filename = sanitizeFilename(`${item.name}.${ext}`)
+            const localPath = resolve(sectionDir, filename)
             await dl.saveAs(localPath)
             downloaded++
             consecutiveFailures = 0
+            console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (viewer download)`)
             succeeded = true
-            console.log(`[product-scraper] (${totalProcessed}/${downloadableItems.length}) OK ${item.name.slice(0, 50)}.${item.format.toLowerCase()} (DocCenter fallback)`)
           } else {
-            lastError = 'No Download button on DocCenter page'
+            lastError = isContentNotFound ? 'Viewer: Content not found' : 'Viewer: No Download button found'
           }
         } finally {
           await dlPage.close()
         }
       } catch (e: any) {
-        if (!lastError) lastError = `DocCenter fallback error: ${(e.message ?? '').slice(0, 100)}`
+        lastError = `Viewer: ${(e.message ?? 'Unknown error').slice(0, 100)}`
+      }
+    }
+
+    // ── FALLBACK: Three-dot DocListPicker menu on the product page ─────────
+    // When the viewer page shows "Content not found" or lacks a Download button,
+    // try downloading via the three-dot menu in the DocListPicker table row.
+    // This path stays on the product page (ANTI-1: no navigation away).
+    if (!succeeded) {
+      console.log(`[product-scraper] (${totalProcessed}) Viewer failed: ${lastError.slice(0, 60)} — trying three-dot fallback`)
+      try {
+        // Find the document row on the product page by matching the item name
+        // Search in all DocListPicker tables on the page
+        const docRow = page.locator(`tr:has-text("${item.name.slice(0, 40).replace(/"/g, '\\"')}"), [role="row"]:has-text("${item.name.slice(0, 40).replace(/"/g, '\\"')}")`)
+          .first()
+
+        if (await docRow.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          // Hover to reveal action icons
+          await docRow.hover()
+          await page.waitForTimeout(500)
+
+          // Find the three-dot menu button
+          const menuSelectors = [
+            '[class*="more"]',
+            '[class*="menu"]:not([role="menu"])',
+            '[aria-label*="more" i]',
+            '[aria-label*="More"]',
+            '[aria-label*="action" i]',
+            '[class*="action"] button:last-child',
+            '[class*="kebab"]',
+            '[class*="ellipsis"]',
+          ]
+
+          let menuBtn: Locator | null = null
+          for (const sel of menuSelectors) {
+            const candidate = docRow.locator(sel).first()
+            if (await candidate.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              menuBtn = candidate
+              break
+            }
+          }
+
+          // Fallback: last button in the row
+          if (!menuBtn) {
+            const lastBtn = docRow.locator('button').last()
+            if (await lastBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              menuBtn = lastBtn
+            }
+          }
+
+          if (!menuBtn) {
+            lastError = 'Fallback: No three-dot menu button found in row'
+            throw new Error(lastError)
+          }
+
+          await menuBtn.click()
+          await page.waitForTimeout(500)
+
+          // Find "Download" in the dropdown
+          const dropdownSelectors = [
+            '[class*="dropdown"]',
+            '[class*="menu"][role="menu"]',
+            '[role="menu"]',
+            '[role="listbox"]',
+            '[class*="popup"]',
+            '[class*="popover"]',
+            '[class*="overlay"]',
+          ]
+
+          let downloadOption: Locator | null = null
+          for (const sel of dropdownSelectors) {
+            const dropdown = page.locator(sel)
+            if (await dropdown.isVisible({ timeout: 2_000 }).catch(() => false)) {
+              const dlOpt = dropdown.locator('text=Download').first()
+              if (await dlOpt.isVisible({ timeout: 1_000 }).catch(() => false)) {
+                downloadOption = dlOpt
+                break
+              }
+            }
+          }
+
+          if (!downloadOption) {
+            const anyDownload = page.getByText('Download', { exact: true }).first()
+            if (await anyDownload.isVisible({ timeout: 1_000 }).catch(() => false)) {
+              downloadOption = anyDownload
+            }
+          }
+
+          if (!downloadOption) {
+            lastError = 'Fallback: No "Download" in three-dot dropdown'
+            await page.keyboard.press('Escape')
+            await page.waitForTimeout(300)
+            throw new Error(lastError)
+          }
+
+          const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+          await downloadOption.click()
+
+          const dl = await downloadPromise
+          const suggestedName = dl.suggestedFilename()
+          const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+          const filename = sanitizeFilename(`${item.name}.${ext}`)
+          const localPath = resolve(sectionDir, filename)
+          await dl.saveAs(localPath)
+          downloaded++
+          consecutiveFailures = 0
+          console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (three-dot fallback)`)
+          succeeded = true
+        } else {
+          lastError = 'Fallback: Document row not found on product page'
+        }
+      } catch (e: any) {
+        if (!lastError.startsWith('Fallback:')) {
+          lastError = `Fallback: ${(e.message ?? 'Unknown error').slice(0, 100)}`
+        }
+        // Dismiss any open dropdown
+        try {
+          await page.keyboard.press('Escape')
+          await page.waitForTimeout(300)
+        } catch { /* ignore */ }
       }
     }
 
     if (!succeeded) {
       consecutiveFailures++
-      console.warn(`[product-scraper] (${totalProcessed}/${downloadableItems.length}) FAIL ${item.name.slice(0, 50)}: ${lastError.slice(0, 80)}`)
+      console.warn(`[product-scraper] (${totalProcessed}) FAIL ${item.name.slice(0, 50)}: ${lastError.slice(0, 80)}`)
       errors++
       failedDownloads.push({
         name: item.name,
-        section: item.sectionKey,
-        format: item.format,
-        versionId: item.versionId,
+        section: sectionKey,
+        format: (item as any).format ?? '',
+        versionId: item.versionId ?? '',
         error: lastError,
         attempts: 1,
       })
     }
 
-    // Brief pause between downloads to avoid rate-limiting
-    await new Promise(r => setTimeout(r, 500))
+    // Brief pause between items to avoid rate-limiting
+    await new Promise(r => setTimeout(r, 1_000))
   }
 
   // ── Write failed downloads manifest ──────────────────────────────────────
@@ -958,31 +1061,15 @@ async function downloadProductDocuments(
       timestamp: new Date().toISOString(),
       productSlug,
       totalAttempted: totalProcessed,
-      totalDownloaded: downloaded,
-      totalSkipped: skipped,
       totalFailed: failedDownloads.length,
       failures: failedDownloads,
     })
     console.warn(`[product-scraper] Failed downloads manifest written to ${manifestPath}`)
   }
 
-  // Update _product.json items with localPath for successfully downloaded files
-  for (const item of downloadableItems) {
-    const localPath = buildLocalPath(productDir, item.sectionKey, item.name, item.format)
-    if (existsSync(localPath)) {
-      // Find the item in sections and set localPath
-      const section = sections[item.sectionKey]
-      if (section) {
-        const sectionItem = section.items.find((i: any) => i.versionId === item.versionId)
-        if (sectionItem) {
-          sectionItem.localPath = relative('', localPath)
-        }
-      }
-    }
-  }
-
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 }
+
 
 // ── CDS Network Interception (#833) ─────────────────────────────────────────
 
@@ -1374,97 +1461,4 @@ if (import.meta.main) {
     console.error('[product-scraper] Fatal error:', err)
     process.exit(1)
   })
-}
-
-// ── Exported Pure Functions (testable, #847) ─────────────────────────────────
-
-export interface DownloadableItem {
-  name: string
-  versionId: string
-  contentId: string
-  format: string
-  sectionKey: string
-  sectionTitle: string
-}
-
-/**
- * Check if a format should be skipped for download.
- * Skips: JSON, MP4, MOV, WEBM, ZIP, PNG, YouTube, URL, and empty.
- */
-export function isSkippedFormat(format: string): boolean {
-  if (!format) return true
-  return SKIP_FORMATS.has(format)
-}
-
-/**
- * Check if a document name indicates non-English content.
- * Uses the same language patterns as the existing scraper.
- */
-export function isNonEnglishDoc(name: string): boolean {
-  return SKIP_LANGUAGE_PATTERNS.some(p => p.test(name))
-}
-
-/**
- * Build a Seismic download URL from contentId and versionId.
- * Uses the Seismic DocCenter download API endpoint.
- */
-export function buildDownloadUrl(versionId: string, contentId: string): string {
-  return `https://saleshub.redhat.com/gateway/services/bss/tenants/redhat/api/download/v1/content/${contentId}/version/${versionId}`
-}
-
-/**
- * Build a local file path for a downloaded document.
- * Organizes by section within the product downloads directory.
- */
-export function buildLocalPath(
-  productDir: string,
-  sectionKey: string,
-  docName: string,
-  format: string,
-): string {
-  const ext = format.toLowerCase()
-  const safeName = sanitizeFilename(docName)
-  return resolve(productDir, 'downloads', sectionKey, `${safeName}.${ext}`)
-}
-
-/**
- * Collect all downloadable items from product sections.
- * Returns items that have versionId + contentId + a downloadable format.
- * Deduplicates by versionId. Excludes non-English documents and skipped formats.
- * Collects from ALL sections, not just Domain.
- */
-export function collectDownloadableItems(
-  sections: Record<string, ProductSection>,
-): DownloadableItem[] {
-  const items: DownloadableItem[] = []
-  const seenVersionIds = new Set<string>()
-
-  for (const [sectionKey, section] of Object.entries(sections)) {
-    for (const item of section.items) {
-      const versionId = (item as any).versionId as string | undefined
-      const contentId = (item as any).contentId as string | undefined
-      const format = (item as any).format as string | undefined
-
-      // Must have API-sourced metadata
-      if (!versionId || !contentId) continue
-      // Must have a downloadable format
-      if (!format || isSkippedFormat(format)) continue
-      // Skip non-English
-      if (isNonEnglishDoc(item.name)) continue
-      // Deduplicate
-      if (seenVersionIds.has(versionId)) continue
-      seenVersionIds.add(versionId)
-
-      items.push({
-        name: item.name,
-        versionId,
-        contentId,
-        format,
-        sectionKey,
-        sectionTitle: section.title,
-      })
-    }
-  }
-
-  return items
 }
