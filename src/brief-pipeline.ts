@@ -74,7 +74,7 @@ export const BRIEF_RESPONSE_SCHEMA = {
   properties: {
     priorityAction: {
       type: 'STRING' as const,
-      description: 'MANDATORY. The single most important action. Format: [Verb] [specific object] [by/before date]. Include dollar figure (renewal amount, pipeline value). Use named people from account team. Cite source as [Source: type].',
+      description: 'MANDATORY. The single most important action. Format: [Verb] [specific object] [by/before date]. Include dollar figure (renewal amount, pipeline value). Use named people from account team. Cite source as [Source: type]. NEVER include internal subscription IDs (MCT numbers) or internal Red Hat system references — use customer-facing language only (e.g., "Ansible subscription renewal" not "MCT3694").',
     },
     whatChanged: {
       type: 'STRING' as const,
@@ -82,11 +82,7 @@ export const BRIEF_RESPONSE_SCHEMA = {
     },
     pipelineOpportunities: {
       type: 'STRING' as const,
-      description: 'Pipeline opportunities with evidence chains: Customer tech/situation -> Business problem -> Red Hat solution -> Measurable outcome. Markdown bullet list. If none detected, write "No pipeline signals detected."',
-    },
-    keyInsights: {
-      type: 'STRING' as const,
-      description: 'Key insights from documents, intelligence, and signals. Include dollar figures. Markdown bullet list.',
+      description: 'Pipeline opportunities with evidence chains: Customer tech/situation -> Business problem -> Red Hat solution -> Measurable outcome. Also weave in key insights from documents that support or contextualize these opportunities — do NOT create a separate insights section. Each opportunity should include the supporting document evidence inline. Markdown bullet list. If none detected, write "No pipeline signals detected."',
     },
     risksAndRenewals: {
       type: 'STRING' as const,
@@ -94,7 +90,7 @@ export const BRIEF_RESPONSE_SCHEMA = {
     },
     talkingPoints: {
       type: 'STRING' as const,
-      description: 'Specific talking points for upcoming meetings or customer interactions. Reference named people. Markdown bullet list.',
+      description: 'MANDATORY. Challenger-style assertive statements the AE can use verbatim — NOT questions. Format each as a declarative statement that teaches the customer something: "[Name], based on what we see in environments like yours, [insight]. Here is how [Red Hat solution] addresses that." NEVER phrase as "How are you planning to..." or "What are your current obstacles..." — those are discovery questions, not Challenger statements. Target specific named people. NEVER reference subscription IDs (MCT numbers), internal dollar targets, or the word "expired" — those are internal Red Hat strategy, not customer-facing language. Internal commercial details belong in Risks & Renewals only. Markdown bullet list.',
     },
     openCases: {
       type: 'STRING' as const,
@@ -106,7 +102,7 @@ export const BRIEF_RESPONSE_SCHEMA = {
     },
     whatTheyMayNotKnow: {
       type: 'STRING' as const,
-      description: 'MANDATORY. One Challenger Sale insight the customer has not surfaced. Peer comparison, industry benchmark, tech stack gap, or competitive move. Be specific with data points and dollar figures where possible.',
+      description: 'MANDATORY. One Challenger Sale insight the customer has not surfaced. Match the customer ACTUAL industry and company profile — never generalize them as "peers in SaaS" or "high-growth companies." Reference their specific technology context (e.g., for a cybersecurity company: model serving latency, multi-tenant isolation, threat detection pipeline performance). Cite industry-specific benchmarks, not generic Forrester TCO studies. The insight must feel like it comes from someone who understands THEIR business. Be specific with data points and dollar figures.',
     },
     nextAction: {
       type: 'STRING' as const,
@@ -118,7 +114,7 @@ export const BRIEF_RESPONSE_SCHEMA = {
     },
   },
   required: [
-    'priorityAction', 'whatChanged', 'pipelineOpportunities', 'keyInsights',
+    'priorityAction', 'whatChanged', 'pipelineOpportunities',
     'risksAndRenewals', 'talkingPoints', 'openCases',
     'nextSteps', 'whatTheyMayNotKnow', 'nextAction', 'dataFreshness',
   ],
@@ -135,12 +131,14 @@ export function assembleBriefFromStructured(parsed: Record<string, string>): str
   if (parsed.pipelineOpportunities && parsed.pipelineOpportunities !== 'No pipeline signals detected.') {
     sections.push(`## Pipeline Opportunities\n${parsed.pipelineOpportunities}`)
   }
-  if (parsed.keyInsights) sections.push(`## Key Insights from Documents\n${parsed.keyInsights}`)
+  // keyInsights merged into pipelineOpportunities per council audit — no separate section
   if (parsed.risksAndRenewals && parsed.risksAndRenewals !== 'No active risks or renewals.') {
     sections.push(`## Risks & Renewals\n${parsed.risksAndRenewals}`)
   }
   if (parsed.talkingPoints) sections.push(`## Talking Points & Prep\n${parsed.talkingPoints}`)
-  if (parsed.openCases) sections.push(`## Open Support Cases\n${parsed.openCases}`)
+  if (parsed.openCases && parsed.openCases.trim().length > 0 && !parsed.openCases.includes('No open support cases') && !parsed.openCases.includes('No data')) {
+    sections.push(`## Open Support Cases\n${parsed.openCases}`)
+  }
   if (parsed.nextSteps) sections.push(`## Next Steps\n${parsed.nextSteps}`)
   if (parsed.whatTheyMayNotKnow) sections.push(`## What They May Not Know\n${parsed.whatTheyMayNotKnow}`)
   if (parsed.nextAction) sections.push(`\n${parsed.nextAction}`)
