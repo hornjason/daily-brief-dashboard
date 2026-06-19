@@ -846,8 +846,34 @@ async function downloadProductDocuments(
     let succeeded = false
     let lastError = ''
 
-    // Try click-to-download (single attempt, no retry on "No Download button")
-    try {
+    // Try direct Source URL download first (#847) — uses OriginUrl from Seismic API
+    const sourceUrl = item.url
+    if (sourceUrl && sourceUrl.startsWith('http')) {
+      try {
+        const response = await dlPage.evaluate(async (url) => {
+          const res = await fetch(url)
+          if (!res.ok) return { ok: false }
+          const blob = await res.blob()
+          const buffer = await blob.arrayBuffer()
+          return { ok: true, data: Array.from(new Uint8Array(buffer)) }
+        }, sourceUrl)
+
+        if (response.ok && response.data) {
+          const { writeFileSync } = await import('fs')
+          writeFileSync(localPath, Buffer.from(response.data))
+          item.localPath = relative(productDir, localPath)
+          downloaded++
+          consecutiveFailures = 0
+          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (source URL)`)
+          succeeded = true
+        }
+      } catch (e: any) {
+        lastError = `Source URL download failed: ${(e.message ?? '').slice(0, 80)}`
+      }
+    }
+
+    // Fallback: click-to-download via DocCenter viewer
+    if (!succeeded) try {
       const rawContentType = (item as any).seismicContentType || item.itemType || 'Other'
       const contentTypeB64 = Buffer.from(rawContentType).toString('base64').replace(/=/g, '%3D')
       const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${item.versionId}//`

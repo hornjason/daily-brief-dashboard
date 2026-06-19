@@ -87,7 +87,7 @@ export function parseDocumentsFromApiResponse(response: any): DocCenterDocument[
       version: `${d.MajorVersion ?? ''}${d.MinorVersion ? '.' + d.MinorVersion : ''}`,
       versionCreated: d.VersionCreatedDate ?? d.VersionCreated ?? '',
       versionId: d.VersionId ?? '',
-      downloadUrl: '',
+      downloadUrl: d.OriginUrl ?? '',
       distributionTerms: getCustomProp(cp, 'Distribution Terms') || (d.DistributionTerms ?? ''),
       product: getCustomProp(cp, 'Product'),
       salesStage: getCustomProp(cp, 'Sales Stage'),
