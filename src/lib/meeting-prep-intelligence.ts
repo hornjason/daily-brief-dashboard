@@ -147,6 +147,10 @@ Each talking point MUST:
 
 Additionally, include ONE Challenger insight — something the customer may not know about their own business, industry benchmarks, or competitive landscape that reframes their priorities.
 
+DOLLAR FIGURES: When connecting to money (pipeline, renewal, expansion), ONLY cite numbers that appear in the evidence data (pipeline amounts, renewal values, subscription costs). If no specific dollar figure exists in the evidence, frame as "industry benchmarks suggest" or "comparable customers have seen" — NEVER fabricate a precise dollar estimate like "$150k" or "$500k" without sourcing. Unsourced precise figures destroy seller credibility when challenged.
+
+CASE REFERENCES: Reference support cases by their business impact and context, NOT by internal ticket numbers. Instead of "Case 04365133: SSO login failure", say "the recent SSO login disruption on your commerce portal." The seller knows the case details from the evidence — the talking point should reference the SITUATION, not the internal tracking ID. Case numbers are internal Red Hat identifiers that feel surveillant when cited to customers.
+
 Format: Return exactly 3 talking points + 1 Challenger insight, each on its own line.
 Label the Challenger line with [CHALLENGER]:
 Do NOT use bullet points or numbered lists in your output.`
@@ -291,14 +295,23 @@ export async function generateMeetingPrepBrief(
   const lastDebrief = readLatestDebrief(customerSlug)
 
   // 9. Multi-threading — identify stakeholder engagement paths (MA-5)
+  //    Tie each stakeholder to a specific tactic + evidence item so the seller
+  //    knows WHAT to bring and WHY NOW.
   const stakeholderPaths: StakeholderPath[] = team
     .filter(m => m.title !== 'Account Solution Architect')
     .slice(0, 3)
-    .map(m => ({
-      name: m.name,
-      role: m.title,
-      reason: `Engage on ${m.title.includes('SSP') ? 'solution positioning' : m.title.includes('SSA') ? 'technical validation' : 'account strategy'}`,
-    }))
+    .map((m, i) => {
+      const topTactic = scored[i] || scored[0]
+      const roleFocus = m.title.includes('SSP') ? 'solution positioning'
+        : m.title.includes('SSA') ? 'technical validation'
+        : m.title.includes('Account Executive') ? 'account strategy'
+        : 'domain expertise'
+      return {
+        name: m.name,
+        role: m.title,
+        reason: `${roleFocus}: ${topTactic?.name || 'general engagement'} — bring ${topTactic?.parentTdp || 'relevant materials'} to discuss with the customer's ${topTactic?.evidenceTrail?.[0]?.fact?.slice(0, 60) || 'current priorities'}`,
+      }
+    })
 
   // 10. Generate talking points via Gemini with quality gate
   const { talkingPoints, challengerInsight, qualityScore } = await generateTalkingPoints(
