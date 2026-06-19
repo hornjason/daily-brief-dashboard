@@ -846,17 +846,65 @@ async function downloadProductDocuments(
     let succeeded = false
     let lastError = ''
 
-    // Try direct Source URL download first (#847) — uses OriginUrl from Seismic API
-    const sourceUrl = item.url
-    if (sourceUrl && sourceUrl.startsWith('http')) {
+    // Try Seismic Library Content download API first (#847)
+    // GET /gateway/services/integration/v2/teamsites/{tsid}/files/{contentId}/versions/{versionId}/content
+    // Returns 302 → signed blob URL. Use redirect:"manual" to extract Location header.
+    const cId = item.contentId || item.versionId
+    const vId = item.versionId
+    if (cId && vId) {
       try {
-        const response = await dlPage.evaluate(async (url) => {
+        const apiResult = await dlPage.evaluate(async (args: {
+          contentId: string; versionId: string; tsid: string
+        }) => {
+          const apiUrl = `https://saleshub.redhat.com/gateway/services/integration/v2/teamsites/${args.tsid}/files/${args.contentId}/versions/${args.versionId}/content`
+          const res = await fetch(apiUrl, { redirect: 'manual' })
+          if (res.status === 302 || res.status === 301) {
+            const blobUrl = res.headers.get('location')
+            if (blobUrl) {
+              const blobRes = await fetch(blobUrl)
+              if (blobRes.ok) {
+                const blob = await blobRes.blob()
+                const buffer = await blob.arrayBuffer()
+                return { ok: true, data: Array.from(new Uint8Array(buffer)), method: 'api-redirect' }
+              }
+            }
+          }
+          if (res.ok) {
+            const blob = await res.blob()
+            const buffer = await blob.arrayBuffer()
+            return { ok: true, data: Array.from(new Uint8Array(buffer)), method: 'api-direct' }
+          }
+          return { ok: false, data: null, method: '', status: res.status }
+        }, {
+          contentId: cId,
+          versionId: vId,
+          tsid: authCtx.headers.teamsiteid || '1',
+        })
+
+        if (apiResult.ok && apiResult.data) {
+          const { writeFileSync } = await import('fs')
+          writeFileSync(localPath, Buffer.from(apiResult.data))
+          item.localPath = relative(productDir, localPath)
+          downloaded++
+          consecutiveFailures = 0
+          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (${apiResult.method})`)
+          succeeded = true
+        }
+      } catch (e: any) {
+        lastError = `API download failed: ${(e.message ?? '').slice(0, 80)}`
+      }
+    }
+
+    // Try direct Source URL if available (works for Google Doc-sourced content)
+    if (!succeeded && item.url && item.url.startsWith('http')) {
+      try {
+        const response = await dlPage.evaluate(async (url: string) => {
           const res = await fetch(url)
-          if (!res.ok) return { ok: false }
+          if (!res.ok) return { ok: false, data: null }
           const blob = await res.blob()
           const buffer = await blob.arrayBuffer()
           return { ok: true, data: Array.from(new Uint8Array(buffer)) }
-        }, sourceUrl)
+        }, item.url)
 
         if (response.ok && response.data) {
           const { writeFileSync } = await import('fs')
