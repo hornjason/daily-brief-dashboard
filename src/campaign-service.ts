@@ -8,6 +8,7 @@
  * Routes file (campaigns-routes.ts) is now a thin HTTP adapter.
  */
 
+// @consumer-contract v1.0
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'

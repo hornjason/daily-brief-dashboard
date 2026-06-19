@@ -12,6 +12,7 @@
  * - In-flight guard for duplicate requests
  */
 
+// @consumer-contract v1.0
 import { Hono } from 'hono'
 import { google } from 'googleapis'
 import { customers } from './server-state.ts'
