@@ -39,6 +39,62 @@ export interface PositioningSections {
   nextSteps: string[]
 }
 
+/**
+ * ADR-040: Gemini response schema for value positioning
+ * Structured output with nullable fields to prevent hallucination
+ */
+const VALUE_POSITIONING_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    currentState: {
+      type: ['string', 'null'],
+      description: 'Summary of customer current state based on provided intelligence, account plan, cases, pipeline. NULL if insufficient data.'
+    },
+    solutionAlignment: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          solution: {
+            type: ['string', 'null'],
+            description: 'Red Hat product name from the context data. NULL if no specific product can be aligned from provided data.'
+          },
+          alignment: {
+            type: ['string', 'null'],
+            description: 'How this solution addresses customer pain point from provided intelligence/account plan. NULL if no alignment evidence exists in context.'
+          },
+          proofPoints: {
+            type: 'array',
+            items: {
+              type: ['string', 'null'],
+              description: 'Evidence from VERIFIED SOLUTION PLAYS or customer-specific data. NULL if no proof exists.'
+            },
+            nullable: true,
+            description: 'Proof points from VERIFIED SOLUTION PLAYS section or actual customer data. Empty array if no proof available.'
+          }
+        },
+        required: ['solution', 'alignment', 'proofPoints']
+      },
+      nullable: true,
+      description: 'Solution alignments based on customer intelligence. Empty array if insufficient data for recommendations.'
+    },
+    artOfPossible: {
+      type: ['string', 'null'],
+      description: 'What customer could achieve with Red Hat based on their provided intelligence/account plan. NULL if insufficient context.'
+    },
+    nextSteps: {
+      type: 'array',
+      items: {
+        type: ['string', 'null'],
+        description: 'Concrete action based on provided customer context. NULL if no actionable step can be derived from data.'
+      },
+      nullable: true,
+      description: 'Actionable next steps grounded in customer data. Empty array if insufficient context for concrete recommendations.'
+    }
+  },
+  required: ['currentState', 'solutionAlignment', 'artOfPossible', 'nextSteps']
+} as const
+
 export interface ValuePositioningResult {
   customerName: string
   sections: PositioningSections
@@ -174,9 +230,17 @@ Rules:
 - Focus on what the customer COULD achieve with Red Hat, grounded in what we KNOW about them
 - Every solution alignment must include proof points (industry examples, case studies, or direct customer evidence)
 - Next steps must be concrete and actionable (not generic "schedule a meeting")
-- Output valid JSON matching the schema provided`
+- Output valid JSON matching the schema provided
 
-export function buildPositioningPrompt(customerName: string, ctx: PositioningContext): string {
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point for a field, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
+5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
+6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.`
+
+export function buildPositioningPrompt(customerName: string, ctx: PositioningContext, solutionPlaysContext?: string): string {
   const sections: string[] = [`CUSTOMER: ${customerName}`]
 
   if (ctx.intelligence) {
@@ -199,6 +263,10 @@ export function buildPositioningPrompt(customerName: string, ctx: PositioningCon
       .map((r: any) => `- ${sanitizePromptInput(r.oppName ?? '', 200)}: $${(Number(r.acv) || 0).toLocaleString()} ACV, ${sanitizePromptInput(r.forecastCategory ?? '', 50)}`)
       .join('\n')
     sections.push(`--- Pipeline ---\nTotal: ${ctx.pipeline.totalOpps} opps, $${ctx.pipeline.totalAcv.toLocaleString()} ACV\n${pipelineText}`)
+  }
+
+  if (solutionPlaysContext) {
+    sections.push(`--- VERIFIED SOLUTION PLAYS ---\n${solutionPlaysContext}`)
   }
 
   sections.push(`Generate a Value Proposition Brief for ${customerName}. The brief should re-engage this account with specific, intelligence-backed proposals.
@@ -308,23 +376,25 @@ export async function generateValuePositioning(
     return empty
   }
 
-  let userPrompt = buildPositioningPrompt(customer.name, ctx)
-
   // #786: Supplement with templateAll deterministic sections
+  let solutionPlaysContext: string | undefined = undefined
   try {
     const { registrySignals } = await loadCustomerSignals(slug, customer.name)
     const templateResult = await templateAll(registrySignals, undefined, { format: 'brief' })
-    if (templateResult.deterministic) {
-      userPrompt += `\n\n--- Signal Context (structured) ---\n${templateResult.deterministic}`
+    if (templateResult.structured?.solutionPlays) {
+      solutionPlaysContext = JSON.stringify(templateResult.structured.solutionPlays, null, 2)
     }
   } catch (e: any) {
     console.warn(`[value-positioning] templateAll enrichment failed (non-fatal): ${e.message}`)
   }
 
+  const userPrompt = buildPositioningPrompt(customer.name, ctx, solutionPlaysContext)
+
   const geminiResult = await callGemini(SYSTEM_PROMPT, userPrompt, {
     callType: 'value-positioning',
     customerName: customer.name,
-    temperature: 0.5,
+    temperature: 0.3,
+    responseSchema: VALUE_POSITIONING_RESPONSE_SCHEMA,
   })
 
   const rawText = geminiResult.text
