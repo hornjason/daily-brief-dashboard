@@ -75,6 +75,7 @@ mock.module('../../src/region-config.ts', () => ({
   normalizeSettings: () => ({
     regions: [{ podBookingsFolderId: 'test-folder', pods: { 'POD1': {} } }],
   }),
+  getRegionById: (settings: any, _regionId?: string) => settings.regions[0],
 }))
 
 mock.module('../../src/google.ts', () => ({

@@ -81,6 +81,8 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 17. **Does this module declare `cacheTtlMs` for heartbeat visibility?** (ADR-037) Every module that caches data MUST declare `cacheTtlMs` in its FeatureModuleRegistry registration. The heartbeat staleness monitor uses this to flag expired data in the admin panel. Modules without `cacheTtlMs` are invisible to staleness monitoring — their data can go stale indefinitely without warning. Reference: `docs/adr/ADR-037-post-upgrade-freshness.md`.
 18. **Does this code call Gemini in a loop?** (#841) If yes, verify: (1) calls are batched with `Promise.allSettled()` — max 5 concurrent, never sequential `await` in a `for` loop, (2) unchanged items are skipped via delta/cache check — never re-enrich a document that hasn't changed, (3) documents > 10MB are skipped — prevents Vertex AI errors and runaway token cost. Sequential Gemini loops are banned. Every Gemini-calling loop must batch and cache.
 19. **Does this work require iterative convergence?** (ADR-039) If the quality bar is a measurable threshold (coverage %, contract score, signal count) rather than a binary done/not-done — use the convergence loop. Set the goal, approve scope, step away. Never iterate manually when the loop can converge autonomously. Anti-pattern: presence-check ACs on iterative work — "signals exist" passes with 1 garbage signal. Apply the garbage test: "Could garbage data pass this AC?" If yes, add a measurable threshold.
+20. **Does this module use a handcrafted mapping file?** (ADR-038) If yes, verify the same data is available from a dynamic source (product pages, API, scraper). Handcrafted files are fallbacks, not primary sources. New modules MUST NOT introduce new handcrafted mapping files — use dynamic sources from Day 1. Reference: `docs/adr/ADR-038-dynamic-matching-replaces-handcrafted-mappings.md`.
+21. **Does this consumer use responseSchema with strict grounding?** (ADR-040) Every consumer that calls Gemini for content generation MUST use `responseSchema` with `nullable: true` on data-dependent fields, a strict grounding instruction block in the system prompt, and `temperature <= 0.3`. Field descriptions must reference specific data sections in the prompt. Reference: `docs/adr/ADR-040-universal-structured-output.md`.
 
 ## Vocabulary Resolver Rule (MANDATORY)
 
@@ -132,6 +134,7 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | src/startup-health-probe.ts | Internal | Validates Gemini model availability at startup |
 | src/lib/executive-resolver.ts | Producer | Resolves executive names from company data |
 | src/lib/attendee-profile-cache.ts | Producer | Enriches attendee profiles with Gemini |
+| src/lib/saleshub-product-enrichment.ts | Producer | Enriches SalesHub product documents with Gemini |
 
 ## Consumer → ensureFresh Contract
 

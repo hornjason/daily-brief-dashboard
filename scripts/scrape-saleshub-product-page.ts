@@ -42,6 +42,79 @@ const SKIP_FORMATS = new Set(['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTu
 const SKIP_LANGUAGE_PATTERNS = [/\bde\b|\bfr\b|\bes\b|\bit\b|\bpt\b|\bja\b|\bko\b|\bzh\b/i]
 const skipDownloads = process.argv.includes('--skip-downloads')
 
+// ── Exported pure helpers (tested in saleshub-product-download.test.ts) ─────
+
+/** A downloadable item collected from product sections */
+export interface DownloadableItem {
+  name: string
+  format: string
+  sectionKey: string
+  versionId: string
+  contentId: string
+}
+
+/** Returns true if the format should be skipped (non-document formats) */
+export function isSkippedFormat(format: string): boolean {
+  if (!format) return true
+  return SKIP_FORMATS.has(format)
+}
+
+/** Returns true if the document name indicates a non-English document */
+export function isNonEnglishDoc(name: string): boolean {
+  return SKIP_LANGUAGE_PATTERNS.some(p => p.test(name))
+}
+
+/** Builds a Seismic download URL from versionId and contentId */
+export function buildDownloadUrl(versionId: string, contentId: string): string {
+  return `https://saleshub.redhat.com/api/doccenter/download/${contentId}/${versionId}`
+}
+
+/** Builds a local filesystem path for a downloaded document */
+export function buildLocalPath(
+  productDir: string,
+  sectionKey: string,
+  docName: string,
+  format: string,
+): string {
+  const sanitized = docName.replace(/[\/\\?%*:|"<>]/g, '_').slice(0, 200)
+  const ext = format.toLowerCase()
+  return `${productDir}/downloads/${sectionKey}/${sanitized}.${ext}`
+}
+
+/**
+ * Collects all downloadable items from product sections.
+ * Filters: must have versionId + contentId, non-skipped format, English-only.
+ * Deduplicates by versionId.
+ */
+export function collectDownloadableItems(
+  sections: Record<string, ProductSection>,
+): DownloadableItem[] {
+  const seen = new Set<string>()
+  const items: DownloadableItem[] = []
+
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    for (const item of section.items) {
+      const si = item as any
+      if (!si.versionId || !si.contentId) continue
+      const format = si.format ?? ''
+      if (isSkippedFormat(format)) continue
+      if (isNonEnglishDoc(item.name)) continue
+      if (seen.has(si.versionId)) continue
+      seen.add(si.versionId)
+
+      items.push({
+        name: item.name,
+        format,
+        sectionKey,
+        versionId: si.versionId,
+        contentId: si.contentId,
+      })
+    }
+  }
+
+  return items
+}
+
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
   'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//'
