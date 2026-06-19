@@ -120,6 +120,38 @@ export function stripProductName(raw: string | string[]): string {
 
 // ── Morning synthesis cache (BKL-AI27) ────────────────────────────────────────
 
+/**
+ * Response schema for morning summary synthesis.
+ * ADR-040: Structured output with grounding rules to prevent hallucination.
+ */
+const MORNING_SUMMARY_SCHEMA = {
+  type: 'object' as const,
+  properties: {
+    priorityToday: {
+      type: 'string' as const,
+      description: '1-2 sentences on the single most important thing to address today. Must reference specific accounts from the provided signals.',
+      nullable: true,
+    },
+    actions: {
+      type: 'array' as const,
+      description: '3 specific actions with account names, one per line. Each action must cite a specific account and signal from the provided context.',
+      items: {
+        type: 'string' as const,
+      },
+      nullable: true,
+    },
+    watch: {
+      type: 'array' as const,
+      description: '2-3 accounts to watch (renewals, competitive signals, stuck pipeline). Must reference accounts from the provided signals.',
+      items: {
+        type: 'string' as const,
+      },
+      nullable: true,
+    },
+  },
+  required: [] as string[],
+}
+
 export async function synthesizeMorningSummary(signals: { customer: string; type: string; severity: string; text: string }[], templateAllContext?: string): Promise<string> {
   const synthCachePath = resolve(CACHE_DIR, 'morning-synthesis.json')
   // Check 4h cache
@@ -148,15 +180,53 @@ Format your response as markdown with bold headers and bullet points. Keep each 
 - 3 specific actions with **account names** bolded, one per line
 
 ## Watch
-- 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
+- 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every account name, signal type, and action MUST come from the provided portfolio signals context.
+2. If the signals do not contain enough data for a specific section, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding recommendations that are not grounded in the provided signals.
+4. When citing an account, the account name MUST exactly match a customer name from the signals list.
+5. Generic recommendations ("review pipeline", "check renewals") without specific account attribution are PROHIBITED. Either cite a named account from the signals or set the field to null.
+6. Priority and action items MUST reference specific severity levels and signal text from the provided context.`
+
   const templateSection = templateAllContext ? `\n\n<signal_context>\n${templateAllContext}\n</signal_context>` : ''
   const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}${templateSection}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 
   const result = await callGemini(systemPrompt, userPrompt, {
     callType: 'daily-briefing-synthesis',
-    temperature: 0.4,
+    temperature: 0.3,
+    responseSchema: MORNING_SUMMARY_SCHEMA,
   })
-  const synthesis: string = result.text
+
+  // Parse structured response and convert to markdown
+  let synthesis: string
+  try {
+    const parsed = JSON.parse(result.text)
+    const parts: string[] = []
+
+    if (parsed.priorityToday) {
+      parts.push(`## Priority Today\n${parsed.priorityToday}`)
+    }
+
+    if (parsed.actions && parsed.actions.length > 0) {
+      parts.push(`## Actions\n${parsed.actions.map((a: string) => `- ${a}`).join('\n')}`)
+    }
+
+    if (parsed.watch && parsed.watch.length > 0) {
+      parts.push(`## Watch\n${parsed.watch.map((w: string) => `- ${w}`).join('\n')}`)
+    }
+
+    synthesis = parts.join('\n\n')
+
+    // Fallback: if parsing failed or all sections are null, return a safe default
+    if (!synthesis || synthesis.trim().length === 0) {
+      synthesis = `## Priority Today\nNo critical signals detected across ${signals.length} portfolio signals.\n\n## Watch\n- Monitor upcoming renewals\n- Track open support cases`
+    }
+  } catch {
+    // JSON parse failed — treat as malformed, return safe default
+    synthesis = `## Priority Today\nNo critical signals detected across ${signals.length} portfolio signals.\n\n## Watch\n- Monitor upcoming renewals\n- Track open support cases`
+  }
 
   // Cache result
   try {
