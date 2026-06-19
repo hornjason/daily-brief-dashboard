@@ -58,6 +58,8 @@ import {
 import { resolveAttendees, type AttendeeProfile } from './lib/attendee-profile-cache.ts'
 import { computeEscalation, formatEscalationForPrompt } from './lib/carry-forward.ts'
 
+// @consumer-contract v1.0
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const CONFIG_DIR = DATA_CONFIG_DIR
