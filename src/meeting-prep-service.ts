@@ -165,6 +165,341 @@ interface ProductRoadmapEntry {
   source: string
 }
 
+// ── ADR-040 Response Schemas ─────────────────────────────────────────────────
+
+/**
+ * 4-section response schema (used when evidence blocks are available).
+ * Each field has descriptive annotations referencing the provided context.
+ */
+const MEETING_PREP_RESPONSE_SCHEMA_4S = {
+  type: 'OBJECT',
+  properties: {
+    meetingObjective: {
+      type: 'STRING',
+      description: '2-3 sentences stating the recommended outcome for this meeting. Be specific — not "discuss renewal" but "secure commitment to upgrade 47 RHEL 7 subscriptions before EOS 2027-06-30". Must reference specific data from the provided context.',
+    },
+    whatChanged: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          date: { type: 'STRING', description: 'Date of the change (from provided intelligence context)' },
+          description: { type: 'STRING', description: 'What changed — must reference specific data from the provided context' },
+        },
+        required: ['date', 'description'],
+      },
+      description: 'Bulleted list of changes since last meeting or recent intelligence updates. Each item: date + what changed. Use ONLY data from the "What Changed Recently" section. If no changes exist in the provided data, return an empty array.',
+    },
+    recommendedPlays: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          assertion: { type: 'STRING', description: 'Bold assertion of what to push and why, naming the SSP/specialist from the provided account team context' },
+          evidence: {
+            type: 'ARRAY',
+            items: { type: 'STRING' },
+            description: '2-3 bullets with specific data from the provided evidence blocks — case numbers, subscription counts, dollar amounts, dates. Never fabricate data points.',
+          },
+          levers: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                name: { type: 'STRING', description: 'Resource name from the evidence blocks' },
+                url: { type: 'STRING', description: 'URL from the evidence blocks — must be copied exactly, never fabricated' },
+              },
+              required: ['name', 'url'],
+            },
+            description: 'Available levers from the evidence blocks, each as a clickable link',
+          },
+          ask: { type: 'STRING', description: 'Specific thing to request in this meeting — must be actionable and tied to the evidence' },
+        },
+        required: ['assertion', 'evidence', 'levers', 'ask'],
+      },
+      description: 'Top 2-3 plays from the provided evidence blocks. Each play must reference ONLY data from the evidence blocks section.',
+    },
+    openItems: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          description: { type: 'STRING', description: 'Action item description from carry-forward or new items to track' },
+          owner: { type: 'STRING', nullable: true, description: 'Owner name from the provided account team context. Set to null if unknown.' },
+          dueDate: { type: 'STRING', nullable: true, description: 'Target date if specified in the provided context. Set to null if not available.' },
+        },
+        required: ['description'],
+      },
+      description: 'Carry-forward action items from previous meetings + new items to track. Use ONLY items from the provided context.',
+    },
+  },
+  required: ['meetingObjective', 'whatChanged', 'recommendedPlays', 'openItems'],
+}
+
+/**
+ * 7-section response schema (used when no evidence blocks — standard or playbook path).
+ * Nullable fields allow Gemini to express "no data" instead of hallucinating.
+ */
+const MEETING_PREP_RESPONSE_SCHEMA_7S = {
+  type: 'OBJECT',
+  properties: {
+    meetingObjective: {
+      type: 'STRING',
+      description: '2-3 lines: state the meeting purpose in context of the customer strategic position. Be specific about what needs to happen in THIS meeting. Reference specific data from the provided context.',
+    },
+    attendees: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING', description: 'Full name from the provided attendee research' },
+          title: { type: 'STRING', nullable: true, description: 'Title from provided attendee research. Set to null if not found.' },
+          insight: { type: 'STRING', description: 'One key insight from the provided attendee research or prior interactions. Must come from the provided context.' },
+        },
+        required: ['name', 'insight'],
+      },
+      description: 'One entry per person on the calendar invite ONLY — do NOT list the full account team. Use ONLY data from the attendee research section.',
+    },
+    recentInteractions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          date: { type: 'STRING', description: 'Date of the interaction from the provided history' },
+          summary: { type: 'STRING', description: 'What was discussed and decided — synthesized from the provided Recent Interactions context' },
+          sourceUrl: { type: 'STRING', nullable: true, description: 'URL to source doc if referenced in provided context. Set to null if not available.' },
+        },
+        required: ['date', 'summary'],
+      },
+      description: '3-5 bullets synthesized from the provided Recent Interactions & History context. If recurring meeting, first item must be outstanding carry-forward items.',
+    },
+    valuePlay: {
+      type: 'STRING',
+      description: 'ONE paragraph, Command of the Message style. A teaching point tailored to THIS meeting attendees and agenda. Must reference specific data from provided context — products, quantities, renewal dates, case numbers. Never fabricate financial figures.',
+    },
+    salesAlignment: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Which Red Hat sales methodology this aligns to. Format: "[TDP Name] TDP > [Tactic Name] tactic | [Sales Play Name] play". Use ONLY plays from the provided Product & Market Intelligence or VERIFIED SOLUTION PLAYS. Set to null if no matching play exists in the provided data.',
+    },
+    discussionQuestions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          attendeeName: { type: 'STRING', description: 'Name from the provided attendee list' },
+          attendeeTitle: { type: 'STRING', nullable: true, description: 'Title from provided context. Set to null if not available.' },
+          question: { type: 'STRING', description: 'Question text that advances the sale — discovers budget, timeline, decision criteria' },
+          purpose: { type: 'STRING', description: 'Why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts) from the provided context. Never fabricate financial figures.' },
+        },
+        required: ['attendeeName', 'question', 'purpose'],
+      },
+      description: '5-7 questions. Each must name a specific attendee from the provided attendee list and weave commercial data from the provided context into the purpose.',
+    },
+    openItems: {
+      type: 'ARRAY',
+      nullable: true,
+      items: {
+        type: 'OBJECT',
+        properties: {
+          description: { type: 'STRING', description: 'Active support case summary or urgent renewal detail from the provided context' },
+          urgency: { type: 'STRING', nullable: true, description: 'Severity or timeline from the provided context. Set to null if not specified.' },
+        },
+        required: ['description'],
+      },
+      description: 'CONDITIONAL — only populate if there are active support cases or renewals within 90 days in the provided context. Set to null if nothing actionable.',
+    },
+    pipelineOpportunities: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING', description: 'Opportunity name from the provided pipeline data' },
+          amount: { type: 'STRING', description: 'Dollar amount from the provided pipeline data — must match exactly, never round or fabricate' },
+          closeDate: { type: 'STRING', description: 'Close date from the provided pipeline data' },
+          stage: { type: 'STRING', nullable: true, description: 'Pipeline stage from provided data. Set to null if not specified.' },
+          meetingRelevance: { type: 'STRING', description: 'How this meeting can advance this opportunity — tied to the meeting topic and attendees' },
+        },
+        required: ['name', 'amount', 'closeDate', 'meetingRelevance'],
+      },
+      description: 'ALL active pipeline opportunities from the provided pipeline data. Dollar amounts MUST match the provided data exactly.',
+    },
+    actionItems: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          phase: { type: 'STRING', description: 'Pre-meeting, During meeting, or Post-meeting' },
+          owner: { type: 'STRING', description: 'Specific team member name from the provided account team context' },
+          action: { type: 'STRING', description: 'Specific action tied to the meeting topic and provided context' },
+          dueDate: { type: 'STRING', nullable: true, description: 'Target date or timeframe. Set to null if not time-bound.' },
+        },
+        required: ['phase', 'owner', 'action'],
+      },
+      description: 'Minimum 3 items with specific team member names from the provided account team context. Reference specific pipeline opportunities by name where relevant.',
+    },
+  },
+  required: ['meetingObjective', 'attendees', 'recentInteractions', 'valuePlay', 'discussionQuestions', 'pipelineOpportunities', 'actionItems'],
+}
+
+// ── ADR-040 Grounding Rules Block ────────────────────────────────────────────
+
+const GROUNDING_RULES_BLOCK = `
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point for a field, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
+5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
+6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
+`
+
+// ── ADR-040 Solution Plays Serializer ────────────────────────────────────────
+
+function serializeVerifiedSolutionPlays(templateResult: { structured?: { solutionPlays?: any[] } }): string {
+  const plays = templateResult.structured?.solutionPlays ?? []
+  if (plays.length === 0) return ''
+
+  let context = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
+  for (const play of plays) {
+    context += `### Play: "${play.playName}"\n`
+    context += `- TDP: ${play.tdp}\n`
+    if (play.customerWins?.length) context += `- Customer Wins: ${JSON.stringify(play.customerWins)}\n`
+    if (play.realWorldExamples?.length) context += `- Real-World Examples: ${JSON.stringify(play.realWorldExamples)}\n`
+    if (play.extractedMetrics?.length) context += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
+    if (play.talkTrack) context += `- Talk Track: ${play.talkTrack.slice(0, 300)}\n`
+    context += '\n'
+  }
+  return context
+}
+
+// ── ADR-040 JSON-to-Markdown Converters ──────────────────────────────────────
+
+function convertMeetingPrep4SToMarkdown(parsed: any, header: string): string {
+  const lines: string[] = [header, '']
+
+  // Section 1: Meeting Objective
+  lines.push('### 1. Meeting Objective')
+  lines.push(parsed.meetingObjective ?? 'No objective provided')
+  lines.push('')
+
+  // Section 2: What Changed
+  lines.push('### 2. What Changed')
+  const changes = parsed.whatChanged ?? []
+  if (changes.length === 0) {
+    lines.push('No significant changes since last interaction.')
+  } else {
+    for (const c of changes) {
+      lines.push(`- ${c.date}: ${c.description}`)
+    }
+  }
+  lines.push('')
+
+  // Section 3: Recommended Plays
+  lines.push('### 3. Recommended Plays')
+  for (const play of parsed.recommendedPlays ?? []) {
+    lines.push(`**${play.assertion}**`)
+    for (const e of play.evidence ?? []) {
+      lines.push(`- Evidence: ${e}`)
+    }
+    const leverLinks = (play.levers ?? []).map((l: any) => `[${l.name}](${l.url})`).join(', ')
+    if (leverLinks) lines.push(`- Levers: ${leverLinks}`)
+    lines.push(`- **Ask:** ${play.ask}`)
+    lines.push('')
+  }
+
+  // Section 4: Open Items
+  lines.push('### 4. Open Items')
+  const items = parsed.openItems ?? []
+  if (items.length === 0) {
+    lines.push('No outstanding items.')
+  } else {
+    for (const item of items) {
+      const ownerPart = item.owner ? ` (${item.owner})` : ''
+      const datePart = item.dueDate ? ` — by ${item.dueDate}` : ''
+      lines.push(`- ${item.description}${ownerPart}${datePart}`)
+    }
+  }
+  lines.push('')
+
+  return lines.join('\n')
+}
+
+function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring: boolean): string {
+  const lines: string[] = [header, '']
+
+  if (isRecurring) {
+    lines.push('*Recurring meeting — outstanding items carried forward in Recent Interactions*')
+    lines.push('')
+  }
+
+  // Section 1: Meeting Objective
+  lines.push('### 1. Meeting Objective')
+  lines.push(parsed.meetingObjective ?? 'No objective provided')
+  lines.push('')
+
+  // Section 2: Who's in the Room
+  lines.push("### 2. Who's in the Room")
+  for (const a of parsed.attendees ?? []) {
+    const titlePart = a.title ? `, ${a.title}` : ''
+    lines.push(`- **${a.name}**${titlePart} — ${a.insight}`)
+  }
+  lines.push('')
+
+  // Section 3: Recent Interactions
+  lines.push('### 3. Recent Interactions')
+  for (const ri of parsed.recentInteractions ?? []) {
+    const urlPart = ri.sourceUrl ? ` [source](${ri.sourceUrl})` : ''
+    lines.push(`- ${ri.date}: ${ri.summary}${urlPart}`)
+  }
+  lines.push('')
+
+  // Section 4: Value Play
+  lines.push('### 4. Value Play')
+  lines.push(parsed.valuePlay ?? 'No value play generated')
+  lines.push('')
+  if (parsed.salesAlignment) {
+    lines.push(`> **Aligned to:** ${parsed.salesAlignment}`)
+    lines.push('')
+  }
+
+  // Section 5: Discussion Questions
+  lines.push('### 5. Discussion Questions')
+  for (const q of parsed.discussionQuestions ?? []) {
+    const titlePart = q.attendeeTitle ? ` (${q.attendeeTitle})` : ''
+    lines.push(`- **${q.attendeeName}${titlePart}:** ${q.question} — PURPOSE: ${q.purpose}`)
+  }
+  lines.push('')
+
+  // Section 6: Open Items (conditional)
+  if (parsed.openItems && parsed.openItems.length > 0) {
+    lines.push('### 6. Open Items')
+    for (const oi of parsed.openItems) {
+      const urgencyPart = oi.urgency ? ` (${oi.urgency})` : ''
+      lines.push(`- ${oi.description}${urgencyPart}`)
+    }
+    lines.push('')
+  }
+
+  // Section 7: Pipeline Opportunities
+  lines.push('### 7. Pipeline Opportunities')
+  for (const po of parsed.pipelineOpportunities ?? []) {
+    const stagePart = po.stage ? `, ${po.stage}` : ''
+    lines.push(`- **${po.name}:** ${po.amount}, closing ${po.closeDate}${stagePart} — ${po.meetingRelevance}`)
+  }
+  lines.push('')
+
+  // Section 8: Action Items
+  lines.push('### 8. Action Items')
+  for (const ai of parsed.actionItems ?? []) {
+    const datePart = ai.dueDate ? ` (by ${ai.dueDate})` : ''
+    lines.push(`- **${ai.phase}:** ${ai.owner} — ${ai.action}${datePart}`)
+  }
+  lines.push('')
+
+  return lines.join('\n')
+}
+
 // ── Partner & Product Config Loaders ──────────────────────────────────────────
 
 function loadProductRoadmap(): ProductRoadmapEntry[] {
@@ -1089,7 +1424,7 @@ export async function generateMeetingPrep(
     // When evidence blocks are available, use the assertive 4-section format (#643)
     const derivedSystemPrompt = filteredEvidenceBlocks.length > 0
       ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
-
+${GROUNDING_RULES_BLOCK}
 VOICE RULES (CRITICAL):
 - Assert recommendations with evidence. NEVER phrase as questions ("Have you considered..." or "It might be worth exploring..."). Instead: "Push X because Y evidence shows Z."
 - Name people from account team by name and role in every recommendation.
@@ -1104,7 +1439,7 @@ FORMAT RULES:
 - Bold assertions, bulleted evidence, clear visual hierarchy for scannability
 - Each Recommended Play has: bold assertion, evidence trail bullets, available levers as links, proposed ask`
       : `You are generating a focused Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
-
+${GROUNDING_RULES_BLOCK}
 FOCUS RULE (CRITICAL):
 - The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
 - Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
@@ -1152,28 +1487,11 @@ ${caseSummary}
 
 ${templateResult.deterministic ? `## Signal Intelligence\n${templateResult.deterministic}` : ''}
 
+${serializeVerifiedSolutionPlays(templateResult)}
+
 ---
 
-Generate the document with these EXACT 4 sections:
-
-# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
-
-### 1. Meeting Objective
-[2-3 sentences. State the recommended outcome for this meeting. Be specific — not "discuss renewal" but "secure commitment to upgrade 47 RHEL 7 subscriptions before EOS 2027-06-30".]
-
-### 2. What Changed
-[Bulleted list of changes since last meeting or recent intelligence updates. Each bullet: date + what changed. Use the "What Changed Recently" data above. If no changes, note "No significant changes since last interaction."]
-
-### 3. Recommended Plays
-[Top 2-3 plays from the evidence blocks above. For EACH play:]
-**[Bold assertion of what to push and why, naming the SSP/specialist]**
-- Evidence: [2-3 bullets with specific data — case numbers, subscription counts, dollar amounts, dates]
-- Levers: [Each as a clickable markdown link: [Name](URL)]
-- **Ask:** [Specific thing to request in this meeting]
-
-### 4. Open Items
-[Carry-forward action items from previous meetings + new items to track. Bullet points with owner names and dates. If none, write "No outstanding items."]`
+Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
       : `Generate a 7-section meeting prep for this specific meeting using the existing customer playbook:
 
 ## Meeting Details
@@ -1275,53 +1593,43 @@ ${partnerCrossRefContext ? `### Partner Cross-Reference\n${partnerCrossRefContex
 
 ${escalationContext ? `${escalationContext}` : ''}
 
+${serializeVerifiedSolutionPlays(templateResult)}
+
 ---
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
-${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items from the last meeting are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
-
-# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — outstanding items carried forward in Recent Interactions*` : ''}
-
-### 1. Meeting Objective
-[2-3 lines: restate the meeting purpose in context of the playbook's strategic position. Be specific about what needs to happen in THIS meeting.]
-
-### 2. Who's in the Room
-[One bullet per person. NO table. Format: "- **Full Name**, Title — one key insight from LinkedIn research or prior interactions". ONLY list people on the calendar invite — do NOT list the full account team. The account team context is for YOUR reference when crafting questions and action items, not for this section.]
-
-### 3. Recent Interactions
-[3-5 bullets synthesized from the Recent Interactions & History context above. If this is a recurring meeting, the FIRST bullet must be carry-forward items marked OUTSTANDING. Each bullet: date, what was discussed and decided (not just "meeting happened"), one-line summary. When referencing news or press releases, include the source URL as a markdown link.]
-
-### 4. Value Play
-[ONE paragraph, Command of the Message style. A teaching point tailored to THIS meeting's attendees and agenda. Reference specific playbook data — products, quantities, renewal dates, case numbers. This should be the thing the AE says in the first 2 minutes to establish credibility and frame the conversation.]
-
-### 5. Discussion Questions
-[5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally.]
-
-### 6. Open Items
-[CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
-
-### 7. Pipeline Opportunities
-[List ALL active pipeline opportunities for this customer. Each bullet: opportunity name, dollar amount, close date, and stage. Highlight which opportunities are most relevant to THIS meeting's topic and attendees. Format: "- **Opp Name:** $amount, closing [date] — [one line on how this meeting can advance it]". Never show bare opportunity IDs.]
-
-### 8. Action Items
-[Bullet points with phase markers and specific names:]
-- **Pre-meeting:** [Name] — [action] (by [date])
-- **During meeting:** [Name/Team] — [action]
-- **Post-meeting (within N days/weeks):** [Name] — [action]
-[Minimum 3 items with specific team member names and dates. Reference specific pipeline opportunities by name where relevant.]`
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items from the last meeting are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
 
     // Shorter Gemini call — playbook is primary context
+    // ADR-040: temperature 0.3, responseSchema for structured output, grounding rules in system prompt
+    const derivedResponseSchema = filteredEvidenceBlocks.length > 0
+      ? MEETING_PREP_RESPONSE_SCHEMA_4S
+      : MEETING_PREP_RESPONSE_SCHEMA_7S
     const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
       callType: 'meeting-prep-derived-from-playbook',
       customerName: customer.name,
-      timeoutMs: 90_000, // Shorter timeout — less synthesis needed
+      timeoutMs: 120_000,
+      temperature: 0.3,
+      responseSchema: derivedResponseSchema,
     })
+
+    // ADR-040: Parse JSON response and convert to markdown
+    const derivedHeader = `# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}\n**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}`
+    let derivedMarkdown: string
+    try {
+      const parsed = JSON.parse(geminiResult.text)
+      derivedMarkdown = filteredEvidenceBlocks.length > 0
+        ? convertMeetingPrep4SToMarkdown(parsed, derivedHeader)
+        : convertMeetingPrep7SToMarkdown(parsed, derivedHeader, isRecurring)
+    } catch {
+      console.warn('[meeting-prep] Failed to parse structured response from playbook path, using raw text')
+      derivedMarkdown = geminiResult.text
+    }
 
     // Quality gate (ADR-024) — validate and retry if below threshold
     const gateResult = await validateAndRetry(
-      geminiResult.text,
+      derivedMarkdown,
       { validator: meetingPrepValidator },
       async (failures) => {
         const feedback = formatFailureFeedback(failures)
@@ -1331,10 +1639,20 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
           {
             callType: 'meeting-prep-derived-from-playbook',
             customerName: customer.name,
-            timeoutMs: 90_000,
+            timeoutMs: 120_000,
+            temperature: 0.3,
+            responseSchema: derivedResponseSchema,
           }
         )
-        return retryResult.text
+        // ADR-040: Parse retry JSON response
+        try {
+          const retryParsed = JSON.parse(retryResult.text)
+          return filteredEvidenceBlocks.length > 0
+            ? convertMeetingPrep4SToMarkdown(retryParsed, derivedHeader)
+            : convertMeetingPrep7SToMarkdown(retryParsed, derivedHeader, isRecurring)
+        } catch {
+          return retryResult.text
+        }
       }
     )
     prepContent = gateResult.output
@@ -1367,7 +1685,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
 
     const systemPrompt = filteredEvidenceBlocks.length > 0
       ? `You are generating a focused Red Hat sales meeting prep document — 4 sections, scannable in 2 minutes. The intelligence graph has pre-scored and ranked tactical plays with evidence. Your job is to write assertive, actionable recommendations.
-
+${GROUNDING_RULES_BLOCK}
 VOICE RULES (CRITICAL):
 - Assert recommendations with evidence. NEVER phrase as questions ("Have you considered..." or "It might be worth exploring..."). Instead: "Push X because Y evidence shows Z."
 - Name people from account team by name and role in every recommendation.
@@ -1382,7 +1700,7 @@ FORMAT RULES:
 - Bold assertions, bulleted evidence, clear visual hierarchy for scannability
 - Each Recommended Play has: bold assertion, evidence trail bullets, available levers as links, proposed ask`
       : `You are generating a Red Hat sales meeting prep document — 7 sections, scannable in 3-5 minutes. Every line must help the account team sell.
-
+${GROUNDING_RULES_BLOCK}
 FOCUS RULE (CRITICAL):
 - The meeting goal/objective is the PRIMARY FILTER for all content. If the meeting is about an Ansible renewal, the Value Play, Discussion Questions, and Action Items must CENTER on Ansible — not spread across every product the customer has. Other products may appear as secondary context ONLY if directly relevant to the meeting topic.
 - Include the specific subscription details for the product(s) relevant to the meeting goal: product name, quantity, expiration date, renewal opportunity ID, and current pricing/quote status.
@@ -1426,28 +1744,11 @@ ${caseSummary}
 
 ${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
+${serializeVerifiedSolutionPlays(templateResult)}
+
 ---
 
-Generate the document with these EXACT 4 sections:
-
-# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
-
-### 1. Meeting Objective
-[2-3 sentences. State the recommended outcome for this meeting. Be specific — not "discuss renewal" but "secure commitment to upgrade 47 RHEL 7 subscriptions before EOS 2027-06-30".]
-
-### 2. What Changed
-[Bulleted list of changes since last meeting or recent intelligence updates. Each bullet: date + what changed. If no changes, note "No significant changes since last interaction."]
-
-### 3. Recommended Plays
-[Top 2-3 plays from the evidence blocks above. For EACH play:]
-**[Bold assertion of what to push and why, naming the SSP/specialist]**
-- Evidence: [2-3 bullets with specific data — case numbers, subscription counts, dollar amounts, dates]
-- Levers: [Each as a clickable markdown link: [Name](URL)]
-- **Ask:** [Specific thing to request in this meeting]
-
-### 4. Open Items
-[Carry-forward action items from previous meetings + new items to track. Bullet points with owner names and dates. If none, write "No outstanding items."]`
+Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
       : `Generate a 7-section meeting prep for:
 
 ## Meeting Details
@@ -1486,57 +1787,42 @@ ${partnerResearch ? `## Partner Context\n${partnerResearch}` : ''}
 
 ${partnerCrossRefContext}
 
+${serializeVerifiedSolutionPlays(templateResult)}
+
 ---
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
-${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Generate the document with these EXACT 7 sections:
+${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
 
-# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
-**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}${isRecurring ? `\n*Recurring meeting — outstanding items carried forward in Recent Interactions*` : ''}
-
-### 1. Meeting Objective
-[2-3 lines: state the meeting purpose. If attendees are from a partner/integrator, focus on the partnership objective for ${customer.name}.]
-
-### 2. Who's in the Room
-[One bullet per person. NO table. Format: "- **Full Name**, Title — one key insight from LinkedIn research or prior interactions". ONLY list people on the calendar invite — do NOT list the full account team. The account team context is for YOUR reference when crafting questions and action items, not for this section.]
-
-### 3. Recent Interactions
-[3-5 bullets synthesized from the Recent Interactions & History context above. If this is a recurring meeting, the FIRST bullet must be carry-forward items marked OUTSTANDING. Each bullet: date, what was discussed and decided (not just "meeting happened"), one-line summary. When referencing news or press releases, include the source URL as a markdown link.]
-
-### 4. Value Play
-[ONE paragraph, Command of the Message style. Cross-reference value maps and product intelligence against the customer's stated goals. A teaching point that establishes credibility and frames the conversation. Reference specific data — products, quantities, renewal dates.]
-
-After the Value Play paragraph, add a blockquote callout showing which Red Hat sales methodology this aligns to. Format:
-> **Aligned to:** [TDP Name] TDP → [Tactic Name] tactic | [Sales Play Name] play
-
-Use the Product & Market Intelligence context above to identify the most relevant TDP and play. This shows management the conversation aligns with Red Hat's sales methodology.
-
-### 5. Discussion Questions
-[5-7 bullet points. Each bullet: **Attendee Name (Title):** Question text — PURPOSE: why this question matters, citing specific commercial data (subscription quantities, renewal dates, pipeline amounts, CCSP cloud spend). Weave commercial data INTO the questions naturally. Questions should ADVANCE THE SALE — discover budget, timeline, decision criteria, competitive alternatives.]
-
-### 6. Open Items
-[CONDITIONAL — only include if there are active support cases or renewals within 90 days relevant to THIS meeting. If nothing actionable, OMIT this section entirely. Use bullets, not tables.]
-
-### 7. Pipeline Opportunities
-[List ALL active pipeline opportunities for this customer. Each bullet: opportunity name, dollar amount, close date, and stage. Highlight which opportunities are most relevant to THIS meeting's topic and attendees. Format: "- **Opp Name:** $amount, closing [date] — [one line on how this meeting can advance it]". Never show bare opportunity IDs.]
-
-### 8. Action Items
-[Bullet points with phase markers and specific names:]
-- **Pre-meeting:** [Name] — [action] (by [date])
-- **During meeting:** [Name/Team] — [action]
-- **Post-meeting (within N days/weeks):** [Name] — [action]
-[Minimum 3 items with specific team member names and dates. Include "share X blog post with Y" items from product intelligence. Reference specific pipeline opportunities by name where relevant.]`
-
+    // ADR-040: temperature 0.3, responseSchema for structured output, grounding rules in system prompt
+    const standardResponseSchema = filteredEvidenceBlocks.length > 0
+      ? MEETING_PREP_RESPONSE_SCHEMA_4S
+      : MEETING_PREP_RESPONSE_SCHEMA_7S
     const geminiResult = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-synthesis',
       customerName: customer.name,
       timeoutMs: 120_000,
+      temperature: 0.3,
+      responseSchema: standardResponseSchema,
     })
+
+    // ADR-040: Parse JSON response and convert to markdown
+    const standardHeader = `# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}\n**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}`
+    let standardMarkdown: string
+    try {
+      const parsed = JSON.parse(geminiResult.text)
+      standardMarkdown = filteredEvidenceBlocks.length > 0
+        ? convertMeetingPrep4SToMarkdown(parsed, standardHeader)
+        : convertMeetingPrep7SToMarkdown(parsed, standardHeader, isRecurring)
+    } catch {
+      console.warn('[meeting-prep] Failed to parse structured response from standard path, using raw text')
+      standardMarkdown = geminiResult.text
+    }
 
     // Quality gate (ADR-024) — validate and retry if below threshold
     const gateResult = await validateAndRetry(
-      geminiResult.text,
+      standardMarkdown,
       { validator: meetingPrepValidator },
       async (failures) => {
         const feedback = formatFailureFeedback(failures)
@@ -1547,9 +1833,19 @@ Use the Product & Market Intelligence context above to identify the most relevan
             callType: 'meeting-prep-synthesis',
             customerName: customer.name,
             timeoutMs: 120_000,
+            temperature: 0.3,
+            responseSchema: standardResponseSchema,
           }
         )
-        return retryResult.text
+        // ADR-040: Parse retry JSON response
+        try {
+          const retryParsed = JSON.parse(retryResult.text)
+          return filteredEvidenceBlocks.length > 0
+            ? convertMeetingPrep4SToMarkdown(retryParsed, standardHeader)
+            : convertMeetingPrep7SToMarkdown(retryParsed, standardHeader, isRecurring)
+        } catch {
+          return retryResult.text
+        }
       }
     )
     prepContent = gateResult.output
