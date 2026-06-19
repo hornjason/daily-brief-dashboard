@@ -33,9 +33,143 @@ const CONFIG_DIR_PATH  = CONFIG_DIR
 // ── In-app config path (inside container: /app/config/account-plan/) ─────────
 const APP_CONFIG_DIR = resolve(import.meta.dir, '../config/account-plan')
 
+// ── ADR-040: Structured response schema for account plan generation ─────────
+
+const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    executiveSummary: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Scorecard overview summarizing account health, ACV, growth trajectory, and strategic priorities. Use ONLY data from the provided context. If a metric is not in the context, omit it rather than fabricating.',
+    },
+    teamMembers: {
+      type: 'STRING',
+      nullable: true,
+      description: 'AE and ASA names and roles from the provided Account Team data. Do not fabricate team member names.',
+    },
+    scorecard: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Category scores (% per category) derived from the provided intelligence data. Only include scores for categories where data exists in the context.',
+    },
+    customerView: {
+      type: 'STRING',
+      nullable: true,
+      description: 'All numbered questions answered: ACV ambition, ACV goal, growth %, why Red Hat, etc. Use ONLY figures from the provided pipeline and intelligence data.',
+    },
+    accountIntelligence: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Company strategy, financial signals, industry pressures. Every claim MUST come from the provided intelligence context. Never extrapolate or generate plausible-sounding data.',
+    },
+    customerEcosystem: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Partners, technologies, integrations from the provided tech stack and ecosystem data. Only cite partners and technologies present in the context.',
+    },
+    keyStakeholders: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Names, titles, engagement status from the provided stakeholder data. Never fabricate stakeholder names or titles.',
+    },
+    technicalLandscape: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Current tech stack and initiatives from the provided technical data. Only reference technologies confirmed in the context.',
+    },
+    customerSuccess: {
+      type: 'STRING',
+      nullable: true,
+      description: 'Health assessment, open cases, risk factors from the provided case and health data. Case counts and details MUST match the provided data.',
+    },
+    whitespaceMap: {
+      type: 'STRING',
+      nullable: true,
+      description: 'A markdown table mapping Business Units/Functions (rows) against Red Hat products (columns: RHEL, Ansible Automation, OpenShift, OpenShift Virt, RHEL AI / OpenShift AI) with opportunity level indicators. Base opportunity levels on evidence from the provided context.',
+    },
+    initiatives: {
+      type: 'ARRAY',
+      nullable: true,
+      items: {
+        type: 'OBJECT',
+        properties: {
+          customerObjective: {
+            type: 'STRING',
+            description: 'Customer objective addressed — must reference a real objective from the provided intelligence.',
+          },
+          redHatSolution: {
+            type: 'STRING',
+            description: 'Red Hat solution that maps to this objective.',
+          },
+          estimatedDealSize: {
+            type: 'STRING',
+            nullable: true,
+            description: 'Estimated deal size from pipeline data. If no pipeline data exists for this initiative, set to null. NEVER fabricate dollar figures.',
+          },
+          timeline: {
+            type: 'STRING',
+            nullable: true,
+            description: 'Timeline based on available context. Set to null if no timeline data exists.',
+          },
+          nextSteps: {
+            type: 'STRING',
+            description: 'Concrete next steps referencing specific people and actions from the context.',
+          },
+          taggedOpportunity: {
+            type: 'STRING',
+            nullable: true,
+            description: 'Tagged potential opportunity from pipeline data. Set to null if no matching opportunity exists.',
+          },
+        },
+        required: ['customerObjective', 'redHatSolution', 'nextSteps'],
+      },
+    },
+    actionsNextSteps: {
+      type: 'ARRAY',
+      nullable: true,
+      items: {
+        type: 'OBJECT',
+        properties: {
+          action: { type: 'STRING', description: 'Specific action item.' },
+          owner: { type: 'STRING', description: 'Owner — use AE or ASA name from the provided account team data.' },
+          targetDate: { type: 'STRING', nullable: true, description: 'Target date if known. Set to null if not determinable from context.' },
+          status: { type: 'STRING', description: 'Current status (e.g., Not Started, In Progress).' },
+        },
+        required: ['action', 'owner', 'status'],
+      },
+    },
+    solutionPlaysReferenced: {
+      type: 'ARRAY',
+      nullable: true,
+      description: 'Solution plays cited in this plan. Each entry MUST come from the VERIFIED SOLUTION PLAYS section. Never fabricate play references.',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          playName: { type: 'STRING', description: 'Exact play name from the VERIFIED SOLUTION PLAYS section.' },
+          customerWin: { type: 'STRING', nullable: true, description: 'Exact customer win cited. Set to null if no win exists for this play.' },
+        },
+        required: ['playName'],
+      },
+    },
+  },
+  required: [
+    'executiveSummary', 'teamMembers', 'customerView',
+    'accountIntelligence', 'whitespaceMap', 'initiatives', 'actionsNextSteps',
+  ],
+}
+
 // ── System prompt (validated in generate-test.ts proof-of-concept) ────────────
 
 const SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect assistant. Your job is to produce a complete, structured Account Plan for a customer — modeled after the sample plan provided.
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point for a field, set that field to null.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
+5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
+6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
 
 Rules:
 - Answer EVERY question and section shown in the questions reference (the image)
@@ -44,7 +178,7 @@ Rules:
 - Be specific: use customer names, product names, dollar amounts, dates where available
 - Write as if the Account Solution Architect is the author
 - Output clean markdown with ## section headers matching the sample plan structure
-- Do NOT include placeholder text — if data is missing, write a concise inference based on what is known
+- Do NOT include placeholder text — if data is missing, set the field to null
 
 REQUIRED SECTIONS — every plan MUST include all of these:
 1. Executive Summary (scorecard overview)
@@ -92,16 +226,98 @@ async function callGeminiForAccountPlan(opts: {
   pdfParts?: { inlineData: { mimeType: string; data: string } }[]
   temperature?: number
   customerName?: string
+  responseSchema?: object
 }): Promise<string> {
   const result = await callGemini(opts.systemPrompt, opts.userPrompt, {
     callType: 'account-plan-generation',
     customerName: opts.customerName,
     inlineDataParts: opts.pdfParts?.map(p => ({ mimeType: p.inlineData.mimeType, data: p.inlineData.data })),
     timeoutMs: 300_000,
-    temperature: opts.temperature ?? 0.7,
+    temperature: opts.temperature ?? 0.3,
+    responseSchema: opts.responseSchema,
   })
   if (!result.text) throw new Error('Gemini returned empty response')
   return result.text
+}
+
+// ── ADR-040: Convert structured JSON response back to markdown ──────────────
+
+function convertAccountPlanJsonToMarkdown(rawText: string): string {
+  let parsed: any
+  try {
+    parsed = JSON.parse(rawText)
+  } catch {
+    // If Gemini returned raw markdown instead of JSON, pass through
+    console.warn('[acct-plan] Failed to parse structured JSON response, using raw text')
+    return rawText
+  }
+
+  const parts: string[] = []
+
+  if (parsed.executiveSummary) {
+    parts.push(`## Executive Summary\n\n${parsed.executiveSummary}`)
+  }
+  if (parsed.teamMembers) {
+    parts.push(`## Team Members\n\n${parsed.teamMembers}`)
+  }
+  if (parsed.scorecard) {
+    parts.push(`## Scorecard\n\n${parsed.scorecard}`)
+  }
+  if (parsed.customerView) {
+    parts.push(`## Customer View\n\n${parsed.customerView}`)
+  }
+  if (parsed.accountIntelligence) {
+    parts.push(`## Account Intelligence\n\n${parsed.accountIntelligence}`)
+  }
+  if (parsed.customerEcosystem) {
+    parts.push(`## Customer Ecosystem\n\n${parsed.customerEcosystem}`)
+  }
+  if (parsed.keyStakeholders) {
+    parts.push(`## Key Stakeholders\n\n${parsed.keyStakeholders}`)
+  }
+  if (parsed.technicalLandscape) {
+    parts.push(`## Technical Landscape\n\n${parsed.technicalLandscape}`)
+  }
+  if (parsed.customerSuccess) {
+    parts.push(`## Customer Success\n\n${parsed.customerSuccess}`)
+  }
+  if (parsed.whitespaceMap) {
+    parts.push(`## Whitespace Map\n\n${parsed.whitespaceMap}`)
+  }
+
+  // Initiatives — convert structured array to markdown
+  if (parsed.initiatives && Array.isArray(parsed.initiatives) && parsed.initiatives.length > 0) {
+    const initLines = parsed.initiatives.map((init: any, i: number) => {
+      const lines = [`### Initiative ${i + 1}: ${init.customerObjective}`]
+      lines.push(`- **Red Hat Solution:** ${init.redHatSolution}`)
+      if (init.estimatedDealSize) lines.push(`- **Estimated Deal Size:** ${init.estimatedDealSize}`)
+      if (init.timeline) lines.push(`- **Timeline:** ${init.timeline}`)
+      lines.push(`- **Next Steps:** ${init.nextSteps}`)
+      if (init.taggedOpportunity) lines.push(`- **Tagged Opportunity:** ${init.taggedOpportunity}`)
+      return lines.join('\n')
+    })
+    parts.push(`## Initiatives\n\n${initLines.join('\n\n')}`)
+  }
+
+  // Actions & Next Steps — convert structured array to markdown table
+  if (parsed.actionsNextSteps && Array.isArray(parsed.actionsNextSteps) && parsed.actionsNextSteps.length > 0) {
+    const tableHeader = '| # | Action | Owner | Target Date | Status |\n|---|--------|-------|-------------|--------|'
+    const tableRows = parsed.actionsNextSteps.map((a: any, i: number) =>
+      `| ${i + 1} | ${a.action} | ${a.owner} | ${a.targetDate ?? 'TBD'} | ${a.status} |`
+    )
+    parts.push(`## Actions & Next Steps\n\n${tableHeader}\n${tableRows.join('\n')}`)
+  }
+
+  // Solution plays referenced — informational section
+  if (parsed.solutionPlaysReferenced && Array.isArray(parsed.solutionPlaysReferenced) && parsed.solutionPlaysReferenced.length > 0) {
+    const playLines = parsed.solutionPlaysReferenced.map((p: any) => {
+      const win = p.customerWin ? ` — Customer Win: ${p.customerWin}` : ''
+      return `- ${p.playName}${win}`
+    })
+    parts.push(`## Solution Plays Referenced\n\n${playLines.join('\n')}`)
+  }
+
+  return parts.join('\n\n')
 }
 
 // ── Core generation logic ────────────────────────────────────────────────────
@@ -166,11 +382,27 @@ export async function generateAccountPlan(
 
   // #786: Load templateAll deterministic sections for signal context enrichment
   let signalContext = ''
+  let solutionPlaysContext = ''
   try {
     const teamMembers = getAccountTeam(customer)
     const { registrySignals } = await loadCustomerSignals(slug, customer.name)
     const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
     signalContext = templateResult.deterministic || ''
+
+    // ADR-040: Serialize solutionPlays into VERIFIED SOLUTION PLAYS section for grounding
+    const structuredPlays = templateResult.structured?.solutionPlays ?? []
+    if (structuredPlays.length > 0) {
+      solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
+      for (const play of structuredPlays) {
+        solutionPlaysContext += `### Play: "${play.playName}"\n`
+        solutionPlaysContext += `- TDP: ${play.tdp}\n`
+        if (play.customerWins?.length) solutionPlaysContext += `- Customer Wins: ${JSON.stringify(play.customerWins)}\n`
+        if (play.realWorldExamples?.length) solutionPlaysContext += `- Real-World Examples: ${JSON.stringify(play.realWorldExamples)}\n`
+        if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
+        if (play.talkTrack) solutionPlaysContext += `- Talk Track: ${play.talkTrack.slice(0, 300)}\n`
+        solutionPlaysContext += '\n'
+      }
+    }
   } catch (e: any) {
     console.warn(`[acct-plan] templateAll enrichment failed (non-fatal): ${e.message}`)
   }
@@ -190,7 +422,7 @@ ${companyIntel.substring(0, 8000)}
 
 ### Product Intelligence
 ${productIntel.substring(0, 5000)}${signalSection}
-
+${solutionPlaysContext}
 ## Account Planning Playbook (Guidance)
 ${playbook}
 
@@ -198,13 +430,18 @@ ${playbook}
 Now generate a complete Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. Include ${aeName} as the AE and ${operatorName} as the ASA in the team members section.`
 
   // Call Gemini with multimodal (text + PDF image) via callGemini() gateway
-  const rawMarkdown = await callGeminiForAccountPlan({
+  // ADR-040: temperature 0.3, structured responseSchema
+  const rawResponse = await callGeminiForAccountPlan({
     systemPrompt: SYSTEM_PROMPT,
     userPrompt,
     pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-    temperature: 0.7,
+    temperature: 0.3,
     customerName: customer.name,
+    responseSchema: ACCOUNT_PLAN_RESPONSE_SCHEMA,
   })
+
+  // ADR-040: Parse structured JSON response and convert to markdown
+  const rawMarkdown = convertAccountPlanJsonToMarkdown(rawResponse)
 
   // Quality gate (ADR-024) — validate and retry if below threshold
   const gateResult = await validateAndRetry(
@@ -212,13 +449,15 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
     { validator: accountPlanValidator },
     async (failures) => {
       const feedback = formatFailureFeedback(failures)
-      return callGeminiForAccountPlan({
+      const retryResponse = await callGeminiForAccountPlan({
         systemPrompt: SYSTEM_PROMPT,
         userPrompt: userPrompt + '\n\n' + feedback,
         pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-        temperature: 0.7,
+        temperature: 0.3,
         customerName: customer.name,
+        responseSchema: ACCOUNT_PLAN_RESPONSE_SCHEMA,
       })
+      return convertAccountPlanJsonToMarkdown(retryResponse)
     }
   )
   const markdown = gateResult.output
