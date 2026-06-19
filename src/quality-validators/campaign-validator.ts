@@ -4,7 +4,7 @@
  * Validates campaign generation output for structural completeness:
  * summary, context, positioning, email templates with subject lines,
  * body length, varied features, and no internal data leakage.
- * Threshold: 70
+ * Threshold: 80
  */
 
 import {
@@ -15,7 +15,7 @@ import {
 } from '../gemini-quality-gate.ts'
 
 const CONTENT_TYPE = 'campaign'
-const PASS_THRESHOLD = 70
+const PASS_THRESHOLD = 80
 
 /** Patterns that indicate leaked internal subscription/SKU data */
 const INTERNAL_DATA_PATTERNS = [
@@ -167,6 +167,37 @@ function validate(output: string): QualityScorecard {
       ? 'no internal data leaked'
       : `found internal data: ${internalDataLeaks.slice(0, 3).join(', ')}`,
     severity: 'required',
+  })
+
+  // MA-4: Money connection — at least one financial term in the output
+  const financialTerms = /\$[\d,]+[kKmMbB]?|\bpipeline\b|\brenewal\b|\bexpansion\b|\bROI\b|\bsavings\b|\brevenue\b|\bARR\b|\bacv\b/gi
+  const hasMoneyConnection = financialTerms.test(output)
+  checks.push({
+    name: 'money-connection',
+    passed: hasMoneyConnection,
+    expected: 'At least one financial connection ($amount, pipeline, renewal, expansion)',
+    actual: hasMoneyConnection ? 'financial terms found' : 'no financial connection',
+    severity: 'required',
+  })
+
+  // MA-3: Action steps — at least one WHO/WHAT/BY WHEN pattern
+  const hasActionStep = /\bshould\b.*\bby\b|\bschedule\b|\bset up\b.*\bby\b/i.test(output)
+  checks.push({
+    name: 'action-step-present',
+    passed: hasActionStep,
+    expected: 'At least one actionable step with WHO/WHAT/BY WHEN',
+    actual: hasActionStep ? 'action step found' : 'no action step',
+    severity: 'required',
+  })
+
+  // MA-6: Challenger insight — industry-specific insight in campaign summary
+  const hasChallengerInsight = /\bindustry\b|\bbenchmark\b|\bcompetitor\b|\bpeer\b.*\bcompan/i.test(output) && output.length > 200
+  checks.push({
+    name: 'challenger-insight',
+    passed: hasChallengerInsight,
+    expected: 'Industry-specific Challenger insight in campaign output',
+    actual: hasChallengerInsight ? 'industry insight found' : 'no Challenger insight',
+    severity: 'recommended',
   })
 
   // saleshub-positioning — recommended: check if SalesHub positioning language appears

@@ -103,7 +103,7 @@ Hello, here is some info.
 describe('campaignValidator', () => {
   it('has correct contentType and threshold', () => {
     expect(campaignValidator.contentType).toBe('campaign')
-    expect(campaignValidator.passThreshold).toBe(70)
+    expect(campaignValidator.passThreshold).toBe(80)
   })
 
   describe('good campaign fixture', () => {
@@ -111,7 +111,7 @@ describe('campaignValidator', () => {
 
     it('passes overall', () => {
       expect(scorecard.passed).toBe(true)
-      expect(scorecard.score).toBeGreaterThanOrEqual(70)
+      expect(scorecard.score).toBeGreaterThanOrEqual(80)
     })
 
     it('detects campaign summary', () => {

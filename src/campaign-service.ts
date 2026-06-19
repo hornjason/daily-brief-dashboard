@@ -177,6 +177,25 @@ Each of the 6 emails MUST highlight DIFFERENT features relevant to THAT persona'
 - An IT Director cares about cost, consistency, audit trails, and vendor consolidation
 DO NOT repeat the same 3 bullets across all emails. Each persona should discover features they haven't seen in the other emails. Pull from the full breadth of the material's value propositions.
 
+## MISSION ALIGNMENT — Money Connection (MA-4, MANDATORY)
+Every campaign MUST connect to the customer's financial reality. In the Campaign Summary or Customer Context section, include:
+- Pipeline value, renewal amount, or expansion opportunity from the loaded signals
+- If specific dollar figures exist in the intelligence data, cite them
+- If no specific figures exist, frame as "industry benchmarks suggest $X-Y range" — NEVER omit the money connection entirely
+Each email's CTA should imply financial impact ("accelerate your $X initiative" or "protect your upcoming renewal").
+
+## MISSION ALIGNMENT — Context Anchor (MA-1, MANDATORY)
+The Customer Context section MUST open with what is happening NOW — a recent case, upcoming renewal, recent meeting, new buying signal, or active campaign. Reference specific dates and events from the loaded signals. Generic strategic descriptions ("they are strategically moving towards...") are NOT sufficient. Anchor to a specific, recent, observable event.
+
+## MISSION ALIGNMENT — Actionable Steps (MA-3, MANDATORY)
+Each email MUST end with a concrete action step following WHO/WHAT/BY WHEN format:
+"[AE Name or Role] should [specific action] by [timeframe]."
+Example: "The AE should schedule a 30-minute demo of Event-Driven Ansible with their Head of Ops by end of month."
+Do NOT use generic CTAs like "let's discuss" or "reach out to learn more."
+
+## MISSION ALIGNMENT — Challenger Insight (MA-6, MANDATORY)
+The Campaign Summary MUST include ONE insight the customer likely doesn't know about their own industry or competitive position. This is NOT a product pitch — it's a business insight that reframes their priorities. Use industry benchmarks, competitive intelligence, or technology trends specific to their vertical. Generic cloud/AI observations are NOT sufficient.
+
 ## Output Format
 Generate clean markdown with these REQUIRED SECTIONS:
 1. **Campaign Summary** — 1-2 sentences
