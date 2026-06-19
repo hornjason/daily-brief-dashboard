@@ -873,6 +873,60 @@ async function downloadProductDocuments(
       lastError = e.message?.slice(0, 120) ?? 'Unknown error'
     }
 
+    // ── API download fallback (#847) ──────────────────────────────────────────
+    // When click-to-download fails, try Seismic delivery API directly.
+    // The browser page already has auth cookies so page.evaluate(fetch) inherits them.
+    if (!succeeded && (item.contentId || item.versionId)) {
+      try {
+        const cId = item.contentId || item.versionId!
+        const vId = item.versionId || item.contentId!
+        const apiDownloadResult = await dlPage.evaluate(async (args: {
+          contentId: string; versionId: string; auth: string; pvid: string; tsid: string
+        }) => {
+          const urls = [
+            `https://saleshub.redhat.com/gateway/services/delivery/tenants/redhat/api/v2/content/${args.contentId}/versions/${args.versionId}/original`,
+            `https://saleshub.redhat.com/gateway/services/delivery/tenants/redhat/api/v1/content/${args.contentId}/versions/${args.versionId}/download`,
+          ]
+          for (const url of urls) {
+            try {
+              const res = await fetch(url, {
+                headers: {
+                  Authorization: args.auth,
+                  profileversionid: args.pvid,
+                  teamsiteid: args.tsid,
+                },
+              })
+              if (res.ok) {
+                const blob = await res.blob()
+                const buffer = await blob.arrayBuffer()
+                return { ok: true as const, data: Array.from(new Uint8Array(buffer)), url }
+              }
+            } catch { /* try next URL */ }
+          }
+          return { ok: false as const, data: null, url: '' }
+        }, {
+          contentId: cId,
+          versionId: vId,
+          auth: authCtx.auth,
+          pvid: PROFILE_VERSION_ID,
+          tsid: authCtx.headers.teamsiteid || '1',
+        })
+
+        if (apiDownloadResult.ok && apiDownloadResult.data) {
+          const { writeFileSync } = await import('fs')
+          writeFileSync(localPath, Buffer.from(apiDownloadResult.data))
+          item.localPath = relative(productDir, localPath)
+          downloaded++
+          consecutiveFailures = 0
+          console.log(`[product-scraper] (${i + 1}/${toDownload.length}) ✓ ${filename} (API fallback)`)
+          succeeded = true
+        }
+      } catch (e: any) {
+        // API fallback also failed — fall through to error tracking below
+        console.warn(`[product-scraper] API fallback failed for ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+      }
+    }
+
     if (!succeeded) {
       consecutiveFailures++
       console.warn(`[product-scraper] (${i + 1}/${toDownload.length}) ✗ ${item.name.slice(0, 50)}: ${lastError.slice(0, 60)}`)
