@@ -214,6 +214,9 @@ Rules:
 - Focus on what the customer COULD achieve with Red Hat, grounded in what we KNOW about them
 - Every solution alignment must include proof points (industry examples, case studies, or direct customer evidence)
 - Next steps must be concrete and actionable (not generic "schedule a meeting")
+- The next steps section MUST include specific dollar amounts from the pipeline data. Instead of "secure a call", say "secure a call to advance the $X pipeline opportunity"
+- Every next step MUST include BY WHEN — a specific deadline. Never leave an action without a timeframe
+- Identify 2-3 stakeholder engagement paths from the account team data. Each path should name a different person with a reason to engage them
 - Output valid JSON matching the schema provided`
 
 export function buildPositioningPrompt(customerName: string, ctx: PositioningContext): string {
