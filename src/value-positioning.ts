@@ -28,6 +28,42 @@ import type { Customer } from './types.ts'
 
 // @consumer-contract v1.0
 
+// ── Structured output schema (ADR-040) ───────────────────────────────────────
+
+const VALUE_POSITIONING_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    currentState: {
+      type: 'STRING',
+      description: '2-3 paragraph summary of what we know about the customer current state, goals, and challenges',
+    },
+    solutionAlignment: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          solution: { type: 'STRING', description: 'Red Hat product or solution name' },
+          alignment: { type: 'STRING', description: 'How this solution addresses a specific customer goal or pain point' },
+          proofPoints: {
+            type: 'ARRAY',
+            items: { type: 'STRING', description: 'Evidence point: industry example, case study, or direct customer evidence' },
+          },
+        },
+        required: ['solution', 'alignment', 'proofPoints'],
+      },
+    },
+    artOfPossible: {
+      type: 'STRING',
+      description: '2-3 paragraphs describing what the customer could achieve with Red Hat that they are not doing today',
+    },
+    nextSteps: {
+      type: 'ARRAY',
+      items: { type: 'STRING', description: 'Concrete, actionable next step' },
+    },
+  },
+  required: ['currentState', 'solutionAlignment', 'artOfPossible', 'nextSteps'],
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SolutionAlignment {
@@ -335,7 +371,8 @@ export async function generateValuePositioning(
   const geminiResult = await callGemini(SYSTEM_PROMPT, userPrompt, {
     callType: 'value-positioning',
     customerName: customer.name,
-    temperature: 0.5,
+    temperature: 0.3,
+    responseSchema: VALUE_POSITIONING_RESPONSE_SCHEMA,
   })
 
   const rawText = geminiResult.text
@@ -350,7 +387,8 @@ export async function generateValuePositioning(
       const retryResult = await callGemini(SYSTEM_PROMPT, userPrompt + '\n\n' + feedback, {
         callType: 'value-positioning',
         customerName: customer.name,
-        temperature: 0.5,
+        temperature: 0.3,
+        responseSchema: VALUE_POSITIONING_RESPONSE_SCHEMA,
       })
       return retryResult.text ?? ''
     }
