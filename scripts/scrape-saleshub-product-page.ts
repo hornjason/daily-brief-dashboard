@@ -906,8 +906,9 @@ async function downloadProductDocuments(
   const downloadQueue: Array<{ item: SectionItem; sectionKey: string; sectionTitle: string }> = []
   for (const [sectionKey, section] of Object.entries(sections)) {
     for (const item of section.items) {
-      // Skip items without a URL — can't download without a reference
-      if (!item.url) continue
+      // Items with contentId+versionId can be downloaded via API even without a URL (#857)
+      const hasApiPath = Boolean(item.contentId && item.versionId)
+      if (!item.url && !hasApiPath) continue
 
       // Skip formats that are not downloadable documents (AC-A1)
       const itemFormat = ((item as any).format ?? '').toUpperCase()
@@ -917,7 +918,7 @@ async function downloadProductDocuments(
         continue
       }
       // Also check URL patterns for skip formats
-      const urlLower = item.url.toLowerCase()
+      const urlLower = (item.url ?? '').toLowerCase()
       if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
         console.log(`[product-scraper] Skipping YouTube: ${item.name.slice(0, 50)}`)
         continue
