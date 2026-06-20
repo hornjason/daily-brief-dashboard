@@ -40,6 +40,13 @@ const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const MAX_DOWNLOADS_PER_PRODUCT = 100
 const SKIP_FORMATS = new Set(['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTube', 'URL'])
 const SKIP_LANGUAGE_PATTERNS = [/\bde\b|\bfr\b|\bes\b|\bit\b|\bpt\b|\bja\b|\bko\b|\bzh\b/i]
+// #856: Safety net — catch any unhandled promise rejections from download
+// timeouts instead of crashing the process. The per-promise .catch() below
+// is the real fix; this is defense-in-depth.
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[product-scraper] Unhandled rejection (caught by safety net):', reason?.message ?? reason)
+})
+
 const skipDownloads = process.argv.includes('--skip-downloads')
 
 // ── Exported pure helpers (tested in saleshub-product-download.test.ts) ─────
@@ -967,18 +974,22 @@ async function downloadProductDocuments(
           const isContentNotFound = /content\s+not\s+found|page\s+not\s+found|error|404/i.test(pageText.slice(0, 500))
 
           if (downloadBtn && !isContentNotFound) {
-            const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
+            const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
             await downloadBtn.click()
             const dl = await downloadPromise
-            const suggestedName = dl.suggestedFilename()
-            const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
-            const filename = sanitizeFilename(`${item.name}.${ext}`)
-            const localPath = resolve(sectionDir, filename)
-            await dl.saveAs(localPath)
-            downloaded++
-            consecutiveFailures = 0
-            console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (viewer download)`)
-            succeeded = true
+            if (!dl) {
+              lastError = 'Viewer: Download event timed out'
+            } else {
+              const suggestedName = dl.suggestedFilename()
+              const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+              const filename = sanitizeFilename(`${item.name}.${ext}`)
+              const localPath = resolve(sectionDir, filename)
+              await dl.saveAs(localPath)
+              downloaded++
+              consecutiveFailures = 0
+              console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (viewer download)`)
+              succeeded = true
+            }
           } else {
             lastError = isContentNotFound ? 'Viewer: Content not found' : 'Viewer: No Download button found'
           }
@@ -1081,19 +1092,23 @@ async function downloadProductDocuments(
             throw new Error(lastError)
           }
 
-          const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+          const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
           await downloadOption.click()
 
           const dl = await downloadPromise
-          const suggestedName = dl.suggestedFilename()
-          const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
-          const filename = sanitizeFilename(`${item.name}.${ext}`)
-          const localPath = resolve(sectionDir, filename)
-          await dl.saveAs(localPath)
-          downloaded++
-          consecutiveFailures = 0
-          console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (three-dot fallback)`)
-          succeeded = true
+          if (!dl) {
+            lastError = 'Fallback: Download event timed out'
+          } else {
+            const suggestedName = dl.suggestedFilename()
+            const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+            const filename = sanitizeFilename(`${item.name}.${ext}`)
+            const localPath = resolve(sectionDir, filename)
+            await dl.saveAs(localPath)
+            downloaded++
+            consecutiveFailures = 0
+            console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (three-dot fallback)`)
+            succeeded = true
+          }
         } else {
           lastError = 'Fallback: Document row not found on product page'
         }
