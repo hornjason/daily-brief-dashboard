@@ -1491,10 +1491,17 @@ export async function scrapeProductPage(
           } as any))
 
           if (sections[sectionKey]) {
-            // Merge with existing section — add API docs to existing items
-            const existingNames = new Set(sections[sectionKey].items.map(i => i.name.slice(0, 50)))
+            // Merge with existing section — add API docs, update existing with contentId/versionId
+            const existingByName = new Map(sections[sectionKey].items.map((i, idx) => [i.name.slice(0, 50), idx]))
             for (const item of items) {
-              if (!existingNames.has(item.name.slice(0, 50))) {
+              const existingIdx = existingByName.get(item.name.slice(0, 50))
+              if (existingIdx !== undefined) {
+                // Update existing item with contentId/versionId from API (#857)
+                const existing = sections[sectionKey].items[existingIdx]
+                if (!existing.contentId && item.contentId) existing.contentId = item.contentId
+                if (!existing.versionId && item.versionId) existing.versionId = item.versionId
+                if (!existing.format && (item as any).format) (existing as any).format = (item as any).format
+              } else {
                 sections[sectionKey].items.push(item)
               }
             }
