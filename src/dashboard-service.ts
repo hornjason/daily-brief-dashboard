@@ -30,6 +30,10 @@ import { DISPLACEMENT_TARGETS } from './lib/motion-config.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
+import { validateAndRetry } from './gemini-quality-gate.ts'
+import { morningSummaryValidator } from './quality-validators/morning-summary-validator.ts'
+
+// @consumer-contract v1.0
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -142,10 +146,10 @@ export async function synthesizeMorningSummary(signals: { customer: string; type
 Format your response as markdown with bold headers and bullet points. Keep each bullet to one line. Bold account names. Use exactly this structure:
 
 ## Priority Today
-1-2 sentences on the single most important thing to address today.
+1-2 sentences on the single most important thing to address today. Every priority MUST name WHO should do WHAT by WHEN. Generic directions like "focus on X" are not acceptable.
 
 ## Actions
-- 3 specific actions with **account names** bolded, one per line
+- 3 specific actions with **account names** bolded, one per line. Every action item MUST name WHO should do WHAT by WHEN. Generic directions like "focus on X" are not acceptable.
 
 ## Watch
 - 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
@@ -156,7 +160,24 @@ Format your response as markdown with bold headers and bullet points. Keep each 
     callType: 'daily-briefing-synthesis',
     temperature: 0.4,
   })
-  const synthesis: string = result.text
+  let synthesis: string = result.text
+
+  // Consumer contract v1.0: Quality gate (ADR-024)
+  const gateResult = await validateAndRetry(
+    synthesis,
+    { validator: morningSummaryValidator },
+    async (failures, attempt) => {
+      const feedback = failures.map(f => `- ${f.name}: expected ${f.expected}, got ${f.actual}`).join('\n')
+      const retryPrompt = `${userPrompt}\n\nPREVIOUS OUTPUT FAILED QUALITY CHECK (attempt ${attempt}). Fix these issues:\n${feedback}`
+      const retryResult = await callGemini(systemPrompt, retryPrompt, {
+        callType: 'daily-briefing-synthesis-retry',
+        temperature: 0.4,
+      })
+      return retryResult.text
+    }
+  )
+  synthesis = gateResult.output
+  console.log(`[morning-summary] Quality gate: score=${gateResult.scorecard.score}, attempts=${gateResult.attempts}, passed=${gateResult.scorecard.passed}`)
 
   // Cache result
   try {
@@ -588,7 +609,7 @@ export async function buildMorningSummary(customers: Customer[]) {
     const templateResults = await Promise.all(
       customers.slice(0, 10).map(async (cu) => {
         const slug = toSlug(cu.name)
-        const { registrySignals } = await loadCustomerSignals(slug, cu.name)
+        const { registrySignals } = await loadCustomerSignals(slug, cu.name, { ensureFresh: true })
         const result = await templateAll(registrySignals, undefined, { format: 'brief' })
         return result.deterministic ? `### ${cu.name}\n${result.deterministic}` : ''
       })
