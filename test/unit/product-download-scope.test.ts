@@ -84,19 +84,32 @@ describe('product-download-scope (#847)', () => {
     })
   })
 
-  describe('ANTI-1: no navigation away from product page in fallback', () => {
+  describe('ANTI-1: no navigation away from product page in three-dot fallback', () => {
     test('three-dot fallback section does not navigate to viewer pages', () => {
-      // The FALLBACK section starts at the "FALLBACK" comment header.
-      // It must NOT contain page.goto or dlPage.goto — those belong in the PRIMARY path only.
-      const fallbackHeader = '── FALLBACK'
+      // The three-dot FALLBACK section starts at "FALLBACK: Three-dot" and ends
+      // before "FALLBACK 3" (the API download). ANTI-1 applies only to the
+      // three-dot method — the API fallback (#857) legitimately opens a new page.
+      const fallbackHeader = 'FALLBACK: Three-dot'
       const fallbackIdx = downloadFn.indexOf(fallbackHeader)
       expect(fallbackIdx).toBeGreaterThan(-1)
 
-      const fallbackSection = downloadFn.slice(fallbackIdx)
-      // Fallback section must not navigate to any URL
-      expect(fallbackSection).not.toContain('.goto(item.url')
-      expect(fallbackSection).not.toContain('dlPage.goto')
-      expect(fallbackSection).not.toContain('context.newPage')
+      // Scope to just the three-dot section (before FALLBACK 3)
+      const apiFallbackHeader = 'FALLBACK 3'
+      const apiFallbackIdx = downloadFn.indexOf(apiFallbackHeader, fallbackIdx)
+      const threeDotSection = apiFallbackIdx > -1
+        ? downloadFn.slice(fallbackIdx, apiFallbackIdx)
+        : downloadFn.slice(fallbackIdx)
+
+      // Three-dot fallback must not navigate to any URL
+      expect(threeDotSection).not.toContain('.goto(item.url')
+      expect(threeDotSection).not.toContain('dlPage.goto')
+      expect(threeDotSection).not.toContain('context.newPage')
+    })
+
+    test('API fallback (#857) exists as a third download method', () => {
+      expect(downloadFn).toContain('FALLBACK 3')
+      expect(downloadFn).toContain('shouldAttemptApiDownload')
+      expect(downloadFn).toContain('buildDownloadUrl')
     })
   })
 
