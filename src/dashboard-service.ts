@@ -122,6 +122,40 @@ export function stripProductName(raw: string | string[]): string {
   return s.replace(/^Red Hat\s+/i, '').replace(/,.*$/, '').trim()
 }
 
+// ── Morning synthesis responseSchema (structured output) ─────────────────────
+const MORNING_SUMMARY_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    priorityToday: {
+      type: 'STRING',
+      description: 'The single most important thing to address today. Must name WHO should do WHAT by WHEN using the provided signal data. Generic directions like "focus on X" are not acceptable.',
+    },
+    actions: {
+      type: 'STRING',
+      nullable: true,
+      description: '3 specific action items separated by newlines, each with bolded **account names**. Every action item must name WHO should do WHAT by WHEN using the provided signal context. Format each as a markdown bullet starting with "- ".',
+    },
+    watch: {
+      type: 'STRING',
+      nullable: true,
+      description: '2-3 accounts to watch for renewals, competitive signals, or stuck pipeline. Format each as a markdown bullet starting with "- ". Reference specific metrics or dates from the provided signal data.',
+    },
+  },
+  required: ['priorityToday'],
+}
+
+/**
+ * Convert structured MORNING_SUMMARY_SCHEMA JSON response back to markdown
+ * for downstream consumers and the quality validator (which expects ## headings).
+ */
+function formatMorningSummaryMarkdown(parsed: { priorityToday: string; actions?: string | null; watch?: string | null }): string {
+  const parts: string[] = []
+  parts.push(`## Priority Today\n${parsed.priorityToday}`)
+  if (parsed.actions) parts.push(`## Actions\n${parsed.actions}`)
+  if (parsed.watch) parts.push(`## Watch\n${parsed.watch}`)
+  return parts.join('\n\n')
+}
+
 // ── Morning synthesis cache (BKL-AI27) ────────────────────────────────────────
 
 export async function synthesizeMorningSummary(signals: { customer: string; type: string; severity: string; text: string }[], templateAllContext?: string): Promise<string> {
@@ -159,8 +193,17 @@ Format your response as markdown with bold headers and bullet points. Keep each 
   const result = await callGemini(systemPrompt, userPrompt, {
     callType: 'daily-briefing-synthesis',
     temperature: 0.4,
+    responseSchema: MORNING_SUMMARY_SCHEMA,
   })
-  let synthesis: string = result.text
+  // Parse structured JSON response and reconstruct markdown for downstream consumers
+  let synthesis: string
+  try {
+    const parsed = JSON.parse(result.text)
+    synthesis = formatMorningSummaryMarkdown(parsed)
+  } catch {
+    // Fallback: if JSON parsing fails, use raw text (graceful degradation)
+    synthesis = result.text
+  }
 
   // Consumer contract v1.0: Quality gate (ADR-024)
   const gateResult = await validateAndRetry(
@@ -172,8 +215,15 @@ Format your response as markdown with bold headers and bullet points. Keep each 
       const retryResult = await callGemini(systemPrompt, retryPrompt, {
         callType: 'daily-briefing-synthesis-retry',
         temperature: 0.4,
+        responseSchema: MORNING_SUMMARY_SCHEMA,
       })
-      return retryResult.text
+      // Parse structured JSON on retry too
+      try {
+        const parsed = JSON.parse(retryResult.text)
+        return formatMorningSummaryMarkdown(parsed)
+      } catch {
+        return retryResult.text
+      }
     }
   )
   synthesis = gateResult.output
