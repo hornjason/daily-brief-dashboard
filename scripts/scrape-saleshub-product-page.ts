@@ -15,7 +15,7 @@
 
 import { chromium } from '@playwright/test'
 import type { Page, Locator } from '@playwright/test'
-import { readFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve, relative } from 'path'
 import type { BrowserContext } from '@playwright/test'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
@@ -74,6 +74,11 @@ export function isNonEnglishDoc(name: string): boolean {
 /** Builds a Seismic download URL from versionId and contentId */
 export function buildDownloadUrl(versionId: string, contentId: string): string {
   return `https://saleshub.redhat.com/api/doccenter/download/${contentId}/${versionId}`
+}
+
+/** Checks whether an item has the required fields for API-based download (#857) */
+export function shouldAttemptApiDownload(item: { contentId?: string; versionId?: string }): boolean {
+  return Boolean(item.contentId && item.versionId)
 }
 
 /** Builds a local filesystem path for a downloaded document */
@@ -1121,6 +1126,75 @@ async function downloadProductDocuments(
           await page.keyboard.press('Escape')
           await page.waitForTimeout(300)
         } catch { /* ignore */ }
+      }
+    }
+
+    // -- FALLBACK 3: Seismic DocCenter API download (#857) --------------------
+    // When both viewer and three-dot methods fail, try downloading directly via
+    // the Seismic DocCenter download API. Requires both contentId and versionId.
+    // Uses the browser context's cookies (SSO session) to authenticate.
+    if (!succeeded && shouldAttemptApiDownload(item)) {
+      const apiContentId = item.contentId!
+      const apiVersionId = item.versionId!
+      const apiUrl = buildDownloadUrl(apiVersionId, apiContentId)
+      console.log(`[product-scraper] (${totalProcessed}) Trying API download: ${item.name.slice(0, 50)}`)
+      try {
+        const apiPage = await context.newPage()
+        try {
+          // Navigate to the download URL — the browser context carries SSO cookies
+          const downloadPromise = apiPage.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
+          await apiPage.goto(apiUrl, { waitUntil: 'commit', timeout: 30_000 })
+
+          const dl = await downloadPromise
+          if (dl) {
+            const suggestedName = dl.suggestedFilename()
+            const ext = suggestedName.includes('.') ? suggestedName.split('.').pop()! : 'pdf'
+            const filename = sanitizeFilename(`${item.name}.${ext}`)
+            const localPath = resolve(sectionDir, filename)
+            await dl.saveAs(localPath)
+            downloaded++
+            consecutiveFailures = 0
+            console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (API download)`)
+            succeeded = true
+          } else {
+            // Download event didn't fire — try reading the response body directly
+            // Some API downloads return the file content as a response body
+            const response = await apiPage.waitForResponse(
+              resp => resp.url().includes('/download/') || resp.url().includes('/blob'),
+              { timeout: 10_000 },
+            ).catch(() => null)
+
+            if (response && response.ok()) {
+              const contentDisposition = response.headers()['content-disposition'] ?? ''
+              const body = await response.body().catch(() => null)
+              if (body && body.length > 0) {
+                // Determine extension from content-disposition or default to pdf
+                let ext = 'pdf'
+                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/)
+                if (filenameMatch?.[2]) {
+                  const suggested = filenameMatch[2]
+                  ext = suggested.includes('.') ? suggested.split('.').pop()! : 'pdf'
+                }
+                const filename = sanitizeFilename(`${item.name}.${ext}`)
+                const localPath = resolve(sectionDir, filename)
+                writeFileSync(localPath, body)
+                downloaded++
+                consecutiveFailures = 0
+                console.log(`[product-scraper] (${totalProcessed}/${downloadQueue.length}) OK ${filename} (API response body)`)
+                succeeded = true
+              } else {
+                lastError = 'API: Response body empty'
+              }
+            } else {
+              lastError = `API: No download event and no valid response (status: ${response?.status() ?? 'none'})`
+            }
+          }
+        } finally {
+          await apiPage.close()
+        }
+      } catch (e: any) {
+        lastError = `API: ${(e.message ?? 'Unknown error').slice(0, 100)}`
+        console.warn(`[product-scraper] (${totalProcessed}) API fallback error: ${lastError}`)
       }
     }
 
