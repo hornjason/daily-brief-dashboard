@@ -863,7 +863,7 @@ async function main(): Promise<void> {
     saleshubRunning = true
     try {
       const result = await scrapeSalesHub()
-      const { products, knowledge } = result
+      const { products = [], knowledge } = result
       console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products, ${knowledge.tdps.length} TDPs, ${knowledge.tactics.length} tactics, ${knowledge.salesPlays.length} plays`)
       const driveResult = await syncSalesHubToDrive()
       console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
