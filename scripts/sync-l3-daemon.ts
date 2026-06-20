@@ -649,6 +649,7 @@ async function main(): Promise<void> {
   const TRIGGER_FILE = `${CACHE_DIR}/sync-trigger`
   const KEEPALIVE_TRIGGER_FILE = `${CACHE_DIR}/keepalive-trigger`
   const SALESHUB_TRIGGER_FILE = `${CACHE_DIR}/saleshub-trigger`
+  const PRODUCT_TRIGGER_FILE = `${CACHE_DIR}/product-trigger`
 
   if (existsSync(TRIGGER_FILE)) {
     try {
@@ -674,6 +675,15 @@ async function main(): Promise<void> {
       console.log('[sync-daemon] deleted stale saleshub trigger file from prior run')
     } catch (e: any) {
       console.warn('[sync-daemon] could not delete stale saleshub trigger file:', e.message)
+    }
+  }
+
+  if (existsSync(PRODUCT_TRIGGER_FILE)) {
+    try {
+      unlinkSync(PRODUCT_TRIGGER_FILE)
+      console.log('[sync-daemon] deleted stale product trigger file from prior run')
+    } catch (e: any) {
+      console.warn('[sync-daemon] could not delete stale product trigger file:', e.message)
     }
   }
 
@@ -937,6 +947,72 @@ async function main(): Promise<void> {
       ).catch(emailErr => console.warn('[sync-daemon] saleshub failure email failed:', emailErr.message))
     } finally {
       saleshubRunning = false
+    }
+  }, 30_000)
+
+  // Timer 4b: Product-only scrape trigger (#845) — poll every 30s for /data/cache/product-trigger
+  // Runs ONLY the product page scrape + auto-enrich/upload — skips full SalesHub content indexer.
+  let productScrapeRunning = false
+  setInterval(async () => {
+    if (!existsSync(PRODUCT_TRIGGER_FILE)) return
+    if (productScrapeRunning) {
+      console.log('[sync-daemon] product trigger fired but scrape already running — discarding')
+      try { unlinkSync(PRODUCT_TRIGGER_FILE) } catch { /* best-effort */ }
+      return
+    }
+    try {
+      unlinkSync(PRODUCT_TRIGGER_FILE)
+    } catch (e: any) {
+      console.error('[sync-daemon] failed to delete product trigger file:', e.message)
+      return
+    }
+    console.log('[sync-daemon] product trigger detected — starting product-only scrape')
+    productScrapeRunning = true
+    try {
+      const scrapeCtx = getScrapeContext()
+      if (!scrapeCtx) {
+        console.warn('[sync-daemon] product scrape skipped — no browser context available')
+        return
+      }
+
+      for (const product of PRODUCT_PAGES) {
+        console.log(`[sync-daemon] product-only scrape: ${product.name}...`)
+        try {
+          await scrapeProductPage(product.url, scrapeCtx)
+          console.log(`[sync-daemon] product-only scrape complete: ${product.name}`)
+        } catch (e: any) {
+          console.warn(`[sync-daemon] product-only scrape failed for ${product.name}: ${e.message?.slice(0, 100)}`)
+        }
+      }
+
+      // Auto-enrich + upload to Drive (#835 pattern)
+      try {
+        const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
+        const { uploadProductToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+        const { readFileSync, existsSync: fsExists } = await import('fs')
+        const { resolve: resolvePath } = await import('path')
+        const { readdirSync } = await import('fs')
+        const productsDir = resolvePath('config-templates', 'saleshub-products')
+        const productDirs = readdirSync(productsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+        for (const pDir of productDirs) {
+          const productPath = resolvePath(productsDir, pDir.name, '_product.json')
+          const enrichedPath = resolvePath(productsDir, pDir.name, '_enriched.json')
+          if (fsExists(productPath)) {
+            const product = JSON.parse(readFileSync(productPath, 'utf-8'))
+            const enriched = fsExists(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
+            await uploadProductToDrive(pDir.name, product, enriched)
+            console.log(`[sync-daemon] product-only: uploaded to Drive: ${pDir.name}`)
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[sync-daemon] product-only auto-enrich/upload failed: ${e.message?.slice(0, 100)}`)
+      }
+
+      console.log('[sync-daemon] product-only scrape cycle complete')
+    } catch (e: any) {
+      console.error('[sync-daemon] product-only scrape failed:', e.message)
+    } finally {
+      productScrapeRunning = false
     }
   }, 30_000)
 

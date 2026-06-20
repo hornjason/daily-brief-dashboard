@@ -54,7 +54,7 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        demo-deploy demo-status demo-restart demo-setup-tunnel \
        pai-sync-remote demo-full-refresh \
        all-down all-ps \
-       sync-up sync-down sync-logs sync-status sync-now sync-up-vnc keepalive-now saleshub-now
+       sync-up sync-down sync-logs sync-status sync-now sync-up-vnc keepalive-now saleshub-now product-now
 
 up: down
 	@test -f $(DATA)/config/aes.json || (echo "❌ data/config/aes.json missing — run 'make setup' or restore from backup first" && exit 1)
@@ -867,6 +867,12 @@ saleshub-now:
 	@echo "Triggering SalesHub scrape + Drive sync via daemon…"
 	podman exec pai-sync-l3 touch /data/cache/saleshub-trigger
 	@echo "SalesHub scrape queued — watch logs: make sync-logs"
+
+product-now:
+	@echo "Triggering product-only scrape (skips full SalesHub indexer)…"
+	podman exec pai-sync-l3 touch /data/cache/product-trigger
+	@echo "Product scrape queued — faster than full saleshub-now (<2 min vs 10-15 min)"
+	@echo "Watch logs: make sync-logs"
 
 sync-up-vnc: sync-down
 	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
