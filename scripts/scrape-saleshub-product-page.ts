@@ -1222,7 +1222,9 @@ async function downloadProductDocuments(
     }
 
     if (!succeeded) {
-      consecutiveFailures++
+      // Only count items with contentId toward circuit breaker — items without
+      // IDs (webpages, webinars, press releases) can never succeed via API (#857)
+      if (item.contentId && item.versionId) consecutiveFailures++
       console.warn(`[product-scraper] (${totalProcessed}) FAIL ${item.name.slice(0, 50)}: ${lastError.slice(0, 80)}`)
       errors++
       failedDownloads.push({
