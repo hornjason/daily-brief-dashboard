@@ -186,7 +186,11 @@ Format your response as markdown with bold headers and bullet points. Keep each 
 - 3 specific actions with **account names** bolded, one per line. Every action item MUST name WHO should do WHAT by WHEN. Generic directions like "focus on X" are not acceptable.
 
 ## Watch
-- 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
+- 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)
+
+CRITICAL REQUIREMENTS:
+1. Every pipeline deal and renewal MUST include its dollar value from the signal data. Instead of "high-value pipeline deal", say "pipeline deal worth $X". Instead of "renewal due in 10 days", say "$X renewal due in 10 days".
+2. Every action item MUST name the specific person from the account team data — never use generic titles like "the AE" or "the SA". Use the actual names: Carolanne Farrell, Jason Horn, Gabe Deupree, etc.`
   const templateSection = templateAllContext ? `\n\n<signal_context>\n${templateAllContext}\n</signal_context>` : ''
   const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}${templateSection}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 
