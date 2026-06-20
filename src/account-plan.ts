@@ -12,6 +12,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
+// @consumer-contract v1.0
 import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
 import { accountPlanValidator } from './quality-validators/account-plan-validator.ts'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
@@ -385,7 +386,7 @@ export async function generateAccountPlan(
   let solutionPlaysContext = ''
   try {
     const teamMembers = getAccountTeam(customer)
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name)
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
     const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
     signalContext = templateResult.deterministic || ''
 
