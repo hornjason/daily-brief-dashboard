@@ -879,6 +879,29 @@ async function downloadProductDocuments(
   let totalProcessed = 0
   const failedDownloads: Array<{ name: string; section: string; format: string; versionId: string; error: string; attempts: number }> = []
 
+  // Build cross-section contentId/versionId lookup (#857)
+  // API merge groups by content type, but DOM items are in different sections.
+  // This ensures every item gets contentId/versionId if ANY matching item has it.
+  const idLookup = new Map<string, { contentId: string; versionId: string }>()
+  for (const section of Object.values(sections)) {
+    for (const item of section.items) {
+      if (item.contentId && item.versionId) {
+        idLookup.set(item.name.toLowerCase().slice(0, 50), { contentId: item.contentId, versionId: item.versionId })
+      }
+    }
+  }
+  if (idLookup.size > 0) {
+    for (const section of Object.values(sections)) {
+      for (const item of section.items) {
+        if (!item.contentId || !item.versionId) {
+          const match = idLookup.get(item.name.toLowerCase().slice(0, 50))
+          if (match) { item.contentId = match.contentId; item.versionId = match.versionId }
+        }
+      }
+    }
+    console.log(`[product-scraper] Cross-section ID propagation: ${idLookup.size} items with contentId`)
+  }
+
   // Collect all downloadable items from ALL sections (ANTI-2: not Domain-only)
   const downloadQueue: Array<{ item: SectionItem; sectionKey: string; sectionTitle: string }> = []
   for (const [sectionKey, section] of Object.entries(sections)) {
