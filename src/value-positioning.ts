@@ -17,12 +17,16 @@ import { CACHE_DIR } from './lib/paths.ts'
 import { callGemini } from './gemini-call.ts'
 import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
 import { toSlug } from './cache-layer.ts'
-import { getOperatorProfile } from './account-team.ts'
+import { getOperatorProfile, getAccountTeam, toPromptContext } from './account-team.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
+import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
+import { valuePositioningValidator } from './quality-validators/value-positioning-validator.ts'
 import type { Customer } from './types.ts'
+
+// @consumer-contract v1.0
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -310,9 +314,16 @@ export async function generateValuePositioning(
 
   let userPrompt = buildPositioningPrompt(customer.name, ctx)
 
+  // Account team context (AccountTeam contract — CLAUDE.md mandate)
+  const accountTeam = getAccountTeam(customer)
+  const teamContext = toPromptContext(accountTeam)
+  if (teamContext) {
+    userPrompt += `\n\n${teamContext}`
+  }
+
   // #786: Supplement with templateAll deterministic sections
   try {
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name)
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
     const templateResult = await templateAll(registrySignals, undefined, { format: 'brief' })
     if (templateResult.deterministic) {
       userPrompt += `\n\n--- Signal Context (structured) ---\n${templateResult.deterministic}`
@@ -330,17 +341,34 @@ export async function generateValuePositioning(
   const rawText = geminiResult.text
   if (!rawText) throw new Error('Gemini returned empty response')
 
+  // Quality gate — validateAndRetry (ADR-024)
+  const gateResult = await validateAndRetry(
+    rawText,
+    { validator: valuePositioningValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      const retryResult = await callGemini(SYSTEM_PROMPT, userPrompt + '\n\n' + feedback, {
+        callType: 'value-positioning',
+        customerName: customer.name,
+        temperature: 0.5,
+      })
+      return retryResult.text ?? ''
+    }
+  )
+  const validatedText = gateResult.output
+  console.log(`[value-positioning] Quality gate: score ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold}, attempts ${gateResult.attempts}`)
+
   // Parse JSON from response
   let parsed: any = null
-  const fenceMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/)
+  const fenceMatch = validatedText.match(/```json\s*([\s\S]*?)\s*```/)
   if (fenceMatch) {
     try { parsed = JSON.parse(fenceMatch[1]) } catch { /* fall through */ }
   }
   if (!parsed) {
-    const firstBrace = rawText.indexOf('{')
-    const lastBrace = rawText.lastIndexOf('}')
+    const firstBrace = validatedText.indexOf('{')
+    const lastBrace = validatedText.lastIndexOf('}')
     if (firstBrace !== -1 && lastBrace > firstBrace) {
-      try { parsed = JSON.parse(rawText.slice(firstBrace, lastBrace + 1)) } catch { /* fall through */ }
+      try { parsed = JSON.parse(validatedText.slice(firstBrace, lastBrace + 1)) } catch { /* fall through */ }
     }
   }
 
