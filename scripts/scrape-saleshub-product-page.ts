@@ -127,6 +127,94 @@ export function collectDownloadableItems(
   return items
 }
 
+// ── Exported viewer content extraction helpers (tested in viewer-content-extractor.test.ts) ──
+
+/** Patterns matching Seismic navigation chrome elements to strip from viewer HTML */
+const SEISMIC_CHROME_PATTERNS = [
+  /class="[^"]*seismic-header[^"]*"/i,
+  /class="[^"]*seismic-footer[^"]*"/i,
+  /class="[^"]*seismic-navigation[^"]*"/i,
+  /class="[^"]*seismic-toolbar[^"]*"/i,
+  /class="[^"]*seismic-page-toolbar[^"]*"/i,
+  /class="[^"]*articleSdk-theme-page-doubleColumn-sidebar[^"]*"/i,
+]
+
+/** Session/token keywords that flag a <meta> tag for removal */
+const SESSION_TOKEN_KEYWORDS = [
+  'csrf', 'token', 'auth', 'session', 'nonce', 'xsrf',
+]
+
+/**
+ * Sanitizes viewer page HTML for enrichment (#859).
+ * Removes: <script>, <style>, <noscript> tags and content;
+ *          <meta> tags containing session/token strings;
+ *          Seismic navigation chrome (header, footer, sidebar, toolbar).
+ * Preserves: document content body with <a href> hyperlinks.
+ */
+export function sanitizeViewerHtml(html: string): string {
+  if (!html) return ''
+
+  let result = html
+
+  // 1. Remove <script> tags and content (including multiline)
+  result = result.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+  // Handle self-closing script tags
+  result = result.replace(/<script[^>]*\/>/gi, '')
+
+  // 2. Remove <style> tags and content
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+
+  // 3. Remove <noscript> tags and content
+  result = result.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+
+  // 4. Remove <meta> tags containing session/token strings
+  result = result.replace(/<meta[^>]*>/gi, (match) => {
+    const lower = match.toLowerCase()
+    const hasToken = SESSION_TOKEN_KEYWORDS.some(kw => lower.includes(kw))
+    return hasToken ? '' : match
+  })
+
+  // 5. Remove Seismic navigation chrome elements
+  // Match elements with chrome class patterns and remove them and their content
+  for (const pattern of SEISMIC_CHROME_PATTERNS) {
+    // Build a regex that matches the opening tag with the chrome class,
+    // captures the tag name, and removes everything through the closing tag
+    result = result.replace(
+      new RegExp(
+        '<(nav|div|header|footer|aside)\\b[^>]*' + pattern.source + '[^>]*>[\\s\\S]*?<\\/\\1>',
+        'gi',
+      ),
+      '',
+    )
+  }
+
+  // 6. Clean up excessive whitespace from removals
+  result = result.replace(/\n{3,}/g, '\n\n').trim()
+
+  return result
+}
+
+/**
+ * Checks if page inner text represents enrichable content (#859).
+ * Returns false for: short content (<=500 chars), "content not found" pages,
+ *                     "page not found" / 404 pages, YouTube embeds.
+ */
+export function isEnrichableContent(innerText: string): boolean {
+  if (!innerText || innerText.length <= 500) return false
+
+  // Check for "content not found" or "page not found" error pages
+  const lower = innerText.toLowerCase()
+  if (/content\s+not\s+found/i.test(lower)) return false
+  if (/page\s+not\s+found/i.test(lower)) return false
+  if (/^404\b/.test(innerText.trim())) return false
+
+  // Check for YouTube embed pages
+  if (/youtube\.com|youtu\.be/i.test(lower)) return false
+  if (/watch\s+this\s+video\s+on\s+youtube/i.test(lower)) return false
+
+  return true
+}
+
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
   'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//'
@@ -1256,6 +1344,248 @@ async function downloadProductDocuments(
   }
 
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
+
+  // ── Phase 4: Viewer content extraction (#859) ─────────────────────────────
+  // For items with a URL that weren't successfully downloaded, extract rendered
+  // HTML content from the viewer page. This provides enrichment content for
+  // Gemini even when file downloads fail.
+
+  console.log('[product-scraper] Phase 4: Extracting viewer page content...')
+  const extractionResults: Array<{
+    name: string
+    section: string
+    status: 'extracted' | 'skipped' | 'failed'
+    reason?: string
+    contentLength?: number
+    filePath?: string
+    timestamp: string
+  }> = []
+  let extracted = 0
+  let extractionSkipped = 0
+  let extractionErrors = 0
+
+  // Build set of successfully downloaded items to skip
+  const downloadedNames = new Set<string>()
+  const downloadsDir = resolve(productDir, 'downloads')
+  if (existsSync(downloadsDir)) {
+    const walkDir = (dir: string) => {
+      const entries = require('fs').readdirSync(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) walkDir(resolve(dir, entry.name))
+        else downloadedNames.add(entry.name.replace(/\.[^.]+$/, ''))
+      }
+    }
+    walkDir(downloadsDir)
+  }
+
+  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+    if (!item.url) continue
+
+    // Skip items that were already successfully downloaded
+    const safeName = sanitizeFilename(item.name)
+    if (downloadedNames.has(safeName.slice(0, 60))) {
+      extractionResults.push({
+        name: item.name,
+        section: sectionTitle,
+        status: 'skipped',
+        reason: 'Already downloaded as file',
+        timestamp: new Date().toISOString(),
+      })
+      extractionSkipped++
+      continue
+    }
+
+    // Skip YouTube URLs (AC-4)
+    const urlLower = (item.url ?? '').toLowerCase()
+    if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
+      extractionResults.push({
+        name: item.name,
+        section: sectionTitle,
+        status: 'skipped',
+        reason: 'YouTube embed',
+        timestamp: new Date().toISOString(),
+      })
+      extractionSkipped++
+      continue
+    }
+
+    // Skip URLs that navigate away from SalesHub domain (AC-A2)
+    try {
+      const parsedUrl = new URL(item.url)
+      if (!parsedUrl.hostname.includes('saleshub.redhat.com') && !parsedUrl.hostname.includes('seismic.com')) {
+        extractionResults.push({
+          name: item.name,
+          section: sectionTitle,
+          status: 'skipped',
+          reason: `External domain: ${parsedUrl.hostname}`,
+          timestamp: new Date().toISOString(),
+        })
+        extractionSkipped++
+        continue
+      }
+    } catch {
+      // Invalid URL — skip
+      extractionResults.push({
+        name: item.name,
+        section: sectionTitle,
+        status: 'skipped',
+        reason: 'Invalid URL',
+        timestamp: new Date().toISOString(),
+      })
+      extractionSkipped++
+      continue
+    }
+
+    // Check if extracted file already exists (cache hit)
+    const sectionSlugE = slugify(sectionTitle)
+    const extractDir = resolve(productDir, 'extracted', sectionSlugE)
+    const extractFilename = `${sanitizeFilename(item.name)}.html`
+    const extractPath = resolve(extractDir, extractFilename)
+    if (existsSync(extractPath)) {
+      extractionResults.push({
+        name: item.name,
+        section: sectionTitle,
+        status: 'skipped',
+        reason: 'Already extracted (cached)',
+        timestamp: new Date().toISOString(),
+      })
+      extractionSkipped++
+      continue
+    }
+
+    // Open viewer page and extract content
+    try {
+      const viewerPage = await context.newPage()
+      try {
+        await viewerPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+        await viewerPage.waitForTimeout(3_000)
+
+        // Get inner text to validate content
+        const innerText = await viewerPage.innerText('body').catch(() => '')
+
+        // AC-4: Check for content-not-found pages
+        if (/content\s+not\s+found|page\s+not\s+found|error\s+404/i.test(innerText.slice(0, 500))) {
+          extractionResults.push({
+            name: item.name,
+            section: sectionTitle,
+            status: 'skipped',
+            reason: 'Content not found',
+            timestamp: new Date().toISOString(),
+          })
+          extractionSkipped++
+          continue
+        }
+
+        // AC-4: Check for iframe-only pages (very little text content)
+        const hasIframes = await viewerPage.locator('iframe').count()
+        if (hasIframes > 0 && innerText.length <= 500) {
+          extractionResults.push({
+            name: item.name,
+            section: sectionTitle,
+            status: 'skipped',
+            reason: 'iframe-only page',
+            timestamp: new Date().toISOString(),
+          })
+          extractionSkipped++
+          continue
+        }
+
+        // AC-3: Content validation — innerText.length > 500 to pass
+        if (!isEnrichableContent(innerText)) {
+          extractionResults.push({
+            name: item.name,
+            section: sectionTitle,
+            status: 'skipped',
+            reason: `Insufficient content (${innerText.length} chars)`,
+            contentLength: innerText.length,
+            timestamp: new Date().toISOString(),
+          })
+          extractionSkipped++
+          continue
+        }
+
+        // AC-1: Extract content via page.evaluate() — target main content container
+        const rawHtml = await viewerPage.evaluate(() => {
+          // Try Seismic viewer content selectors (most specific first)
+          const contentSelectors = [
+            '.articleSdk-theme-page-doubleColumn-main',
+            '.seismic-page-content',
+            '[class*="document-content"]',
+            '[class*="viewer-content"]',
+            '[role="main"]',
+            'main',
+            'article',
+          ]
+          for (const sel of contentSelectors) {
+            const el = document.querySelector(sel)
+            if (el && el.innerHTML.length > 200) return el.innerHTML
+          }
+          // Fallback: full body innerHTML
+          return document.body.innerHTML
+        })
+
+        // AC-2: Sanitize the extracted HTML
+        const sanitizedHtml = sanitizeViewerHtml(rawHtml)
+
+        if (sanitizedHtml.length < 100) {
+          extractionResults.push({
+            name: item.name,
+            section: sectionTitle,
+            status: 'skipped',
+            reason: `Sanitized content too short (${sanitizedHtml.length} chars)`,
+            contentLength: sanitizedHtml.length,
+            timestamp: new Date().toISOString(),
+          })
+          extractionSkipped++
+          continue
+        }
+
+        // AC-5: Save to extracted/{sectionSlug}/{sanitized-name}.html
+        mkdirSync(extractDir, { recursive: true })
+        writeFileSync(extractPath, sanitizedHtml, 'utf-8')
+
+        extractionResults.push({
+          name: item.name,
+          section: sectionTitle,
+          status: 'extracted',
+          contentLength: sanitizedHtml.length,
+          filePath: relative(productDir, extractPath),
+          timestamp: new Date().toISOString(),
+        })
+        extracted++
+        console.log(`[product-scraper] Extracted: ${item.name.slice(0, 50)} (${sanitizedHtml.length} chars)`)
+      } finally {
+        await viewerPage.close()
+      }
+    } catch (e: any) {
+      extractionResults.push({
+        name: item.name,
+        section: sectionTitle,
+        status: 'failed',
+        reason: (e.message ?? 'Unknown error').slice(0, 200),
+        timestamp: new Date().toISOString(),
+      })
+      extractionErrors++
+      console.warn(`[product-scraper] Extraction failed: ${item.name.slice(0, 50)}: ${(e.message ?? '').slice(0, 80)}`)
+    }
+
+    // Brief pause between extractions
+    await new Promise(r => setTimeout(r, 500))
+  }
+
+  // AC-6: Write extraction manifest
+  const extractionManifestPath = resolve(productDir, '_extraction-manifest.json')
+  writeJsonAtomic(extractionManifestPath, {
+    timestamp: new Date().toISOString(),
+    productSlug,
+    totalItems: downloadQueue.length,
+    extracted,
+    skipped: extractionSkipped,
+    failed: extractionErrors,
+    results: extractionResults,
+  })
+  console.log(`[product-scraper] Extraction manifest written to ${extractionManifestPath}`)
+  console.log(`[product-scraper] Extraction complete: ${extracted} extracted, ${extractionSkipped} skipped, ${extractionErrors} errors`)
 }
 
 
