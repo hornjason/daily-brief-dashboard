@@ -45,11 +45,78 @@ export interface SectionItem {
 export interface ProductEnrichment {
   productSlug: string
   enrichedAt: string
-  contentKits: ContentKitExtraction[]
-  messagingGuides: DocumentExtraction[]
-  battlecards: DocumentExtraction[]
-  caseStudies: CaseStudyExtraction[]
-  competitiveReviews: CompetitiveReviewExtraction[]
+  documents: DocumentIntelligence[]
+}
+
+// ── ADR-041: Universal Document Intelligence Schema ────────────────────────
+
+export type DocumentCategory =
+  | 'content-kit'
+  | 'messaging-guide'
+  | 'battlecard'
+  | 'case-study'
+  | 'competitive-review'
+  | 'solution-brief'
+  | 'design-guide'
+  | 'workshop'
+  | 'demo'
+  | 'reference-architecture'
+  | 'migration-guide'
+  | 'other'
+
+export interface ProductReference {
+  name: string
+  slug: string | null
+}
+
+export interface IntegrationReference {
+  technology: string
+  category: string
+}
+
+export interface CompetitorReference {
+  name: string
+  context: string
+}
+
+export interface PartnerSolutionReference {
+  partnerName: string
+  solutionArea: string
+}
+
+export interface CustomerScenario {
+  scenario: string
+  industry: string | null
+}
+
+export interface DocumentIntelligence {
+  documentName: string
+  documentCategory: DocumentCategory
+  summary: string
+
+  // What the document is ABOUT (structured classification)
+  productsReferenced: ProductReference[]
+  integrationsReferenced: IntegrationReference[] | null
+  competitorsReferenced: CompetitorReference[] | null
+  partnerSolutions: PartnerSolutionReference[] | null
+  useCases: string[] | null
+  customerScenarios: CustomerScenario[] | null
+  cloudProviders: string[] | null
+
+  // Who the document is FOR
+  audience: 'internal' | 'partner' | 'customer' | 'mixed'
+
+  // What the document CONTAINS
+  keyPoints: string[]
+  talkTracks: string[] | null
+  links: Array<{ name: string; url: string }>
+  actionableSteps: Array<{ step: string; url?: string }> | null
+  workshops: Array<{ name: string; url: string }> | null
+  demos: Array<{ name: string; url: string }> | null
+
+  // Provenance
+  enrichedAt: string
+  sourceProductSlug: string
 }
 
 export interface CaseStudyExtraction {
