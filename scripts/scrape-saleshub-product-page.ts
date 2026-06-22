@@ -531,7 +531,7 @@ async function detectSectionType(
  */
 async function extractRedHeaderSections(
   page: Page,
-): Promise<Record<string, ProductSection>> {
+): Promise<{ sections: Record<string, ProductSection>; domainDocLookup: Map<string, string> }> {
   const sections: Record<string, ProductSection> = {}
 
   // Strategy: Combine red divider bars (.seismic-page-divider-view) with
@@ -564,14 +564,19 @@ async function extractRedHeaderSections(
       title: string
       widgetClass: string
       links: Array<{ text: string; href: string }>
+      tableRows: Array<{ name: string; description: string }>
       textContent: string
       isAccordion: boolean
+      /** For accordion widgets: maps accordion heading → document names under it (#858) */
+      domainDocMap: Array<{ domain: string; docNames: string[] }>
     }> = []
 
     let currentTitle = ''
     let currentLinks: Array<{ text: string; href: string }> = []
+    let currentTableRows: Array<{ name: string; description: string }> = []
     let currentText = ''
     let isAccordion = false
+    let currentDomainDocMap: Array<{ domain: string; docNames: string[] }> = []
 
     for (const widget of widgets) {
       const cls = widget.className || ''
@@ -582,8 +587,8 @@ async function extractRedHeaderSections(
 
       if (isDivider) {
         // Save previous section if it has content
-        if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentText)) {
-          result.push({ title: currentTitle, widgetClass: cls, links: currentLinks, textContent: currentText, isAccordion })
+        if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentTableRows.length > 0 || currentText)) {
+          result.push({ title: currentTitle, widgetClass: cls, links: currentLinks, tableRows: currentTableRows, textContent: currentText, isAccordion, domainDocMap: currentDomainDocMap })
         }
         // Start new section from divider text
         const dividerText = (widget.textContent || '').trim()
@@ -594,8 +599,10 @@ async function extractRedHeaderSections(
           currentTitle = '__pending__'
         }
         currentLinks = []
+        currentTableRows = []
         currentText = ''
         isAccordion = false
+        currentDomainDocMap = []
         continue
       }
 
@@ -608,14 +615,52 @@ async function extractRedHeaderSections(
         // Handle accordion widgets specially — each has its own title
         if (isAccordionWidget) {
           // Save previous section
-          if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentText)) {
-            result.push({ title: currentTitle, widgetClass: '', links: currentLinks, textContent: currentText, isAccordion })
+          if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentTableRows.length > 0 || currentText)) {
+            result.push({ title: currentTitle, widgetClass: '', links: currentLinks, tableRows: currentTableRows, textContent: currentText, isAccordion, domainDocMap: currentDomainDocMap })
           }
           isAccordion = true
           const accTitle = widget.querySelector('.seismic-page-divider-view')
           currentTitle = accTitle ? (accTitle.textContent || '').trim() : 'Untitled'
           currentLinks = []
+          currentTableRows = []
           currentText = ''
+          currentDomainDocMap = []
+
+          // (#858 Fix 2) Extract domain-to-document mapping from accordion sub-sections.
+          // Each accordion panel has a heading (domain name) and a DocListPicker table
+          // with document names. Build a mapping so CDS-intercepted documents can be
+          // tagged with their domain.
+          const accordionPanels = widget.querySelectorAll(
+            '[class*="accordion"] [class*="panel"], ' +
+            '[class*="accordion"] [class*="content"], ' +
+            '[class*="Accordion"] [class*="Panel"], ' +
+            '[class*="expandable"] [class*="content"]'
+          )
+          for (const panel of accordionPanels) {
+            // Find the heading for this accordion panel — look for the trigger/header sibling
+            const parentItem = panel.closest(
+              '[class*="accordion-item"], [class*="AccordionItem"], ' +
+              '[class*="expandable-item"], [class*="pf-v5-c-accordion__expanded-content"]'
+            ) || panel.parentElement
+            if (!parentItem) continue
+            const heading = parentItem.querySelector(
+              '[class*="header"], [class*="trigger"], [class*="toggle"], ' +
+              '[class*="Header"], button[class*="accordion"]'
+            )
+            const domainName = heading ? (heading.textContent || '').trim() : ''
+            if (!domainName || domainName.length < 3) continue
+
+            // Collect document names from links inside this panel
+            const docLinks = panel.querySelectorAll('a[href]')
+            const docNames: string[] = []
+            for (const a of docLinks) {
+              const text = (a.textContent || '').trim().slice(0, 200)
+              if (text.length > 3) docNames.push(text)
+            }
+            if (docNames.length > 0) {
+              currentDomainDocMap.push({ domain: domainName, docNames })
+            }
+          }
         }
 
         // If title is pending (after empty divider), use this widget's own heading
@@ -650,11 +695,27 @@ async function extractRedHeaderSections(
               }
             }
             if (subLinks.length > 0 || subTitle) {
-              result.push({ title: subTitle, widgetClass: '', links: subLinks, textContent: '', isAccordion: false })
+              result.push({ title: subTitle, widgetClass: '', links: subLinks, tableRows: [], textContent: '', isAccordion: false, domainDocMap: [] })
             }
           }
           // Don't add to currentLinks — we already split into sub-sections
           continue
+        }
+
+        // (#858 Fix 1) Extract table rows — TDP & Sales Tactics tables have
+        // two-column rows: tactic name + rich description, with no links.
+        const tables = widget.querySelectorAll('table')
+        for (const table of tables) {
+          const rows = table.querySelectorAll('tbody tr, tr')
+          for (const row of rows) {
+            const cells = row.querySelectorAll('td')
+            if (cells.length < 2) continue
+            const name = (cells[0].textContent || '').trim()
+            const description = (cells[1].textContent || '').trim()
+            if (name.length > 3 && description.length > 10) {
+              currentTableRows.push({ name: name.slice(0, 200), description: description.slice(0, 2000) })
+            }
+          }
         }
 
         // Extract all links from this widget
@@ -676,8 +737,8 @@ async function extractRedHeaderSections(
     }
 
     // Don't forget the last section
-    if (currentTitle && (currentLinks.length > 0 || currentText)) {
-      result.push({ title: currentTitle, widgetClass: '', links: currentLinks, textContent: currentText, isAccordion })
+    if (currentTitle && (currentLinks.length > 0 || currentTableRows.length > 0 || currentText)) {
+      result.push({ title: currentTitle, widgetClass: '', links: currentLinks, tableRows: currentTableRows, textContent: currentText, isAccordion, domainDocMap: currentDomainDocMap })
     }
 
     return result
@@ -685,7 +746,9 @@ async function extractRedHeaderSections(
 
   console.log(`[product-scraper] Found ${widgetSections.length} widget sections:`)
   for (const ws of widgetSections) {
-    console.log(`  "${ws.title.slice(0, 50)}" — ${ws.links.length} links, ${ws.textContent.length} chars text${ws.isAccordion ? ' [accordion]' : ''}`)
+    const tableInfo = ws.tableRows.length > 0 ? `, ${ws.tableRows.length} table rows` : ''
+    const domainInfo = ws.domainDocMap.length > 0 ? `, ${ws.domainDocMap.length} domain maps` : ''
+    console.log(`  "${ws.title.slice(0, 50)}" — ${ws.links.length} links${tableInfo}${domainInfo}, ${ws.textContent.length} chars text${ws.isAccordion ? ' [accordion]' : ''}`)
   }
 
   if (widgetSections.length < 1) {
@@ -694,7 +757,21 @@ async function extractRedHeaderSections(
     if (allItems.length > 0) {
       sections['all-content'] = { title: 'All Content', type: 'links', items: allItems }
     }
-    return sections
+    return { sections, domainDocLookup: new Map() }
+  }
+
+  // (#858 Fix 2) Build a global domain-to-document-name mapping from all accordion sections.
+  // This will be used later to tag CDS-intercepted and API-merged documents with their domain.
+  const domainDocLookup = new Map<string, string>() // docName (lowercased, first 50 chars) → domain
+  for (const ws of widgetSections) {
+    for (const { domain, docNames } of ws.domainDocMap) {
+      for (const docName of docNames) {
+        domainDocLookup.set(docName.toLowerCase().slice(0, 50), domain)
+      }
+    }
+  }
+  if (domainDocLookup.size > 0) {
+    console.log(`[product-scraper] Domain-document mapping: ${domainDocLookup.size} documents across ${new Set(domainDocLookup.values()).size} domains`)
   }
 
   // Convert widget sections to ProductSection objects
@@ -712,15 +789,37 @@ async function extractRedHeaderSections(
       const key = link.text.slice(0, 50) + '|' + link.href
       if (seen.has(key)) continue
       seen.add(key)
-      items.push({ name: link.text, url: link.href })
+      const item: SectionItem = { name: link.text, url: link.href }
+      // Tag with domain if this document appears in a domain accordion (#858)
+      const domain = domainDocLookup.get(link.text.toLowerCase().slice(0, 50))
+      if (domain) item.domain = domain
+      items.push(item)
     }
 
-    const type: ProductSection['type'] = ws.isAccordion ? 'accordion' : 'mixed'
+    // (#858 Fix 1) Add table rows as SectionItem entries with itemType 'tactic'
+    for (const row of ws.tableRows) {
+      if (isGarbage(row.name)) continue
+      const key = row.name.slice(0, 50) + '|__table__'
+      if (seen.has(key)) continue
+      seen.add(key)
+      items.push({ name: row.name, description: row.description, itemType: 'tactic' })
+    }
+
+    const type: ProductSection['type'] = ws.isAccordion ? 'accordion'
+      : ws.tableRows.length > 0 ? 'table'
+      : 'mixed'
+
+    // Build textContent — include table row descriptions for TDP sections (#858)
+    let textContent = ws.textContent || ''
+    if (ws.tableRows.length > 0) {
+      const tableText = ws.tableRows.map(r => `${r.name}: ${r.description}`).join('\n\n')
+      textContent = textContent ? `${textContent}\n\n${tableText}` : tableText
+    }
 
     if (items.length > 0) {
       sections[sectionKey] = {
         title,
-        textContent: ws.textContent || undefined,
+        textContent: textContent || undefined,
         type,
         items,
       }
@@ -728,7 +827,7 @@ async function extractRedHeaderSections(
     }
   }
 
-  return sections
+  return { sections, domainDocLookup }
 }
 
 /**
@@ -1799,7 +1898,7 @@ export async function scrapeProductPage(
 
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
-    const sections = await extractRedHeaderSections(page)
+    const { sections, domainDocLookup } = await extractRedHeaderSections(page)
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
     // Query Seismic API for document list by product name (using auth captured in Step 1)
@@ -1835,16 +1934,22 @@ export async function scrapeProductPage(
           const sectionName = typeToSection[contentType] || contentType
           const sectionKey = slugify(sectionName)
 
-          const items: SectionItem[] = docs.map(doc => ({
-            name: doc.name,
-            url: doc.downloadUrl || undefined,
-            itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
-            description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
-            contentId: (doc as any).contentId || undefined,
-            versionId: doc.versionId || undefined,
-            format: (doc as any).format || undefined,
-            seismicContentType: contentType,
-          } as any))
+          const items: SectionItem[] = docs.map(doc => {
+            const item: any = {
+              name: doc.name,
+              url: doc.downloadUrl || undefined,
+              itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
+              description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
+              contentId: (doc as any).contentId || undefined,
+              versionId: doc.versionId || undefined,
+              format: (doc as any).format || undefined,
+              seismicContentType: contentType,
+            }
+            // (#858 Fix 2) Tag API documents with their Domain accordion section
+            const domain = domainDocLookup.get(doc.name.toLowerCase().slice(0, 50))
+            if (domain) item.domain = domain
+            return item
+          })
 
           if (sections[sectionKey]) {
             // Merge with existing section — add API docs, update existing with contentId/versionId
@@ -1876,6 +1981,27 @@ export async function scrapeProductPage(
       }
     } else {
       console.warn('[product-scraper] Could not capture Seismic auth — using DOM-only results')
+    }
+
+    // (#858 Fix 2) Final pass: tag any remaining untagged items with their domain.
+    // Items may have been added via API merge without domain tags if they were grouped
+    // by content type rather than by accordion section.
+    if (domainDocLookup.size > 0) {
+      let tagged = 0
+      for (const section of Object.values(sections)) {
+        for (const item of section.items) {
+          if (!item.domain) {
+            const domain = domainDocLookup.get(item.name.toLowerCase().slice(0, 50))
+            if (domain) {
+              item.domain = domain
+              tagged++
+            }
+          }
+        }
+      }
+      if (tagged > 0) {
+        console.log(`[product-scraper] Domain tagging: ${tagged} items tagged in final pass`)
+      }
     }
 
     // Extract sidebar

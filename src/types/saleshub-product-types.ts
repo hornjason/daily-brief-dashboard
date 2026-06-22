@@ -31,8 +31,9 @@ export interface SectionItem {
   name: string
   url?: string
   description?: string
-  itemType?: string  // 'deck', 'resource', 'video', 'case-study', 'workshop', 'lab', etc.
+  itemType?: string  // 'deck', 'resource', 'video', 'case-study', 'workshop', 'lab', 'tactic', etc.
   audience?: string  // 'internal', 'partner', 'customer', 'external'
+  domain?: string    // Domain accordion section this item belongs to (e.g., 'AIOps', 'Event-Driven Ansible')
   driveUrl?: string
   children?: SectionItem[]
   contentId?: string
