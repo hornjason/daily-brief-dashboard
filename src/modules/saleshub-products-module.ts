@@ -17,7 +17,7 @@ import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.t
 import { loadCustomerContext, matchesSubscriptionProducts } from '../lib/customer-context-loader.ts'
 import { readCCSPCache, readPipelineCache } from '../cache-layer.ts'
 import { downloadProductsFromDrive } from '../lib/saleshub-product-drive-sync.ts'
-import type { ProductPage, ProductSection, ProductEnrichment } from '../types/saleshub-product-types.ts'
+import type { ProductPage, ProductSection, ProductEnrichment, DocumentIntelligence } from '../types/saleshub-product-types.ts'
 import { resolve } from 'path'
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 
@@ -176,6 +176,88 @@ function customerHasCloudSpend(customerSlug: string, cloudProvider: string): boo
   )
 }
 
+// ── ADR-041: Document Intelligence Customer Matching ────────────────────────
+
+interface TechStackEntry {
+  name: string
+  [key: string]: unknown
+}
+
+interface TechStackCache {
+  technologies: TechStackEntry[]
+  [key: string]: unknown
+}
+
+function loadTechStackCache(customerSlug: string): TechStackCache | null {
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  const cachePath = resolve(cacheDir, 'tech-stack', `${customerSlug}.json`)
+  if (!existsSync(cachePath)) return null
+  try {
+    return JSON.parse(readFileSync(cachePath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Match a DocumentIntelligence against a customer's tech stack (ADR-041).
+ *
+ * Council corrections:
+ * - 4-character minimum on all substring matches
+ * - Single-direction only: tech stack name must CONTAIN extracted name
+ * - Returns ALL match types as array (not early-return)
+ */
+export function matchDocumentToCustomer(
+  doc: DocumentIntelligence,
+  customerSlug: string,
+): { matched: boolean; matchTypes: string[]; matchedItems: string[] } {
+  const techStack = loadTechStackCache(customerSlug)
+  if (!techStack?.technologies?.length) return { matched: false, matchTypes: [], matchedItems: [] }
+
+  const techNames = techStack.technologies.map(t => t.name.toLowerCase())
+  const matchTypes: string[] = []
+  const matchedItems: string[] = []
+
+  // Helper: 4-char minimum, single-direction (techName includes extracted)
+  const matches = (extracted: string, techName: string): boolean => {
+    const e = extracted.toLowerCase()
+    if (e.length < 4) return false
+    return techName.includes(e)
+  }
+
+  // Check integration matches
+  const integrationMatches = (doc.integrationsReferenced ?? [])
+    .filter(i => techNames.some(t => matches(i.technology, t)))
+  if (integrationMatches.length > 0) {
+    matchTypes.push('integration')
+    matchedItems.push(...integrationMatches.map(i => i.technology))
+  }
+
+  // Check competitor matches
+  const competitorMatches = (doc.competitorsReferenced ?? [])
+    .filter(c => techNames.some(t => matches(c.name, t)))
+  if (competitorMatches.length > 0) {
+    // Determine match type based on context
+    const hasDisplacement = competitorMatches.some(c => c.context === 'migration-from' || c.context === 'displacement')
+    matchTypes.push(hasDisplacement ? 'competitor-displacement' : 'competitor-context')
+    matchedItems.push(...competitorMatches.map(c => c.name))
+  }
+
+  // Check partner solution matches
+  const partnerMatches = (doc.partnerSolutions ?? [])
+    .filter(p => techNames.some(t => matches(p.partnerName, t)))
+  if (partnerMatches.length > 0) {
+    matchTypes.push('partner')
+    matchedItems.push(...partnerMatches.map(p => p.partnerName))
+  }
+
+  return {
+    matched: matchTypes.length > 0,
+    matchTypes,
+    matchedItems,
+  }
+}
+
 // ── Signal emission ──────────────────────────────────────────────────────────
 
 function emitProductSignals(
@@ -211,61 +293,49 @@ function emitProductSignals(
     })
   }
 
-  // 2. Cloud provider content kit signals (from enrichment, cap at 5)
-  // Sort by value: cloud provider > contacts > steps > generic
-  if (enrichment?.contentKits) {
-    const sorted = [...enrichment.contentKits].sort((a, b) => {
-      const scoreKit = (k: typeof a) => {
-        let s = 0
-        if (k.cloudProvider && k.cloudProvider !== 'unknown' && k.cloudProvider !== 'none') s += 10
-        if (k.contactName) s += 5
-        if (k.calculatorUrl) s += 5
-        s += Math.min(k.actionableSteps?.length ?? 0, 5)
-        s += Math.min(k.workshops?.length ?? 0, 3)
-        return s
-      }
-      return scoreKit(b) - scoreKit(a)
-    })
-    // Cap at 2 per cloud provider to prevent one provider dominating
-    const cloudCount = new Map<string, number>()
-    const selected: typeof sorted = []
-    for (const kit of sorted) {
-      if (selected.length >= 5) break
-      const cloud = kit.cloudProvider || 'unknown'
-      const count = cloudCount.get(cloud) ?? 0
-      if (count >= 2) continue
-      cloudCount.set(cloud, count + 1)
-      selected.push(kit)
-    }
-    for (const kit of selected) {
-      const stepsFormatted = kit.actionableSteps
-        .map((s, i) => `${i + 1}. ${s.step}${s.url ? ` (${s.url})` : ''}`)
-        .join('\n')
+  // 2. Document intelligence signals (ADR-041)
+  if (enrichment?.documents) {
+    for (const doc of enrichment.documents.slice(0, 10)) {
+      const match = matchDocumentToCustomer(doc, customerSlug)
 
       const metadata: Record<string, unknown> = {
         productSlug: product.slug,
-        cloudProvider: kit.cloudProvider,
-        actionableSteps: kit.actionableSteps,
-        calculatorUrl: kit.calculatorUrl ?? null,
-        workshopUrl: kit.workshops.length > 0 ? kit.workshops[0].url : null,
-        contactName: kit.contactName ?? null,
-      }
-      if (isCustomerMatch) {
-        metadata.customerSlug = customerSlug
-        // Check CCSP cloud spend for this provider
-        if (customerHasCloudSpend(customerSlug, kit.cloudProvider)) {
-          metadata.hasCloudSpend = true
-        }
+        documentCategory: doc.documentCategory,
+        documentName: doc.documentName,
+        redHatProducts: doc.productsReferenced.map(p => p.slug).filter(Boolean),
+        sourceProductSlug: doc.sourceProductSlug,
       }
 
+      if (match.matched) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = match.matchTypes
+        metadata.matchedTechnologies = match.matchedItems
+        metadata.integrationsReferenced = doc.integrationsReferenced
+        metadata.links = (doc.links ?? []).slice(0, 3)
+        metadata.useCases = doc.useCases
+        metadata.talkTracks = doc.talkTracks
+        metadata.actionableSteps = doc.actionableSteps
+
+        // Check CCSP cloud spend for cloud-specific documents
+        const clouds = doc.cloudProviders ?? []
+        for (const cloud of clouds) {
+          if (customerHasCloudSpend(customerSlug, cloud)) {
+            metadata.hasCloudSpend = true
+            break
+          }
+        }
+      } else if (isCustomerMatch) {
+        // Product subscription match — include customerSlug
+        metadata.customerSlug = customerSlug
+      }
+
+      const cleanName = doc.documentName.replace(/\.(html|pdf|docx|pptx)$/i, '')
       signals.push({
         source: 'saleshub-products',
         type: 'recommendation',
-        headline: kit.cloudProvider !== 'unknown'
-          ? `${product.name} on ${kit.cloudProvider} — ${kit.documentName.replace(/\.(html|pdf|docx|pptx)$/i, '')}`
-          : `${product.name} — ${kit.documentName.replace(/\.(html|pdf|docx|pptx)$/i, '')}`,
-        detail: stepsFormatted,
-        rawRelevance: 0.35,
+        headline: `${product.name} — ${cleanName}`,
+        detail: doc.summary || doc.keyPoints.join('; '),
+        rawRelevance: match.matched ? 0.40 : 0.35,
         timestamp,
         metadata,
       })
@@ -612,11 +682,7 @@ export function createSaleshubProductsRouter() {
         slug,
         enriched: true,
         documentsProcessed: documents.length,
-        contentKits: enrichment.contentKits.length,
-        messagingGuides: enrichment.messagingGuides.length,
-        battlecards: enrichment.battlecards.length,
-        caseStudies: enrichment.caseStudies.length,
-        competitiveReviews: enrichment.competitiveReviews.length,
+        documentsEnriched: enrichment.documents.length,
         enrichedAt: enrichment.enrichedAt,
       })
     } catch (e: any) {

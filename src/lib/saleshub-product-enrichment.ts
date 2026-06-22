@@ -1,9 +1,10 @@
 /**
- * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819, #867)
+ * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819, #866)
  *
- * Enriches product documents (content kits, messaging guides, battlecards,
- * case studies, competitive reviews) using callGemini() (ADR-023) with
- * ADR-024 quality validators.
+ * ADR-041: Universal DocumentIntelligence extraction replaces 5 type-specific
+ * configs. Every document gets the same structured intelligence fields via
+ * responseSchema (ADR-040). Post-extraction vocabulary resolution is
+ * deterministic (no Gemini).
  *
  * All extraction goes through extractWithGemini() — the single shared
  * ceremony that handles prompt building, fence stripping, parsing,
@@ -17,33 +18,23 @@
 import { callGemini, type GeminiResult } from '../gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
 import type { QualityValidator } from '../gemini-quality-gate.ts'
-import {
-  contentKitValidator,
-  documentExtractionValidator,
-  caseStudyValidator,
-  competitiveReviewValidator,
-} from '../quality-validators/product-enrichment-validator.ts'
+import { documentIntelligenceValidator } from '../quality-validators/document-intelligence-validator.ts'
 import type {
-  ContentKitExtraction,
-  DocumentExtraction,
+  DocumentIntelligence,
   ProductEnrichment,
-  CaseStudyExtraction,
-  CompetitiveReviewExtraction,
 } from '../types/saleshub-product-types.ts'
+import { resolveDocumentIntelligence } from './document-intelligence-resolver.ts'
+import { loadAllEcosystemPartners, type EcosystemPartnerCache } from './ecosystem-catalog.ts'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type GeminiCaller = (system: string, user: string, opts: any) => Promise<GeminiResult>
 
-interface ContentKitInput {
+export interface EnrichmentDocumentInput {
   name: string
   content: string
-  cloudProvider: string
-}
-
-interface DocumentInput {
-  name: string
-  content: string
+  type: string
+  cloudProvider?: string
 }
 
 /**
@@ -56,6 +47,7 @@ export interface ExtractionConfig<T> {
   validator?: QualityValidator
   parseResult: (raw: any, docName: string, fallbacks?: Record<string, any>) => T
   callType: string  // for callGemini cost tracking
+  responseSchema?: object  // ADR-040: Gemini structured output schema
 }
 
 // ── Content helpers ────────────────────────────────────────────────────────
@@ -98,13 +90,6 @@ function buildUserPrompt(promptFn: (name: string, content: string) => string, na
   return promptFn(name, content) + urlRef
 }
 
-interface EnrichmentDocumentInput {
-  name: string
-  content: string
-  type: string
-  cloudProvider?: string
-}
-
 // ── Fence stripping (single location — AC-3) ──────────────────────────────
 
 /**
@@ -122,7 +107,8 @@ export function stripMarkdownFences(text: string): string {
  * 1. Build user prompt (with binary/HTML detection, URL extraction)
  * 2. Build Gemini opts (handle binary content, inlineDataParts)
  * 3. Call callGemini()
- * 4. Strip markdown fences
+ * 4. Strip markdown fences (BYPASSED when responseSchema is present — Gemini
+ *    structured output returns clean JSON, no markdown fencing)
  * 5. JSON.parse() the result
  * 6. Run through validateAndRetry() if validator provided
  * 7. Catch and warn on failure, return null
@@ -137,18 +123,29 @@ export async function extractWithGemini<T>(
   try {
     const systemPrompt = config.systemPrompt
     const userPrompt = buildUserPrompt(config.userPromptFn, docName, content)
-    const opts = buildGeminiOpts(content, {
+    const baseOpts: any = {
       callType: config.callType,
       model: 'lite',
       deltaKey: `saleshub-enrich-${config.callType}-${docName}`,
-    })
+    }
+    // ADR-040: pass responseSchema + temperature when configured
+    if (config.responseSchema) {
+      baseOpts.responseSchema = config.responseSchema
+      baseOpts.temperature = 0.3
+      baseOpts.timeoutMs = 90000
+    }
+    const opts = buildGeminiOpts(content, baseOpts)
+
+    // When responseSchema is set, Gemini returns clean JSON — skip fence stripping
+    const hasSchema = !!config.responseSchema
 
     const initialResult = await gemini(systemPrompt, userPrompt, opts)
 
     if (config.validator) {
+      const initialText = hasSchema ? initialResult.text : stripMarkdownFences(initialResult.text)
       // Full validateAndRetry path
       const gateResult = await validateAndRetry(
-        stripMarkdownFences(initialResult.text),
+        initialText,
         { validator: config.validator, maxRetries: 2 },
         async (failures, _attempt) => {
           const feedback = formatFailureFeedback(failures)
@@ -157,7 +154,7 @@ export async function extractWithGemini<T>(
             `${userPrompt}\n\n${feedback}`,
             opts,
           )
-          return retryResult.text
+          return hasSchema ? retryResult.text : stripMarkdownFences(retryResult.text)
         },
       )
 
@@ -167,12 +164,12 @@ export async function extractWithGemini<T>(
         )
       }
 
-      const cleaned = stripMarkdownFences(gateResult.output)
+      const cleaned = hasSchema ? gateResult.output : stripMarkdownFences(gateResult.output)
       const parsed = JSON.parse(cleaned)
       return config.parseResult(parsed, docName, fallbacks)
     } else {
       // No validator — parse directly
-      const cleaned = stripMarkdownFences(initialResult.text)
+      const cleaned = hasSchema ? initialResult.text : stripMarkdownFences(initialResult.text)
       const parsed = JSON.parse(cleaned)
       return config.parseResult(parsed, docName, fallbacks)
     }
@@ -182,243 +179,239 @@ export async function extractWithGemini<T>(
   }
 }
 
-// ── Prompts ─────────────────────────────────────────────────────────────────
+// ── ADR-041: Document Intelligence Schema ──────────────────────────────────
 
-const CONTENT_KIT_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat sales content kits.
-Extract engagement data and return valid JSON only. No markdown, no explanation.`
-
-const CONTENT_KIT_USER_PROMPT = (docName: string, content: string) => `Extract structured engagement data from this sales content kit document: "${docName}"
-
-Return a JSON object with these fields:
-- actionableSteps: array of { step: string, url?: string } — preserve all URLs exactly
-- calculatorUrl: string or null — URL to any ROI/cost calculator
-- contactName: string or null — any named contact person
-- workshops: array of { name: string, url: string }
-- demos: array of { name: string, url: string }
-- battlecards: array of { name: string, url: string, competitor?: string }
-- internalMaterials: array of { name: string, url: string }
-- salesPlayAlignment: array of strings
-- cloudProvider: string — the primary cloud provider this content targets: "AWS", "Azure", "Google Cloud", or "none" if not cloud-specific. Detect from document content, not just the title.
-
-IMPORTANT: Preserve ALL URLs exactly as they appear in the document. Every link must be captured.
-
-Document content:
-${content}`
-
-const MESSAGING_GUIDE_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat messaging guides.
-Extract key messaging data and return valid JSON only. No markdown, no explanation.`
-
-const MESSAGING_GUIDE_USER_PROMPT = (docName: string, content: string) => `Extract structured messaging data from this guide: "${docName}"
-
-Return a JSON object with these fields:
-- summary: string — 1-2 sentence summary of the messaging guide
-- keyPoints: array of strings — key messaging points and value propositions
-- talkTracks: array of strings — recommended talk tracks for sales conversations
-- links: array of { name: string, url: string } — all referenced URLs
-
-Document content:
-${content}`
-
-const BATTLECARD_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat competitive battlecards.
-Extract competitive intelligence and return valid JSON only. No markdown, no explanation.`
-
-const BATTLECARD_USER_PROMPT = (docName: string, content: string) => `Extract competitive intelligence from this battlecard: "${docName}"
-
-Return a JSON object with these fields:
-- summary: string — 1-2 sentence summary of the competitive positioning
-- keyPoints: array of strings — competitive differentiators and angles
-- links: array of { name: string, url: string } — all referenced URLs
-
-Document content:
-${content}`
-
-const CASE_STUDY_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat customer case studies.
-Extract customer success data and return valid JSON only. No markdown, no explanation.`
-
-const CASE_STUDY_USER_PROMPT = (docName: string, content: string) => `Extract customer success data from this case study: "${docName}"
-
-Return a JSON object with these fields:
-- summary: string — 1-2 sentence summary of the customer success story
-- customerName: string — name of the customer organization
-- industry: string — customer's industry
-- challenge: string — business challenge the customer faced
-- solution: string — how Red Hat products solved it
-- results: array of strings — measurable outcomes and benefits
-- productsUsed: array of strings — Red Hat products mentioned
-- keyPoints: array of strings — key takeaways for sales conversations
-- links: array of { name: string, url: string } — all referenced URLs
-
-Document content:
-${content}`
-
-const COMPETITIVE_REVIEW_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat competitive reviews.
-Extract competitive positioning data and return valid JSON only. No markdown, no explanation.`
-
-const COMPETITIVE_REVIEW_USER_PROMPT = (docName: string, content: string) => `Extract competitive positioning from this review: "${docName}"
-
-Return a JSON object with these fields:
-- summary: string — 1-2 sentence summary of the competitive comparison
-- competitor: string — name of the competitor being compared
-- keyDifferentiators: array of strings — Red Hat advantages over the competitor
-- competitorWeaknesses: array of strings — competitor disadvantages
-- talkTracks: array of strings — recommended conversation approaches
-- keyPoints: array of strings — key competitive insights
-- links: array of { name: string, url: string } — all referenced URLs
-
-Document content:
-${content}`
-
-// ── Extraction configs ─────────────────────────────────────────────────────
-
-const contentKitConfig: ExtractionConfig<ContentKitExtraction> = {
-  systemPrompt: CONTENT_KIT_SYSTEM_PROMPT,
-  userPromptFn: CONTENT_KIT_USER_PROMPT,
-  validator: contentKitValidator,
-  callType: 'content-kit-extraction',
-  parseResult: (parsed, docName, fallbacks) => ({
-    documentName: docName,
-    cloudProvider: (parsed.cloudProvider && parsed.cloudProvider !== 'none')
-      ? parsed.cloudProvider
-      : (fallbacks?.cloudProvider || 'unknown'),
-    actionableSteps: parsed.actionableSteps ?? [],
-    calculatorUrl: parsed.calculatorUrl ?? null,
-    contactName: parsed.contactName ?? null,
-    contactEmail: parsed.contactEmail ?? undefined,
-    workshops: (parsed.workshops ?? []).slice(0, 5),
-    demos: (parsed.demos ?? []).slice(0, 5),
-    battlecards: (parsed.battlecards ?? []).slice(0, 5),
-    internalMaterials: (parsed.internalMaterials ?? []).slice(0, 5),
-    salesPlayAlignment: parsed.salesPlayAlignment ?? [],
-  }),
+export const DOCUMENT_INTELLIGENCE_SCHEMA = {
+  type: 'object',
+  properties: {
+    documentCategory: {
+      type: 'string',
+      enum: ['content-kit', 'messaging-guide', 'battlecard', 'case-study',
+             'competitive-review', 'solution-brief', 'design-guide',
+             'workshop', 'demo', 'reference-architecture', 'migration-guide', 'other'],
+      description: 'The editorial format/type of this document based on its structure and content.',
+    },
+    summary: {
+      type: 'string',
+      description: '1-2 sentence summary of the document\'s primary purpose and content.',
+    },
+    productsReferenced: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Red Hat product name as mentioned in the document.' },
+        },
+        required: ['name'],
+      },
+      description: 'All Red Hat products mentioned in the document. Extract exact product names.',
+    },
+    integrationsReferenced: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          technology: { type: 'string', description: 'Third-party technology name (e.g., ServiceNow, Cisco ACI, Splunk).' },
+          category: { type: 'string', description: 'Technology category: ITSM, Networking, CI/CD, Monitoring, Security, Cloud, Storage, Virtualization, Database, or Other.' },
+        },
+        required: ['technology', 'category'],
+      },
+      nullable: true,
+      description: 'Third-party technologies this document discusses integration with. Set null if the document does not reference any third-party integrations.',
+    },
+    competitorsReferenced: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Competitor company or product name.' },
+          context: { type: 'string', enum: ['displacement', 'comparison', 'migration-from', 'coexistence'], description: 'How the competitor is referenced in the document.' },
+        },
+        required: ['name', 'context'],
+      },
+      nullable: true,
+      description: 'Competitor technologies or products referenced. Set null if no competitors are mentioned.',
+    },
+    partnerSolutions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          partnerName: { type: 'string', description: 'Technology partner company name.' },
+          solutionArea: { type: 'string', description: 'Solution category: ITSM, Security, Observability, Networking, Storage, or Other.' },
+        },
+        required: ['partnerName', 'solutionArea'],
+      },
+      nullable: true,
+      description: 'Partner solutions referenced as complementary to Red Hat products. Set null if no partner solutions are mentioned.',
+    },
+    useCases: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true,
+      description: 'Specific use cases the document addresses (e.g., "Network automation", "Container security", "VM migration"). Set null if no specific use cases are described.',
+    },
+    customerScenarios: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          scenario: { type: 'string', description: 'Customer scenario described (e.g., "Migrating from VMware to OpenShift Virtualization").' },
+          industry: { type: 'string', nullable: true, description: 'Industry if mentioned. Set null if industry-agnostic.' },
+        },
+        required: ['scenario'],
+      },
+      nullable: true,
+      description: 'Customer scenarios or use cases with industry context. Set null if none described.',
+    },
+    cloudProviders: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true,
+      description: 'Cloud providers referenced (AWS, Azure, Google Cloud, IBM Cloud). Set null if not cloud-specific.',
+    },
+    audience: {
+      type: 'string',
+      enum: ['internal', 'partner', 'customer', 'mixed'],
+      description: 'Primary audience for this document based on its content and tone.',
+    },
+    keyPoints: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Key messaging points or value propositions from the document.',
+    },
+    talkTracks: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true,
+      description: 'Recommended talk tracks for sales conversations. Set null if none present.',
+    },
+    links: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          url: { type: 'string' },
+        },
+        required: ['name', 'url'],
+      },
+      description: 'All hyperlinks from the document. Preserve URLs exactly.',
+    },
+    actionableSteps: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          step: { type: 'string' },
+          url: { type: 'string', nullable: true },
+        },
+        required: ['step'],
+      },
+      nullable: true,
+      description: 'Actionable steps with optional URLs. Set null if none present.',
+    },
+    workshops: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          url: { type: 'string' },
+        },
+        required: ['name', 'url'],
+      },
+      nullable: true,
+      description: 'Workshops or labs referenced. Set null if none.',
+    },
+    demos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          url: { type: 'string' },
+        },
+        required: ['name', 'url'],
+      },
+      nullable: true,
+      description: 'Demos or interactive experiences referenced. Set null if none.',
+    },
+  },
+  required: ['documentCategory', 'summary', 'productsReferenced', 'audience', 'keyPoints', 'links'],
 }
 
-const messagingGuideConfig: ExtractionConfig<DocumentExtraction> = {
-  systemPrompt: MESSAGING_GUIDE_SYSTEM_PROMPT,
-  userPromptFn: MESSAGING_GUIDE_USER_PROMPT,
-  validator: documentExtractionValidator,
-  callType: 'messaging-guide-extraction',
+// ── ADR-041: Document Intelligence Prompts ─────────────────────────────────
+
+const DOCUMENT_INTELLIGENCE_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat sales and product documents.
+Extract intelligence about what the document covers — products, integrations, competitors, partner solutions, use cases, and key messaging.
+Return valid JSON matching the provided schema.
+
+## GROUNDING RULES (MANDATORY)
+1. Every claim MUST come from the provided document content.
+2. If the document does not mention a technology/product/competitor, set the field to null.
+3. Never extrapolate integrations not explicitly discussed.
+4. Preserve all URLs exactly.`
+
+const DOCUMENT_INTELLIGENCE_USER_PROMPT = (docName: string, content: string) =>
+  `Extract structured intelligence from this Red Hat document: "${docName}"
+
+Classify the document type, extract all referenced Red Hat products, third-party integrations, competitors, partner solutions, use cases, and key messaging. Capture all hyperlinks exactly as they appear.
+
+Document content:
+${content}`
+
+// ── ADR-041: Document Intelligence Extraction Config ───────────────────────
+
+const documentIntelligenceConfig: ExtractionConfig<DocumentIntelligence> = {
+  systemPrompt: DOCUMENT_INTELLIGENCE_SYSTEM_PROMPT,
+  userPromptFn: DOCUMENT_INTELLIGENCE_USER_PROMPT,
+  validator: documentIntelligenceValidator,
+  callType: 'document-intelligence-extraction',
+  responseSchema: DOCUMENT_INTELLIGENCE_SCHEMA,
   parseResult: (parsed, docName) => ({
     documentName: docName,
+    documentCategory: parsed.documentCategory ?? 'other',
     summary: parsed.summary ?? '',
+    productsReferenced: (parsed.productsReferenced ?? []).map((p: any) => ({
+      name: p.name ?? '',
+      slug: null, // resolved post-extraction by document-intelligence-resolver
+    })),
+    integrationsReferenced: parsed.integrationsReferenced ?? null,
+    competitorsReferenced: parsed.competitorsReferenced ?? null,
+    partnerSolutions: parsed.partnerSolutions ?? null,
+    useCases: parsed.useCases ?? null,
+    customerScenarios: parsed.customerScenarios ?? null,
+    cloudProviders: parsed.cloudProviders ?? null,
+    audience: parsed.audience ?? 'internal',
     keyPoints: parsed.keyPoints ?? [],
-    talkTracks: parsed.talkTracks ?? [],
+    talkTracks: parsed.talkTracks ?? null,
     links: parsed.links ?? [],
-  }),
-}
-
-const battlecardConfig: ExtractionConfig<DocumentExtraction> = {
-  systemPrompt: BATTLECARD_SYSTEM_PROMPT,
-  userPromptFn: BATTLECARD_USER_PROMPT,
-  validator: documentExtractionValidator,
-  callType: 'battlecard-extraction',
-  parseResult: (parsed, docName) => ({
-    documentName: docName,
-    summary: parsed.summary ?? '',
-    keyPoints: parsed.keyPoints ?? [],
-    links: parsed.links ?? [],
-  }),
-}
-
-const caseStudyConfig: ExtractionConfig<CaseStudyExtraction> = {
-  systemPrompt: CASE_STUDY_SYSTEM_PROMPT,
-  userPromptFn: CASE_STUDY_USER_PROMPT,
-  validator: caseStudyValidator,
-  callType: 'case-study-extraction',
-  parseResult: (parsed, docName) => ({
-    documentName: docName,
-    customerName: parsed.customerName ?? '',
-    industry: parsed.industry ?? '',
-    challenge: parsed.challenge ?? '',
-    solution: parsed.solution ?? '',
-    results: (parsed.results ?? []).slice(0, 5),
-    productsUsed: (parsed.productsUsed ?? []).slice(0, 5),
-    keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
-    links: (parsed.links ?? []).slice(0, 5),
-  }),
-}
-
-const competitiveReviewConfig: ExtractionConfig<CompetitiveReviewExtraction> = {
-  systemPrompt: COMPETITIVE_REVIEW_SYSTEM_PROMPT,
-  userPromptFn: COMPETITIVE_REVIEW_USER_PROMPT,
-  validator: competitiveReviewValidator,
-  callType: 'competitive-review-extraction',
-  parseResult: (parsed, docName) => ({
-    documentName: docName,
-    competitor: parsed.competitor ?? '',
-    keyDifferentiators: (parsed.keyDifferentiators ?? []).slice(0, 5),
-    competitorWeaknesses: (parsed.competitorWeaknesses ?? []).slice(0, 5),
-    talkTracks: (parsed.talkTracks ?? []).slice(0, 5),
-    keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
-    links: (parsed.links ?? []).slice(0, 5),
+    actionableSteps: parsed.actionableSteps ?? null,
+    workshops: parsed.workshops ?? null,
+    demos: parsed.demos ?? null,
+    enrichedAt: new Date().toISOString(),
+    sourceProductSlug: '', // set by caller
   }),
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Enrich a content kit document with Gemini extraction.
- * Uses ADR-024 validateAndRetry with contentKitValidator.
+ * Enrich a single document with universal DocumentIntelligence extraction (ADR-041).
+ * Returns a DocumentIntelligence or null on failure.
  */
-export async function enrichContentKit(
-  doc: ContentKitInput,
+export async function enrichDocumentIntelligence(
+  doc: EnrichmentDocumentInput,
   gemini: GeminiCaller = callGemini,
-): Promise<ContentKitExtraction | null> {
-  return extractWithGemini(
-    contentKitConfig,
-    doc.name,
-    doc.content,
-    gemini,
-    { cloudProvider: doc.cloudProvider },
-  )
+): Promise<DocumentIntelligence | null> {
+  return extractWithGemini(documentIntelligenceConfig, doc.name, doc.content, gemini)
 }
 
 /**
- * Enrich a messaging guide document with Gemini extraction.
- * Uses ADR-024 validateAndRetry with documentExtractionValidator.
- */
-export async function enrichMessagingGuide(
-  doc: DocumentInput,
-  gemini: GeminiCaller = callGemini,
-): Promise<DocumentExtraction | null> {
-  return extractWithGemini(messagingGuideConfig, doc.name, doc.content, gemini)
-}
-
-/**
- * Enrich a battlecard document with Gemini extraction.
- * Uses ADR-024 validateAndRetry with documentExtractionValidator.
- */
-export async function enrichBattlecard(
-  doc: DocumentInput,
-  gemini: GeminiCaller = callGemini,
-): Promise<DocumentExtraction | null> {
-  return extractWithGemini(battlecardConfig, doc.name, doc.content, gemini)
-}
-
-/**
- * Enrich a case study document with Gemini extraction.
- * Uses ADR-024 validateAndRetry with caseStudyValidator (#868).
- */
-export async function enrichCaseStudy(
-  doc: DocumentInput,
-  gemini: GeminiCaller = callGemini,
-): Promise<CaseStudyExtraction | null> {
-  return extractWithGemini(caseStudyConfig, doc.name, doc.content, gemini)
-}
-
-/**
- * Enrich a competitive review document with Gemini extraction.
- * Uses ADR-024 validateAndRetry with competitiveReviewValidator (#868).
- */
-export async function enrichCompetitiveReview(
-  doc: DocumentInput,
-  gemini: GeminiCaller = callGemini,
-): Promise<CompetitiveReviewExtraction | null> {
-  return extractWithGemini(competitiveReviewConfig, doc.name, doc.content, gemini)
-}
-
-/**
- * Enrich all documents for a product, routing each to the appropriate
- * enrichment function based on document type.
+ * Enrich all documents for a product using the universal DocumentIntelligence
+ * schema (ADR-041). Each document gets the same extraction regardless of type.
+ * Post-extraction resolution runs deterministically against vocabulary modules.
  *
  * @param geminiFactory - Optional factory that returns a GeminiCaller per doc type (for testing)
  */
@@ -427,14 +420,18 @@ export async function enrichProductDocuments(
   documents: EnrichmentDocumentInput[],
   geminiFactory?: (docType: string) => GeminiCaller,
 ): Promise<ProductEnrichment> {
-  const contentKits: ContentKitExtraction[] = []
-  const messagingGuides: DocumentExtraction[] = []
-  const battlecards: DocumentExtraction[] = []
-  const caseStudies: CaseStudyExtraction[] = []
-  const competitiveReviews: CompetitiveReviewExtraction[] = []
+  const docs: DocumentIntelligence[] = []
 
-  const getGemini = (type: string): GeminiCaller =>
-    geminiFactory ? geminiFactory(type) : callGemini
+  const getGemini = (_type: string): GeminiCaller =>
+    geminiFactory ? geminiFactory(_type) : callGemini
+
+  // Load ecosystem partners once for the batch (not per-document)
+  let partners: EcosystemPartnerCache[] = []
+  try {
+    partners = loadAllEcosystemPartners()
+  } catch {
+    // Ecosystem catalog not available — proceed without partner resolution
+  }
 
   // Process in parallel batches of 5 (#841)
   const BATCH_SIZE = 5
@@ -446,65 +443,22 @@ export async function enrichProductDocuments(
         console.warn(`[saleshub-product-enrichment] Skipping "${doc.name}" — content too large (${Math.round(doc.content.length / 1_000_000)}MB)`)
         return null
       }
-      return { doc, result: await enrichSingleDocument(doc, getGemini) }
+      const result = await enrichDocumentIntelligence(doc, getGemini(doc.type))
+      if (!result) return null
+      // Set source product slug and resolve against vocabularies
+      result.sourceProductSlug = productSlug
+      return resolveDocumentIntelligence(result, partners)
     }))
 
     for (const r of results) {
-      if (r.status !== 'fulfilled' || !r.value?.result) continue
-      const { doc, result } = r.value
-      switch (doc.type) {
-        case 'content-kit': contentKits.push(result as ContentKitExtraction); break
-        case 'messaging-guide': messagingGuides.push(result as DocumentExtraction); break
-        case 'battlecard': battlecards.push(result as DocumentExtraction); break
-        case 'case-study': caseStudies.push(result as CaseStudyExtraction); break
-        case 'competitive-review': competitiveReviews.push(result as CompetitiveReviewExtraction); break
-      }
+      if (r.status !== 'fulfilled' || !r.value) continue
+      docs.push(r.value)
     }
   }
 
   return {
     productSlug,
     enrichedAt: new Date().toISOString(),
-    contentKits,
-    messagingGuides,
-    battlecards,
-    caseStudies,
-    competitiveReviews,
-  }
-}
-
-async function enrichSingleDocument(
-  doc: EnrichmentDocumentInput,
-  getGemini: (type: string) => GeminiCaller,
-): Promise<any> {
-  switch (doc.type) {
-      case 'content-kit':
-        return enrichContentKit(
-          { name: doc.name, content: doc.content, cloudProvider: doc.cloudProvider ?? 'unknown' },
-          getGemini('content-kit'),
-        )
-      case 'messaging-guide':
-        return enrichMessagingGuide(
-          { name: doc.name, content: doc.content },
-          getGemini('messaging-guide'),
-        )
-      case 'battlecard':
-        return enrichBattlecard(
-          { name: doc.name, content: doc.content },
-          getGemini('battlecard'),
-        )
-      case 'case-study':
-        return enrichCaseStudy(
-          { name: doc.name, content: doc.content },
-          getGemini('case-study'),
-        )
-      case 'competitive-review':
-        return enrichCompetitiveReview(
-          { name: doc.name, content: doc.content },
-          getGemini('competitive-review'),
-        )
-      default:
-        console.warn(`[saleshub-product-enrichment] Unknown document type "${doc.type}" for "${doc.name}" — skipping`)
-        return null
+    documents: docs,
   }
 }

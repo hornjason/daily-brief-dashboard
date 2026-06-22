@@ -67,29 +67,39 @@ describe('saleshub-products-module', () => {
       JSON.stringify(productA),
     )
 
-    // Write enrichment data for product A with AWS content kit
+    // Write enrichment data for product A using ADR-041 DocumentIntelligence format
     const enrichmentA = {
       productSlug: 'test-product-a',
       enrichedAt: '2026-06-15T00:00:00.000Z',
-      contentKits: [
+      documents: [
         {
           documentName: 'Test Product A on AWS Content Kit',
-          cloudProvider: 'AWS',
+          documentCategory: 'content-kit',
+          summary: 'AWS cloud migration content kit for Test Product A.',
+          productsReferenced: [{ name: 'Test Product A', slug: 'test-product-a' }],
+          integrationsReferenced: null,
+          competitorsReferenced: null,
+          partnerSolutions: null,
+          useCases: ['Cloud migration'],
+          customerScenarios: null,
+          cloudProviders: ['AWS'],
+          audience: 'customer',
+          keyPoints: ['Cost savings on AWS', 'Marketplace deployment'],
+          talkTracks: ['Ask about cloud migration timeline'],
+          links: [
+            { name: 'AWS Workshop', url: 'https://example.com/workshop' },
+            { name: 'Calculator', url: 'https://example.com/calculator' },
+          ],
           actionableSteps: [
             { step: 'Ask the customer about cloud migration goals', url: 'https://example.com/step1' },
             { step: 'Share cost comparison data' },
           ],
-          calculatorUrl: 'https://example.com/calculator',
-          contactName: 'Jane Smith',
           workshops: [{ name: 'AWS Migration Workshop', url: 'https://example.com/workshop' }],
           demos: [],
-          battlecards: [{ name: 'AWS Battlecard', url: 'https://example.com/bc', competitor: 'VMware' }],
-          internalMaterials: [],
-          salesPlayAlignment: ['Cloud Sales Play'],
+          enrichedAt: '2026-06-15T00:00:00.000Z',
+          sourceProductSlug: 'test-product-a',
         },
       ],
-      messagingGuides: [],
-      battlecards: [],
     }
 
     writeFileSync(
@@ -159,22 +169,20 @@ describe('saleshub-products-module', () => {
     expect((news.metadata!.links as any[]).length).toBe(2)
   })
 
-  it('signals() returns cloud provider content kit signals with calculator URL', async () => {
+  it('signals() returns document intelligence signals (ADR-041)', async () => {
     const mod = FeatureModuleRegistry.get('saleshub-products')!
     const signals = await mod.signals('some-customer')
 
-    const kitSignals = signals.filter(
-      s => s.type === 'recommendation' && (s.metadata?.cloudProvider as string) === 'AWS'
+    const docSignals = signals.filter(
+      s => s.type === 'recommendation' && s.metadata?.documentCategory === 'content-kit'
     )
-    expect(kitSignals.length).toBe(1)
+    expect(docSignals.length).toBe(1)
 
-    const kit = kitSignals[0]
-    expect(kit.headline).toContain('Test Product A on AWS')
-    expect(kit.metadata?.calculatorUrl).toBe('https://example.com/calculator')
-    expect(kit.metadata?.contactName).toBe('Jane Smith')
-    expect(kit.metadata?.workshopUrl).toBe('https://example.com/workshop')
-    expect(kit.metadata?.actionableSteps).toBeDefined()
-    expect((kit.metadata!.actionableSteps as any[]).length).toBe(2)
+    const doc = docSignals[0]
+    expect(doc.headline).toContain('Test Product A')
+    expect(doc.headline).toContain('AWS Content Kit')
+    expect(doc.metadata?.documentName).toBe('Test Product A on AWS Content Kit')
+    expect(doc.metadata?.sourceProductSlug).toBe('test-product-a')
   })
 
   it('signals() returns training resource signals', async () => {
@@ -251,14 +259,14 @@ describe('saleshub-products-module', () => {
       if (s.type === 'product-release') return 'news'
       if (s.metadata?.resourceType === 'training') return 'training'
       if (s.metadata?.resourceType === 'services') return 'services'
-      if (s.metadata?.cloudProvider) return 'cloud-kit'
+      if (s.metadata?.documentCategory) return 'document'
       return 'other'
     }))
 
     expect(types.has('news')).toBe(true)
     expect(types.has('training')).toBe(true)
     expect(types.has('services')).toBe(true)
-    expect(types.has('cloud-kit')).toBe(true)
+    expect(types.has('document')).toBe(true)
   })
 
   it('syncNow reloads products and records outcome', async () => {

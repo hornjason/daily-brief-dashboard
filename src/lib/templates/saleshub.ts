@@ -18,8 +18,13 @@ export function templateSalesHubInsights(signals: Signal[]): string | null {
 
   const tactics = shSignals.filter(s => s.metadata?.playType === 'tactic')
   const strategicPlays = shSignals.filter(s => s.metadata?.playType === 'strategic')
+  // ADR-041: Document intelligence signals with matchType
+  const docMatches = shSignals.filter(s => {
+    const mt = s.metadata?.matchType
+    return Array.isArray(mt) && mt.length > 0
+  })
 
-  if (tactics.length === 0 && strategicPlays.length === 0) return null
+  if (tactics.length === 0 && strategicPlays.length === 0 && docMatches.length === 0) return null
 
   const lines: string[] = ['## Sales Plays & Tactics']
 
@@ -46,6 +51,48 @@ export function templateSalesHubInsights(signals: Signal[]): string | null {
       const name = s.headline
       const tdps = Array.isArray(m.tdpAlignment) ? m.tdpAlignment.join(', ') : String(m.tdpAlignment ?? '')
       lines.push(`- **${name}** — TDPs: ${tdps}`)
+    }
+  }
+
+  // ADR-041: Render integration/competitor/partner matched documents
+  if (docMatches.length > 0) {
+    lines.push('')
+    lines.push('### Matched Product Documents')
+    for (const s of docMatches.slice(0, 8)) {
+      const m = s.metadata ?? {}
+      const docName = String(m.documentName ?? s.headline)
+      const matchTypes = Array.isArray(m.matchType) ? m.matchType : []
+      const matchedTechs = Array.isArray(m.matchedTechnologies) ? m.matchedTechnologies.join(', ') : ''
+      const category = String(m.documentCategory ?? '')
+      const useCases = Array.isArray(m.useCases) ? m.useCases.slice(0, 3) : []
+      const talkTracks = Array.isArray(m.talkTracks) ? m.talkTracks.slice(0, 2) : []
+      const actionableSteps = Array.isArray(m.actionableSteps) ? m.actionableSteps.slice(0, 3) : []
+      const links = Array.isArray(m.links) ? m.links.slice(0, 3) : []
+
+      lines.push(`\n#### ${docName}${category ? ` -- ${category}` : ''}`)
+      if (matchedTechs) lines.push(`**Matched:** ${matchedTechs} (${matchTypes.join(', ')})`)
+      const rhProducts = Array.isArray(m.redHatProducts) ? m.redHatProducts.filter(Boolean) : []
+      if (rhProducts.length > 0) lines.push(`**Products:** ${rhProducts.join(', ')}`)
+      if (useCases.length > 0) lines.push(`**Use cases:** ${useCases.join(', ')}`)
+      if (talkTracks.length > 0) {
+        for (const tt of talkTracks) {
+          lines.push(`- ${String(tt).slice(0, 200)}`)
+        }
+      }
+      if (actionableSteps.length > 0) {
+        for (const step of actionableSteps) {
+          const stepText = typeof step === 'object' && step !== null ? String((step as any).step ?? step) : String(step)
+          const stepUrl = typeof step === 'object' && step !== null ? (step as any).url : undefined
+          lines.push(`- ${stepText}${stepUrl ? ` (${stepUrl})` : ''}`)
+        }
+      }
+      if (links.length > 0) {
+        for (const link of links) {
+          if (typeof link === 'object' && link !== null) {
+            lines.push(`- [${(link as any).name ?? 'Link'}](${(link as any).url ?? ''})`)
+          }
+        }
+      }
     }
   }
 
