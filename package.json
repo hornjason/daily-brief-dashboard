@@ -16,7 +16,6 @@
     "lint": "bash scripts/check-empty-catches.sh"
   },
   "dependencies": {
-    "fallow": "^2.101.0",
     "googleapis": "^144.0.0",
     "hono": "^4.7.0",
     "unpdf": "^1.4.0",
