@@ -88,7 +88,10 @@ FeatureModuleRegistry.register({
       return  // Cache is fresh
     }
 
-    // Cache is stale or missing — trigger pipeline
+    // Heavy Gemini call — skip regen during preflight (ADR-040 OOM prevention)
+    console.log(`[intelligence-module] ensureFresh: stale — skipping regen`)
+    return
+    // DISABLED:
     const { runIntelligencePipeline } = await import('../account-intelligence.ts')
     const { customers } = await import('../server-state.ts')
     const { toSlug } = await import('../cache-layer.ts')

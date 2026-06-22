@@ -587,7 +587,8 @@ export async function buildMorningSummary(customers: Customer[]) {
       const closeDate = new Date(opp.closeDate)
       const daysPast = Math.floor((today.getTime() - closeDate.getTime()) / 86_400_000)
       if (daysPast > 30) {
-        signals.push({ customer: hs.name, type: 'pipeline-stuck', severity: 'high', text: `Pipeline deal "${opp.oppName}" stuck ${daysPast}d past close date` })
+        const acvStr = opp.acv ? ` ($${Number(opp.acv).toLocaleString()} ACV)` : ''
+        signals.push({ customer: hs.name, type: 'pipeline-stuck', severity: 'high', text: `Pipeline deal "${opp.oppName}"${acvStr} stuck ${daysPast}d past close date` })
       }
     }
 

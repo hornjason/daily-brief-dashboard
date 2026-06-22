@@ -83,6 +83,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 19. **Does this work require iterative convergence?** (ADR-039) If the quality bar is a measurable threshold (coverage %, contract score, signal count) rather than a binary done/not-done — use the convergence loop. Set the goal, approve scope, step away. Never iterate manually when the loop can converge autonomously. Anti-pattern: presence-check ACs on iterative work — "signals exist" passes with 1 garbage signal. Apply the garbage test: "Could garbage data pass this AC?" If yes, add a measurable threshold.
 20. **Does this module use a handcrafted mapping file?** (ADR-038) If yes, verify the same data is available from a dynamic source (product pages, API, scraper). Handcrafted files are fallbacks, not primary sources. New modules MUST NOT introduce new handcrafted mapping files — use dynamic sources from Day 1. Reference: `docs/adr/ADR-038-dynamic-matching-replaces-handcrafted-mappings.md`.
 21. **Does this consumer use responseSchema with strict grounding?** (ADR-040) Every consumer that calls Gemini for content generation MUST use `responseSchema` with `nullable: true` on data-dependent fields, a strict grounding instruction block in the system prompt, and `temperature <= 0.3`. Field descriptions must reference specific data sections in the prompt. Reference: `docs/adr/ADR-040-universal-structured-output.md`.
+22. **Does this module enrich SalesHub documents?** (ADR-041) Every module that enriches SalesHub product documents MUST use the universal `DocumentIntelligence` schema with `responseSchema` (ADR-040). Extraction must populate `productsReferenced`, and at least one of `integrationsReferenced`, `useCases`, `competitorsReferenced`, or `partnerSolutions`. Post-extraction resolution against vocabulary modules (`product-vocabulary.ts`, `competitive-vocabulary.ts`, `ecosystem-catalog.ts`) is mandatory — never ask Gemini to resolve to canonical slugs. Reference: `docs/adr/ADR-041-structured-document-intelligence.md`.
 
 ## Vocabulary Resolver Rule (MANDATORY)
 
@@ -365,6 +366,7 @@ Consumers select which section groups they need via options. They MUST NOT:
 - ❌ Reading L3 CSV data via static sheet IDs instead of `discoverL3Csv()` (ADR-019) — becomes stale when source files change, skips change detection, breaks on sheet re-creation.
 - ❌ Hardcoding product, competitor, or technology vocabularies as const arrays (ADR-035) — use vocabulary resolvers (`product-vocabulary.ts`, `competitive-vocabulary.ts`, `rh-product-catalog.json`). Hardcoded lists drift from source of truth, miss new products/competitors, and require code changes instead of data updates.
 - ❌ Shipping a producer module whose signals fall to 'other' in `routeSignal()` (ADR-035) — invisible in deterministic output. Every signal must route to a named section. Architecture compliance test enforces this.
+- ❌ Extracting SalesHub documents into type-specific schemas without content classification (ADR-041) — type-specific extraction (content kit vs battlecard) tells the system WHAT the document IS but not what it is ABOUT. Every extraction must include structured classification fields (`integrationsReferenced`, `competitorsReferenced`, `partnerSolutions`, `useCases`) so the signal pipeline can match documents to customers by technology overlap.
 - ❌ Caching empty extraction results as "fresh" (ADR-037) — when Gemini extraction returns 0 items (timeout, API error, org policy block), do NOT write `technologies: []` or `clouds: []` to cache with a valid `cachedAt` timestamp. Empty results with valid timestamps look "fresh" to `ensureFresh()`, preventing re-extraction indefinitely. Either skip the write entirely, or mark the cache as `status: 'error'` so the next ensureFresh retries.
 - ❌ Registering a module without `cacheTtlMs` (ADR-037) — invisible to heartbeat staleness monitoring. Data can go stale for weeks without any admin panel indicator. Every cached module MUST declare its TTL.
 
@@ -407,6 +409,7 @@ Every ADR in `docs/adr/` must include these sections:
 | 15 | ADR-029 | Portfolio modules cross-ref customer context |
 | 16 | ADR-035 | Signal routing: every module routes to a named section |
 | 17 | ADR-037 | cacheTtlMs for heartbeat visibility + no empty cache as fresh |
+| 22 | ADR-041 | SalesHub document enrichment uses DocumentIntelligence schema |
 
 ## Signal Scoring Quick Reference (ADR-027)
 

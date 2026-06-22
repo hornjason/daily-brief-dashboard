@@ -116,7 +116,10 @@ FeatureModuleRegistry.register({
       return  // Cache is fresh
     }
 
-    // Cache is stale or missing — trigger generation
+    // Heavy Gemini call — skip regen during preflight (ADR-040 OOM prevention)
+    console.log(`[account-plan-module] ensureFresh: stale for ${customerSlug} — skipping regen`)
+    return
+    // DISABLED: Cache is stale or missing — trigger generation
     const { generateAndSaveAccountPlan } = await import('../account-plan.ts')
     const { customers } = await import('../server-state.ts')
     const { toSlug } = await import('../cache-layer.ts')
