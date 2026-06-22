@@ -705,9 +705,31 @@ async function main() {
     return
   }
 
-  console.log(`\n[extract] Running enrichment on ${extractedContents.length} documents...`)
+  // Save legitimate extractions to disk for persistence
+  const extractedDir = resolve(productDir, 'extracted')
+  mkdirSync(extractedDir, { recursive: true })
+  let savedCount = 0
+  for (const ec of extractedContents) {
+    // Skip garbage: SPA shell pages (>50KB, or contains Seismic nav chrome)
+    if (ec.content.length > 50000 || ec.content.includes('Skip to Main Content') && ec.content.includes('DocCenter')) {
+      continue
+    }
+    const safeName = ec.name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 150)
+    const filePath = resolve(extractedDir, safeName + '.html')
+    writeFileSync(filePath, ec.content)
+    savedCount++
+  }
+  console.log(`[extract] Saved ${savedCount} legitimate extractions to ${extractedDir}`)
 
-  const enrichmentInputs = extractedContents.map(ec => ({
+  // Filter out garbage SPA shell content before enrichment
+  const legitimateContent = extractedContents.filter(ec =>
+    ec.content.length < 50000 &&
+    !(ec.content.includes('Skip to Main Content') && ec.content.includes('DocCenter'))
+  )
+
+  console.log(`\n[extract] Running enrichment on ${legitimateContent.length} documents (filtered from ${extractedContents.length})...`)
+
+  const enrichmentInputs = legitimateContent.map(ec => ({
     name: ec.name,
     content: ec.content,
     type: ec.type,
