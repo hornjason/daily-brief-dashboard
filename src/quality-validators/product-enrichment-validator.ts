@@ -1,6 +1,9 @@
 /**
- * Quality validator for SalesHub product enrichment (content kits, messaging guides, battlecards).
+ * Quality validator for SalesHub product enrichment (content kits, messaging guides,
+ * battlecards, case studies, competitive reviews).
  * ADR-024: Every module that generates content via Gemini MUST have a quality validator.
+ *
+ * Validators added in #868: caseStudyValidator, competitiveReviewValidator.
  */
 
 import {
@@ -120,6 +123,124 @@ export const documentExtractionValidator: QualityValidator = {
   passThreshold: 60,
   validate(output: string): QualityScorecard {
     const checks = checkDocumentExtraction(output)
+    const passed = checks.filter(c => c.passed).length
+    const total = checks.length
+    const score = total > 0 ? Math.round((passed / total) * 100) : 0
+    return { ...initialScorecard(score), checks }
+  },
+}
+
+// ── Case Study validator (#868) ────────────────────────────────────────────
+
+function checkCaseStudy(output: string): QualityCheck[] {
+  const checks: QualityCheck[] = []
+  let parsed: any
+
+  try {
+    parsed = JSON.parse(output)
+  } catch {
+    checks.push({ name: 'valid-json', passed: false, expected: 'valid JSON object', actual: 'parse error', severity: 'required' })
+    return checks
+  }
+  checks.push({ name: 'valid-json', passed: true, expected: 'valid JSON object', actual: 'valid JSON', severity: 'required' })
+
+  // customerName must be non-empty
+  const customerName = (parsed.customerName ?? '').trim()
+  checks.push({
+    name: 'has-customer-name',
+    passed: customerName.length > 0,
+    expected: 'non-empty customerName',
+    actual: customerName.length > 0 ? customerName : '(empty)',
+    severity: 'required',
+  })
+
+  // challenge must be non-empty
+  const challenge = (parsed.challenge ?? '').trim()
+  checks.push({
+    name: 'has-challenge',
+    passed: challenge.length > 0,
+    expected: 'non-empty challenge description',
+    actual: challenge.length > 0 ? `${challenge.length} chars` : '(empty)',
+    severity: 'required',
+  })
+
+  // solution must be non-empty
+  const solution = (parsed.solution ?? '').trim()
+  checks.push({
+    name: 'has-solution',
+    passed: solution.length > 0,
+    expected: 'non-empty solution description',
+    actual: solution.length > 0 ? `${solution.length} chars` : '(empty)',
+    severity: 'required',
+  })
+
+  // results array must have at least 1 item
+  const results = parsed.results ?? []
+  checks.push({
+    name: 'has-results',
+    passed: results.length >= 1,
+    expected: 'at least 1 measurable result',
+    actual: `${results.length} results`,
+    severity: 'required',
+  })
+
+  return checks
+}
+
+export const caseStudyValidator: QualityValidator = {
+  contentType: 'case-study-extraction',
+  passThreshold: 60,
+  validate(output: string): QualityScorecard {
+    const checks = checkCaseStudy(output)
+    const passed = checks.filter(c => c.passed).length
+    const total = checks.length
+    const score = total > 0 ? Math.round((passed / total) * 100) : 0
+    return { ...initialScorecard(score), checks }
+  },
+}
+
+// ── Competitive Review validator (#868) ────────────────────────────────────
+
+function checkCompetitiveReview(output: string): QualityCheck[] {
+  const checks: QualityCheck[] = []
+  let parsed: any
+
+  try {
+    parsed = JSON.parse(output)
+  } catch {
+    checks.push({ name: 'valid-json', passed: false, expected: 'valid JSON object', actual: 'parse error', severity: 'required' })
+    return checks
+  }
+  checks.push({ name: 'valid-json', passed: true, expected: 'valid JSON object', actual: 'valid JSON', severity: 'required' })
+
+  // competitor must be non-empty
+  const competitor = (parsed.competitor ?? '').trim()
+  checks.push({
+    name: 'has-competitor',
+    passed: competitor.length > 0,
+    expected: 'non-empty competitor name',
+    actual: competitor.length > 0 ? competitor : '(empty)',
+    severity: 'required',
+  })
+
+  // keyDifferentiators must have at least 1 item
+  const differentiators = parsed.keyDifferentiators ?? []
+  checks.push({
+    name: 'has-differentiators',
+    passed: differentiators.length >= 1,
+    expected: 'at least 1 key differentiator',
+    actual: `${differentiators.length} differentiators`,
+    severity: 'required',
+  })
+
+  return checks
+}
+
+export const competitiveReviewValidator: QualityValidator = {
+  contentType: 'competitive-review-extraction',
+  passThreshold: 60,
+  validate(output: string): QualityScorecard {
+    const checks = checkCompetitiveReview(output)
     const passed = checks.filter(c => c.passed).length
     const total = checks.length
     const score = total > 0 ? Math.round((passed / total) * 100) : 0

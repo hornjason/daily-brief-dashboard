@@ -1,29 +1,43 @@
 /**
- * SalesHub Product Enrichment — Unit Tests (GitHub Issue #819)
+ * SalesHub Product Enrichment — Unit Tests (GitHub Issue #819, #867, #868)
  *
  * Tests the Gemini-powered enrichment functions for content kits,
- * messaging guides, and battlecards. Mocks callGemini to avoid
- * real API calls.
+ * messaging guides, battlecards, case studies, and competitive reviews.
+ * Also tests the shared extractWithGemini ceremony and new validators.
+ * Mocks callGemini to avoid real API calls.
  */
 
 import { describe, test, expect, mock, beforeEach } from 'bun:test'
 
-// Mock callGemini before importing the module under test
-const mockCallGemini = mock(() => Promise.resolve({
-  text: '{}',
-  cached: false,
-  inputTokens: 100,
-  outputTokens: 200,
-  model: 'gemini-2.0-flash',
-}))
-
-// We'll use dynamic import after setting up mocks
 import {
   enrichContentKit,
   enrichMessagingGuide,
   enrichBattlecard,
+  enrichCaseStudy,
+  enrichCompetitiveReview,
   enrichProductDocuments,
+  extractWithGemini,
+  stripMarkdownFences,
+  type ExtractionConfig,
+  type GeminiCaller,
 } from '../../src/lib/saleshub-product-enrichment.ts'
+
+import {
+  caseStudyValidator,
+  competitiveReviewValidator,
+} from '../../src/quality-validators/product-enrichment-validator.ts'
+
+// ── Helper: mock Gemini response ───────────────────────────────────────────
+
+function mockGeminiResponse(data: any): GeminiCaller {
+  return () => Promise.resolve({
+    text: JSON.stringify(data),
+    cached: false,
+    inputTokens: 100,
+    outputTokens: 200,
+    model: 'gemini-2.0-flash',
+  })
+}
 
 describe('saleshub-product-enrichment', () => {
   describe('enrichContentKit', () => {
@@ -42,18 +56,11 @@ describe('saleshub-product-enrichment', () => {
         salesPlayAlignment: ['Cloud Migration', 'App Modernization'],
       }
 
-      // The function parses JSON from callGemini's text response
       const result = await enrichContentKit({
         name: 'AWS Content Kit',
         content: 'This is sample content with https://aws.amazon.com/marketplace/pp/redhat link',
         cloudProvider: 'aws',
-      }, () => Promise.resolve({
-        text: JSON.stringify(mockResponse),
-        cached: false,
-        inputTokens: 100,
-        outputTokens: 200,
-        model: 'gemini-2.0-flash',
-      }))
+      }, mockGeminiResponse(mockResponse))
 
       expect(result).toBeTruthy()
       expect(result!.actionableSteps).toHaveLength(2)
@@ -82,13 +89,7 @@ describe('saleshub-product-enrichment', () => {
         name: 'Empty Content Kit',
         content: 'No useful content here',
         cloudProvider: 'azure',
-      }, () => Promise.resolve({
-        text: JSON.stringify(mockResponse),
-        cached: false,
-        inputTokens: 50,
-        outputTokens: 50,
-        model: 'gemini-2.0-flash',
-      }))
+      }, mockGeminiResponse(mockResponse))
 
       expect(result).toBeTruthy()
       expect(result!.actionableSteps).toEqual([])
@@ -140,13 +141,7 @@ describe('saleshub-product-enrichment', () => {
       const result = await enrichMessagingGuide({
         name: 'OCP-V Messaging Guide',
         content: 'Messaging guide content here',
-      }, () => Promise.resolve({
-        text: JSON.stringify(mockResponse),
-        cached: false,
-        inputTokens: 100,
-        outputTokens: 200,
-        model: 'gemini-2.0-flash',
-      }))
+      }, mockGeminiResponse(mockResponse))
 
       expect(result).toBeTruthy()
       expect(result!.summary).toContain('messaging guide')
@@ -170,18 +165,82 @@ describe('saleshub-product-enrichment', () => {
       const result = await enrichBattlecard({
         name: 'VMware Battlecard',
         content: 'Competitive analysis content',
-      }, () => Promise.resolve({
-        text: JSON.stringify(mockResponse),
-        cached: false,
-        inputTokens: 100,
-        outputTokens: 150,
-        model: 'gemini-2.0-flash',
-      }))
+      }, mockGeminiResponse(mockResponse))
 
       expect(result).toBeTruthy()
       expect(result!.summary).toContain('battlecard')
       expect(result!.keyPoints).toHaveLength(3)
       expect(result!.links).toHaveLength(1)
+    })
+  })
+
+  describe('enrichCaseStudy', () => {
+    test('extracts customer success data', async () => {
+      const mockResponse = {
+        customerName: 'Acme Corp',
+        industry: 'Manufacturing',
+        challenge: 'Legacy infrastructure slowing digital transformation',
+        solution: 'Deployed Red Hat OpenShift for container orchestration',
+        results: ['50% faster deployments', '30% reduction in infrastructure costs'],
+        productsUsed: ['OpenShift', 'RHEL'],
+        keyPoints: ['Container adoption accelerated', 'Hybrid cloud enabled'],
+        links: [{ name: 'Full Case Study', url: 'https://redhat.com/case/acme' }],
+      }
+
+      const result = await enrichCaseStudy({
+        name: 'Acme Corp Case Study',
+        content: 'Case study content here',
+      }, mockGeminiResponse(mockResponse))
+
+      expect(result).toBeTruthy()
+      expect(result!.customerName).toBe('Acme Corp')
+      expect(result!.industry).toBe('Manufacturing')
+      expect(result!.challenge).toContain('Legacy')
+      expect(result!.solution).toContain('OpenShift')
+      expect(result!.results).toHaveLength(2)
+      expect(result!.productsUsed).toContain('OpenShift')
+    })
+
+    test('returns null on Gemini failure', async () => {
+      const result = await enrichCaseStudy({
+        name: 'Bad Case Study',
+        content: 'content',
+      }, () => Promise.reject(new Error('Gemini API error')))
+
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('enrichCompetitiveReview', () => {
+    test('extracts competitive positioning', async () => {
+      const mockResponse = {
+        competitor: 'VMware',
+        keyDifferentiators: ['No per-socket licensing', 'Kubernetes-native'],
+        competitorWeaknesses: ['High licensing costs', 'Vendor lock-in'],
+        talkTracks: ['Lead with TCO comparison'],
+        keyPoints: ['Focus on open source advantage'],
+        links: [{ name: 'Comparison Guide', url: 'https://redhat.com/compare/vmware' }],
+      }
+
+      const result = await enrichCompetitiveReview({
+        name: 'VMware Competitive Review',
+        content: 'Competitive review content here',
+      }, mockGeminiResponse(mockResponse))
+
+      expect(result).toBeTruthy()
+      expect(result!.competitor).toBe('VMware')
+      expect(result!.keyDifferentiators).toHaveLength(2)
+      expect(result!.competitorWeaknesses).toHaveLength(2)
+      expect(result!.talkTracks).toHaveLength(1)
+    })
+
+    test('returns null on Gemini failure', async () => {
+      const result = await enrichCompetitiveReview({
+        name: 'Bad Review',
+        content: 'content',
+      }, () => Promise.reject(new Error('Gemini API error')))
+
+      expect(result).toBeNull()
     })
   })
 
@@ -253,10 +312,130 @@ describe('saleshub-product-enrichment', () => {
   })
 })
 
+// ── extractWithGemini tests (#867) ─────────────────────────────────────────
+
+describe('extractWithGemini', () => {
+  test('calls gemini with system prompt, user prompt, and opts', async () => {
+    let capturedSystem = ''
+    let capturedUser = ''
+    let capturedOpts: any = null
+
+    const config: ExtractionConfig<{ value: string }> = {
+      systemPrompt: 'Test system prompt',
+      userPromptFn: (name, content) => `Extract from "${name}": ${content}`,
+      callType: 'test-extraction',
+      parseResult: (raw) => ({ value: raw.v ?? 'default' }),
+    }
+
+    const mockGemini: GeminiCaller = (system, user, opts) => {
+      capturedSystem = system
+      capturedUser = user
+      capturedOpts = opts
+      return Promise.resolve({
+        text: JSON.stringify({ v: 'hello' }),
+        cached: false,
+        inputTokens: 10,
+        outputTokens: 20,
+        model: 'gemini-2.0-flash',
+      })
+    }
+
+    const result = await extractWithGemini(config, 'TestDoc', 'test content', mockGemini)
+
+    expect(result).toEqual({ value: 'hello' })
+    expect(capturedSystem).toBe('Test system prompt')
+    expect(capturedUser).toContain('Extract from "TestDoc"')
+    expect(capturedOpts.callType).toBe('test-extraction')
+    expect(capturedOpts.deltaKey).toBe('saleshub-enrich-test-extraction-TestDoc')
+  })
+
+  test('returns null on Gemini failure', async () => {
+    const config: ExtractionConfig<{ v: string }> = {
+      systemPrompt: 'sys',
+      userPromptFn: (_n, c) => c,
+      callType: 'test',
+      parseResult: (raw) => ({ v: raw.v }),
+    }
+
+    const result = await extractWithGemini(
+      config, 'doc', 'content',
+      () => Promise.reject(new Error('boom')),
+    )
+
+    expect(result).toBeNull()
+  })
+
+  test('returns null on invalid JSON response', async () => {
+    const config: ExtractionConfig<{ v: string }> = {
+      systemPrompt: 'sys',
+      userPromptFn: (_n, c) => c,
+      callType: 'test',
+      parseResult: (raw) => ({ v: raw.v }),
+    }
+
+    const result = await extractWithGemini(
+      config, 'doc', 'content',
+      () => Promise.resolve({ text: 'not json', cached: false, inputTokens: 0, outputTokens: 0, model: 'x' }),
+    )
+
+    expect(result).toBeNull()
+  })
+
+  test('passes fallbacks to parseResult', async () => {
+    const config: ExtractionConfig<{ name: string; fallbackVal: string }> = {
+      systemPrompt: 'sys',
+      userPromptFn: (_n, c) => c,
+      callType: 'test',
+      parseResult: (raw, _docName, fallbacks) => ({
+        name: raw.name ?? '',
+        fallbackVal: fallbacks?.myFallback ?? 'none',
+      }),
+    }
+
+    const result = await extractWithGemini(
+      config, 'doc', 'content',
+      mockGeminiResponse({ name: 'test' }),
+      { myFallback: 'provided' },
+    )
+
+    expect(result).toEqual({ name: 'test', fallbackVal: 'provided' })
+  })
+})
+
+// ── stripMarkdownFences tests (#867) ───────────────────────────────────────
+
+describe('stripMarkdownFences', () => {
+  test('strips ```json wrapper', () => {
+    const input = '```json\n{"key": "value"}\n```'
+    expect(stripMarkdownFences(input)).toBe('{"key": "value"}')
+  })
+
+  test('strips bare ``` wrapper', () => {
+    const input = '```\n{"key": "value"}\n```'
+    expect(stripMarkdownFences(input)).toBe('{"key": "value"}')
+  })
+
+  test('passes through bare JSON unchanged', () => {
+    const input = '{"key": "value"}'
+    expect(stripMarkdownFences(input)).toBe('{"key": "value"}')
+  })
+
+  test('handles ```json with extra whitespace', () => {
+    const input = '```json  \n  {"key": "value"}  \n  ```'
+    expect(stripMarkdownFences(input)).toBe('{"key": "value"}')
+  })
+
+  test('handles empty string', () => {
+    expect(stripMarkdownFences('')).toBe('')
+  })
+})
+
+// ── deltaKey caching tests ─────────────────────────────────────────────────
+
 describe('deltaKey caching', () => {
   test('enrichContentKit passes deltaKey to gemini caller', async () => {
     let receivedOpts: any = null
-    const result = await enrichContentKit({
+    await enrichContentKit({
       name: 'AWS Content Kit',
       content: 'sample content',
       cloudProvider: 'aws',
@@ -268,7 +447,7 @@ describe('deltaKey caching', () => {
       })
     })
     expect(receivedOpts).toBeTruthy()
-    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-content-kit-AWS Content Kit')
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-content-kit-extraction-AWS Content Kit')
   })
 
   test('enrichMessagingGuide passes deltaKey to gemini caller', async () => {
@@ -284,7 +463,7 @@ describe('deltaKey caching', () => {
       })
     })
     expect(receivedOpts).toBeTruthy()
-    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-messaging-guide-OCP-V Guide')
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-messaging-guide-extraction-OCP-V Guide')
   })
 
   test('enrichBattlecard passes deltaKey to gemini caller', async () => {
@@ -300,7 +479,7 @@ describe('deltaKey caching', () => {
       })
     })
     expect(receivedOpts).toBeTruthy()
-    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-battlecard-VMware BC')
+    expect(receivedOpts.deltaKey).toBe('saleshub-enrich-battlecard-extraction-VMware BC')
   })
 
   test('enrichProductDocuments passes deltaKey through geminiFactory', async () => {
@@ -316,7 +495,117 @@ describe('deltaKey caching', () => {
       { name: 'Doc A', content: 'content a', type: 'content-kit', cloudProvider: 'aws' },
       { name: 'Doc B', content: 'content b', type: 'messaging-guide' },
     ], mockGemini)
-    expect(receivedKeys).toContain('saleshub-enrich-content-kit-Doc A')
-    expect(receivedKeys).toContain('saleshub-enrich-messaging-guide-Doc B')
+    expect(receivedKeys).toContain('saleshub-enrich-content-kit-extraction-Doc A')
+    expect(receivedKeys).toContain('saleshub-enrich-messaging-guide-extraction-Doc B')
+  })
+})
+
+// ── Validator tests (#868) ─────────────────────────────────────────────────
+
+describe('caseStudyValidator', () => {
+  test('passes valid case study', () => {
+    const input = JSON.stringify({
+      customerName: 'Acme Corp',
+      challenge: 'Legacy infrastructure problems',
+      solution: 'Deployed OpenShift',
+      results: ['50% faster deployments'],
+    })
+    const scorecard = caseStudyValidator.validate(input)
+    expect(scorecard.passed).toBe(true)
+    expect(scorecard.checks.every(c => c.passed)).toBe(true)
+  })
+
+  test('fails missing customerName', () => {
+    const input = JSON.stringify({
+      customerName: '',
+      challenge: 'Some challenge',
+      solution: 'Some solution',
+      results: ['A result'],
+    })
+    const scorecard = caseStudyValidator.validate(input)
+    const customerCheck = scorecard.checks.find(c => c.name === 'has-customer-name')
+    expect(customerCheck?.passed).toBe(false)
+  })
+
+  test('fails empty results array', () => {
+    const input = JSON.stringify({
+      customerName: 'Acme',
+      challenge: 'Challenge text',
+      solution: 'Solution text',
+      results: [],
+    })
+    const scorecard = caseStudyValidator.validate(input)
+    const resultsCheck = scorecard.checks.find(c => c.name === 'has-results')
+    expect(resultsCheck?.passed).toBe(false)
+  })
+
+  test('fails invalid JSON', () => {
+    const scorecard = caseStudyValidator.validate('not json')
+    expect(scorecard.passed).toBe(false)
+    expect(scorecard.checks[0].name).toBe('valid-json')
+    expect(scorecard.checks[0].passed).toBe(false)
+  })
+
+  test('fails missing challenge', () => {
+    const input = JSON.stringify({
+      customerName: 'Acme',
+      challenge: '',
+      solution: 'Deployed OCP',
+      results: ['Improved speed'],
+    })
+    const scorecard = caseStudyValidator.validate(input)
+    const check = scorecard.checks.find(c => c.name === 'has-challenge')
+    expect(check?.passed).toBe(false)
+  })
+
+  test('fails missing solution', () => {
+    const input = JSON.stringify({
+      customerName: 'Acme',
+      challenge: 'Legacy infra',
+      solution: '',
+      results: ['Improved speed'],
+    })
+    const scorecard = caseStudyValidator.validate(input)
+    const check = scorecard.checks.find(c => c.name === 'has-solution')
+    expect(check?.passed).toBe(false)
+  })
+})
+
+describe('competitiveReviewValidator', () => {
+  test('passes valid competitive review', () => {
+    const input = JSON.stringify({
+      competitor: 'VMware',
+      keyDifferentiators: ['No per-socket licensing'],
+    })
+    const scorecard = competitiveReviewValidator.validate(input)
+    expect(scorecard.passed).toBe(true)
+    expect(scorecard.checks.every(c => c.passed)).toBe(true)
+  })
+
+  test('fails missing competitor', () => {
+    const input = JSON.stringify({
+      competitor: '',
+      keyDifferentiators: ['Lower cost'],
+    })
+    const scorecard = competitiveReviewValidator.validate(input)
+    const check = scorecard.checks.find(c => c.name === 'has-competitor')
+    expect(check?.passed).toBe(false)
+  })
+
+  test('fails empty keyDifferentiators', () => {
+    const input = JSON.stringify({
+      competitor: 'VMware',
+      keyDifferentiators: [],
+    })
+    const scorecard = competitiveReviewValidator.validate(input)
+    const check = scorecard.checks.find(c => c.name === 'has-differentiators')
+    expect(check?.passed).toBe(false)
+  })
+
+  test('fails invalid JSON', () => {
+    const scorecard = competitiveReviewValidator.validate('not json')
+    expect(scorecard.passed).toBe(false)
+    expect(scorecard.checks[0].name).toBe('valid-json')
+    expect(scorecard.checks[0].passed).toBe(false)
   })
 })

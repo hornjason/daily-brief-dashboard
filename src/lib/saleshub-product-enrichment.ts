@@ -1,8 +1,14 @@
 /**
- * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819)
+ * SalesHub Product Enrichment — Gemini extraction (GitHub Issue #819, #867)
  *
- * Enriches product documents (content kits, messaging guides, battlecards)
- * using callGemini() (ADR-023) with ADR-024 quality validators.
+ * Enriches product documents (content kits, messaging guides, battlecards,
+ * case studies, competitive reviews) using callGemini() (ADR-023) with
+ * ADR-024 quality validators.
+ *
+ * All extraction goes through extractWithGemini() — the single shared
+ * ceremony that handles prompt building, fence stripping, parsing,
+ * validation, and retry. Each doc type is a config object, not a
+ * duplicated function body.
  *
  * Each function accepts an optional geminiCaller parameter for testing
  * (defaults to the real callGemini import).
@@ -10,7 +16,13 @@
 
 import { callGemini, type GeminiResult } from '../gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
-import { contentKitValidator, documentExtractionValidator } from '../quality-validators/product-enrichment-validator.ts'
+import type { QualityValidator } from '../gemini-quality-gate.ts'
+import {
+  contentKitValidator,
+  documentExtractionValidator,
+  caseStudyValidator,
+  competitiveReviewValidator,
+} from '../quality-validators/product-enrichment-validator.ts'
 import type {
   ContentKitExtraction,
   DocumentExtraction,
@@ -21,7 +33,7 @@ import type {
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-type GeminiCaller = (system: string, user: string, opts: any) => Promise<GeminiResult>
+export type GeminiCaller = (system: string, user: string, opts: any) => Promise<GeminiResult>
 
 interface ContentKitInput {
   name: string
@@ -33,6 +45,20 @@ interface DocumentInput {
   name: string
   content: string
 }
+
+/**
+ * Configuration for a single extraction type. Each doc type defines one of
+ * these — extractWithGemini() handles the rest.
+ */
+export interface ExtractionConfig<T> {
+  systemPrompt: string
+  userPromptFn: (docName: string, content: string) => string
+  validator?: QualityValidator
+  parseResult: (raw: any, docName: string, fallbacks?: Record<string, any>) => T
+  callType: string  // for callGemini cost tracking
+}
+
+// ── Content helpers ────────────────────────────────────────────────────────
 
 const BINARY_MARKER = '[PDF:base64:'
 function isBinaryContent(content: string): boolean {
@@ -77,6 +103,83 @@ interface EnrichmentDocumentInput {
   content: string
   type: string
   cloudProvider?: string
+}
+
+// ── Fence stripping (single location — AC-3) ──────────────────────────────
+
+/**
+ * Strip markdown code fences from Gemini output. This is the ONLY place
+ * this regex exists in the enrichment pipeline.
+ */
+export function stripMarkdownFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
+}
+
+// ── Shared extraction ceremony ─────────────────────────────────────────────
+
+/**
+ * Generic Gemini extraction that encapsulates the 7-step ceremony:
+ * 1. Build user prompt (with binary/HTML detection, URL extraction)
+ * 2. Build Gemini opts (handle binary content, inlineDataParts)
+ * 3. Call callGemini()
+ * 4. Strip markdown fences
+ * 5. JSON.parse() the result
+ * 6. Run through validateAndRetry() if validator provided
+ * 7. Catch and warn on failure, return null
+ */
+export async function extractWithGemini<T>(
+  config: ExtractionConfig<T>,
+  docName: string,
+  content: string,
+  gemini: GeminiCaller = callGemini,
+  fallbacks?: Record<string, any>,
+): Promise<T | null> {
+  try {
+    const systemPrompt = config.systemPrompt
+    const userPrompt = buildUserPrompt(config.userPromptFn, docName, content)
+    const opts = buildGeminiOpts(content, {
+      callType: config.callType,
+      model: 'lite',
+      deltaKey: `saleshub-enrich-${config.callType}-${docName}`,
+    })
+
+    const initialResult = await gemini(systemPrompt, userPrompt, opts)
+
+    if (config.validator) {
+      // Full validateAndRetry path
+      const gateResult = await validateAndRetry(
+        stripMarkdownFences(initialResult.text),
+        { validator: config.validator, maxRetries: 2 },
+        async (failures, _attempt) => {
+          const feedback = formatFailureFeedback(failures)
+          const retryResult = await gemini(
+            systemPrompt,
+            `${userPrompt}\n\n${feedback}`,
+            opts,
+          )
+          return retryResult.text
+        },
+      )
+
+      if (!gateResult.scorecard.passed) {
+        console.warn(
+          `[saleshub-product-enrichment] "${docName}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
+        )
+      }
+
+      const cleaned = stripMarkdownFences(gateResult.output)
+      const parsed = JSON.parse(cleaned)
+      return config.parseResult(parsed, docName, fallbacks)
+    } else {
+      // No validator — parse directly
+      const cleaned = stripMarkdownFences(initialResult.text)
+      const parsed = JSON.parse(cleaned)
+      return config.parseResult(parsed, docName, fallbacks)
+    }
+  } catch (e: any) {
+    console.warn(`[saleshub-product-enrichment] Failed to enrich "${docName}": ${e.message}`)
+    return null
+  }
 }
 
 // ── Prompts ─────────────────────────────────────────────────────────────────
@@ -165,221 +268,152 @@ Return a JSON object with these fields:
 Document content:
 ${content}`
 
+// ── Extraction configs ─────────────────────────────────────────────────────
+
+const contentKitConfig: ExtractionConfig<ContentKitExtraction> = {
+  systemPrompt: CONTENT_KIT_SYSTEM_PROMPT,
+  userPromptFn: CONTENT_KIT_USER_PROMPT,
+  validator: contentKitValidator,
+  callType: 'content-kit-extraction',
+  parseResult: (parsed, docName, fallbacks) => ({
+    documentName: docName,
+    cloudProvider: (parsed.cloudProvider && parsed.cloudProvider !== 'none')
+      ? parsed.cloudProvider
+      : (fallbacks?.cloudProvider || 'unknown'),
+    actionableSteps: parsed.actionableSteps ?? [],
+    calculatorUrl: parsed.calculatorUrl ?? null,
+    contactName: parsed.contactName ?? null,
+    contactEmail: parsed.contactEmail ?? undefined,
+    workshops: (parsed.workshops ?? []).slice(0, 5),
+    demos: (parsed.demos ?? []).slice(0, 5),
+    battlecards: (parsed.battlecards ?? []).slice(0, 5),
+    internalMaterials: (parsed.internalMaterials ?? []).slice(0, 5),
+    salesPlayAlignment: parsed.salesPlayAlignment ?? [],
+  }),
+}
+
+const messagingGuideConfig: ExtractionConfig<DocumentExtraction> = {
+  systemPrompt: MESSAGING_GUIDE_SYSTEM_PROMPT,
+  userPromptFn: MESSAGING_GUIDE_USER_PROMPT,
+  validator: documentExtractionValidator,
+  callType: 'messaging-guide-extraction',
+  parseResult: (parsed, docName) => ({
+    documentName: docName,
+    summary: parsed.summary ?? '',
+    keyPoints: parsed.keyPoints ?? [],
+    talkTracks: parsed.talkTracks ?? [],
+    links: parsed.links ?? [],
+  }),
+}
+
+const battlecardConfig: ExtractionConfig<DocumentExtraction> = {
+  systemPrompt: BATTLECARD_SYSTEM_PROMPT,
+  userPromptFn: BATTLECARD_USER_PROMPT,
+  validator: documentExtractionValidator,
+  callType: 'battlecard-extraction',
+  parseResult: (parsed, docName) => ({
+    documentName: docName,
+    summary: parsed.summary ?? '',
+    keyPoints: parsed.keyPoints ?? [],
+    links: parsed.links ?? [],
+  }),
+}
+
+const caseStudyConfig: ExtractionConfig<CaseStudyExtraction> = {
+  systemPrompt: CASE_STUDY_SYSTEM_PROMPT,
+  userPromptFn: CASE_STUDY_USER_PROMPT,
+  validator: caseStudyValidator,
+  callType: 'case-study-extraction',
+  parseResult: (parsed, docName) => ({
+    documentName: docName,
+    customerName: parsed.customerName ?? '',
+    industry: parsed.industry ?? '',
+    challenge: parsed.challenge ?? '',
+    solution: parsed.solution ?? '',
+    results: (parsed.results ?? []).slice(0, 5),
+    productsUsed: (parsed.productsUsed ?? []).slice(0, 5),
+    keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
+    links: (parsed.links ?? []).slice(0, 5),
+  }),
+}
+
+const competitiveReviewConfig: ExtractionConfig<CompetitiveReviewExtraction> = {
+  systemPrompt: COMPETITIVE_REVIEW_SYSTEM_PROMPT,
+  userPromptFn: COMPETITIVE_REVIEW_USER_PROMPT,
+  validator: competitiveReviewValidator,
+  callType: 'competitive-review-extraction',
+  parseResult: (parsed, docName) => ({
+    documentName: docName,
+    competitor: parsed.competitor ?? '',
+    keyDifferentiators: (parsed.keyDifferentiators ?? []).slice(0, 5),
+    competitorWeaknesses: (parsed.competitorWeaknesses ?? []).slice(0, 5),
+    talkTracks: (parsed.talkTracks ?? []).slice(0, 5),
+    keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
+    links: (parsed.links ?? []).slice(0, 5),
+  }),
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
  * Enrich a content kit document with Gemini extraction.
  * Uses ADR-024 validateAndRetry with contentKitValidator.
- * Returns a ContentKitExtraction or null on failure.
  */
 export async function enrichContentKit(
   doc: ContentKitInput,
   gemini: GeminiCaller = callGemini,
 ): Promise<ContentKitExtraction | null> {
-  try {
-    const systemPrompt = CONTENT_KIT_SYSTEM_PROMPT
-    const userPrompt = buildUserPrompt(CONTENT_KIT_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-content-kit-${doc.name}` })
-
-    const initialResult = await gemini(systemPrompt, userPrompt, opts)
-
-    const gateResult = await validateAndRetry(
-      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
-      { validator: contentKitValidator, maxRetries: 2 },
-      async (failures, _attempt) => {
-        const feedback = formatFailureFeedback(failures)
-        const retryResult = await gemini(
-          systemPrompt,
-          `${userPrompt}\n\n${feedback}`,
-          opts,
-        )
-        return retryResult.text
-      },
-    )
-
-    if (!gateResult.scorecard.passed) {
-      console.warn(
-        `[saleshub-product-enrichment] Content kit "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
-      )
-    }
-
-    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
-    const parsed = JSON.parse(cleaned)
-
-    return {
-      documentName: doc.name,
-      cloudProvider: (parsed.cloudProvider && parsed.cloudProvider !== 'none')
-        ? parsed.cloudProvider
-        : (doc.cloudProvider || 'unknown'),
-      actionableSteps: parsed.actionableSteps ?? [],
-      calculatorUrl: parsed.calculatorUrl ?? null,
-      contactName: parsed.contactName ?? null,
-      contactEmail: parsed.contactEmail ?? undefined,
-      workshops: (parsed.workshops ?? []).slice(0, 5),
-      demos: (parsed.demos ?? []).slice(0, 5),
-      battlecards: (parsed.battlecards ?? []).slice(0, 5),
-      internalMaterials: (parsed.internalMaterials ?? []).slice(0, 5),
-      salesPlayAlignment: parsed.salesPlayAlignment ?? [],
-    }
-  } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich content kit "${doc.name}": ${e.message}`)
-    return null
-  }
+  return extractWithGemini(
+    contentKitConfig,
+    doc.name,
+    doc.content,
+    gemini,
+    { cloudProvider: doc.cloudProvider },
+  )
 }
 
 /**
  * Enrich a messaging guide document with Gemini extraction.
  * Uses ADR-024 validateAndRetry with documentExtractionValidator.
- * Returns a DocumentExtraction or null on failure.
  */
 export async function enrichMessagingGuide(
   doc: DocumentInput,
   gemini: GeminiCaller = callGemini,
 ): Promise<DocumentExtraction | null> {
-  try {
-    const systemPrompt = MESSAGING_GUIDE_SYSTEM_PROMPT
-    const userPrompt = buildUserPrompt(MESSAGING_GUIDE_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-messaging-guide-${doc.name}` })
-
-    const initialResult = await gemini(systemPrompt, userPrompt, opts)
-
-    const gateResult = await validateAndRetry(
-      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
-      { validator: documentExtractionValidator, maxRetries: 2 },
-      async (failures, _attempt) => {
-        const feedback = formatFailureFeedback(failures)
-        const retryResult = await gemini(
-          systemPrompt,
-          `${userPrompt}\n\n${feedback}`,
-          opts,
-        )
-        return retryResult.text
-      },
-    )
-
-    if (!gateResult.scorecard.passed) {
-      console.warn(
-        `[saleshub-product-enrichment] Messaging guide "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
-      )
-    }
-
-    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
-    const parsed = JSON.parse(cleaned)
-
-    return {
-      documentName: doc.name,
-      summary: parsed.summary ?? '',
-      keyPoints: parsed.keyPoints ?? [],
-      talkTracks: parsed.talkTracks ?? [],
-      links: parsed.links ?? [],
-    }
-  } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich messaging guide "${doc.name}": ${e.message}`)
-    return null
-  }
+  return extractWithGemini(messagingGuideConfig, doc.name, doc.content, gemini)
 }
 
 /**
  * Enrich a battlecard document with Gemini extraction.
  * Uses ADR-024 validateAndRetry with documentExtractionValidator.
- * Returns a DocumentExtraction or null on failure.
  */
 export async function enrichBattlecard(
   doc: DocumentInput,
   gemini: GeminiCaller = callGemini,
 ): Promise<DocumentExtraction | null> {
-  try {
-    const systemPrompt = BATTLECARD_SYSTEM_PROMPT
-    const userPrompt = buildUserPrompt(BATTLECARD_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-battlecard-${doc.name}` })
-
-    const initialResult = await gemini(systemPrompt, userPrompt, opts)
-
-    const gateResult = await validateAndRetry(
-      initialResult.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim(),
-      { validator: documentExtractionValidator, maxRetries: 2 },
-      async (failures, _attempt) => {
-        const feedback = formatFailureFeedback(failures)
-        const retryResult = await gemini(
-          systemPrompt,
-          `${userPrompt}\n\n${feedback}`,
-          opts,
-        )
-        return retryResult.text
-      },
-    )
-
-    if (!gateResult.scorecard.passed) {
-      console.warn(
-        `[saleshub-product-enrichment] Battlecard "${doc.name}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
-      )
-    }
-
-    const cleaned = gateResult.output.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
-    const parsed = JSON.parse(cleaned)
-
-    return {
-      documentName: doc.name,
-      summary: parsed.summary ?? '',
-      keyPoints: parsed.keyPoints ?? [],
-      links: parsed.links ?? [],
-    }
-  } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich battlecard "${doc.name}": ${e.message}`)
-    return null
-  }
+  return extractWithGemini(battlecardConfig, doc.name, doc.content, gemini)
 }
 
+/**
+ * Enrich a case study document with Gemini extraction.
+ * Uses ADR-024 validateAndRetry with caseStudyValidator (#868).
+ */
 export async function enrichCaseStudy(
   doc: DocumentInput,
   gemini: GeminiCaller = callGemini,
 ): Promise<CaseStudyExtraction | null> {
-  try {
-    const userPrompt = buildUserPrompt(CASE_STUDY_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-case-study-${doc.name}` })
-    const result = await gemini(CASE_STUDY_SYSTEM_PROMPT, userPrompt, opts)
-    const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
-    const parsed = JSON.parse(cleaned)
-    return {
-      documentName: doc.name,
-      customerName: parsed.customerName ?? '',
-      industry: parsed.industry ?? '',
-      challenge: parsed.challenge ?? '',
-      solution: parsed.solution ?? '',
-      results: (parsed.results ?? []).slice(0, 5),
-      productsUsed: (parsed.productsUsed ?? []).slice(0, 5),
-      keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
-      links: (parsed.links ?? []).slice(0, 5),
-    }
-  } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich case study "${doc.name}": ${e.message}`)
-    return null
-  }
+  return extractWithGemini(caseStudyConfig, doc.name, doc.content, gemini)
 }
 
+/**
+ * Enrich a competitive review document with Gemini extraction.
+ * Uses ADR-024 validateAndRetry with competitiveReviewValidator (#868).
+ */
 export async function enrichCompetitiveReview(
   doc: DocumentInput,
   gemini: GeminiCaller = callGemini,
 ): Promise<CompetitiveReviewExtraction | null> {
-  try {
-    const userPrompt = buildUserPrompt(COMPETITIVE_REVIEW_USER_PROMPT, doc.name, doc.content)
-    const opts = buildGeminiOpts(doc.content, { callType: 'content-kit-extraction', model: 'lite', deltaKey: `saleshub-enrich-competitive-review-${doc.name}` })
-    const result = await gemini(COMPETITIVE_REVIEW_SYSTEM_PROMPT, userPrompt, opts)
-    const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
-    const parsed = JSON.parse(cleaned)
-    return {
-      documentName: doc.name,
-      competitor: parsed.competitor ?? '',
-      keyDifferentiators: (parsed.keyDifferentiators ?? []).slice(0, 5),
-      competitorWeaknesses: (parsed.competitorWeaknesses ?? []).slice(0, 5),
-      talkTracks: (parsed.talkTracks ?? []).slice(0, 5),
-      keyPoints: (parsed.keyPoints ?? []).slice(0, 5),
-      links: (parsed.links ?? []).slice(0, 5),
-    }
-  } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich competitive review "${doc.name}": ${e.message}`)
-    return null
-  }
+  return extractWithGemini(competitiveReviewConfig, doc.name, doc.content, gemini)
 }
 
 /**
