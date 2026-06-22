@@ -17,7 +17,7 @@
 
 import { chromium } from '@playwright/test'
 import type { Page, BrowserContext } from '@playwright/test'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
 import { sanitizeViewerHtml } from './scrape-saleshub-product-page.ts'
