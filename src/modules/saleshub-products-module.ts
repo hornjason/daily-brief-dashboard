@@ -721,6 +721,31 @@ export function createSaleshubProductsRouter() {
         }
 
         const subdirPath = resolve(subdir.parentDir, subdir.name)
+
+        // For 'extracted/' directory: recurse one level into section subdirs (extracted/integrations/*.html)
+        if (subdir.name === 'extracted') {
+          try {
+            const extractedSubs = readdirSync(subdirPath, { withFileTypes: true }).filter(d => d.isDirectory())
+            for (const eSub of extractedSubs) {
+              const eSubPath = resolve(subdirPath, eSub.name)
+              const eFiles = readdirSync(eSubPath).filter(f =>
+                f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.html') || f.endsWith('.extracted.json')
+              )
+              for (const file of eFiles) {
+                const filePath = resolve(eSubPath, file)
+                const content = readFileSync(filePath, 'utf-8')
+                documents.push({
+                  name: file.replace(/\.(txt|md|html|extracted\.json)$/, ''),
+                  content,
+                  type: 'content-kit',
+                  cloudProvider: undefined,
+                })
+              }
+            }
+          } catch { /* extracted dir scan failed */ }
+          continue
+        }
+
         const files = readdirSync(subdirPath).filter(f =>
           f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json') || f.endsWith('.html')
         )
