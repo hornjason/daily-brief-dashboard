@@ -2191,7 +2191,7 @@ export async function scrapeProductPage(
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
     // ── Pipeline manifest: Gate 0 — DOM visibility (#874) ─────────────────
-    const manifest = createManifest(slugify(header.name), header.name)
+    let manifest = createManifest(slugify(header.name), header.name)
     for (const [sectionKey, section] of Object.entries(sections)) {
       for (const item of section.items) {
         addGate0Entry(manifest, item.name, sectionKey, ['dom'])
