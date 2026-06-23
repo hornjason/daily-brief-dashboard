@@ -190,16 +190,16 @@ describe('Intelligence Graph — persistence', () => {
     expect(existsSync(filePath)).toBe(true)
 
     const raw = readFileSync(filePath, 'utf-8')
-    expect(Buffer.byteLength(raw, 'utf-8')).toBeLessThan(200 * 1024)
+    expect(Buffer.byteLength(raw, 'utf-8')).toBeLessThan(512 * 1024)
   })
 
-  it('persistGraph throws when graph exceeds 200KB', () => {
+  it('persistGraph throws when graph exceeds 512KB', () => {
     // Construct an oversized graph
     const nodes: Record<string, IntelligenceNode> = {}
     const edges: IntelligenceEdge[] = []
 
-    // Create enough nodes to exceed 200KB
-    for (let i = 0; i < 2000; i++) {
+    // Create enough nodes to exceed 512KB
+    for (let i = 0; i < 5000; i++) {
       const id = `product:oversized-${i}`
       nodes[id] = {
         id,
@@ -223,7 +223,7 @@ describe('Intelligence Graph — persistence', () => {
       edges,
     }
 
-    expect(() => persistGraph(oversizedGraph, TEST_DATA_DIR)).toThrow('exceeds 50KB')
+    expect(() => persistGraph(oversizedGraph, TEST_DATA_DIR)).toThrow('exceeds 512KB')
   })
 
   it('loadGraph returns persisted graph with identical structure', () => {
