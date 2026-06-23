@@ -26,6 +26,7 @@ import {
   updateGate2,
   computeGateSummary,
   writeManifest,
+  readManifest,
   type PipelineManifest,
 } from '../src/lib/pipeline-manifest.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
@@ -2503,9 +2504,11 @@ export async function scrapeProductPage(
           writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
           console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
 
-          // Re-compute manifest with Gate 2/3 data
-          computeGateSummary(manifest)
-          writeManifest(manifest, configOutputDir)
+          // Re-read manifest from disk (enrichment already updated it with Gate 3 data)
+          const updatedManifest = readManifest(configOutputDir)
+          if (updatedManifest) {
+            manifest = updatedManifest
+          }
         }
       } else {
         console.log('[product-scraper] No documents to enrich')
