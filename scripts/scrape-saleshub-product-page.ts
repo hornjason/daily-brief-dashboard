@@ -2519,12 +2519,15 @@ export async function scrapeProductPage(
       console.warn(`[product-scraper] Inline enrichment failed (non-blocking): ${e.message}`)
     }
 
-    // Upload manifest + enriched data to Drive for cross-node visibility (#874 PR 3)
+    // Upload all product data to Drive for cross-node visibility (#874 PR 3)
     try {
-      const { uploadManifestToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+      const { uploadProductToDrive, uploadManifestToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+      const enrichedPath = resolve(configOutputDir, '_enriched.json')
+      const enrichedJson = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
+      await uploadProductToDrive(productSlug, productPage, enrichedJson)
       await uploadManifestToDrive(productSlug, manifest)
     } catch (e: any) {
-      console.warn(`[product-scraper] Manifest Drive upload failed (non-blocking): ${e.message}`)
+      console.warn(`[product-scraper] Drive upload failed (non-blocking): ${e.message}`)
     }
 
     console.log(`\n[product-scraper] Written to:`)
