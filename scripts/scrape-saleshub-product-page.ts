@@ -2428,7 +2428,82 @@ export async function scrapeProductPage(
     writeManifest(manifest, configOutputDir)
     console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM, Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
-    // Upload manifest to Drive for cross-node visibility (#874 PR 3)
+    // ── Step 6: Inline enrichment — runs in the SAME process as the scraper ──
+    // This ensures scrape → extract → enrich → manifest update all happen on one machine.
+    // Enrichment reads extracted/ HTML files, runs Gemini DocumentIntelligence extraction,
+    // and updates the manifest with Gate 2/3 data.
+    console.log('[product-scraper] Step 6: Running inline enrichment...')
+    try {
+      const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
+
+      // Collect documents from extracted/ directory (same logic as enrich endpoint)
+      const enrichDocs: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
+      const extractedDir = resolve(configOutputDir, 'extracted')
+      if (existsSync(extractedDir)) {
+        const eSubs = readdirSync(extractedDir, { withFileTypes: true }).filter(d => d.isDirectory())
+        for (const eSub of eSubs) {
+          const eSubPath = resolve(extractedDir, eSub.name)
+          const eFiles = readdirSync(eSubPath).filter(f =>
+            f.endsWith('.html') || f.endsWith('.txt') || f.endsWith('.md')
+          )
+          for (const file of eFiles) {
+            const content = readFileSync(resolve(eSubPath, file), 'utf-8')
+            enrichDocs.push({
+              name: file.replace(/\.(html|txt|md)$/, ''),
+              content,
+              type: 'content-kit',
+            })
+          }
+        }
+      }
+
+      // Also collect from downloads/ if any files were downloaded
+      const dlDir = resolve(configOutputDir, 'downloads')
+      if (existsSync(dlDir)) {
+        const dlSubs = readdirSync(dlDir, { withFileTypes: true }).filter(d => d.isDirectory())
+        for (const dlSub of dlSubs) {
+          const dlSubPath = resolve(dlDir, dlSub.name)
+          const dlFiles = readdirSync(dlSubPath).filter(f => {
+            const lower = f.toLowerCase()
+            return lower.endsWith('.html') || lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')
+          })
+          for (const file of dlFiles) {
+            const filePath = resolve(dlSubPath, file)
+            const lower = file.toLowerCase()
+            let content: string
+            if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
+              content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+            } else {
+              content = readFileSync(filePath, 'utf-8')
+            }
+            enrichDocs.push({
+              name: file.replace(/\.(html|pdf|docx|pptx)$/i, ''),
+              content,
+              type: 'content-kit',
+            })
+          }
+        }
+      }
+
+      if (enrichDocs.length > 0) {
+        console.log(`[product-scraper] Enriching ${enrichDocs.length} documents inline...`)
+        const enrichment = await enrichProductDocuments(productSlug, enrichDocs, configOutputDir)
+        if (enrichment) {
+          writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
+          console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
+
+          // Re-compute manifest with Gate 2/3 data
+          computeGateSummary(manifest)
+          writeManifest(manifest, configOutputDir)
+        }
+      } else {
+        console.log('[product-scraper] No documents to enrich')
+      }
+    } catch (e: any) {
+      console.warn(`[product-scraper] Inline enrichment failed (non-blocking): ${e.message}`)
+    }
+
+    // Upload manifest + enriched data to Drive for cross-node visibility (#874 PR 3)
     try {
       const { uploadManifestToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
       await uploadManifestToDrive(productSlug, manifest)
