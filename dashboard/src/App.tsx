@@ -29,6 +29,7 @@ import { CalendarPage } from './pages/CalendarPage'
 import { BookOfBusinessPage } from './pages/BookOfBusinessPage'
 import { MeetingPrepPage } from './pages/MeetingPrepPage'
 import { PortfolioTriagePage } from './pages/PortfolioTriagePage'
+import { GraphHealthPage } from './pages/GraphHealthPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp, RefreshCw as RefreshCwIcon, X } from 'lucide-react'
 import type { AccountInfo, SupportCase, PodInfo, CCSPSummary, PipelineSummary } from './types'
@@ -223,6 +224,7 @@ function Dashboard() {
       '/dashboard/events': 'Events | ASA Command Center',
       '/dashboard/rh-news': 'Red Hat News | ASA Command Center',
       '/dashboard/triage': 'Portfolio Triage | ASA Command Center',
+      '/dashboard/admin/graph-health': 'Graph Health | ASA Command Center',
     }
     document.title = pathToTitle[location.pathname] || 'ASA Command Center'
   }, [location.pathname])
@@ -656,6 +658,7 @@ function App() {
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
       <Route path="/dashboard/setup" element={<SetupPage />} />
       <Route path="/dashboard/admin" element={<AdminPage />} />
+      <Route path="/dashboard/admin/graph-health" element={<GraphHealthPage />} />
       <Route path="/dashboard/batch" element={<BatchPage />} />
       <Route path="/dashboard/*" element={<Dashboard />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

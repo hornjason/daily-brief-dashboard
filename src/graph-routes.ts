@@ -21,6 +21,8 @@ import type { Signal } from './feature-module-registry.ts'
 import { customers } from './server-state.ts'
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
+import { computeCustomerGraphHealth, computePortfolioHealth, type CustomerHealthReport } from './lib/graph-health.ts'
+import { getSignalConfigKeys } from './lib/signal-config-keys.ts'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -455,6 +457,80 @@ export function createGraphRouter(): Hono {
       })
     } catch (e: any) {
       console.error('[graph-routes] Portfolio triage failed:', e?.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/admin/graph-health (#875) ────────────────────────────────────
+
+  router.get('/api/admin/graph-health', async (c) => {
+    try {
+      const { CACHE_DIR } = await import('./lib/paths.ts')
+      const { existsSync, readFileSync } = await import('fs')
+      const { resolve } = await import('path')
+      const signalConfigKeys = getSignalConfigKeys()
+      const reports: CustomerHealthReport[] = []
+
+      for (const customer of customers) {
+        const slug = toSlug(customer.name)
+        const graph = loadGraph(slug, CACHE_DIR)
+        if (!graph) continue
+
+        // Load cached motion if exists (read-only, no generation)
+        let motion: import('./lib/motion-builder.ts').StrategicMotion | null = null
+        try {
+          const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          if (existsSync(motionPath)) {
+            motion = JSON.parse(readFileSync(motionPath, 'utf-8'))
+          }
+        } catch {
+          // Skip motion — report still valid without it
+        }
+
+        const report = computeCustomerGraphHealth(graph, signalConfigKeys, motion)
+        reports.push(report)
+      }
+
+      return c.json(reports)
+    } catch (e: any) {
+      console.error('[graph-routes] Graph health failed:', e?.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/admin/graph-health/portfolio (#875) ────────────────────────
+
+  router.get('/api/admin/graph-health/portfolio', async (c) => {
+    try {
+      const { CACHE_DIR } = await import('./lib/paths.ts')
+      const { existsSync, readFileSync } = await import('fs')
+      const { resolve } = await import('path')
+      const signalConfigKeys = getSignalConfigKeys()
+      const reports: CustomerHealthReport[] = []
+
+      for (const customer of customers) {
+        const slug = toSlug(customer.name)
+        const graph = loadGraph(slug, CACHE_DIR)
+        if (!graph) continue
+
+        let motion: import('./lib/motion-builder.ts').StrategicMotion | null = null
+        try {
+          const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          if (existsSync(motionPath)) {
+            motion = JSON.parse(readFileSync(motionPath, 'utf-8'))
+          }
+        } catch {
+          // Skip motion
+        }
+
+        const report = computeCustomerGraphHealth(graph, signalConfigKeys, motion)
+        reports.push(report)
+      }
+
+      const portfolio = computePortfolioHealth(reports)
+      return c.json(portfolio)
+    } catch (e: any) {
+      console.error('[graph-routes] Portfolio health failed:', e?.message)
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
