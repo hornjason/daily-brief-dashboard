@@ -16,6 +16,13 @@
  */
 
 import { callGemini, type GeminiResult } from '../gemini-call.ts'
+import {
+  readManifest,
+  updateGate3,
+  computeGateSummary,
+  writeManifest,
+  type PipelineManifest,
+} from './pipeline-manifest.ts'
 import { validateAndRetry, formatFailureFeedback } from '../gemini-quality-gate.ts'
 import type { QualityValidator } from '../gemini-quality-gate.ts'
 import { documentIntelligenceValidator } from '../quality-validators/document-intelligence-validator.ts'
@@ -414,16 +421,24 @@ export async function enrichDocumentIntelligence(
  * Post-extraction resolution runs deterministically against vocabulary modules.
  *
  * @param geminiFactory - Optional factory that returns a GeminiCaller per doc type (for testing)
+ * @param productDir - Optional directory path for pipeline manifest integration (#874)
  */
 export async function enrichProductDocuments(
   productSlug: string,
   documents: EnrichmentDocumentInput[],
   geminiFactory?: (docType: string) => GeminiCaller,
+  productDir?: string,
 ): Promise<ProductEnrichment> {
   const docs: DocumentIntelligence[] = []
 
   const getGemini = (_type: string): GeminiCaller =>
     geminiFactory ? geminiFactory(_type) : callGemini
+
+  // Read pipeline manifest if productDir provided (#874)
+  let manifest: PipelineManifest | null = null
+  if (productDir) {
+    manifest = readManifest(productDir)
+  }
 
   // Load ecosystem partners once for the batch (not per-document)
   let partners: EcosystemPartnerCache[] = []
@@ -433,27 +448,103 @@ export async function enrichProductDocuments(
     // Ecosystem catalog not available — proceed without partner resolution
   }
 
+  // Deduplicate enrichment inputs by normalized name (#873)
+  const seenNames = new Set<string>()
+  const uniqueDocuments: EnrichmentDocumentInput[] = []
+  for (const doc of documents) {
+    const normalized = doc.name.toLowerCase().trim()
+    if (seenNames.has(normalized)) {
+      console.log(`[saleshub-product-enrichment] Skipping duplicate: "${doc.name}"`)
+      if (manifest) {
+        updateGate3(manifest, doc.name, {
+          gate3_enriched: false,
+          gate3_enrichmentOutcome: 'skipped',
+          gate3_enrichmentReason: 'duplicate',
+        })
+      }
+      continue
+    }
+    seenNames.add(normalized)
+    uniqueDocuments.push(doc)
+  }
+
   // Process in parallel batches of 5 (#841)
   const BATCH_SIZE = 5
-  for (let batchStart = 0; batchStart < documents.length; batchStart += BATCH_SIZE) {
-    const batch = documents.slice(batchStart, batchStart + BATCH_SIZE)
+  for (let batchStart = 0; batchStart < uniqueDocuments.length; batchStart += BATCH_SIZE) {
+    const batch = uniqueDocuments.slice(batchStart, batchStart + BATCH_SIZE)
     const results = await Promise.allSettled(batch.map(async (doc) => {
-      // Skip documents > 10MB
+      // Skip documents > 10MB — explicit manifest outcome, no silent drop
       if (doc.content.length > 10_000_000) {
         console.warn(`[saleshub-product-enrichment] Skipping "${doc.name}" — content too large (${Math.round(doc.content.length / 1_000_000)}MB)`)
-        return null
+        if (manifest) {
+          updateGate3(manifest, doc.name, {
+            gate3_enriched: false,
+            gate3_enrichmentOutcome: 'skipped',
+            gate3_enrichmentReason: 'too-large',
+          })
+        }
+        return { doc, result: null, outcome: 'skipped' as const, reason: 'too-large' }
       }
+
+      // Skip documents with no content — explicit manifest outcome
+      if (!doc.content || doc.content.trim().length === 0) {
+        console.warn(`[saleshub-product-enrichment] Skipping "${doc.name}" — no content`)
+        if (manifest) {
+          updateGate3(manifest, doc.name, {
+            gate3_enriched: false,
+            gate3_enrichmentOutcome: 'skipped',
+            gate3_enrichmentReason: 'no-content',
+          })
+        }
+        return { doc, result: null, outcome: 'skipped' as const, reason: 'no-content' }
+      }
+
       const result = await enrichDocumentIntelligence(doc, getGemini(doc.type))
-      if (!result) return null
+      if (!result) {
+        // enrichDocumentIntelligence returned null — Gemini call failed
+        if (manifest) {
+          updateGate3(manifest, doc.name, {
+            gate3_enriched: false,
+            gate3_enrichmentOutcome: 'failed',
+            gate3_enrichmentReason: 'gemini-extraction-failed',
+          })
+        }
+        return { doc, result: null, outcome: 'failed' as const, reason: 'gemini-extraction-failed' }
+      }
+
       // Set source product slug and resolve against vocabularies
       result.sourceProductSlug = productSlug
-      return resolveDocumentIntelligence(result, partners)
+      const resolved = resolveDocumentIntelligence(result, partners)
+
+      // Update manifest with success
+      if (manifest) {
+        updateGate3(manifest, doc.name, {
+          gate3_enriched: true,
+          gate3_productsFound: resolved.productsReferenced?.length ?? 0,
+          gate3_classificationsFound:
+            (resolved.integrationsReferenced?.length ?? 0) +
+            (resolved.competitorsReferenced?.length ?? 0) +
+            (resolved.partnerSolutions?.length ?? 0),
+          gate3_enrichmentOutcome: 'enriched',
+        })
+      }
+
+      return { doc, result: resolved, outcome: 'enriched' as const, reason: null }
     }))
 
     for (const r of results) {
-      if (r.status !== 'fulfilled' || !r.value) continue
-      docs.push(r.value)
+      if (r.status !== 'fulfilled') continue
+      if (r.value.outcome === 'enriched' && r.value.result) {
+        docs.push(r.value.result)
+      }
     }
+  }
+
+  // Write updated manifest after enrichment batch (#874)
+  if (manifest && productDir) {
+    computeGateSummary(manifest)
+    writeManifest(manifest, productDir)
+    console.log(`[saleshub-product-enrichment] Pipeline manifest updated: ${manifest.gates.gate2_enrichedCount} enriched, coverage ${(manifest.gates.gate2_enrichmentCoverage * 100).toFixed(0)}%`)
   }
 
   return {

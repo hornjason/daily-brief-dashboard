@@ -19,6 +19,15 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve, relative } from 'path'
 import type { BrowserContext } from '@playwright/test'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
+import {
+  createManifest,
+  addGate0Entry,
+  updateGate1,
+  updateGate2,
+  computeGateSummary,
+  writeManifest,
+  type PipelineManifest,
+} from '../src/lib/pipeline-manifest.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
 import {
   captureSeismicAuth,
@@ -39,7 +48,11 @@ const CHROMIUM_PATH = process.env.CHROMIUM_PATH ?? '/ms-playwright/chromium-1208
 const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const MAX_DOWNLOADS_PER_PRODUCT = 100
 const SKIP_FORMATS = new Set(['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTube', 'URL'])
-const SKIP_LANGUAGE_PATTERNS = [/\bde\b|\bfr\b|\bes\b|\bit\b|\bpt\b|\bja\b|\bko\b|\bzh\b/i]
+// Two-tier language filter (#872):
+// Tier 1: Common non-English words that appear in SalesHub document titles
+const NON_ENGLISH_WORDS = /acelere|começe|comience|motivos|migrar|máquinas|fluxos|maneiras|faça|débuter|einstieg|ergebnisse|gestisci|introduzione|vantaggi|virtualisierung|비즈니스|仮想化|자동화|empresa\s+automatizada/i
+// Tier 2: ISO language code suffixes in parentheses, e.g. "(fr)", "(pt-BR)"
+const ISO_LANGUAGE_CODE_PATTERN = /\((?:de|fr|es|it|pt|pt-br|ja|ko|zh|zh-cn|zh-tw)\)$/i
 // #856: Safety net — catch any unhandled promise rejections from download
 // timeouts instead of crashing the process. The per-promise .catch() below
 // is the real fix; this is defense-in-depth.
@@ -66,9 +79,31 @@ export function isSkippedFormat(format: string): boolean {
   return SKIP_FORMATS.has(format)
 }
 
-/** Returns true if the document name indicates a non-English document */
+/**
+ * Returns true if the document name indicates a non-English document (#872).
+ *
+ * Two-tier detection:
+ *  1. Check for common non-English words in the title (catches "Acelere os resultados")
+ *  2. Check for ISO language code suffix, e.g. "(fr)", "(pt-BR)"
+ *
+ * When metadata.language is available, callers should check that FIRST
+ * before falling back to this name-based heuristic.
+ */
 export function isNonEnglishDoc(name: string): boolean {
-  return SKIP_LANGUAGE_PATTERNS.some(p => p.test(name))
+  if (NON_ENGLISH_WORDS.test(name)) return true
+  if (ISO_LANGUAGE_CODE_PATTERN.test(name.trim())) return true
+  return false
+}
+
+/**
+ * Returns true if an item's metadata language field indicates non-English (#872).
+ * Primary check — use before falling back to isNonEnglishDoc() name heuristic.
+ */
+export function isNonEnglishByMetadata(item: { language?: string }): boolean {
+  if (!item.language) return false
+  const lang = item.language.toLowerCase().trim()
+  if (!lang || lang === 'en' || lang === 'en-us' || lang === 'en-gb') return false
+  return true
 }
 
 /** Builds a Seismic download URL from versionId and contentId */
@@ -110,6 +145,8 @@ export function collectDownloadableItems(
       if (!si.versionId || !si.contentId) continue
       const format = si.format ?? ''
       if (isSkippedFormat(format)) continue
+      // #872: Two-tier language filter — metadata first, then name heuristic
+      if (isNonEnglishByMetadata(si)) continue
       if (isNonEnglishDoc(item.name)) continue
       if (seen.has(si.versionId)) continue
       seen.add(si.versionId)
@@ -125,6 +162,63 @@ export function collectDownloadableItems(
   }
 
   return items
+}
+
+/**
+ * Deduplicates items across all sections by normalized name (#873).
+ * When duplicates are found, keeps the entry with more metadata (contentId > no contentId).
+ * Returns { sections (mutated), removed } for manifest tracking.
+ */
+export function deduplicateAcrossSections(
+  sections: Record<string, ProductSection>,
+): { removed: Array<{ name: string; section: string }> } {
+  const seen = new Map<string, { sectionKey: string; itemIdx: number; hasContentId: boolean }>()
+  const toRemove: Array<{ sectionKey: string; itemIdx: number; name: string; section: string }> = []
+
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    for (let i = 0; i < section.items.length; i++) {
+      const item = section.items[i]
+      const normalizedName = item.name.toLowerCase().trim()
+      const hasContentId = Boolean((item as any).contentId)
+
+      const existing = seen.get(normalizedName)
+      if (existing) {
+        // Decide which to keep — prefer the one with contentId
+        if (hasContentId && !existing.hasContentId) {
+          // Current is better — remove the existing one
+          toRemove.push({
+            sectionKey: existing.sectionKey,
+            itemIdx: existing.itemIdx,
+            name: item.name,
+            section: existing.sectionKey,
+          })
+          seen.set(normalizedName, { sectionKey, itemIdx: i, hasContentId })
+        } else {
+          // Existing is same or better — remove current
+          toRemove.push({ sectionKey, itemIdx: i, name: item.name, section: sectionKey })
+        }
+      } else {
+        seen.set(normalizedName, { sectionKey, itemIdx: i, hasContentId })
+      }
+    }
+  }
+
+  // Remove duplicates in reverse index order to avoid index shifting
+  const bySectionKey = new Map<string, number[]>()
+  for (const entry of toRemove) {
+    if (!bySectionKey.has(entry.sectionKey)) bySectionKey.set(entry.sectionKey, [])
+    bySectionKey.get(entry.sectionKey)!.push(entry.itemIdx)
+  }
+  for (const [sectionKey, indices] of bySectionKey) {
+    const sorted = indices.sort((a, b) => b - a) // reverse order
+    for (const idx of sorted) {
+      sections[sectionKey].items.splice(idx, 1)
+    }
+  }
+
+  return {
+    removed: toRemove.map(r => ({ name: r.name, section: r.section })),
+  }
 }
 
 /**
@@ -1493,18 +1587,8 @@ async function downloadProductDocuments(
     await new Promise(r => setTimeout(r, 1_000))
   }
 
-  // ── Write failed downloads manifest ──────────────────────────────────────
-  if (failedDownloads.length > 0) {
-    const manifestPath = resolve(productDir, '_failed-downloads.json')
-    writeJsonAtomic(manifestPath, {
-      timestamp: new Date().toISOString(),
-      productSlug,
-      totalAttempted: totalProcessed,
-      totalFailed: failedDownloads.length,
-      failures: failedDownloads,
-    })
-    console.warn(`[product-scraper] Failed downloads manifest written to ${manifestPath}`)
-  }
+  // Failed downloads tracked in unified pipeline manifest (#874)
+  // _failed-downloads.json removed — data now in _pipeline-manifest.json
 
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 
@@ -1736,18 +1820,8 @@ async function downloadProductDocuments(
     await new Promise(r => setTimeout(r, 500))
   }
 
-  // AC-6: Write extraction manifest
-  const extractionManifestPath = resolve(productDir, '_extraction-manifest.json')
-  writeJsonAtomic(extractionManifestPath, {
-    timestamp: new Date().toISOString(),
-    productSlug,
-    totalItems: downloadQueue.length,
-    extracted,
-    skipped: extractionSkipped,
-    failed: extractionErrors,
-    results: extractionResults,
-  })
-  console.log(`[product-scraper] Extraction manifest written to ${extractionManifestPath}`)
+  // Extraction data tracked in unified pipeline manifest (#874)
+  // _extraction-manifest.json removed — data now in _pipeline-manifest.json
   console.log(`[product-scraper] Extraction complete: ${extracted} extracted, ${extractionSkipped} skipped, ${extractionErrors} errors`)
 }
 
@@ -1977,6 +2051,15 @@ export async function scrapeProductPage(
     const { sections, domainDocLookup } = await extractRedHeaderSections(page)
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
+    // ── Pipeline manifest: Gate 0 — DOM visibility (#874) ─────────────────
+    const manifest = createManifest(slugify(header.name), header.name)
+    for (const [sectionKey, section] of Object.entries(sections)) {
+      for (const item of section.items) {
+        addGate0Entry(manifest, item.name, sectionKey, ['dom'])
+      }
+    }
+    console.log(`[product-scraper] Manifest Gate 0: ${manifest.documents.length} DOM items registered`)
+
     // Query Seismic API for document list by product name (using auth captured in Step 1)
     if (authCtx) {
       console.log('[product-scraper] Step 4: Querying Seismic API for product documents...')
@@ -2051,6 +2134,19 @@ export async function scrapeProductPage(
           }
         }
 
+        // Update manifest: add API-discovered items not already in manifest
+        for (const [sectionKey, section] of Object.entries(sections)) {
+          for (const item of section.items) {
+            const existing = manifest.documents.find(d => d.name === item.name)
+            if (existing) {
+              // Update source to include 'api' if it came from API merge
+              if (!existing.source.includes('api')) existing.source.push('api')
+            } else {
+              addGate0Entry(manifest, item.name, sectionKey, ['api'])
+            }
+          }
+        }
+
         console.log(`[product-scraper] After API merge: ${Object.keys(sections).length} total sections`)
       } catch (e: any) {
         console.warn(`[product-scraper] Seismic API query failed — DOM-only results: ${e.message}`)
@@ -2080,12 +2176,54 @@ export async function scrapeProductPage(
       }
     }
 
+    // ── Dedup across all sections (#873) ──────────────────────────────────
+    console.log('[product-scraper] Deduplicating items across sections...')
+    const dedupResult = deduplicateAcrossSections(sections)
+    for (const removed of dedupResult.removed) {
+      updateGate1(manifest, removed.name, { gate1_deduped: false })
+    }
+    if (dedupResult.removed.length > 0) {
+      console.log(`[product-scraper] Dedup: removed ${dedupResult.removed.length} duplicate items`)
+    }
+
+    // ── Language filter across all sections (#872) ─────────────────────────
+    let languageFiltered = 0
+    for (const [sectionKey, section] of Object.entries(sections)) {
+      for (const item of section.items) {
+        const si = item as any
+        if (isNonEnglishByMetadata(si) || isNonEnglishDoc(item.name)) {
+          updateGate1(manifest, item.name, { language: si.language ?? 'non-en' })
+          updateGate2(manifest, item.name, { gate2_skippedReason: 'non-english' })
+          languageFiltered++
+        }
+      }
+    }
+    if (languageFiltered > 0) {
+      console.log(`[product-scraper] Language filter: ${languageFiltered} non-English items flagged`)
+    }
+
+    // ── Gate 1 blocking check (#874) ───────────────────────────────────────
+    computeGateSummary(manifest)
+    const configOutputDir = resolve('config-templates', 'saleshub-products', slugify(header.name))
+    mkdirSync(configOutputDir, { recursive: true })
+
+    if (manifest.gates.gate1_blocked) {
+      const passPct = (manifest.gates.gate1_passRate * 100).toFixed(1)
+      console.log(`[product-scraper] GATE 1 BLOCKED: Only ${passPct}% of page items captured (threshold: 80%)`)
+      manifest.gates.gate1_blocked = true
+      writeManifest(manifest, configOutputDir)
+      // Still write _product.json for debugging, but skip downloads + enrichment
+      console.log('[product-scraper] Skipping downloads and enrichment due to Gate 1 block')
+    }
+
     // Extract sidebar
     console.log('[product-scraper] Extracting sidebar...')
     const sidebar = await extractSidebar(page)
 
     // Step 5: Download documents into per-product directory (SC-2)
-    if (!skipDownloads && authCtx) {
+    if (manifest.gates.gate1_blocked) {
+      console.log('[product-scraper] Skipping downloads (Gate 1 blocked)')
+    } else if (!skipDownloads && authCtx) {
       console.log('[product-scraper] Step 5: Downloading documents into product directory...')
       await downloadProductDocuments(page, context, sections, slugify(header.name), authCtx)
     } else if (skipDownloads) {
@@ -2143,10 +2281,9 @@ export async function scrapeProductPage(
 
     // Write output files
     const cacheOutputDir = resolve(CACHE_DIR, 'saleshub', 'products', productSlug)
-    const configOutputDir = resolve('config-templates', 'saleshub-products', productSlug)
 
     mkdirSync(cacheOutputDir, { recursive: true })
-    mkdirSync(configOutputDir, { recursive: true })
+    // configOutputDir already created above at Gate 1 check
 
     const cachePath = resolve(cacheOutputDir, '_product.json')
     const configPath = resolve(configOutputDir, '_product.json')
@@ -2159,15 +2296,10 @@ export async function scrapeProductPage(
       writeJsonAtomic(resolve(configOutputDir, '_cds-inventory.json'), cdsDocuments)
     }
 
-    // Write completeness report (#837)
-    const downloaded = existsSync(resolve(configOutputDir, 'downloads'))
-      ? require('child_process').execSync(`find ${resolve(configOutputDir, 'downloads')} -type f | wc -l`).toString().trim()
-      : '0'
-    const completeness = generateCompletenessReport(
-      header.name, cdsDocuments, totalItems, parseInt(downloaded), delta,
-    )
-    writeJsonAtomic(resolve(configOutputDir, '_completeness.json'), completeness)
-    console.log(`[product-scraper] Completeness: ${completeness.status} (CDS: ${completeness.cdsItemCount}, DOM: ${completeness.domItemCount}, downloaded: ${completeness.downloadedCount}, missing: ${completeness.missingItems.length})`)
+    // Write unified pipeline manifest (#874) — replaces _completeness.json
+    computeGateSummary(manifest)
+    writeManifest(manifest, configOutputDir)
+    console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM, Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
     console.log(`\n[product-scraper] Written to:`)
     console.log(`  ${cachePath}`)

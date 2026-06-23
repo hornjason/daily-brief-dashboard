@@ -16,9 +16,11 @@ import {
   collectDownloadableItems,
   isSkippedFormat,
   isNonEnglishDoc,
+  isNonEnglishByMetadata,
   buildDownloadUrl,
   buildLocalPath,
   authCanaryCheck,
+  deduplicateAcrossSections,
   type DownloadableItem,
 } from '../../scripts/scrape-saleshub-product-page.ts'
 import type { ProductSection, SectionItem } from '../../src/types/saleshub-product-types.ts'
@@ -168,18 +170,66 @@ describe('isSkippedFormat', () => {
 
 // ── isNonEnglishDoc ─────────────────────────────────────────────────────────
 
-describe('isNonEnglishDoc', () => {
-  it('returns true for documents with language codes in name', () => {
+describe('isNonEnglishDoc (#872 two-tier)', () => {
+  it('returns true for ISO language code suffixes', () => {
     expect(isNonEnglishDoc('Guide de déploiement (fr)')).toBe(true)
     expect(isNonEnglishDoc('Guía rápida (es)')).toBe(true)
     expect(isNonEnglishDoc('Leitfaden (de)')).toBe(true)
     expect(isNonEnglishDoc('ガイド (ja)')).toBe(true)
+    expect(isNonEnglishDoc('Guia (pt-BR)')).toBe(true)
+  })
+
+  it('returns true for non-English word patterns in title', () => {
+    // Portuguese
+    expect(isNonEnglishDoc('Acelere os resultados com Red Hat')).toBe(true)
+    expect(isNonEnglishDoc('Começe a usar automação')).toBe(true)
+    expect(isNonEnglishDoc('5 maneiras de usar OpenShift')).toBe(true)
+    expect(isNonEnglishDoc('Faça mais com menos')).toBe(true)
+    // Spanish
+    expect(isNonEnglishDoc('Comience con la automatización')).toBe(true)
+    expect(isNonEnglishDoc('5 motivos para migrar')).toBe(true)
+    // French
+    expect(isNonEnglishDoc('Débuter avec RHEL')).toBe(true)
+    // German
+    expect(isNonEnglishDoc('Einstieg in die Virtualisierung')).toBe(true)
+    // Italian
+    expect(isNonEnglishDoc('Introduzione alla gestione')).toBe(true)
+    expect(isNonEnglishDoc('I vantaggi di OpenShift')).toBe(true)
+    // Korean
+    expect(isNonEnglishDoc('비즈니스 자동화 가이드')).toBe(true)
+    // Japanese
+    expect(isNonEnglishDoc('仮想化ソリューション')).toBe(true)
   })
 
   it('returns false for English documents', () => {
     expect(isNonEnglishDoc('Quick Start Guide')).toBe(false)
     expect(isNonEnglishDoc('AAP 2.6 Release Overview')).toBe(false)
     expect(isNonEnglishDoc('Red Hat Ansible Automation Platform Cheatsheet')).toBe(false)
+    expect(isNonEnglishDoc('Accelerate business outcomes')).toBe(false)
+    expect(isNonEnglishDoc('Getting Started with OpenShift')).toBe(false)
+  })
+})
+
+describe('isNonEnglishByMetadata (#872)', () => {
+  it('returns true for non-English language metadata', () => {
+    expect(isNonEnglishByMetadata({ language: 'fr' })).toBe(true)
+    expect(isNonEnglishByMetadata({ language: 'pt-BR' })).toBe(true)
+    expect(isNonEnglishByMetadata({ language: 'de' })).toBe(true)
+    expect(isNonEnglishByMetadata({ language: 'ja' })).toBe(true)
+  })
+
+  it('returns false for English language variants', () => {
+    expect(isNonEnglishByMetadata({ language: 'en' })).toBe(false)
+    expect(isNonEnglishByMetadata({ language: 'en-us' })).toBe(false)
+    expect(isNonEnglishByMetadata({ language: 'en-US' })).toBe(false)
+    expect(isNonEnglishByMetadata({ language: 'en-gb' })).toBe(false)
+    expect(isNonEnglishByMetadata({ language: 'EN' })).toBe(false)
+  })
+
+  it('returns false when no language field', () => {
+    expect(isNonEnglishByMetadata({})).toBe(false)
+    expect(isNonEnglishByMetadata({ language: '' })).toBe(false)
+    expect(isNonEnglishByMetadata({ language: undefined })).toBe(false)
   })
 })
 
@@ -289,5 +339,70 @@ describe('authCanaryCheck', () => {
     const result = await authCanaryCheck(authCtx, sections, mockFetch)
     expect(result.ok).toBe(true)
     expect(result.skipped).toBe(true)
+  })
+})
+
+// ── deduplicateAcrossSections (#873) ──────────────────────────────────────
+
+describe('deduplicateAcrossSections', () => {
+  it('removes duplicate items by normalized name across sections', () => {
+    const sections: Record<string, ProductSection> = {
+      'resources': makeSection('Resources', [
+        { name: 'Getting Started Guide', url: 'https://example.com' },
+        { name: 'Unique Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
+      ]),
+      'technical-resources': makeSection('Technical resources', [
+        { name: 'getting started guide', versionId: 'v2', contentId: 'c2', format: 'PDF' } as any,
+      ]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    expect(result.removed).toHaveLength(1)
+
+    // Total items after dedup: 2 (unique + the kept copy)
+    const totalItems = Object.values(sections).reduce((sum, s) => sum + s.items.length, 0)
+    expect(totalItems).toBe(2)
+  })
+
+  it('keeps the entry with contentId when deduplicating', () => {
+    const sections: Record<string, ProductSection> = {
+      'a': makeSection('A', [
+        { name: 'My Doc', url: 'https://example.com' },  // no contentId
+      ]),
+      'b': makeSection('B', [
+        { name: 'my doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,  // has contentId
+      ]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    expect(result.removed).toHaveLength(1)
+
+    // Section 'a' should have the DOM-only item removed
+    expect(sections['a'].items).toHaveLength(0)
+    // Section 'b' should keep its item (has contentId)
+    expect(sections['b'].items).toHaveLength(1)
+    expect(sections['b'].items[0].name).toBe('my doc')
+  })
+
+  it('returns empty removed array when no duplicates', () => {
+    const sections: Record<string, ProductSection> = {
+      'a': makeSection('A', [
+        { name: 'Doc A' },
+        { name: 'Doc B' },
+      ]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    expect(result.removed).toHaveLength(0)
+  })
+
+  it('handles multiple duplicates of the same item', () => {
+    const sections: Record<string, ProductSection> = {
+      'a': makeSection('A', [{ name: 'Same Doc' }]),
+      'b': makeSection('B', [{ name: 'same doc', contentId: 'c1' } as any]),
+      'c': makeSection('C', [{ name: 'SAME DOC' }]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    expect(result.removed).toHaveLength(2)
+
+    const totalItems = Object.values(sections).reduce((sum, s) => sum + s.items.length, 0)
+    expect(totalItems).toBe(1)
   })
 })
