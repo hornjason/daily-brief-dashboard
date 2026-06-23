@@ -1270,7 +1270,7 @@ async function downloadProductDocuments(
       }
 
       // Skip non-English documents
-      const isNonEnglish = SKIP_LANGUAGE_PATTERNS.some(p => p.test(item.name))
+      const isNonEnglish = isNonEnglishDoc(item.name)
       if (isNonEnglish) {
         console.log(`[product-scraper] Skipping non-English: ${item.name.slice(0, 50)}`)
         continue
