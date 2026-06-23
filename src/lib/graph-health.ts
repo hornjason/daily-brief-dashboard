@@ -232,6 +232,27 @@ function computeMotionCoverageFromMotion(
   return { referencedNodes, totalNodes, percentage }
 }
 
+// Evidence module → graph sourceModule mapping (evidence uses normalized names,
+// graph nodes use original signal source names)
+const EVIDENCE_MODULE_TO_SOURCE: Record<string, string[]> = {
+  'cases_open': ['cases'],
+  'cases_closed': ['cases'],
+  'pipeline': ['pipeline'],
+  'subscriptions': ['subscriptions'],
+  'competitive-intel': ['competitive-intel'],
+  'ccsp': ['ccsp', 'cloud-marketplace', 'ecosystem-catalog'],
+  'solution-intelligence': ['solution-intelligence'],
+  'lifecycle': ['product-lifecycle'],
+  'tech-stack': ['tech-stack'],
+  'product-intel': ['product-intel', 'customer-product-intel'],
+  'partner': ['partner-catalog'],
+  'news': ['news-radar', 'rh-rss'],
+  'events': ['rh-events'],
+  'engagement': ['emails'],
+  'customer-docs': ['customer-docs'],
+  'intel': ['competitive-intel', 'news-radar', 'rh-rss', 'product-intel'],
+}
+
 /**
  * Collect all graph node IDs referenced by a motion's evidence and tactics.
  */
@@ -243,9 +264,10 @@ function collectReferencedNodeIds(
 
   for (const phase of motion.phases) {
     for (const ev of phase.evidence) {
+      const matchingSources = EVIDENCE_MODULE_TO_SOURCE[ev.module] ?? [ev.module]
       for (const [nodeId, node] of Object.entries(graph.nodes)) {
         if (
-          node.sourceModule === ev.module ||
+          matchingSources.includes(node.sourceModule) ||
           ev.fact.toLowerCase().includes(node.name.toLowerCase()) ||
           node.name.toLowerCase().includes(ev.fact.toLowerCase().slice(0, 20))
         ) {
