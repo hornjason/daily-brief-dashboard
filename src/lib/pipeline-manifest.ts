@@ -214,8 +214,28 @@ export function updateGate3(
   name: string,
   updates: Partial<PipelineManifestEntry>,
 ): void {
-  const entry = manifest.documents.find(d => d.name === name)
-  if (!entry) return
+  let entry = manifest.documents.find(d => d.name === name)
+  if (!entry) {
+    entry = {
+      name,
+      section: 'enrichment',
+      source: ['dom'] as ('dom' | 'cds' | 'api')[],
+      language: 'en',
+      gate0_visible: false,
+      gate1_scraped: false,
+      gate1_deduped: false,
+      gate2_downloaded: false,
+      gate2_acquisitionMethod: 'extracted',
+      gate2_downloadPath: null,
+      gate2_skippedReason: null,
+      gate3_enriched: false,
+      gate3_productsFound: 0,
+      gate3_classificationsFound: 0,
+      gate3_enrichmentOutcome: null,
+      gate3_enrichmentReason: null,
+    }
+    manifest.documents.push(entry)
+  }
   Object.assign(entry, updates)
 }
 
@@ -225,7 +245,7 @@ export function computeGateSummary(manifest: PipelineManifest): void {
   const docs = manifest.documents
   const g = manifest.gates
 
-  g.gate0_domItemCount = docs.length
+  g.gate0_domItemCount = docs.filter(d => d.gate0_visible).length || docs.length
   g.gate1_scrapedCount = docs.filter(d => d.gate1_scraped).length
   g.gate1_dedupedCount = docs.filter(d => !d.gate1_deduped).length  // count of REMOVED dupes
   g.gate1_filteredCount = docs.filter(d => d.gate2_skippedReason === 'non-english').length
@@ -236,10 +256,11 @@ export function computeGateSummary(manifest: PipelineManifest): void {
 
   g.gate2_downloadedCount = docs.filter(d => d.gate2_downloaded).length
   g.gate2_enrichedCount = docs.filter(d => d.gate3_enriched).length
-  g.gate2_enrichmentCoverage = g.gate2_downloadedCount > 0
-    ? g.gate2_enrichedCount / g.gate2_downloadedCount
+  const enrichableDocs = docs.filter(d => d.gate3_enrichmentOutcome !== null).length
+  g.gate2_enrichmentCoverage = enrichableDocs > 0
+    ? g.gate2_enrichedCount / enrichableDocs
     : 0
-  g.gate2_enrichmentAlert = g.gate2_downloadedCount > 0 && g.gate2_enrichmentCoverage < 0.60
+  g.gate2_enrichmentAlert = enrichableDocs > 0 && g.gate2_enrichmentCoverage < 0.60
 }
 
 // ── I/O ──────────────────────────────────────────────────────────────────────
