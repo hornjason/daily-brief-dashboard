@@ -2498,7 +2498,7 @@ export async function scrapeProductPage(
 
       if (enrichDocs.length > 0) {
         console.log(`[product-scraper] Enriching ${enrichDocs.length} documents inline...`)
-        const enrichment = await enrichProductDocuments(productSlug, enrichDocs, configOutputDir)
+        const enrichment = await enrichProductDocuments(productSlug, enrichDocs, undefined, configOutputDir)
         if (enrichment) {
           writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
           console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
