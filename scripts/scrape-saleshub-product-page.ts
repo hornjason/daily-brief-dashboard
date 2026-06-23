@@ -26,6 +26,7 @@ import {
   updateGate2,
   computeGateSummary,
   writeManifest,
+  readManifest,
   type PipelineManifest,
 } from '../src/lib/pipeline-manifest.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
@@ -2190,7 +2191,7 @@ export async function scrapeProductPage(
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
     // ── Pipeline manifest: Gate 0 — DOM visibility (#874) ─────────────────
-    const manifest = createManifest(slugify(header.name), header.name)
+    let manifest = createManifest(slugify(header.name), header.name)
     for (const [sectionKey, section] of Object.entries(sections)) {
       for (const item of section.items) {
         addGate0Entry(manifest, item.name, sectionKey, ['dom'])
@@ -2503,9 +2504,11 @@ export async function scrapeProductPage(
           writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
           console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
 
-          // Re-compute manifest with Gate 2/3 data
-          computeGateSummary(manifest)
-          writeManifest(manifest, configOutputDir)
+          // Re-read manifest from disk (enrichment already wrote Gate 3 data)
+          const updatedManifest = readManifest(configOutputDir)
+          if (updatedManifest) {
+            manifest = updatedManifest
+          }
         }
       } else {
         console.log('[product-scraper] No documents to enrich')
