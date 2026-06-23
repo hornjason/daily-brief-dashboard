@@ -40,9 +40,10 @@ export interface SignalSourceEntry {
 }
 
 export interface MotionCoverageInfo {
-  referencedNodes: number
-  totalNodes: number
-  percentage: number
+  domainCoverage: number      // percentage: TDP domains with evidence / active TDP domains
+  signalBreadth: number       // count: distinct source types contributing evidence
+  activeDomains: number       // how many TDP domains the customer has
+  domainsWithEvidence: number // how many have >=1 evidence item
 }
 
 export interface CustomerHealthReport {
@@ -218,98 +219,57 @@ export function computeCustomerGraphHealth(
 }
 
 /**
- * Compute motion coverage: how many graph nodes are referenced by the motion.
+ * Compute motion coverage: TDP domain coverage and signal breadth (#882).
+ * Replaces node-counting approach with domain-level coverage.
  */
 function computeMotionCoverageFromMotion(
-  graph: CustomerGraph,
+  _graph: CustomerGraph,
   motion: StrategicMotion,
 ): MotionCoverageInfo {
-  const referencedNodeIds = collectReferencedNodeIds(graph, motion)
-  const totalNodes = Object.keys(graph.nodes).length
-  const referencedNodes = referencedNodeIds.size
-  const percentage = totalNodes > 0 ? Math.round((referencedNodes / totalNodes) * 100) : 0
-
-  return { referencedNodes, totalNodes, percentage }
-}
-
-// Evidence module → graph sourceModule mapping (evidence uses normalized names,
-// graph nodes use original signal source names)
-const EVIDENCE_MODULE_TO_SOURCE: Record<string, string[]> = {
-  'cases_open': ['cases'],
-  'cases_closed': ['cases'],
-  'pipeline': ['pipeline'],
-  'subscriptions': ['subscriptions'],
-  'competitive-intel': ['competitive-intel'],
-  'ccsp': ['ccsp', 'cloud-marketplace', 'ecosystem-catalog'],
-  'solution-intelligence': ['solution-intelligence'],
-  'lifecycle': ['product-lifecycle'],
-  'tech-stack': ['tech-stack'],
-  'product-intel': ['product-intel', 'customer-product-intel'],
-  'partner': ['partner-catalog'],
-  'news': ['news-radar', 'rh-rss'],
-  'events': ['rh-events'],
-  'engagement': ['emails'],
-  'customer-docs': ['customer-docs'],
-  'intel': ['competitive-intel', 'news-radar', 'rh-rss', 'product-intel'],
-}
-
-/**
- * Collect all graph node IDs referenced by a motion's evidence and tactics.
- */
-function collectReferencedNodeIds(
-  graph: CustomerGraph,
-  motion: StrategicMotion,
-): Set<string> {
-  const referencedNodeIds = new Set<string>()
+  const activeDomains = new Set<string>()
+  const domainsWithEvidence = new Set<string>()
+  const sourceTypes = new Set<string>()
 
   for (const phase of motion.phases) {
-    for (const ev of phase.evidence) {
-      const matchingSources = EVIDENCE_MODULE_TO_SOURCE[ev.module] ?? [ev.module]
-      for (const [nodeId, node] of Object.entries(graph.nodes)) {
-        if (
-          matchingSources.includes(node.sourceModule) ||
-          ev.fact.toLowerCase().includes(node.name.toLowerCase()) ||
-          node.name.toLowerCase().includes(ev.fact.toLowerCase().slice(0, 20))
-        ) {
-          referencedNodeIds.add(nodeId)
-        }
-      }
+    // Each phase covers a TDP domain (extracted from phase name)
+    const phaseTdp = phase.name.replace(/^(Anchor: Protect|Anchor|Expand|Transform|Displace):\s*/, '').trim()
+    if (phaseTdp) activeDomains.add(phaseTdp)
+
+    if (phase.evidence.length > 0 && phaseTdp) {
+      domainsWithEvidence.add(phaseTdp)
     }
 
-    for (const tactic of phase.tactics) {
-      for (const [nodeId, node] of Object.entries(graph.nodes)) {
-        if (
-          (node.type === 'play' && node.name.toLowerCase().includes(tactic.parentTdp.toLowerCase())) ||
-          (node.type === 'product' && tactic.name.toLowerCase().includes(node.name.toLowerCase()))
-        ) {
-          referencedNodeIds.add(nodeId)
-        }
-      }
+    for (const ev of phase.evidence) {
+      sourceTypes.add(ev.module)
     }
   }
 
-  return referencedNodeIds
+  const domainCoverage = activeDomains.size > 0
+    ? Math.round((domainsWithEvidence.size / activeDomains.size) * 100)
+    : 0
+
+  return {
+    domainCoverage,
+    signalBreadth: sourceTypes.size,
+    activeDomains: activeDomains.size,
+    domainsWithEvidence: domainsWithEvidence.size,
+  }
 }
 
 /**
- * Compute motion coverage with full details (unreferenced node list).
+ * Compute motion coverage with full details (#882 — domain coverage).
  */
 export function computeMotionCoverage(
   graph: CustomerGraph,
   motion: StrategicMotion,
 ): MotionCoverageReport {
-  const referencedNodeIds = collectReferencedNodeIds(graph, motion)
-  const totalNodes = Object.keys(graph.nodes).length
-  const referencedNodes = referencedNodeIds.size
-  const percentage = totalNodes > 0 ? Math.round((referencedNodes / totalNodes) * 100) : 0
-  const unreferencedNodeIds = Object.keys(graph.nodes).filter(id => !referencedNodeIds.has(id))
-
+  const info = computeMotionCoverageFromMotion(graph, motion)
   return {
     customerSlug: graph.customerId,
-    referencedNodes,
-    totalNodes,
-    percentage,
-    unreferencedNodeIds,
+    referencedNodes: info.domainsWithEvidence,
+    totalNodes: info.activeDomains,
+    percentage: info.domainCoverage,
+    unreferencedNodeIds: [], // Domain-level coverage replaces node-level tracking
   }
 }
 
