@@ -12,6 +12,8 @@ import { describe, it, expect } from 'bun:test'
 import {
   sanitizeViewerHtml,
   isEnrichableContent,
+  detectNavigationPage,
+  extractSubPageLinks,
 } from '../../scripts/scrape-saleshub-product-page.ts'
 
 // ── sanitizeViewerHtml ─────────────────────────────────────────────────────
@@ -203,5 +205,153 @@ describe('isEnrichableContent', () => {
       'infrastructure. It integrates with existing CI/CD pipelines and security frameworks.',
     ].join(' ')
     expect(isEnrichableContent(text)).toBe(true)
+  })
+})
+
+// ── detectNavigationPage (#874 follow-through) ──────────────────────────
+
+describe('detectNavigationPage', () => {
+  it('returns true for a page with 3+ internal links and short text', () => {
+    const innerText = 'ServiceNow Integration\nBrowse resources'
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+      '<a href="https://saleshub.redhat.com/doc/def">Doc B</a>',
+      '<a href="https://saleshub.redhat.com/doc/ghi">Doc C</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(true)
+    expect(result.links.length).toBe(3)
+  })
+
+  it('returns false for a document page with substantial content', () => {
+    const innerText = 'A'.repeat(2500)
+    const html = '<div>' + innerText + '</div><a href="https://saleshub.redhat.com/other">Link</a>'
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(false)
+  })
+
+  it('returns false when fewer than 3 internal links', () => {
+    const innerText = 'Short page'
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+      '<a href="https://saleshub.redhat.com/doc/def">Doc B</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(false)
+  })
+
+  it('ignores external links — only counts saleshub/seismic domains', () => {
+    const innerText = 'Links page'
+    const html = [
+      '<a href="https://google.com/search">Google</a>',
+      '<a href="https://microsoft.com/docs">MS Docs</a>',
+      '<a href="https://github.com/repo">GitHub</a>',
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(false)
+    expect(result.links.length).toBe(1)
+  })
+
+  it('counts seismic.com links as internal', () => {
+    const innerText = 'Resources page'
+    const html = [
+      '<a href="https://redhat.seismic.com/content/abc">Doc A</a>',
+      '<a href="https://redhat.seismic.com/content/def">Doc B</a>',
+      '<a href="https://redhat.seismic.com/content/ghi">Doc C</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(true)
+    expect(result.links.length).toBe(3)
+  })
+
+  it('deduplicates links by href', () => {
+    const innerText = 'Repeated links'
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A copy</a>',
+      '<a href="https://saleshub.redhat.com/doc/def">Doc B</a>',
+      '<a href="https://saleshub.redhat.com/doc/ghi">Doc C</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.isNavPage).toBe(true)
+    expect(result.links.length).toBe(3)
+  })
+
+  it('caps links at MAX_SUB_PAGES (10)', () => {
+    const innerText = 'Many links page'
+    const links = Array.from({ length: 15 }, (_, i) =>
+      `<a href="https://saleshub.redhat.com/doc/${i}">Doc ${i}</a>`
+    ).join('\n')
+    const result = detectNavigationPage(innerText, links)
+    expect(result.isNavPage).toBe(true)
+    expect(result.links.length).toBe(10)
+  })
+
+  it('extracts link text as name', () => {
+    const innerText = 'Nav page'
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">ServiceNow Integration Guide</a>',
+      '<a href="https://saleshub.redhat.com/doc/def">Cisco ACI Battle Card</a>',
+      '<a href="https://saleshub.redhat.com/doc/ghi">VMware Migration Playbook</a>',
+    ].join('\n')
+    const result = detectNavigationPage(innerText, html)
+    expect(result.links[0].name).toBe('ServiceNow Integration Guide')
+    expect(result.links[0].url).toBe('https://saleshub.redhat.com/doc/abc')
+  })
+})
+
+// ── extractSubPageLinks (#874 follow-through) ───────────────────────────
+
+describe('extractSubPageLinks', () => {
+  it('extracts saleshub.redhat.com links from HTML', () => {
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+      '<a href="https://google.com">External</a>',
+      '<a href="https://saleshub.redhat.com/doc/def">Doc B</a>',
+    ].join('\n')
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(2)
+    expect(links[0].url).toBe('https://saleshub.redhat.com/doc/abc')
+    expect(links[1].url).toBe('https://saleshub.redhat.com/doc/def')
+  })
+
+  it('extracts seismic.com links', () => {
+    const html = '<a href="https://redhat.seismic.com/content/xyz">Seismic Doc</a>'
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(1)
+    expect(links[0].name).toBe('Seismic Doc')
+  })
+
+  it('returns empty array when no internal links', () => {
+    const html = '<a href="https://google.com">Google</a><a href="https://aws.amazon.com">AWS</a>'
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(0)
+  })
+
+  it('deduplicates by URL', () => {
+    const html = [
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A</a>',
+      '<a href="https://saleshub.redhat.com/doc/abc">Doc A again</a>',
+    ].join('\n')
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(1)
+  })
+
+  it('skips links with empty href or hash-only href', () => {
+    const html = [
+      '<a href="">Empty</a>',
+      '<a href="#">Hash</a>',
+      '<a href="https://saleshub.redhat.com/doc/abc">Real</a>',
+    ].join('\n')
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(1)
+  })
+
+  it('uses href as name fallback when text is empty', () => {
+    const html = '<a href="https://saleshub.redhat.com/doc/abc"><img src="icon.png"/></a>'
+    const links = extractSubPageLinks(html)
+    expect(links.length).toBe(1)
+    expect(links[0].name).toBe('https://saleshub.redhat.com/doc/abc')
   })
 })
