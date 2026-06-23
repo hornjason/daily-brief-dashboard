@@ -14,6 +14,13 @@ import type {
 } from './intelligence-graph-types.ts'
 import type { StrategicMotion } from './motion-builder.ts'
 
+// ── By-design null sources (intentionally produce no nodes) ──────────────────
+
+export const BY_DESIGN_NULL_SOURCES = new Set([
+  'intelligence', 'account-plan', 'saleshub-plays', 'saleshub-tactics',
+  'recommended-actions', 'playbook', 'SalesHub Content', 'solution-intelligence',
+])
+
 // ── Node type enumeration (all 17 from IntelligenceNodeType) ────────────────
 
 const ALL_NODE_TYPES: IntelligenceNodeType[] = [
@@ -29,6 +36,7 @@ export interface SignalSourceEntry {
   nodeCount: number
   edgeCount: number
   lastSignalTimestamp: string | null
+  isByDesign: boolean
 }
 
 export interface MotionCoverageInfo {
@@ -156,14 +164,17 @@ export function computeCustomerGraphHealth(
     nodeCount: sourceNodeCounts.get(source) ?? 0,
     edgeCount: sourceEdgeCounts.get(source) ?? 0,
     lastSignalTimestamp: sourceLastTimestamp.get(source) ?? null,
+    isByDesign: BY_DESIGN_NULL_SOURCES.has(source),
   }))
 
-  const sourcesWithNodes = signalSourceCoverage.filter(s => s.nodeCount > 0).length
-  const totalSources = signalSourceCoverage.length
+  // Coverage fraction excludes by-design sources from the denominator
+  const activeSources = signalSourceCoverage.filter(s => !s.isByDesign)
+  const sourcesWithNodes = activeSources.filter(s => s.nodeCount > 0).length
+  const totalSources = activeSources.length
   const coverageFraction = `${sourcesWithNodes}/${totalSources}`
 
-  // Thin graph: true if >=5 sources produced 0 nodes
-  const sourcesWithZeroNodes = signalSourceCoverage.filter(s => s.nodeCount === 0).length
+  // Thin graph: true if >=5 non-by-design sources produced 0 nodes
+  const sourcesWithZeroNodes = activeSources.filter(s => s.nodeCount === 0).length
   const isThinGraph = sourcesWithZeroNodes >= 5
 
   // Motion coverage
@@ -288,11 +299,11 @@ export function computePortfolioHealth(
     ? `${Math.round((customersWithFreshGraphs / sorted.length) * 100)}%`
     : '0%'
 
-  // Signal source gaps: sources that produce 0 nodes for >50% of customers
+  // Signal source gaps: non-by-design sources that produce 0 nodes for >50% of customers
   const sourceGapCounts = new Map<string, number>()
   for (const report of sorted) {
     for (const entry of report.signalSourceCoverage) {
-      if (entry.nodeCount === 0) {
+      if (entry.nodeCount === 0 && !entry.isByDesign) {
         sourceGapCounts.set(entry.source, (sourceGapCounts.get(entry.source) ?? 0) + 1)
       }
     }

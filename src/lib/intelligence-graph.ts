@@ -470,6 +470,23 @@ const SIGNAL_CONFIGS: Record<string, SignalNodeConfig> = {
     nodeType: 'none',
     buildNode: () => null, // used via saleshub module
   },
+
+  'saleshub-products': {
+    nodeType: 'evidence',
+    buildNode: (signal, m, hash, ts) => ({
+      id: makeNodeId('evidence', `shp-${String(m.documentTitle ?? m.product ?? signal.headline).slice(0, 30)}`),
+      type: 'evidence',
+      name: signal.headline,
+      properties: {
+        docType: m.documentType ?? m.contentType ?? 'saleshub-product',
+        product: m.product,
+        url: signal.url,
+      },
+      sourceModule: signal.source,
+      contentHash: hash,
+      updatedAt: ts,
+    }),
+  },
 }
 
 // ── Signal-to-Node Mapping ────────────────────────────────────────────────────
@@ -510,6 +527,7 @@ const SOURCE_TIMESTAMP_FIELDS: Record<string, string[]> = {
   'product-intel': ['date'],
   'partner-catalog': ['date'],
   'value-maps': ['date'],
+  'saleshub-products': ['date'],
 }
 
 /**

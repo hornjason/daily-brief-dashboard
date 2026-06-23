@@ -18,6 +18,7 @@ interface SignalSourceEntry {
   nodeCount: number
   edgeCount: number
   lastSignalTimestamp: string | null
+  isByDesign: boolean
 }
 
 interface MotionCoverageInfo {
@@ -161,6 +162,12 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
       <div>
         <h4 className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
           Signal Source Coverage ({report.coverageFraction} active)
+          {(() => {
+            const byDesignCount = report.signalSourceCoverage.filter(s => s.isByDesign).length
+            return byDesignCount > 0
+              ? <span className="ml-1 text-text-secondary/50 normal-case">({byDesignCount} by design)</span>
+              : null
+          })()}
         </h4>
         <div className="bg-surface border border-border rounded overflow-hidden">
           <table className="w-full text-xs">
@@ -173,34 +180,49 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
               </tr>
             </thead>
             <tbody>
-              {report.signalSourceCoverage.map(entry => (
-                <tr
-                  key={entry.source}
-                  className={`border-b border-border/30 last:border-b-0 ${
-                    entry.nodeCount === 0 ? 'bg-red-500/5' : ''
-                  }`}
-                >
-                  <td className={`px-3 py-1.5 ${entry.nodeCount === 0 ? 'text-red-400' : 'text-text-primary'}`}>
-                    {entry.source}
-                    {entry.nodeCount === 0 && (
-                      <span className="ml-1.5 text-red-400/70">(no data)</span>
-                    )}
-                  </td>
-                  <td className={`text-right px-3 py-1.5 tabular-nums ${
-                    entry.nodeCount === 0 ? 'text-red-400/60' : 'text-text-secondary'
-                  }`}>
-                    {entry.nodeCount}
-                  </td>
-                  <td className="text-right px-3 py-1.5 tabular-nums text-text-secondary">
-                    {entry.edgeCount}
-                  </td>
-                  <td className="text-right px-3 py-1.5 text-text-secondary/60">
-                    {entry.lastSignalTimestamp
-                      ? new Date(entry.lastSignalTimestamp).toLocaleDateString()
-                      : '--'}
-                  </td>
-                </tr>
-              ))}
+              {report.signalSourceCoverage.map(entry => {
+                const isGap = entry.nodeCount === 0 && !entry.isByDesign
+                const isByDesignNull = entry.nodeCount === 0 && entry.isByDesign
+                return (
+                  <tr
+                    key={entry.source}
+                    className={`border-b border-border/30 last:border-b-0 ${
+                      isGap ? 'bg-red-500/5' : ''
+                    }`}
+                  >
+                    <td className={`px-3 py-1.5 ${
+                      isGap ? 'text-red-400' :
+                      isByDesignNull ? 'text-text-secondary/50' :
+                      'text-text-primary'
+                    }`}>
+                      {entry.source}
+                      {isGap && (
+                        <span className="ml-1.5 text-red-400/70">(no data)</span>
+                      )}
+                      {isByDesignNull && (
+                        <span className="ml-1.5 text-text-secondary/40">(by design)</span>
+                      )}
+                    </td>
+                    <td className={`text-right px-3 py-1.5 tabular-nums ${
+                      isGap ? 'text-red-400/60' :
+                      isByDesignNull ? 'text-text-secondary/40' :
+                      'text-text-secondary'
+                    }`}>
+                      {entry.nodeCount}
+                    </td>
+                    <td className={`text-right px-3 py-1.5 tabular-nums ${
+                      isByDesignNull ? 'text-text-secondary/40' : 'text-text-secondary'
+                    }`}>
+                      {entry.edgeCount}
+                    </td>
+                    <td className="text-right px-3 py-1.5 text-text-secondary/60">
+                      {entry.lastSignalTimestamp
+                        ? new Date(entry.lastSignalTimestamp).toLocaleDateString()
+                        : '--'}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
