@@ -1549,11 +1549,56 @@ async function downloadProductDocuments(
     const urlLower = (item.url ?? '').toLowerCase()
     if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) continue
 
-    // Skip external domains
+    // External Red Hat domains — fetch directly via HTTP instead of Seismic viewer
     try {
       const parsedUrl = new URL(item.url)
-      if (!parsedUrl.hostname.includes('saleshub.redhat.com') && !parsedUrl.hostname.includes('seismic.com')) {
+      const host = parsedUrl.hostname
+      const isSeismic = host.includes('saleshub.redhat.com') || host.includes('seismic.com')
+      const isRedHatDomain = host.includes('redhat.com') || host.includes('google.com')
+
+      if (!isSeismic && !isRedHatDomain) {
         viewerSkipped++
+        continue
+      }
+
+      if (!isSeismic) {
+        // Fetch external Red Hat domain content directly via HTTP
+        const sectionSlugE = slugify(sectionTitle)
+        const extractDir = resolve(productDir, 'extracted', sectionSlugE)
+        const extractFilename = `${sanitizeFilename(item.name)}.html`
+        const extractPath = resolve(extractDir, extractFilename)
+        if (existsSync(extractPath)) {
+          viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+          viewerExtracted++
+          continue
+        }
+
+        try {
+          const resp = await fetch(item.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+            redirect: 'follow',
+            signal: AbortSignal.timeout(15_000),
+          })
+          if (resp.ok) {
+            const html = await resp.text()
+            const cleaned = sanitizeViewerHtml(html)
+            // Extract meaningful text — skip if too short
+            const textOnly = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+            if (textOnly.length > 300) {
+              mkdirSync(extractDir, { recursive: true })
+              writeFileSync(extractPath, cleaned, 'utf-8')
+              viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+              viewerExtracted++
+              console.log(`[product-scraper] HTTP extracted: ${item.name.slice(0, 50)} from ${host} (${textOnly.length} chars)`)
+            } else {
+              viewerSkipped++
+            }
+          } else {
+            viewerSkipped++
+          }
+        } catch {
+          viewerSkipped++
+        }
         continue
       }
     } catch { viewerSkipped++; continue }
