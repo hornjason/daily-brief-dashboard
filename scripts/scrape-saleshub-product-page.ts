@@ -1535,8 +1535,66 @@ async function downloadProductDocuments(
 
   console.log(`[product-scraper] Download queue: ${downloadQueue.length} items from ${Object.keys(sections).length} sections`)
 
-  // ── Phase 3: Download each item — viewer PRIMARY, three-dot FALLBACK ────
+  // ── Phase 3 (REORDERED): Viewer extraction FIRST — inline content is primary ──
+  // Run viewer extraction with follow-through on ALL queued items BEFORE trying downloads.
+  // This is the primary acquisition path — downloads are the fallback.
+  console.log('[product-scraper] Phase 3a: Inline viewer extraction (primary path)...')
+  const viewerExtractedNames = new Set<string>()
+  let viewerExtracted = 0
+  let viewerSkipped = 0
+
   for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+    if (!item.url) continue
+
+    const urlLower = (item.url ?? '').toLowerCase()
+    if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) continue
+
+    // Skip external domains
+    try {
+      const parsedUrl = new URL(item.url)
+      if (!parsedUrl.hostname.includes('saleshub.redhat.com') && !parsedUrl.hostname.includes('seismic.com')) {
+        viewerSkipped++
+        continue
+      }
+    } catch { viewerSkipped++; continue }
+
+    // Check if already extracted (cached)
+    const sectionSlugE = slugify(sectionTitle)
+    const extractDir = resolve(productDir, 'extracted', sectionSlugE)
+    const extractFilename = `${sanitizeFilename(item.name)}.html`
+    const extractPath = resolve(extractDir, extractFilename)
+    if (existsSync(extractPath)) {
+      viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+      viewerExtracted++
+      continue
+    }
+
+    // Use extractWithFollowThrough for inline content extraction
+    try {
+      const result = await extractWithFollowThrough(context, item, sectionKey, productDir)
+      if (result.extracted.length > 0) {
+        for (const ext of result.extracted) {
+          viewerExtractedNames.add(sanitizeFilename(ext.name).slice(0, 60))
+        }
+        viewerExtracted += result.extracted.length
+        console.log(`[product-scraper] Viewer extracted: ${item.name.slice(0, 50)} (${result.extracted.length} doc${result.extracted.length > 1 ? 's' : ''})`)
+      } else {
+        viewerSkipped++
+      }
+    } catch (e: any) {
+      console.warn(`[product-scraper] Viewer extraction failed for ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+      viewerSkipped++
+    }
+  }
+  console.log(`[product-scraper] Phase 3a complete: ${viewerExtracted} extracted, ${viewerSkipped} skipped`)
+
+  // ── Phase 3b: File downloads — SECONDARY, only for items not already extracted ──
+  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+    // Skip items that already have viewer-extracted content
+    const safeName = sanitizeFilename(item.name).slice(0, 60)
+    if (viewerExtractedNames.has(safeName)) {
+      continue
+    }
     if (consecutiveFailures >= CIRCUIT_BREAKER) {
       console.log(`[product-scraper] Circuit breaker: ${CIRCUIT_BREAKER} consecutive failures — stopping downloads`)
       break
@@ -1845,159 +1903,8 @@ async function downloadProductDocuments(
 
   console.log(`[product-scraper] Downloads complete: ${downloaded} new, ${skipped} cached, ${errors} errors`)
 
-  // ── Phase 4: Viewer content extraction (#859) ─────────────────────────────
-  // For items with a URL that weren't successfully downloaded, extract rendered
-  // HTML content from the viewer page. This provides enrichment content for
-  // Gemini even when file downloads fail.
-
-  console.log('[product-scraper] Phase 4: Extracting viewer page content...')
-  const extractionResults: Array<{
-    name: string
-    section: string
-    status: 'extracted' | 'skipped' | 'failed'
-    reason?: string
-    contentLength?: number
-    filePath?: string
-    timestamp: string
-  }> = []
-  let extracted = 0
-  let extractionSkipped = 0
-  let extractionErrors = 0
-
-  // Build set of successfully downloaded items to skip
-  const downloadedNames = new Set<string>()
-  const downloadsDir = resolve(productDir, 'downloads')
-  if (existsSync(downloadsDir)) {
-    const walkDir = (dir: string) => {
-      const entries = require('fs').readdirSync(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        if (entry.isDirectory()) walkDir(resolve(dir, entry.name))
-        else downloadedNames.add(entry.name.replace(/\.[^.]+$/, ''))
-      }
-    }
-    walkDir(downloadsDir)
-  }
-
-  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
-    if (!item.url) continue
-
-    // Skip items that were already successfully downloaded
-    const safeName = sanitizeFilename(item.name)
-    if (downloadedNames.has(safeName.slice(0, 60))) {
-      extractionResults.push({
-        name: item.name,
-        section: sectionTitle,
-        status: 'skipped',
-        reason: 'Already downloaded as file',
-        timestamp: new Date().toISOString(),
-      })
-      extractionSkipped++
-      continue
-    }
-
-    // Skip YouTube URLs (AC-4)
-    const urlLower = (item.url ?? '').toLowerCase()
-    if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) {
-      extractionResults.push({
-        name: item.name,
-        section: sectionTitle,
-        status: 'skipped',
-        reason: 'YouTube embed',
-        timestamp: new Date().toISOString(),
-      })
-      extractionSkipped++
-      continue
-    }
-
-    // Skip URLs that navigate away from SalesHub domain (AC-A2)
-    try {
-      const parsedUrl = new URL(item.url)
-      if (!parsedUrl.hostname.includes('saleshub.redhat.com') && !parsedUrl.hostname.includes('seismic.com')) {
-        extractionResults.push({
-          name: item.name,
-          section: sectionTitle,
-          status: 'skipped',
-          reason: `External domain: ${parsedUrl.hostname}`,
-          timestamp: new Date().toISOString(),
-        })
-        extractionSkipped++
-        continue
-      }
-    } catch {
-      // Invalid URL — skip
-      extractionResults.push({
-        name: item.name,
-        section: sectionTitle,
-        status: 'skipped',
-        reason: 'Invalid URL',
-        timestamp: new Date().toISOString(),
-      })
-      extractionSkipped++
-      continue
-    }
-
-    // Check if extracted file already exists (cache hit)
-    const sectionSlugE = slugify(sectionTitle)
-    const extractDir = resolve(productDir, 'extracted', sectionSlugE)
-    const extractFilename = `${sanitizeFilename(item.name)}.html`
-    const extractPath = resolve(extractDir, extractFilename)
-    if (existsSync(extractPath)) {
-      extractionResults.push({
-        name: item.name,
-        section: sectionTitle,
-        status: 'skipped',
-        reason: 'Already extracted (cached)',
-        timestamp: new Date().toISOString(),
-      })
-      extractionSkipped++
-      continue
-    }
-
-    // Extract content with follow-through for navigation pages (#874)
-    try {
-      const result = await extractWithFollowThrough(context, item, sectionTitle, productDir)
-
-      for (const entry of result.extracted) {
-        extractionResults.push({
-          name: entry.name,
-          section: sectionTitle,
-          status: 'extracted',
-          contentLength: entry.content.length,
-          filePath: entry.filePath,
-          timestamp: new Date().toISOString(),
-        })
-        extracted++
-      }
-
-      for (const reason of result.skipped) {
-        extractionResults.push({
-          name: item.name,
-          section: sectionTitle,
-          status: 'skipped',
-          reason,
-          timestamp: new Date().toISOString(),
-        })
-        extractionSkipped++
-      }
-    } catch (e: any) {
-      extractionResults.push({
-        name: item.name,
-        section: sectionTitle,
-        status: 'failed',
-        reason: (e.message ?? 'Unknown error').slice(0, 200),
-        timestamp: new Date().toISOString(),
-      })
-      extractionErrors++
-      console.warn(`[product-scraper] Extraction failed: ${item.name.slice(0, 50)}: ${(e.message ?? '').slice(0, 80)}`)
-    }
-
-    // Brief pause between extractions
-    await new Promise(r => setTimeout(r, 500))
-  }
-
-  // Extraction data tracked in unified pipeline manifest (#874)
-  // _extraction-manifest.json removed — data now in _pipeline-manifest.json
-  console.log(`[product-scraper] Extraction complete: ${extracted} extracted, ${extractionSkipped} skipped, ${extractionErrors} errors`)
+  // Phase 4 removed — viewer extraction now runs as Phase 3a (PRIMARY path) above.
+  // Downloads (Phase 3b) are the SECONDARY fallback.
 }
 
 
