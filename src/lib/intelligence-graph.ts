@@ -37,7 +37,7 @@ import { writeJsonAtomic } from './atomic-write.ts'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GRAPH_VERSION = '1.0'
-const MAX_GRAPH_SIZE_BYTES = 200 * 1024 // 200KB ceiling (50KB was too small for customers with 100+ signals)
+const MAX_GRAPH_SIZE_BYTES = 512 * 1024 // 512KB ceiling (200KB was too small after signal source expansion #876)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -959,7 +959,7 @@ export function buildCustomerGraph(
 
 /**
  * Persist graph to {dataDir}/{customerSlug}/intelligence-graph.json.
- * Enforces <50KB ceiling — throws if exceeded.
+ * Enforces size ceiling — throws if exceeded.
  * Uses writeJsonAtomic for crash-safe writes.
  */
 export function persistGraph(graph: CustomerGraph, dataDir: string): void {
@@ -970,7 +970,7 @@ export function persistGraph(graph: CustomerGraph, dataDir: string): void {
 
   if (Buffer.byteLength(json, 'utf-8') > MAX_GRAPH_SIZE_BYTES) {
     throw new Error(
-      `Intelligence graph for ${graph.customerId} exceeds 50KB ceiling ` +
+      `Intelligence graph for ${graph.customerId} exceeds 512KB ceiling ` +
       `(${Buffer.byteLength(json, 'utf-8')} bytes). ` +
       `Reduce node/edge count or prune stale data.`,
     )
