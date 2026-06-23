@@ -477,11 +477,13 @@ export function createGraphRouter(): Hono {
         if (!graph) continue
 
         // Load cached motion if exists (read-only, no generation)
+        // Validate it has .phases — old expansion files lack StrategicMotion shape
         let motion: import('./lib/motion-builder.ts').StrategicMotion | null = null
         try {
           const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
           if (existsSync(motionPath)) {
-            motion = JSON.parse(readFileSync(motionPath, 'utf-8'))
+            const parsed = JSON.parse(readFileSync(motionPath, 'utf-8'))
+            if (parsed && Array.isArray(parsed.phases)) motion = parsed
           }
         } catch {
           // Skip motion — report still valid without it
@@ -517,7 +519,8 @@ export function createGraphRouter(): Hono {
         try {
           const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
           if (existsSync(motionPath)) {
-            motion = JSON.parse(readFileSync(motionPath, 'utf-8'))
+            const parsed = JSON.parse(readFileSync(motionPath, 'utf-8'))
+            if (parsed && Array.isArray(parsed.phases)) motion = parsed
           }
         } catch {
           // Skip motion
