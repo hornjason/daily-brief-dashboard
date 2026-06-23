@@ -28,9 +28,10 @@ import { findNodesByType } from './graph-utils.ts'
 import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
-import { scoreTactics, type SignalDensity } from './tactic-scorer.ts'
+import { scoreTactics, type SignalDensity, nodeMatchesTdp } from './tactic-scorer.ts'
 import type { TacticOutcome } from './deal-outcome-history.ts'
 import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
+import { sanitizePromptInput } from '../utils.ts'
 import { getDisplacementMap } from './competitive-vocabulary.ts'
 import { CONTEXT_PRIORITY, CONTEXT_VERB_MAP } from './motion-config.ts'
 
@@ -121,14 +122,24 @@ const MAX_TACTICS_PER_TDP = 3
 /** Maximum evidence items per phase (#532) */
 const MAX_EVIDENCE_PER_PHASE = 7
 
-/** Evidence module priority for sorting (lower = higher priority) */
+/** Evidence module priority for sorting (lower = higher priority) (#879) */
 const EVIDENCE_PRIORITY: Record<string, number> = {
   cases_open: 0,
-  subscriptions: 1,
-  ccsp: 2,
-  'solution-intelligence': 3,
-  'tech-stack': 4,
-  cases_closed: 5,
+  pipeline: 1,
+  subscriptions: 2,
+  'competitive-intel': 3,
+  ccsp: 3.5,
+  'solution-intelligence': 4,
+  lifecycle: 4.5,
+  'tech-stack': 5,
+  'product-intel': 5,
+  partner: 5.5,
+  news: 6,
+  events: 6,
+  engagement: 6.5,
+  'customer-docs': 7,
+  intel: 7,
+  cases_closed: 8,
 }
 
 /**
@@ -146,6 +157,201 @@ function capEvidence(evidence: MotionPhase['evidence']): MotionPhase['evidence']
     return (EVIDENCE_PRIORITY[aKey] ?? 99) - (EVIDENCE_PRIORITY[bKey] ?? 99)
   })
   return sorted.slice(0, MAX_EVIDENCE_PER_PHASE)
+}
+
+// ── Shared Phase Evidence Builder (#879) ──────────────────────────────────────
+
+/** Map node types to evidence module labels */
+const NODE_TYPE_TO_MODULE: Record<string, string> = {
+  subscription: 'subscriptions',
+  case: 'cases',
+  deal: 'pipeline',
+  play: 'solution-intelligence',
+  program: 'ccsp',
+  product: 'tech-stack',
+  engagement: 'engagement',
+  lifecycle: 'lifecycle',
+  event: 'events',
+  evidence: 'customer-docs',
+  partner: 'partner',
+}
+
+/** Sources that require 2+ matching nodes before contributing evidence (#879 SC-7) */
+const CORROBORATION_REQUIRED_SOURCES = new Set(['news', 'customer-docs'])
+
+/** Classify intel nodes into evidence modules */
+function getIntelModule(node: IntelligenceNode): string {
+  const intelType = String(node.properties?.intelType ?? '')
+  if (intelType === 'competitive' || intelType === 'ma') return 'competitive-intel'
+  if (intelType === 'news' || intelType === 'rss') return 'news'
+  if (intelType === 'product' || intelType === 'product-customer') return 'product-intel'
+  return 'intel'
+}
+
+/**
+ * Build phase evidence by traversing the full graph for nodes matching TDP domains.
+ * Replaces 4 ad-hoc evidence blocks in individual phase builders (#879 SC-1).
+ */
+function buildPhaseEvidence(
+  graph: CustomerGraph,
+  tdpDomains: string[],
+  _phaseCategory: string,
+): MotionPhase['evidence'] {
+  const evidence: MotionPhase['evidence'] = []
+  const nodeTypes: string[] = [
+    'subscription', 'case', 'deal', 'play', 'program', 'product',
+    'engagement', 'intel', 'lifecycle', 'event', 'evidence', 'partner',
+  ]
+
+  for (const nodeType of nodeTypes) {
+    let nodes = findNodesByType(graph, nodeType as any)
+    // Product nodes: skip proprietary/internal+using and developing context (#693)
+    if (nodeType === 'product') {
+      nodes = nodes.filter(n => {
+        const context = String(n.properties?.context ?? 'using').toLowerCase()
+        const category = String(n.properties?.category ?? '').toLowerCase()
+        if ((category === 'proprietary' || category === 'internal') && context === 'using') return false
+        if (context === 'developing') return false
+        return true
+      })
+    }
+    // Program nodes (cloud programs) match on programType, not TDP keywords
+    const matching = nodeType === 'program'
+      ? nodes.filter(n => {
+          const pt = String(n.properties?.programType ?? '')
+          return pt === 'cloud-spend' || pt === 'marketplace' || pt === 'ecosystem' ||
+            tdpDomains.some(tdp => nodeMatchesTdp(n, tdp))
+        })
+      : nodes.filter(n => tdpDomains.some(tdp => nodeMatchesTdp(n, tdp)))
+    if (matching.length === 0) continue
+
+    const sampleModule = nodeType === 'intel'
+      ? getIntelModule(matching[0])
+      : (NODE_TYPE_TO_MODULE[nodeType] ?? nodeType)
+
+    // Corroboration check: news and customer-docs need 2+ matches (#879 SC-7)
+    if (CORROBORATION_REQUIRED_SOURCES.has(sampleModule) && matching.length < 2) continue
+
+    for (const node of matching) {
+      const module = nodeType === 'intel' ? getIntelModule(node) : (NODE_TYPE_TO_MODULE[nodeType] ?? nodeType)
+
+      let fact = ''
+      if (nodeType === 'case') {
+        const sev = node.properties?.severity ?? ''
+        const status = node.properties?.status ?? 'open'
+        const statusLower = String(status).toLowerCase()
+        const statusLabel = statusLower.includes('closed') ? 'Recent case' : 'Open case'
+        fact = `${statusLabel} (Sev ${sev}): ${node.name}`
+        const moduleKey = statusLower.includes('closed') ? 'cases_closed' : 'cases_open'
+        evidence.push({
+          module: moduleKey,
+          fact: sanitizePromptInput(fact, 200),
+          url: String(node.properties?.url ?? '') || undefined,
+        })
+        continue
+      }
+      if (nodeType === 'deal') {
+        const stage = node.properties?.stage ?? ''
+        const amount = node.properties?.amount ?? ''
+        fact = `Pipeline: ${node.name} (${stage}${amount ? ', $' + amount : ''})`
+      } else if (nodeType === 'subscription') {
+        const status = node.properties?.urgency ?? node.properties?.status ?? ''
+        fact = `${String(status)}: ${node.name}`
+      } else if (nodeType === 'lifecycle') {
+        fact = `Lifecycle: ${node.name}`
+      } else if (nodeType === 'partner') {
+        fact = `Partner: ${node.name}`
+      } else if (nodeType === 'event') {
+        fact = `Event: ${node.name}`
+      } else if (nodeType === 'engagement') {
+        fact = `Engagement: ${node.name}`
+      } else if (nodeType === 'program') {
+        const partner = String(node.properties?.cloudPartner ?? node.properties?.provider ?? '')
+        const acv = node.properties?.acvPlus
+        if (acv) {
+          fact = `${partner} cloud spend: $${Number(acv).toLocaleString()} ACV`
+        } else {
+          fact = `${node.name}`
+        }
+      } else if (nodeType === 'play') {
+        fact = `Matched play: ${node.name}`
+      } else if (nodeType === 'intel') {
+        const intelType = String(node.properties?.intelType ?? '')
+        const prefix = intelType === 'competitive' ? 'Competitive' : intelType === 'ma' ? 'M&A' : intelType === 'news' ? 'News' : 'Intel'
+        fact = `${prefix}: ${node.name}`
+      } else if (nodeType === 'product') {
+        fact = `Uses ${String(node.properties?.techName ?? node.name ?? '')}`
+      } else {
+        fact = `${node.name}`
+      }
+
+      evidence.push({
+        module,
+        fact: sanitizePromptInput(fact, 200),
+        url: String(node.properties?.url ?? '') || undefined,
+      })
+    }
+  }
+
+  return capEvidence(evidence)
+}
+
+// ── Urgency Modifiers (#879 SC-4) ────────────────────────────────────────────
+
+const URGENCY_LEVELS = ['low', 'medium', 'high', 'critical'] as const
+type UrgencyLevel = typeof URGENCY_LEVELS[number]
+
+/** Bump urgency level up by N steps, capping at critical */
+function bumpUrgency(current: string, levels: number = 1): UrgencyLevel {
+  const idx = URGENCY_LEVELS.indexOf(current as UrgencyLevel)
+  if (idx === -1) return current as UrgencyLevel
+  return URGENCY_LEVELS[Math.min(idx + levels, URGENCY_LEVELS.length - 1)]
+}
+
+/** Check if a deal node has a close date within 90 days */
+function isNearCloseDeal(node: IntelligenceNode): boolean {
+  const closeDate = node.properties?.closeDate
+  if (!closeDate) return false
+  const ms = new Date(String(closeDate)).getTime() - Date.now()
+  return ms > 0 && ms < 90 * 24 * 60 * 60 * 1000
+}
+
+/**
+ * Apply urgency modifiers based on graph signals matching TDP domains.
+ * Bumps urgency for: high-severity cases, near-close deals, EOL lifecycle.
+ */
+function applyUrgencyModifiers(
+  graph: CustomerGraph,
+  tdpDomains: string[],
+  currentUrgency: string,
+): UrgencyLevel {
+  let urgency = currentUrgency as UrgencyLevel
+
+  // Sev 1-2 open cases matching TDP → bump +1
+  const matchingCases = findNodesByType(graph, 'case').filter(c =>
+    tdpDomains.some(t => nodeMatchesTdp(c, t)) &&
+    ['1', '2', 'Urgent', 'High'].includes(String(c.properties?.severity ?? ''))
+  )
+  if (matchingCases.length > 0) urgency = bumpUrgency(urgency, 1)
+
+  // Pipeline deals within 90 days matching TDP → bump +1
+  const matchingDeals = findNodesByType(graph, 'deal').filter(d =>
+    tdpDomains.some(t => nodeMatchesTdp(d, t)) && isNearCloseDeal(d)
+  )
+  if (matchingDeals.length > 0) urgency = bumpUrgency(urgency, 1)
+
+  // Lifecycle EOL within 6 months matching TDP → bump +1
+  const matchingLifecycle = findNodesByType(graph, 'lifecycle').filter(lc => {
+    if (!tdpDomains.some(t => nodeMatchesTdp(lc, t))) return false
+    const eolDate = lc.properties?.eolDate as string | undefined
+    if (!eolDate) return false
+    const eolMs = new Date(eolDate).getTime() - Date.now()
+    const eolMonths = eolMs / (1000 * 60 * 60 * 24 * 30)
+    return eolMonths > 0 && eolMonths <= 6
+  })
+  if (matchingLifecycle.length > 0) urgency = bumpUrgency(urgency, 1)
+
+  return urgency
 }
 
 /**
@@ -455,43 +661,14 @@ function buildAnchorPhase(
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
 
-  // Build evidence from expired subs and related cases
-  const evidence: MotionPhase['evidence'] = []
-  for (const sub of expiredSubs) {
-    evidence.push({
-      module: 'subscriptions',
-      fact: `${sub.name} expired ${sub.properties.endDate ?? 'recently'}`,
-      url: sub.properties.url as string | undefined,
-    })
-  }
+  // #879: Build evidence from full graph traversal
+  const tdpDomains = [...expiredTdps]
+  const evidence = buildPhaseEvidence(graph, tdpDomains, 'anchor')
 
-  // Add case evidence for products related to expired subs (reuse cases from above)
-  for (const c of cases) {
-    const caseProduct = String(c.properties.product ?? '')
-    const statusLabel = String(c.properties.status ?? '').toLowerCase().includes('closed')
-      ? 'Recent case' : 'Open case'
-    for (const sub of expiredSubs) {
-      const subName = String(sub.properties.productDescription ?? sub.name ?? '')
-      if (caseProduct.toLowerCase().includes('ansible') && subName.toLowerCase().includes('ansible')) {
-        evidence.push({
-          module: 'cases',
-          fact: `${statusLabel}: ${c.name}`,
-          url: c.properties.url as string | undefined,
-        })
-        break
-      }
-      if (caseProduct.toLowerCase().includes('openshift') && subName.toLowerCase().includes('openshift')) {
-        evidence.push({
-          module: 'cases',
-          fact: `${statusLabel}: ${c.name}`,
-          url: c.properties.url as string | undefined,
-        })
-        break
-      }
-    }
-  }
-
-  // Determine urgency: if any expired sub has matching cases → critical
+  // Determine base urgency: expired subs start at high
+  // #879: Apply urgency modifiers from graph signals
+  let urgency: UrgencyLevel = 'high'
+  // Legacy: if any expired sub has matching cases → critical (reuse cases from keyword extraction)
   const hasCritical = expiredSubs.some(sub => {
     const desc = String(sub.properties.productDescription ?? sub.name ?? '').toLowerCase()
     return cases.some(c => {
@@ -500,15 +677,17 @@ function buildAnchorPhase(
              (desc.includes('openshift') && cp.includes('openshift'))
     })
   })
+  if (hasCritical) urgency = 'critical'
+  urgency = applyUrgencyModifiers(graph, tdpDomains, urgency)
 
   return {
     id: 'phase-1-anchor',
     name: buildPhaseName('Anchor: Protect', tactics),
     category: 'anchor',
-    urgency: hasCritical ? 'critical' : 'high',
+    urgency,
     tactics,
     targetPersonas: [],
-    evidence: capEvidence(evidence),
+    evidence,
   }
 }
 
@@ -581,43 +760,21 @@ function buildExpandPhase(
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
 
-  // Evidence from cloud spend
-  const evidence: MotionPhase['evidence'] = []
-  for (const prog of cloudPrograms) {
-    const partner = String(prog.properties.cloudPartner ?? prog.properties.provider ?? '')
-    const acv = prog.properties.acvPlus
-    if (acv) {
-      evidence.push({
-        module: 'ccsp',
-        fact: `${partner} cloud spend: $${Number(acv).toLocaleString()} ACV`,
-        url: prog.properties.url as string | undefined,
-      })
-    } else {
-      evidence.push({
-        module: prog.sourceModule,
-        fact: `${prog.name}`,
-        url: prog.properties.url as string | undefined,
-      })
-    }
-  }
+  // #879: Build evidence from full graph traversal
+  const expandTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
+  const evidence = buildPhaseEvidence(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'expand')
 
-  // Add active sub evidence (reuse subs/activeSubs from keyword extraction above)
-  for (const sub of activeSubs) {
-    evidence.push({
-      module: 'subscriptions',
-      fact: `Active: ${sub.name}`,
-      url: sub.properties.url as string | undefined,
-    })
-  }
+  // #879: Apply urgency modifiers
+  const urgency = applyUrgencyModifiers(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'high')
 
   return {
     id: 'phase-2-expand',
     name: buildPhaseName('Expand', tactics),
     category: 'expand',
-    urgency: 'high',
+    urgency,
     tactics,
     targetPersonas: [],
-    evidence: capEvidence(evidence),
+    evidence,
   }
 }
 
@@ -685,45 +842,41 @@ function buildTransformPhase(
   // Attach materials to tactics (#576)
   attachMaterials(tactics)
 
-  // Evidence from plays — filter to AI/Transform-relevant TDPs only
-  const transformTdps = new Set(['AI Platform', 'Container Mgmt'])
-  const evidence: MotionPhase['evidence'] = []
-  for (const play of plays) {
-    const playTdp = String(play.properties.tdp ?? play.properties.solutionTdp ?? '')
-    if (transformTdps.has(playTdp) || playTdp.toLowerCase().includes('ai')) {
-      evidence.push({
-        module: 'solution-intelligence',
-        fact: `Matched play: ${play.name}`,
-        url: play.properties.url as string | undefined,
-      })
-    }
-  }
+  // Gate: transform phase requires AI/strategic evidence to be viable (preserve original guard)
+  // Check for plays with AI/transform TDPs or AI-related products — without this gate,
+  // transform consumes TDPs that displacement should use (#693 regression prevention)
+  const transformGateTdps = new Set(['AI Platform', 'AI', 'Container Mgmt'])
+  const hasTransformPlay = plays.some(p => {
+    const playTdp = String(p.properties.tdp ?? p.properties.solutionTdp ?? '')
+    return transformGateTdps.has(playTdp) || playTdp.toLowerCase().includes('ai')
+  })
+  const hasTransformProduct = products.some(p => {
+    const name = String(p.properties?.techName ?? p.name ?? '')
+    const category = String(p.properties?.category ?? '').toLowerCase()
+    const pContext = String(p.properties?.context ?? 'using').toLowerCase()
+    return !(category === 'proprietary' || category === 'internal') &&
+           pContext !== 'developing' &&
+           (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml'))
+  })
+  if (!hasTransformPlay && !hasTransformProduct) return null
 
-  // Tech stack evidence for AI-related products — exclude proprietary/internal tools and developing context (#693)
-  for (const p of products) {
-    const name = String(p.properties.techName ?? p.name ?? '')
-    const category = String(p.properties.category ?? '').toLowerCase()
-    const isProprietary = category === 'proprietary' || category === 'internal'
-    const pContext = String(p.properties.context ?? 'using').toLowerCase()
-    if (!isProprietary && pContext !== 'developing' && (name.toLowerCase().includes('ai') || name.toLowerCase().includes('ml'))) {
-      evidence.push({
-        module: 'tech-stack',
-        fact: `Uses ${name}`,
-        url: p.properties.url as string | undefined,
-      })
-    }
-  }
+  // #879: Build evidence from full graph traversal
+  const transformTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
+  const evidence = buildPhaseEvidence(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'transform')
 
   if (evidence.length === 0) return null
+
+  // #879: Apply urgency modifiers
+  const urgency = applyUrgencyModifiers(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'medium')
 
   return {
     id: 'phase-3-transform',
     name: buildPhaseName('Transform', tactics),
     category: 'transform',
-    urgency: 'medium',
+    urgency,
     tactics,
     targetPersonas: [],
-    evidence: capEvidence(evidence),
+    evidence,
   }
 }
 
@@ -1000,9 +1153,10 @@ function buildDisplacementPhase(
   attachMaterials(tactics)
 
 
-  // Build evidence from displacement matches — reflect actual context (#693)
-  const evidence: MotionPhase['evidence'] = matches.map(m => {
-    // Find the product node to get its context
+  // #879: Build evidence from full graph + displacement-specific matches
+  const displaceTdpDomains = [...displacementTdps]
+  // Start with displacement-specific evidence (competitor context) then merge graph evidence
+  const displacementEvidence: MotionPhase['evidence'] = matches.map(m => {
     const productNode = nonRedHatProducts.find(p =>
       String(p.properties.techName ?? p.name ?? '') === m.competitor
     )
@@ -1010,18 +1164,25 @@ function buildDisplacementPhase(
     const verb = CONTEXT_VERB_MAP[context] ?? 'uses'
     return {
       module: 'tech-stack' as const,
-      fact: `Customer ${verb} ${m.competitor} — opportunity to displace with ${m.redHat}`,
+      fact: sanitizePromptInput(`Customer ${verb} ${m.competitor} — opportunity to displace with ${m.redHat}`, 200),
     }
   })
+  // Merge graph-wide evidence (excluding tech-stack to avoid duplicates with displacement evidence)
+  const graphEvidence = buildPhaseEvidence(graph, displaceTdpDomains, 'displacement')
+    .filter(e => e.module !== 'tech-stack')
+  const evidence = capEvidence([...displacementEvidence, ...graphEvidence])
+
+  // #879: Apply urgency modifiers
+  const urgency = applyUrgencyModifiers(graph, displaceTdpDomains, 'high')
 
   return {
     id: 'phase-displacement',
     name: buildPhaseName('Displace', tactics),
     category: 'expand',
-    urgency: 'high',
+    urgency,
     tactics,
     targetPersonas: [],
-    evidence: capEvidence(evidence),
+    evidence,
   }
 }
 
@@ -1107,6 +1268,15 @@ export async function buildMotion(
   if (graphNodeTypes.size < 3) {
     // Suppress all phases — graph too sparse for meaningful recommendations
     phases.length = 0
+  }
+
+  // #879 SC-5: Cap at max 2 critical phases per motion
+  const criticalPhases = phases.filter(p => p.urgency === 'critical')
+  if (criticalPhases.length > 2) {
+    criticalPhases.sort((a, b) => b.evidence.length - a.evidence.length)
+    for (let i = 2; i < criticalPhases.length; i++) {
+      criticalPhases[i].urgency = 'high'
+    }
   }
 
   // Guard: need at least 1 phase

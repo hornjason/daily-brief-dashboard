@@ -97,7 +97,7 @@ const TDP_KEYWORDS: Record<string, string[]> = {
 /**
  * Check if a node's content (name + properties) matches a given TDP domain.
  */
-function nodeMatchesTdp(node: IntelligenceNode, tdp: string): boolean {
+export function nodeMatchesTdp(node: IntelligenceNode, tdp: string): boolean {
   const keywords = TDP_KEYWORDS[tdp]
   if (!keywords) return false
 
