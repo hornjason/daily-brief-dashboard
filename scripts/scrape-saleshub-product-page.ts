@@ -40,6 +40,17 @@ import type {
   SectionItem,
 } from '../src/types/saleshub-product-types.ts'
 
+// ── Load .env when running standalone (not via container --env-file) ─────────
+// Gemini credentials and Google OAuth paths are needed for inline enrichment
+// and Drive upload but aren't available unless .env is loaded explicitly.
+const _envPath = resolve(import.meta.dir, '../.env')
+if (!process.env.GEMINI_SERVICE_ACCOUNT_KEY && existsSync(_envPath)) {
+  for (const line of readFileSync(_envPath, 'utf-8').split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2]
+  }
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
