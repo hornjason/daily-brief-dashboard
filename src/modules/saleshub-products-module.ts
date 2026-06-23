@@ -722,7 +722,7 @@ export function createSaleshubProductsRouter() {
 
         const subdirPath = resolve(subdir.parentDir, subdir.name)
         const files = readdirSync(subdirPath).filter(f =>
-          f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json')
+          f.endsWith('.txt') || f.endsWith('.md') || f.endsWith('.extracted.json') || f.endsWith('.html')
         )
 
         for (const file of files) {
@@ -742,7 +742,7 @@ export function createSaleshubProductsRouter() {
           else if (combined.includes('google cloud') || combined.includes('gcp')) cloudProvider = 'Google Cloud'
 
           documents.push({
-            name: file.replace(/\.(txt|md|extracted\.json)$/, ''),
+            name: file.replace(/\.(txt|md|html|extracted\.json)$/, ''),
             content,
             type: docType,
             cloudProvider,
