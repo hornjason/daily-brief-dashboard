@@ -355,6 +355,82 @@ export function isEnrichableContent(innerText: string): boolean {
   return true
 }
 
+// ── Navigation Page Detection (#874 follow-through) ─────────────────────────
+
+/** Maximum sub-pages to follow from a single navigation page */
+const MAX_SUB_PAGES = 10
+
+/** Text length threshold — pages with more text are likely documents, not nav pages */
+const NAV_PAGE_TEXT_LIMIT = 2000
+
+/** Minimum internal links to qualify as a navigation/listing page */
+const NAV_PAGE_MIN_LINKS = 3
+
+/**
+ * Extract internal (saleshub/seismic) links from raw HTML.
+ * Parses <a href="..."> tags and filters to allowed domains.
+ * Deduplicates by URL. Returns up to MAX_SUB_PAGES links.
+ */
+export function extractSubPageLinks(html: string): Array<{ name: string; url: string }> {
+  const linkRegex = /<a\s+[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+  const seen = new Set<string>()
+  const links: Array<{ name: string; url: string }> = []
+
+  let match: RegExpExecArray | null
+  while ((match = linkRegex.exec(html)) !== null) {
+    const href = match[1].trim()
+    const rawText = match[2].replace(/<[^>]+>/g, '').trim()
+
+    // Skip empty/hash-only hrefs
+    if (!href || href === '#') continue
+
+    // Only allow saleshub.redhat.com or seismic.com domains
+    try {
+      const url = new URL(href)
+      if (!url.hostname.includes('saleshub.redhat.com') && !url.hostname.includes('seismic.com')) continue
+    } catch {
+      // Relative URL or invalid — skip (we require absolute URLs from page HTML)
+      continue
+    }
+
+    // Deduplicate
+    if (seen.has(href)) continue
+    seen.add(href)
+
+    const name = rawText || href
+    links.push({ name, url: href })
+
+    if (links.length >= MAX_SUB_PAGES) break
+  }
+
+  return links
+}
+
+/**
+ * Detect whether a page is a navigation/listing page rather than a document.
+ * A navigation page has:
+ * - Short inner text (< NAV_PAGE_TEXT_LIMIT chars)
+ * - 3+ internal links to saleshub.redhat.com or seismic.com
+ *
+ * Returns { isNavPage, links } where links are the extracted sub-page URLs.
+ */
+export function detectNavigationPage(
+  innerText: string,
+  html: string,
+): { isNavPage: boolean; links: Array<{ name: string; url: string }> } {
+  // If the page has substantial text content, it's a document page
+  if (innerText.length >= NAV_PAGE_TEXT_LIMIT) {
+    return { isNavPage: false, links: [] }
+  }
+
+  const links = extractSubPageLinks(html)
+
+  return {
+    isNavPage: links.length >= NAV_PAGE_MIN_LINKS,
+    links,
+  }
+}
+
 // Default product page URL -- OpenShift Virtualization (update with correct URL when known)
 const DEFAULT_URL =
   'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//'
@@ -1194,6 +1270,183 @@ export async function expandAllAccordions(page: Page): Promise<number> {
 
 // ── Per-product document download (SC-2) ────────────────────────────────────
 
+// ── Viewer Follow-Through Extraction (#874) ─────────────────────────────────
+// When a viewer URL points to a navigation/listing page instead of a document,
+// follow internal links to find the actual documents (one level deep).
+
+/** Content selectors for Seismic viewer pages — most specific first */
+const VIEWER_CONTENT_SELECTORS = [
+  '.articleSdk-theme-page-doubleColumn-main',
+  '.seismic-page-content',
+  '[class*="document-content"]',
+  '[class*="viewer-content"]',
+  '[role="main"]',
+  'main',
+  'article',
+]
+
+/**
+ * Extract content from a single viewer page.
+ * Returns sanitized HTML if enrichable, or null with a skip reason.
+ */
+async function extractSinglePage(
+  context: BrowserContext,
+  url: string,
+): Promise<{ content: string | null; reason?: string; contentLength?: number }> {
+  const page = await context.newPage()
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(3_000)
+
+    const innerText = await page.innerText('body').catch(() => '')
+
+    // Check for content-not-found pages
+    if (/content\s+not\s+found|page\s+not\s+found|error\s+404/i.test(innerText.slice(0, 500))) {
+      return { content: null, reason: 'Content not found' }
+    }
+
+    // Check for iframe-only pages
+    const hasIframes = await page.locator('iframe').count()
+    if (hasIframes > 0 && innerText.length <= 500) {
+      return { content: null, reason: 'iframe-only page' }
+    }
+
+    // Content validation
+    if (!isEnrichableContent(innerText)) {
+      // Not enrichable — but might be a navigation page
+      const bodyHtml = await page.evaluate(() => document.body.innerHTML).catch(() => '')
+      const navResult = detectNavigationPage(innerText, bodyHtml)
+      if (navResult.isNavPage) {
+        return { content: null, reason: '__nav_page__', contentLength: navResult.links.length }
+      }
+      return { content: null, reason: `Insufficient content (${innerText.length} chars)`, contentLength: innerText.length }
+    }
+
+    // Extract content via page.evaluate()
+    const rawHtml = await page.evaluate((selectors) => {
+      for (const sel of selectors) {
+        const el = document.querySelector(sel)
+        if (el && el.innerHTML.length > 200) return el.innerHTML
+      }
+      return document.body.innerHTML
+    }, VIEWER_CONTENT_SELECTORS)
+
+    const sanitizedHtml = sanitizeViewerHtml(rawHtml)
+    if (sanitizedHtml.length < 100) {
+      return { content: null, reason: `Sanitized content too short (${sanitizedHtml.length} chars)`, contentLength: sanitizedHtml.length }
+    }
+
+    return { content: sanitizedHtml, contentLength: sanitizedHtml.length }
+  } finally {
+    await page.close()
+  }
+}
+
+/**
+ * Extract viewer content with follow-through for navigation pages.
+ *
+ * When a URL opens a document page → extract content directly.
+ * When a URL opens a navigation/listing page → follow internal links
+ * one level deep and extract each sub-page document.
+ *
+ * Maximum follow depth: 1 level. Maximum sub-pages per parent: 10.
+ * Only follows links to saleshub.redhat.com or seismic.com domains.
+ */
+async function extractWithFollowThrough(
+  context: BrowserContext,
+  item: SectionItem,
+  sectionKey: string,
+  productDir: string,
+): Promise<{
+  extracted: Array<{ name: string; content: string; followedFrom?: string; filePath?: string }>
+  skipped: string[]
+}> {
+  const extracted: Array<{ name: string; content: string; followedFrom?: string; filePath?: string }> = []
+  const skipped: string[] = []
+  const sectionSlug = slugify(sectionKey)
+  const extractDir = resolve(productDir, 'extracted', sectionSlug)
+
+  if (!item.url) {
+    skipped.push(`${item.name}: No URL`)
+    return { extracted, skipped }
+  }
+
+  // Try direct extraction first
+  const directResult = await extractSinglePage(context, item.url)
+
+  if (directResult.content) {
+    // Direct extraction succeeded — it's a document page
+    const extractFilename = `${sanitizeFilename(item.name)}.html`
+    const extractPath = resolve(extractDir, extractFilename)
+    mkdirSync(extractDir, { recursive: true })
+    writeFileSync(extractPath, directResult.content, 'utf-8')
+    extracted.push({
+      name: item.name,
+      content: directResult.content,
+      filePath: relative(productDir, extractPath),
+    })
+    console.log(`[product-scraper] Extracted: ${item.name.slice(0, 50)} (${directResult.contentLength} chars)`)
+    return { extracted, skipped }
+  }
+
+  // Not directly enrichable — check if it's a navigation page
+  if (directResult.reason !== '__nav_page__') {
+    // Not a nav page either — genuinely unenrichable
+    skipped.push(`${item.name}: ${directResult.reason}`)
+    return { extracted, skipped }
+  }
+
+  // It's a navigation page — follow through to sub-pages
+  console.log(`[product-scraper] Navigation page detected: ${item.name.slice(0, 50)} — following ${directResult.contentLength} links`)
+
+  // Re-open the page to get the links (extractSinglePage closed it)
+  const navPage = await context.newPage()
+  let subPageLinks: Array<{ name: string; url: string }> = []
+  try {
+    await navPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await navPage.waitForTimeout(3_000)
+    const bodyHtml = await navPage.evaluate(() => document.body.innerHTML).catch(() => '')
+    subPageLinks = extractSubPageLinks(bodyHtml)
+  } finally {
+    await navPage.close()
+  }
+
+  // Follow each sub-page link sequentially (max MAX_SUB_PAGES)
+  for (const link of subPageLinks.slice(0, MAX_SUB_PAGES)) {
+    try {
+      const subResult = await extractSinglePage(context, link.url)
+      if (subResult.content) {
+        const subName = `${sanitizeFilename(item.name)}--${sanitizeFilename(link.name)}`
+        const subFilename = `${subName}.html`
+        const subPath = resolve(extractDir, subFilename)
+        mkdirSync(extractDir, { recursive: true })
+        writeFileSync(subPath, subResult.content, 'utf-8')
+        extracted.push({
+          name: `${item.name} > ${link.name}`,
+          content: subResult.content,
+          followedFrom: item.name,
+          filePath: relative(productDir, subPath),
+        })
+        console.log(`[product-scraper] Followed ${item.name.slice(0, 30)} -> ${link.name.slice(0, 30)} (${subResult.contentLength} chars)`)
+      } else {
+        skipped.push(`${item.name} > ${link.name}: ${subResult.reason}`)
+      }
+    } catch (e: any) {
+      skipped.push(`${item.name} > ${link.name}: ${(e.message ?? 'Unknown error').slice(0, 100)}`)
+      console.warn(`[product-scraper] Sub-page failed: ${link.name.slice(0, 50)}: ${(e.message ?? '').slice(0, 80)}`)
+    }
+
+    // Brief pause between sub-page extractions
+    await new Promise(r => setTimeout(r, 500))
+  }
+
+  if (extracted.length === 0) {
+    skipped.push(`${item.name}: Navigation page with 0 enrichable sub-pages`)
+  }
+
+  return { extracted, skipped }
+}
+
 async function downloadProductDocuments(
   page: Page,
   context: BrowserContext,
@@ -1700,109 +1953,31 @@ async function downloadProductDocuments(
       continue
     }
 
-    // Open viewer page and extract content
+    // Extract content with follow-through for navigation pages (#874)
     try {
-      const viewerPage = await context.newPage()
-      try {
-        await viewerPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-        await viewerPage.waitForTimeout(3_000)
+      const result = await extractWithFollowThrough(context, item, sectionTitle, productDir)
 
-        // Get inner text to validate content
-        const innerText = await viewerPage.innerText('body').catch(() => '')
-
-        // AC-4: Check for content-not-found pages
-        if (/content\s+not\s+found|page\s+not\s+found|error\s+404/i.test(innerText.slice(0, 500))) {
-          extractionResults.push({
-            name: item.name,
-            section: sectionTitle,
-            status: 'skipped',
-            reason: 'Content not found',
-            timestamp: new Date().toISOString(),
-          })
-          extractionSkipped++
-          continue
-        }
-
-        // AC-4: Check for iframe-only pages (very little text content)
-        const hasIframes = await viewerPage.locator('iframe').count()
-        if (hasIframes > 0 && innerText.length <= 500) {
-          extractionResults.push({
-            name: item.name,
-            section: sectionTitle,
-            status: 'skipped',
-            reason: 'iframe-only page',
-            timestamp: new Date().toISOString(),
-          })
-          extractionSkipped++
-          continue
-        }
-
-        // AC-3: Content validation — innerText.length > 500 to pass
-        if (!isEnrichableContent(innerText)) {
-          extractionResults.push({
-            name: item.name,
-            section: sectionTitle,
-            status: 'skipped',
-            reason: `Insufficient content (${innerText.length} chars)`,
-            contentLength: innerText.length,
-            timestamp: new Date().toISOString(),
-          })
-          extractionSkipped++
-          continue
-        }
-
-        // AC-1: Extract content via page.evaluate() — target main content container
-        const rawHtml = await viewerPage.evaluate(() => {
-          // Try Seismic viewer content selectors (most specific first)
-          const contentSelectors = [
-            '.articleSdk-theme-page-doubleColumn-main',
-            '.seismic-page-content',
-            '[class*="document-content"]',
-            '[class*="viewer-content"]',
-            '[role="main"]',
-            'main',
-            'article',
-          ]
-          for (const sel of contentSelectors) {
-            const el = document.querySelector(sel)
-            if (el && el.innerHTML.length > 200) return el.innerHTML
-          }
-          // Fallback: full body innerHTML
-          return document.body.innerHTML
-        })
-
-        // AC-2: Sanitize the extracted HTML
-        const sanitizedHtml = sanitizeViewerHtml(rawHtml)
-
-        if (sanitizedHtml.length < 100) {
-          extractionResults.push({
-            name: item.name,
-            section: sectionTitle,
-            status: 'skipped',
-            reason: `Sanitized content too short (${sanitizedHtml.length} chars)`,
-            contentLength: sanitizedHtml.length,
-            timestamp: new Date().toISOString(),
-          })
-          extractionSkipped++
-          continue
-        }
-
-        // AC-5: Save to extracted/{sectionSlug}/{sanitized-name}.html
-        mkdirSync(extractDir, { recursive: true })
-        writeFileSync(extractPath, sanitizedHtml, 'utf-8')
-
+      for (const entry of result.extracted) {
         extractionResults.push({
-          name: item.name,
+          name: entry.name,
           section: sectionTitle,
           status: 'extracted',
-          contentLength: sanitizedHtml.length,
-          filePath: relative(productDir, extractPath),
+          contentLength: entry.content.length,
+          filePath: entry.filePath,
           timestamp: new Date().toISOString(),
         })
         extracted++
-        console.log(`[product-scraper] Extracted: ${item.name.slice(0, 50)} (${sanitizedHtml.length} chars)`)
-      } finally {
-        await viewerPage.close()
+      }
+
+      for (const reason of result.skipped) {
+        extractionResults.push({
+          name: item.name,
+          section: sectionTitle,
+          status: 'skipped',
+          reason,
+          timestamp: new Date().toISOString(),
+        })
+        extractionSkipped++
       }
     } catch (e: any) {
       extractionResults.push({
