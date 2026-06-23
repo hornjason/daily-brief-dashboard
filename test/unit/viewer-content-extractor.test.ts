@@ -105,6 +105,51 @@ describe('sanitizeViewerHtml', () => {
     expect(result).not.toContain('More toolbar')
     expect(result).toContain('Document body')
   })
+
+  // ── Gate 0: inline event handlers + sensitive data-attributes (#874) ───
+
+  it('strips inline event handlers (onclick, onload, onerror)', () => {
+    const html = '<div onclick="alert(1)" onload="init()" onerror="handleErr()">content</div>'
+    const result = sanitizeViewerHtml(html)
+    expect(result).not.toContain('onclick')
+    expect(result).not.toContain('onload')
+    expect(result).not.toContain('onerror')
+    expect(result).not.toContain('alert(1)')
+    expect(result).toContain('content')
+  })
+
+  it('strips inline handlers with single quotes', () => {
+    const html = "<button onclick='doStuff()'>Click</button>"
+    const result = sanitizeViewerHtml(html)
+    expect(result).not.toContain('onclick')
+    expect(result).not.toContain('doStuff')
+    expect(result).toContain('Click')
+  })
+
+  it('strips sensitive data-attributes (session, user, token, auth, csrf, tracking)', () => {
+    const html = '<div data-session-id="abc" data-user-name="jdoe" data-token="xyz" data-auth-state="valid" data-csrf-token="t1" data-tracking-id="tr1">content</div>'
+    const result = sanitizeViewerHtml(html)
+    expect(result).not.toContain('data-session-id')
+    expect(result).not.toContain('data-user-name')
+    expect(result).not.toContain('data-token')
+    expect(result).not.toContain('data-auth-state')
+    expect(result).not.toContain('data-csrf-token')
+    expect(result).not.toContain('data-tracking-id')
+    expect(result).toContain('content')
+  })
+
+  it('preserves non-sensitive data-attributes', () => {
+    const html = '<div data-testid="my-div" data-content-type="pdf">content</div>'
+    const result = sanitizeViewerHtml(html)
+    expect(result).toContain('data-testid')
+    expect(result).toContain('data-content-type')
+  })
+
+  it('combined: onclick + data-session-id stripped, content preserved', () => {
+    const html = '<div onclick="alert(1)" data-session-id="abc">content</div>'
+    const result = sanitizeViewerHtml(html)
+    expect(result).toBe('<div>content</div>')
+  })
 })
 
 // ── isEnrichableContent ────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
   isNonEnglishDoc,
   buildDownloadUrl,
   buildLocalPath,
+  authCanaryCheck,
   type DownloadableItem,
 } from '../../scripts/scrape-saleshub-product-page.ts'
 import type { ProductSection, SectionItem } from '../../src/types/saleshub-product-types.ts'
@@ -220,5 +221,73 @@ describe('buildLocalPath', () => {
   it('uses lowercase extension', () => {
     const path = buildLocalPath('/data/products/my-product', 's', 'Doc', 'PPTX')
     expect(path).toEndWith('.pptx')
+  })
+})
+
+// ── authCanaryCheck (#874) ────────────────────────────────────────────────
+
+describe('authCanaryCheck', () => {
+  it('returns { ok: true } when fetch returns 200', async () => {
+    const mockFetch = async () => ({ status: 200, ok: true, redirected: false, url: 'https://saleshub.redhat.com/api/doccenter/download/c1/v1' }) as any
+    const sections: Record<string, ProductSection> = {
+      's': makeSection('S', [
+        { name: 'Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
+      ]),
+    }
+    const authCtx = { auth: 'Bearer xyz', headers: { Authorization: 'Bearer xyz' }, searchUrl: '' }
+    const result = await authCanaryCheck(authCtx, sections, mockFetch)
+    expect(result.ok).toBe(true)
+  })
+
+  it('returns { ok: false } with reason on 401', async () => {
+    const mockFetch = async () => ({ status: 401, ok: false, redirected: false, url: '' }) as any
+    const sections: Record<string, ProductSection> = {
+      's': makeSection('S', [
+        { name: 'Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
+      ]),
+    }
+    const authCtx = { auth: 'Bearer xyz', headers: { Authorization: 'Bearer xyz' }, searchUrl: '' }
+    const result = await authCanaryCheck(authCtx, sections, mockFetch)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('401')
+  })
+
+  it('returns { ok: false } with reason on 403', async () => {
+    const mockFetch = async () => ({ status: 403, ok: false, redirected: false, url: '' }) as any
+    const sections: Record<string, ProductSection> = {
+      's': makeSection('S', [
+        { name: 'Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
+      ]),
+    }
+    const authCtx = { auth: 'Bearer xyz', headers: { Authorization: 'Bearer xyz' }, searchUrl: '' }
+    const result = await authCanaryCheck(authCtx, sections, mockFetch)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('403')
+  })
+
+  it('returns { ok: false } when redirected to login page', async () => {
+    const mockFetch = async () => ({ status: 200, ok: true, redirected: true, url: 'https://auth.redhat.com/login' }) as any
+    const sections: Record<string, ProductSection> = {
+      's': makeSection('S', [
+        { name: 'Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
+      ]),
+    }
+    const authCtx = { auth: 'Bearer xyz', headers: { Authorization: 'Bearer xyz' }, searchUrl: '' }
+    const result = await authCanaryCheck(authCtx, sections, mockFetch)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('login')
+  })
+
+  it('returns { ok: true, skipped: true } when no downloadable items exist', async () => {
+    const mockFetch = async () => { throw new Error('should not be called') }
+    const sections: Record<string, ProductSection> = {
+      's': makeSection('S', [
+        { name: 'Link Only', url: 'https://example.com' },
+      ]),
+    }
+    const authCtx = { auth: 'Bearer xyz', headers: { Authorization: 'Bearer xyz' }, searchUrl: '' }
+    const result = await authCanaryCheck(authCtx, sections, mockFetch)
+    expect(result.ok).toBe(true)
+    expect(result.skipped).toBe(true)
   })
 })

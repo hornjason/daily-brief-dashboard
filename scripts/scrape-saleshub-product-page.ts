@@ -127,6 +127,45 @@ export function collectDownloadableItems(
   return items
 }
 
+/**
+ * Auth canary check — validates auth before the full download loop (#874).
+ * Picks the first downloadable item, attempts one API download, and checks
+ * for 401/403 or login-page redirects. Returns { ok, reason?, skipped? }.
+ * Accepts an optional fetchFn for testing (defaults to global fetch).
+ */
+export async function authCanaryCheck(
+  authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
+  sections: Record<string, ProductSection>,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
+  const items = collectDownloadableItems(sections)
+  if (items.length === 0) {
+    return { ok: true, skipped: true }
+  }
+
+  const canary = items[0]
+  const url = buildDownloadUrl(canary.versionId, canary.contentId)
+
+  try {
+    const resp = await fetchFn(url, {
+      headers: authCtx.headers,
+      redirect: 'follow',
+    })
+
+    if (resp.status === 401 || resp.status === 403) {
+      return { ok: false, reason: `AUTH CANARY FAILED: ${resp.status}` }
+    }
+
+    if (resp.redirected && resp.url && /login|auth|sso/i.test(resp.url)) {
+      return { ok: false, reason: `AUTH CANARY FAILED: redirected to login page (${resp.url})` }
+    }
+
+    return { ok: true }
+  } catch (err: any) {
+    return { ok: false, reason: `AUTH CANARY FAILED: fetch error — ${err.message ?? err}` }
+  }
+}
+
 // ── Exported viewer content extraction helpers (tested in viewer-content-extractor.test.ts) ──
 
 /** Patterns matching Seismic navigation chrome elements to strip from viewer HTML */
@@ -187,6 +226,13 @@ export function sanitizeViewerHtml(html: string): string {
       '',
     )
   }
+
+  // 5a. Remove inline event handlers (onclick, onload, onerror, etc.) (#874)
+  result = result.replace(/\s+on\w+="[^"]*"/gi, '')
+  result = result.replace(/\s+on\w+='[^']*'/gi, '')
+
+  // 5b. Remove sensitive data-attributes (#874)
+  result = result.replace(/\s+data-(session|user|token|auth|csrf|tracking)[\w-]*="[^"]*"/gi, '')
 
   // 6. Clean up excessive whitespace from removals
   result = result.replace(/\n{3,}/g, '\n\n').trim()
@@ -1022,17 +1068,14 @@ async function queryDocumentsByProduct(
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-// ── Per-product document download (SC-2) ────────────────────────────────────
+// ── Accordion expansion (#874) ──────────────────────────────────────────────
 
-async function downloadProductDocuments(
-  page: Page,
-  context: BrowserContext,
-  sections: Record<string, ProductSection>,
-  productSlug: string,
-  authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
-): Promise<void> {
-  // ── Phase 1: Expand all accordion sections on the product page ──────────
-  // Expand ANY collapsed accordions — not just Domain sections (AC-1, ANTI-2)
+/**
+ * Expands all collapsed accordion sections on a product page.
+ * Must be called BEFORE extractRedHeaderSections() so DOM extraction
+ * sees content inside collapsed accordions.
+ */
+export async function expandAllAccordions(page: Page): Promise<number> {
   console.log('[product-scraper] Expanding all accordion sections on page...')
 
   const collapsedAccordions = page.locator(
@@ -1052,6 +1095,27 @@ async function downloadProductDocuments(
     }
   }
   await page.waitForTimeout(1_500)
+  return accordionCount
+}
+
+// ── Per-product document download (SC-2) ────────────────────────────────────
+
+async function downloadProductDocuments(
+  page: Page,
+  context: BrowserContext,
+  sections: Record<string, ProductSection>,
+  productSlug: string,
+  authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
+): Promise<void> {
+  // ── Phase 1: Expand all accordion sections (safety net — may re-collapse) ──
+  await expandAllAccordions(page)
+
+  // ── Phase 1b: Auth canary — fail fast if auth is expired (#874) ──────────
+  const canary = await authCanaryCheck(authCtx, sections)
+  if (!canary.ok) {
+    console.log(`[product-scraper] ${canary.reason} — skipping all downloads`)
+    return
+  }
 
   // ── Phase 2: Build download queue from ALL sections ─────────────────────
   // Iterate all sections from the scraped page data (AC-1, ANTI-2: all sections,
@@ -1895,6 +1959,18 @@ export async function scrapeProductPage(
     // Extract product header
     const header = await extractProductHeader(page)
     console.log(`[product-scraper] Product: "${header.name}"`)
+
+    // Expand all accordions BEFORE DOM extraction (#874 — Gate 0)
+    // Content inside collapsed accordions is invisible to extractRedHeaderSections()
+    await expandAllAccordions(page)
+
+    // Screenshot audit artifact (#874 — Gate 0)
+    // Saved BEFORE extractRedHeaderSections() so the screenshot shows the fully-expanded page
+    const earlyProductSlug = slugify(header.name)
+    const earlyConfigOutputDir = resolve('config-templates', 'saleshub-products', earlyProductSlug)
+    mkdirSync(earlyConfigOutputDir, { recursive: true })
+    await page.screenshot({ fullPage: true, path: resolve(earlyConfigOutputDir, '_page-screenshot.png') })
+    console.log('[product-scraper] Saved page screenshot as audit artifact')
 
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
