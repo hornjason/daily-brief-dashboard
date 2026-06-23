@@ -286,3 +286,73 @@ describe('saleshub-products-module', () => {
     await mod.cleanup('_global')
   })
 })
+
+// ── Gate 3 Advisory Tests (#874 PR 3) ────────────────────────────────────
+
+describe('runGate3Advisory', () => {
+  beforeAll(async () => {
+    // Set up mock tech stack data for advisory check
+    const techStackDir = resolve(TEST_CACHE_DIR, 'tech-stack')
+    mkdirSync(techStackDir, { recursive: true })
+
+    writeFileSync(
+      resolve(techStackDir, 'acme-corp.json'),
+      JSON.stringify({
+        technologies: [
+          { name: 'ServiceNow' },
+          { name: 'VMware vSphere' },
+          { name: 'Kubernetes' },
+        ],
+        cachedAt: '2026-06-15T00:00:00.000Z',
+      }),
+    )
+
+    writeFileSync(
+      resolve(techStackDir, 'globex-inc.json'),
+      JSON.stringify({
+        technologies: [
+          { name: 'Amazon Web Services' },
+          { name: 'Docker' },
+        ],
+        cachedAt: '2026-06-15T00:00:00.000Z',
+      }),
+    )
+  })
+
+  it('returns results with customers checked and match counts', async () => {
+    const { runGate3Advisory } = await import('../../src/modules/saleshub-products-module.ts')
+    const result = runGate3Advisory('test-product-a')
+
+    expect(result.customersChecked).toBeGreaterThanOrEqual(1)
+    expect(result.results).toBeInstanceOf(Array)
+    expect(result.results.length).toBeGreaterThanOrEqual(1)
+
+    // Each result should have customer, tech, and matchCount
+    for (const r of result.results) {
+      expect(r.customer).toBeTruthy()
+      expect(r.tech).toBeInstanceOf(Array)
+      expect(typeof r.matchCount).toBe('number')
+    }
+  })
+
+  it('returns zero matches when no enriched documents exist', async () => {
+    const { runGate3Advisory } = await import('../../src/modules/saleshub-products-module.ts')
+    // 'empty-product' has no _enriched.json
+    const result = runGate3Advisory('empty-product')
+    expect(result.customersChecked).toBe(0)
+    expect(result.totalMatches).toBe(0)
+  })
+
+  it('returns zero when no tech-stack cache exists', async () => {
+    // Temporarily override CACHE_DIR to a path with no tech-stack
+    const origCacheDir = process.env.CACHE_DIR
+    process.env.CACHE_DIR = '/tmp/nonexistent-cache-dir-test'
+
+    const { runGate3Advisory } = await import('../../src/modules/saleshub-products-module.ts')
+    const result = runGate3Advisory('test-product-a')
+    expect(result.customersChecked).toBe(0)
+    expect(result.totalMatches).toBe(0)
+
+    process.env.CACHE_DIR = origCacheDir
+  })
+})

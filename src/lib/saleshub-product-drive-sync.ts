@@ -441,3 +441,58 @@ export async function uploadProductFilesToDrive(
   }
   return { uploaded, errors }
 }
+
+/**
+ * Upload _pipeline-manifest.json to the product's Drive folder (#874 PR 3).
+ *
+ * Makes the manifest visible across nodes (Mac Mini + hero installs).
+ * Fails silently with a warning — the local copy is sufficient.
+ */
+export async function uploadManifestToDrive(
+  productSlug: string,
+  manifest: import('./pipeline-manifest.ts').PipelineManifest,
+): Promise<void> {
+  const parentFolderId = getPodBookingsFolderId()
+  if (!parentFolderId) {
+    console.log('[saleshub-product-drive-sync] No podBookingsFolderId — skipping manifest upload')
+    return
+  }
+
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    // Find "SalesHub Products" folder
+    const productsFolderId = await findFolder(drive, parentFolderId, PRODUCTS_FOLDER_NAME)
+    if (!productsFolderId) {
+      console.warn('[saleshub-product-drive-sync] No "SalesHub Products" folder — skipping manifest upload')
+      return
+    }
+
+    // Find product folder by slug
+    const foldersRes = await withQuotaRetry(
+      () => drive.files.list({
+        q: `'${productsFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        pageSize: 100,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }),
+      '[saleshub-product-drive-sync] list product folders for manifest upload',
+    )
+
+    const productFolder = (foldersRes.data.files ?? []).find(
+      f => f.name && slugify(f.name) === productSlug,
+    )
+
+    if (!productFolder?.id) {
+      console.warn(`[saleshub-product-drive-sync] Product folder not found for slug "${productSlug}" — skipping manifest upload`)
+      return
+    }
+
+    await uploadOrUpdateJson(drive, productFolder.id, '_pipeline-manifest.json', manifest)
+    console.log(`[saleshub-product-drive-sync] Uploaded manifest for "${productSlug}" to Drive`)
+  } catch (e: any) {
+    console.warn(`[saleshub-product-drive-sync] Manifest upload failed for "${productSlug}": ${e.message}`)
+  }
+}

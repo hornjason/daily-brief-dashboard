@@ -19,7 +19,9 @@ import {
   writeManifest,
   readManifest,
   sanitizeManifestValues,
+  diffManifests,
   type PipelineManifest,
+  type ManifestDiff,
 } from '../../src/lib/pipeline-manifest.ts'
 
 describe('pipeline-manifest', () => {
@@ -401,6 +403,192 @@ describe('pipeline-manifest', () => {
       const entry = manifest.documents[0]
       expect(entry.language).toBe('pt')
       expect(entry.gate2_skippedReason).toBe('non-english')
+    })
+  })
+
+  // ── diffManifests (#874 PR 3) ──────────────────────────────────────────
+
+  describe('diffManifests', () => {
+    test('detects new documents', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+      addGate0Entry(current, 'Doc B', 's2', ['dom'])
+
+      const diff = diffManifests(current, previous)
+      expect(diff.newDocuments).toEqual(['Doc B'])
+      expect(diff.removedDocuments).toEqual([])
+    })
+
+    test('detects removed documents', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      addGate0Entry(previous, 'Doc B', 's2', ['dom'])
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+
+      const diff = diffManifests(current, previous)
+      expect(diff.removedDocuments).toEqual(['Doc B'])
+      expect(diff.newDocuments).toEqual([])
+    })
+
+    test('detects enrichment regression', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      addGate0Entry(previous, 'Doc B', 's2', ['dom'])
+      updateGate3(previous, 'Doc A', { gate3_enriched: true })
+      updateGate3(previous, 'Doc B', { gate3_enriched: true })
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+      addGate0Entry(current, 'Doc B', 's2', ['dom'])
+      updateGate3(current, 'Doc A', { gate3_enriched: true })
+      // Doc B lost enrichment
+
+      const diff = diffManifests(current, previous)
+      expect(diff.enrichmentRegression).toEqual(['Doc B'])
+      expect(diff.enrichmentGain).toEqual([])
+    })
+
+    test('detects enrichment gain', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      addGate0Entry(previous, 'Doc B', 's2', ['dom'])
+      // Neither enriched in previous
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+      addGate0Entry(current, 'Doc B', 's2', ['dom'])
+      updateGate3(current, 'Doc A', { gate3_enriched: true })
+
+      const diff = diffManifests(current, previous)
+      expect(diff.enrichmentGain).toEqual(['Doc A'])
+      expect(diff.enrichmentRegression).toEqual([])
+    })
+
+    test('calculates positive coverage change', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      addGate0Entry(previous, 'Doc B', 's2', ['dom'])
+      updateGate2(previous, 'Doc A', { gate2_downloaded: true })
+      updateGate2(previous, 'Doc B', { gate2_downloaded: true })
+      updateGate3(previous, 'Doc A', { gate3_enriched: true })
+      computeGateSummary(previous) // 50% coverage
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+      addGate0Entry(current, 'Doc B', 's2', ['dom'])
+      updateGate2(current, 'Doc A', { gate2_downloaded: true })
+      updateGate2(current, 'Doc B', { gate2_downloaded: true })
+      updateGate3(current, 'Doc A', { gate3_enriched: true })
+      updateGate3(current, 'Doc B', { gate3_enriched: true })
+      computeGateSummary(current) // 100% coverage
+
+      const diff = diffManifests(current, previous)
+      expect(diff.coverageChange).toBeCloseTo(0.50, 2)
+    })
+
+    test('calculates negative coverage change (regression warning)', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      addGate0Entry(previous, 'Doc B', 's2', ['dom'])
+      updateGate2(previous, 'Doc A', { gate2_downloaded: true })
+      updateGate2(previous, 'Doc B', { gate2_downloaded: true })
+      updateGate3(previous, 'Doc A', { gate3_enriched: true })
+      updateGate3(previous, 'Doc B', { gate3_enriched: true })
+      computeGateSummary(previous) // 100% coverage
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+      addGate0Entry(current, 'Doc B', 's2', ['dom'])
+      updateGate2(current, 'Doc A', { gate2_downloaded: true })
+      updateGate2(current, 'Doc B', { gate2_downloaded: true })
+      updateGate3(current, 'Doc A', { gate3_enriched: true })
+      // Doc B lost enrichment
+      computeGateSummary(current) // 50% coverage
+
+      const diff = diffManifests(current, previous)
+      expect(diff.coverageChange).toBeCloseTo(-0.50, 2)
+      expect(diff.enrichmentRegression).toEqual(['Doc B'])
+    })
+
+    test('handles empty previous manifest', () => {
+      const previous = createManifest('test', 'Test')
+
+      const current = createManifest('test', 'Test')
+      addGate0Entry(current, 'Doc A', 's1', ['dom'])
+
+      const diff = diffManifests(current, previous)
+      expect(diff.newDocuments).toEqual(['Doc A'])
+      expect(diff.removedDocuments).toEqual([])
+      expect(diff.enrichmentRegression).toEqual([])
+      expect(diff.coverageChange).toBe(0)
+    })
+
+    test('handles empty current manifest', () => {
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+
+      const current = createManifest('test', 'Test')
+
+      const diff = diffManifests(current, previous)
+      expect(diff.newDocuments).toEqual([])
+      expect(diff.removedDocuments).toEqual(['Doc A'])
+    })
+
+    test('does not flag removed docs as enrichment regression', () => {
+      // A doc that was enriched in previous but is completely removed
+      // should appear in removedDocuments, NOT enrichmentRegression
+      const previous = createManifest('test', 'Test')
+      addGate0Entry(previous, 'Doc A', 's1', ['dom'])
+      updateGate3(previous, 'Doc A', { gate3_enriched: true })
+
+      const current = createManifest('test', 'Test')
+      // Doc A does not exist at all
+
+      const diff = diffManifests(current, previous)
+      expect(diff.removedDocuments).toEqual(['Doc A'])
+      expect(diff.enrichmentRegression).toEqual([])
+    })
+  })
+
+  // ── writeManifest with diff logging ────────────────────────────────────
+
+  describe('writeManifest with diff logging', () => {
+    test('produces .prev.json that enables diff on next write', () => {
+      const tmpDir = mkdtempSync(resolve(tmpdir(), 'manifest-diff-'))
+
+      // First write
+      const first = createManifest('test', 'Test')
+      addGate0Entry(first, 'Doc A', 's1', ['dom'])
+      updateGate2(first, 'Doc A', { gate2_downloaded: true })
+      updateGate3(first, 'Doc A', { gate3_enriched: true })
+      computeGateSummary(first)
+      writeManifest(first, tmpDir)
+
+      // Second write with additional doc
+      const second = createManifest('test', 'Test')
+      addGate0Entry(second, 'Doc A', 's1', ['dom'])
+      addGate0Entry(second, 'Doc B', 's2', ['dom'])
+      updateGate2(second, 'Doc A', { gate2_downloaded: true })
+      updateGate2(second, 'Doc B', { gate2_downloaded: true })
+      updateGate3(second, 'Doc A', { gate3_enriched: true })
+      updateGate3(second, 'Doc B', { gate3_enriched: true })
+      computeGateSummary(second)
+      writeManifest(second, tmpDir)
+
+      // Verify .prev.json is the first manifest
+      const prevPath = resolve(tmpDir, '_pipeline-manifest.prev.json')
+      expect(existsSync(prevPath)).toBe(true)
+      const prev = JSON.parse(readFileSync(prevPath, 'utf-8'))
+      expect(prev.documents).toHaveLength(1)
+
+      // Current should have 2
+      const current = readManifest(tmpDir)
+      expect(current!.documents).toHaveLength(2)
     })
   })
 })

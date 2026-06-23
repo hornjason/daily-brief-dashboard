@@ -54,6 +54,79 @@ export interface PipelineManifest {
   documents: PipelineManifestEntry[]
 }
 
+// ── Manifest diff / regression detection (#874 PR 3) ────────────────────────
+
+export interface ManifestDiff {
+  newDocuments: string[]         // in current but not in previous
+  removedDocuments: string[]     // in previous but not in current
+  enrichmentRegression: string[] // was enriched in prev, not enriched in current
+  enrichmentGain: string[]      // not enriched in prev, enriched in current
+  coverageChange: number        // current coverage - previous coverage
+}
+
+/**
+ * Compare current vs previous manifest and detect regressions.
+ *
+ * - New/removed documents by name
+ * - Enrichment regression: docs that LOST enrichment between runs
+ * - Coverage change: difference in enrichment coverage percentage
+ *
+ * Logs a warning when enrichmentRegression.length > 0 or coverageChange < -0.10.
+ */
+export function diffManifests(
+  current: PipelineManifest,
+  previous: PipelineManifest,
+): ManifestDiff {
+  const currentNames = new Set(current.documents.map(d => d.name))
+  const previousNames = new Set(previous.documents.map(d => d.name))
+
+  const newDocuments = current.documents
+    .filter(d => !previousNames.has(d.name))
+    .map(d => d.name)
+
+  const removedDocuments = previous.documents
+    .filter(d => !currentNames.has(d.name))
+    .map(d => d.name)
+
+  // Build enrichment maps
+  const prevEnriched = new Set(
+    previous.documents.filter(d => d.gate3_enriched).map(d => d.name),
+  )
+  const currEnriched = new Set(
+    current.documents.filter(d => d.gate3_enriched).map(d => d.name),
+  )
+
+  // Enrichment regression: was enriched before, not now (only for docs that still exist)
+  const enrichmentRegression = previous.documents
+    .filter(d => d.gate3_enriched && currentNames.has(d.name) && !currEnriched.has(d.name))
+    .map(d => d.name)
+
+  // Enrichment gain: not enriched before, enriched now (only for docs that existed before)
+  const enrichmentGain = current.documents
+    .filter(d => d.gate3_enriched && previousNames.has(d.name) && !prevEnriched.has(d.name))
+    .map(d => d.name)
+
+  // Coverage change
+  const prevCoverage = previous.gates.gate2_enrichmentCoverage ?? 0
+  const currCoverage = current.gates.gate2_enrichmentCoverage ?? 0
+  const coverageChange = currCoverage - prevCoverage
+
+  // Log regression warnings
+  if (enrichmentRegression.length > 0 || coverageChange < -0.10) {
+    console.warn(
+      `[pipeline-manifest] REGRESSION: ${enrichmentRegression.length} docs lost enrichment, coverage changed by ${coverageChange > 0 ? '+' : ''}${coverageChange.toFixed(2)}`,
+    )
+  }
+
+  return {
+    newDocuments,
+    removedDocuments,
+    enrichmentRegression,
+    enrichmentGain,
+    coverageChange,
+  }
+}
+
 // ── Credential denylist ──────────────────────────────────────────────────────
 
 const CREDENTIAL_PATTERNS = /\b(bearer|token|auth|cookie|session|authorization|api[_-]?key)\b/i
@@ -178,6 +251,29 @@ export function writeManifest(manifest: PipelineManifest, outputDir: string): vo
   const sanitized = sanitizeManifestValues(manifest)
   const filePath = resolve(outputDir, MANIFEST_FILENAME)
   const prevPath = resolve(outputDir, PREV_FILENAME)
+
+  // Diff against previous manifest BEFORE rotating (#874 PR 3)
+  if (existsSync(filePath)) {
+    try {
+      const previousRaw = readFileSync(filePath, 'utf-8')
+      const previous: PipelineManifest = JSON.parse(previousRaw)
+      const diff = diffManifests(sanitized, previous)
+
+      const parts: string[] = []
+      if (diff.newDocuments.length > 0) parts.push(`+${diff.newDocuments.length} new`)
+      if (diff.removedDocuments.length > 0) parts.push(`-${diff.removedDocuments.length} removed`)
+      if (diff.enrichmentGain.length > 0) parts.push(`+${diff.enrichmentGain.length} enriched`)
+      if (diff.enrichmentRegression.length > 0) parts.push(`${diff.enrichmentRegression.length} lost enrichment`)
+      if (Math.abs(diff.coverageChange) > 0.01) {
+        parts.push(`coverage ${diff.coverageChange > 0 ? '+' : ''}${(diff.coverageChange * 100).toFixed(1)}%`)
+      }
+      if (parts.length > 0) {
+        console.log(`[pipeline-manifest] Diff: ${parts.join(', ')}`)
+      }
+    } catch {
+      // Previous manifest unreadable — skip diff
+    }
+  }
 
   // Rotate previous manifest
   if (existsSync(filePath)) {

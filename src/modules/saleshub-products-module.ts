@@ -258,6 +258,101 @@ export function matchDocumentToCustomer(
   }
 }
 
+// ── Gate 3 Advisory: Signal matching check (#874 PR 3) ──────────────────────
+
+export interface Gate3Result {
+  customersChecked: number
+  totalMatches: number
+  results: Array<{ customer: string; tech: string[]; matchCount: number }>
+}
+
+/**
+ * Advisory-only check: validates that enriched documents match against
+ * real customer tech stacks. Does NOT modify the manifest — purely
+ * informational to confirm the enrichment pipeline produces actionable data.
+ *
+ * Picks 2-3 customers with known tech stack data, runs matchDocumentToCustomer()
+ * on each enriched document, and logs results.
+ */
+export function runGate3Advisory(productSlug: string): Gate3Result {
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  const techStackDir = resolve(cacheDir, 'tech-stack')
+
+  // Find 2-3 customers with tech stack data
+  const customerSlugs: string[] = []
+  if (existsSync(techStackDir)) {
+    try {
+      const files = readdirSync(techStackDir)
+        .filter(f => f.endsWith('.json'))
+        .slice(0, 3)
+      for (const f of files) {
+        try {
+          const data = JSON.parse(readFileSync(resolve(techStackDir, f), 'utf-8'))
+          if (data.technologies?.length > 0) {
+            customerSlugs.push(f.replace('.json', ''))
+          }
+        } catch { /* skip unreadable files */ }
+      }
+    } catch { /* tech-stack dir unreadable */ }
+  }
+
+  if (customerSlugs.length === 0) {
+    console.log(`[gate3-advisory] No customers with tech stack data — skipping advisory check`)
+    return { customersChecked: 0, totalMatches: 0, results: [] }
+  }
+
+  // Read enrichment data for the product
+  const productsDir = getProductsDir()
+  const productDir = resolve(productsDir, productSlug)
+
+  // Read enrichment data
+  const enrichedPath = resolve(productDir, '_enriched.json')
+  let enrichedDocs: DocumentIntelligence[] = []
+  if (existsSync(enrichedPath)) {
+    try {
+      const enrichment: ProductEnrichment = JSON.parse(readFileSync(enrichedPath, 'utf-8'))
+      enrichedDocs = enrichment.documents ?? []
+    } catch { /* skip */ }
+  }
+
+  if (enrichedDocs.length === 0) {
+    console.log(`[gate3-advisory] No enriched documents for "${productSlug}" — skipping advisory check`)
+    return { customersChecked: 0, totalMatches: 0, results: [] }
+  }
+
+  // Run matching for each customer
+  const results: Gate3Result['results'] = []
+  let totalMatches = 0
+
+  for (const customerSlug of customerSlugs) {
+    const techStack = loadTechStackCache(customerSlug)
+    const techNames = techStack?.technologies?.map(t => t.name) ?? []
+
+    let matchCount = 0
+    for (const doc of enrichedDocs) {
+      const match = matchDocumentToCustomer(doc, customerSlug)
+      if (match.matched) matchCount++
+    }
+
+    results.push({ customer: customerSlug, tech: techNames.slice(0, 5), matchCount })
+    totalMatches += matchCount
+
+    console.log(
+      `[gate3-advisory] Customer ${customerSlug} (has ${techNames.slice(0, 3).join(', ')}) -> ${matchCount} docs matched`,
+    )
+  }
+
+  console.log(
+    `[gate3-advisory] Gate 3 Advisory: ${customerSlugs.length} customers checked, ${totalMatches} total matches across ${enrichedDocs.length} enriched docs`,
+  )
+
+  return {
+    customersChecked: customerSlugs.length,
+    totalMatches,
+    results,
+  }
+}
+
 // ── Signal emission ──────────────────────────────────────────────────────────
 
 function emitProductSignals(
@@ -678,12 +773,21 @@ export function createSaleshubProductsRouter() {
       // Reset cache so next signals() call picks up enrichment
       resetProductCache()
 
+      // Gate 3 Advisory: check signal matching against real customers (#874 PR 3)
+      let advisory: Gate3Result | null = null
+      try {
+        advisory = runGate3Advisory(slug)
+      } catch (e: any) {
+        console.warn(`[saleshub-products] Gate 3 advisory failed (non-blocking): ${e.message}`)
+      }
+
       return c.json({
         slug,
         enriched: true,
         documentsProcessed: documents.length,
         documentsEnriched: enrichment.documents.length,
         enrichedAt: enrichment.enrichedAt,
+        gate3Advisory: advisory,
       })
     } catch (e: any) {
       return c.json({ error: `Enrichment failed: ${e.message}` }, 500)

@@ -2301,6 +2301,14 @@ export async function scrapeProductPage(
     writeManifest(manifest, configOutputDir)
     console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM, Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
+    // Upload manifest to Drive for cross-node visibility (#874 PR 3)
+    try {
+      const { uploadManifestToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+      await uploadManifestToDrive(productSlug, manifest)
+    } catch (e: any) {
+      console.warn(`[product-scraper] Manifest Drive upload failed (non-blocking): ${e.message}`)
+    }
+
     console.log(`\n[product-scraper] Written to:`)
     console.log(`  ${cachePath}`)
     console.log(`  ${configPath}`)
