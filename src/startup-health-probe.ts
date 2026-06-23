@@ -260,3 +260,58 @@ registerProbe({
     }
   },
 })
+
+/**
+ * Probe: intelligence graph freshness (#878)
+ * Checks how many customer graphs have builtAt >48h old.
+ * Returns 'warn' if >50% are stale.
+ */
+registerProbe({
+  name: 'intelligence-graph-freshness',
+  category: 'warning',
+  test: async () => {
+    try {
+      const { loadGraph } = await import('./lib/intelligence-graph.ts')
+      const { customers } = await import('./server-state.ts')
+      const { toSlug } = await import('./cache-layer.ts')
+
+      if (!customers || customers.length === 0) {
+        return { passed: true, message: 'No customers configured — skipping intelligence graph freshness check' }
+      }
+
+      const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000
+      const now = Date.now()
+      let staleCount = 0
+      let graphCount = 0
+
+      for (const customer of customers) {
+        const slug = toSlug(customer.name)
+        const graph = loadGraph(slug, CACHE_DIR)
+        if (!graph) continue
+        graphCount++
+        const builtAtMs = new Date(graph.builtAt).getTime()
+        if (now - builtAtMs > FORTY_EIGHT_HOURS) {
+          staleCount++
+        }
+      }
+
+      if (graphCount === 0) {
+        return { passed: true, message: 'No intelligence graphs found — graphs not yet built' }
+      }
+
+      if (staleCount > graphCount / 2) {
+        return {
+          passed: false,
+          message: `${staleCount}/${graphCount} intelligence graphs are >48h stale — graph rebuild may be stalled`,
+        }
+      }
+
+      return {
+        passed: true,
+        message: `Intelligence graph freshness OK: ${graphCount - staleCount}/${graphCount} graphs are <48h old`,
+      }
+    } catch (e: any) {
+      return { passed: false, message: `Intelligence graph freshness check failed: ${e.message?.slice(0, 200)}` }
+    }
+  },
+})

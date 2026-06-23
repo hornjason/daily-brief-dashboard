@@ -47,6 +47,25 @@ interface CustomerHealthReport {
   lastRebuiltBy?: string
 }
 
+interface GraphHealthAlert {
+  type: 'staleness' | 'persist_error' | 'scheduler_stall'
+  message: string
+  severity: 'critical' | 'warning'
+  count: number
+}
+
+interface PortfolioHealthResponse {
+  customers: CustomerHealthReport[]
+  medianNodeCount: number
+  medianEdgeCount: number
+  customersWithFreshGraphs: number
+  percentFresh: string
+  signalSourceGaps: string[]
+  thinGraphCustomers: string[]
+  alerts: GraphHealthAlert[]
+  persistErrorCount: number
+}
+
 interface EdgeDetail {
   from: string
   to: string
@@ -278,6 +297,7 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
 
 export function GraphHealthPage() {
   const { data, loading, error } = useApi<CustomerHealthReport[]>('/api/admin/graph-health')
+  const { data: portfolio } = useApi<PortfolioHealthResponse>('/api/admin/graph-health/portfolio')
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
   const [sortField, setSortField] = useState<'edges' | 'nodes' | 'freshness' | 'coverage'>('edges')
 
@@ -357,6 +377,22 @@ export function GraphHealthPage() {
           </div>
         )}
 
+        {/* Alert Banners (#878) */}
+        {portfolio?.alerts && portfolio.alerts.length > 0 && (
+          <div className="space-y-2 mb-5">
+            {portfolio.alerts.map((alert, i) => (
+              <div key={i} className={`p-3 rounded-lg border flex items-start gap-2 text-sm ${
+                alert.severity === 'critical'
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+              }`}>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{alert.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Error State */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400 text-sm flex items-center gap-2">
@@ -427,7 +463,12 @@ export function GraphHealthPage() {
                 >
                   Coverage
                 </button>
-                <span className="w-24 text-right">Motion</span>
+                <span
+                  className="w-24 text-right"
+                  title="Percentage of graph nodes referenced by expansion motion evidence and tactics. Higher = more intelligence data being used in recommendations."
+                >
+                  Motion
+                </span>
                 <span className="flex-1 text-right">Status</span>
               </div>
             </div>

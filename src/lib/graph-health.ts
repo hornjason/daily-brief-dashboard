@@ -67,6 +67,13 @@ export interface CustomerHealthReport {
   lastRebuiltBy: string
 }
 
+export interface GraphHealthAlert {
+  type: 'staleness' | 'persist_error' | 'scheduler_stall'
+  message: string
+  severity: 'critical' | 'warning'
+  count: number
+}
+
 export interface PortfolioHealthReport {
   customers: CustomerHealthReport[]
   medianNodeCount: number
@@ -75,6 +82,8 @@ export interface PortfolioHealthReport {
   percentFresh: string
   signalSourceGaps: string[]
   thinGraphCustomers: string[]
+  alerts: GraphHealthAlert[]
+  persistErrorCount: number
 }
 
 export interface MotionCoverageReport {
@@ -283,11 +292,67 @@ export function computeMotionCoverage(
 }
 
 /**
+ * Compute alerts based on portfolio-level health signals (#878).
+ * Pure function — no IO, no side effects.
+ */
+export function computeAlerts(
+  reports: CustomerHealthReport[],
+  persistErrorCount: number,
+  schedulerLastRun: string | null,
+): GraphHealthAlert[] {
+  const alerts: GraphHealthAlert[] = []
+
+  // Staleness: >50% red = critical
+  const redCount = reports.filter(r => r.freshnessBadge === 'red').length
+  if (reports.length > 0 && redCount > reports.length / 2) {
+    alerts.push({
+      type: 'staleness',
+      message: `${redCount} of ${reports.length} graphs are >24h stale`,
+      severity: 'critical',
+      count: redCount,
+    })
+  }
+
+  // Persist errors
+  if (persistErrorCount > 0) {
+    alerts.push({
+      type: 'persist_error',
+      message: `${persistErrorCount} graph persist failure${persistErrorCount > 1 ? 's' : ''} since container start`,
+      severity: 'warning',
+      count: persistErrorCount,
+    })
+  }
+
+  // Scheduler stall: hasn't run in >12h
+  if (schedulerLastRun) {
+    const hoursSince = (Date.now() - new Date(schedulerLastRun).getTime()) / 3600000
+    if (hoursSince > 12) {
+      alerts.push({
+        type: 'scheduler_stall',
+        message: `Graph rebuild scheduler hasn't run in ${Math.round(hoursSince)}h (expected every 6h)`,
+        severity: 'warning',
+        count: Math.round(hoursSince),
+      })
+    }
+  } else {
+    alerts.push({
+      type: 'scheduler_stall',
+      message: 'Graph rebuild scheduler has never run',
+      severity: 'warning',
+      count: 0,
+    })
+  }
+
+  return alerts
+}
+
+/**
  * Compute portfolio-level health summary from individual customer reports.
  * Customers sorted ascending by totalEdges (sparsest first).
  */
 export function computePortfolioHealth(
   reports: CustomerHealthReport[],
+  opts?: { alerts?: GraphHealthAlert[]; persistErrorCount?: number },
 ): PortfolioHealthReport {
   // Sort by total edges ascending (sparsest first)
   const sorted = [...reports].sort((a, b) => a.totalEdges - b.totalEdges)
@@ -333,6 +398,8 @@ export function computePortfolioHealth(
     percentFresh,
     signalSourceGaps,
     thinGraphCustomers,
+    alerts: opts?.alerts ?? [],
+    persistErrorCount: opts?.persistErrorCount ?? 0,
   }
 }
 

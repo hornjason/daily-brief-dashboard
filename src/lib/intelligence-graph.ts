@@ -39,6 +39,10 @@ import { writeJsonAtomic } from './atomic-write.ts'
 const GRAPH_VERSION = '1.0'
 const MAX_GRAPH_SIZE_BYTES = 512 * 1024 // 512KB ceiling (200KB was too small after signal source expansion #876)
 
+// ── Persist error counter (#878) ─────────────────────────────────────────────
+let _persistErrorCount = 0
+export function getPersistErrorCount(): number { return _persistErrorCount }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function slugify(text: string): string {
@@ -969,6 +973,7 @@ export function persistGraph(graph: CustomerGraph, dataDir: string): void {
   const json = JSON.stringify(graph, null, 2)
 
   if (Buffer.byteLength(json, 'utf-8') > MAX_GRAPH_SIZE_BYTES) {
+    _persistErrorCount++
     throw new Error(
       `Intelligence graph for ${graph.customerId} exceeds 512KB ceiling ` +
       `(${Buffer.byteLength(json, 'utf-8')} bytes). ` +

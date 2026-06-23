@@ -14,14 +14,14 @@ import { getExpansionMotion, getGraphDebug, generateAllGraphs, type GenerateAllR
 import { generateMotionCampaigns } from './lib/motion-campaign-service.ts'
 import { detectActionTriggers } from './lib/motion-action-triggers.ts'
 import { computeGraphDiff } from './lib/graph-diff.ts'
-import { loadGraph } from './lib/intelligence-graph.ts'
+import { loadGraph, getPersistErrorCount } from './lib/intelligence-graph.ts'
 import { getSimilarCustomers } from './lib/customer-similarity.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import type { Signal } from './feature-module-registry.ts'
 import { customers } from './server-state.ts'
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
-import { computeCustomerGraphHealth, computePortfolioHealth, type CustomerHealthReport } from './lib/graph-health.ts'
+import { computeCustomerGraphHealth, computePortfolioHealth, computeAlerts, type CustomerHealthReport } from './lib/graph-health.ts'
 import { getSignalConfigKeys } from './lib/signal-config-keys.ts'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -537,7 +537,19 @@ export function createGraphRouter(): Hono {
         reports.push(report)
       }
 
-      const portfolio = computePortfolioHealth(reports)
+      // #878: Compute alerts for portfolio health
+      const persistErrors = getPersistErrorCount()
+
+      let schedulerLastRun: string | null = null
+      try {
+        const { schedulerRegistry } = await import('./scheduler-registry.ts')
+        const status = schedulerRegistry.getStatus()
+        const graphEntry = status.find((e: any) => e.name === 'intelligence-graph-rebuild')
+        schedulerLastRun = graphEntry?.lastRun ?? null
+      } catch { /* scheduler may not expose this */ }
+
+      const alerts = computeAlerts(reports, persistErrors, schedulerLastRun)
+      const portfolio = computePortfolioHealth(reports, { alerts, persistErrorCount: persistErrors })
       return c.json(portfolio)
     } catch (e: any) {
       console.error('[graph-routes] Portfolio health failed:', e?.message)
