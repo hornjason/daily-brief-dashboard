@@ -233,6 +233,7 @@ export function createGraphRouter(): Hono {
         collectSignals: (slug: string) => FeatureModuleRegistry.collectAllSignals(slug),
         playSignals,
         tacticSignals,
+        rebuiltBy: 'manual',
       },
     }).then(result => {
       generateAllState = { status: 'complete', result, startedAt: generateAllState.startedAt }
@@ -477,10 +478,13 @@ export function createGraphRouter(): Hono {
         if (!graph) continue
 
         // Load cached motion if exists (read-only, no generation)
+        // #877: Read from per-customer motion.json first, fallback to legacy path
         // Validate it has .phases — old expansion files lack StrategicMotion shape
         let motion: import('./lib/motion-builder.ts').StrategicMotion | null = null
         try {
-          const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          const motionPathNew = resolve(CACHE_DIR, slug, 'motion.json')
+          const motionPathLegacy = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          const motionPath = existsSync(motionPathNew) ? motionPathNew : motionPathLegacy
           if (existsSync(motionPath)) {
             const parsed = JSON.parse(readFileSync(motionPath, 'utf-8'))
             if (parsed && Array.isArray(parsed.phases)) motion = parsed
@@ -515,9 +519,12 @@ export function createGraphRouter(): Hono {
         const graph = loadGraph(slug, CACHE_DIR)
         if (!graph) continue
 
+        // #877: Read from per-customer motion.json first, fallback to legacy path
         let motion: import('./lib/motion-builder.ts').StrategicMotion | null = null
         try {
-          const motionPath = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          const motionPathNew = resolve(CACHE_DIR, slug, 'motion.json')
+          const motionPathLegacy = resolve(CACHE_DIR, 'intelligence', `${slug}-expansion.json`)
+          const motionPath = existsSync(motionPathNew) ? motionPathNew : motionPathLegacy
           if (existsSync(motionPath)) {
             const parsed = JSON.parse(readFileSync(motionPath, 'utf-8'))
             if (parsed && Array.isArray(parsed.phases)) motion = parsed

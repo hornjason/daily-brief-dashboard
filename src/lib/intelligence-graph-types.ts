@@ -142,4 +142,6 @@ export interface CustomerGraph {
   edges: IntelligenceEdge[]
   /** Motion history — accumulated across graph rebuilds (#522) */
   history?: MotionHistoryEntry[]
+  /** Who triggered this graph build — on-demand, scheduled, or manual (#877) */
+  rebuiltBy?: string
 }

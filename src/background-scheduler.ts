@@ -1079,6 +1079,59 @@ export function initBackgroundScheduler(opts: {
     },
   })
 
+  // Intelligence Graph — rebuild every 6 hours (#877)
+  schedulerRegistry.register({
+    name: 'intelligence-graph-rebuild',
+    type: 'interval',
+    intervalMs: 6 * 60 * 60 * 1000, // 6 hours
+    enabled: true,
+    run: async () => {
+      console.log('[intelligence-graph] scheduled rebuild started')
+      const { generateAllGraphs, getExpansionMotion } = await import('./lib/expansion-motion-service.ts')
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+
+      // Collect SalesHub signals (same pattern as graph-routes.ts)
+      const saleshubModule = FeatureModuleRegistry.get('saleshub')
+      const saleshubContentModule = FeatureModuleRegistry.get('saleshub-content')
+      const playSignals: any[] = []
+      const tacticSignals: any[] = []
+
+      if (saleshubModule?.signals) {
+        try {
+          const signals = await saleshubModule.signals('_global')
+          for (const s of signals) {
+            const m = s.metadata ?? {}
+            if (m.tdpAlignment) playSignals.push(s)
+            else if (m.parentTdp !== undefined) tacticSignals.push(s)
+          }
+        } catch (e: any) {
+          console.warn('[intelligence-graph] SalesHub signal collection failed:', e?.message)
+        }
+      }
+      if (saleshubContentModule?.signals) {
+        try {
+          const signals = await saleshubContentModule.signals('_global')
+          tacticSignals.push(...signals.filter((s: any) => s.metadata?.parentTdp))
+        } catch (e: any) {
+          console.warn('[intelligence-graph] SalesHub content signal collection failed:', e?.message)
+        }
+      }
+
+      const result = await generateAllGraphs({
+        customers: customers.map(c => ({ name: c.name })),
+        getExpansionMotion,
+        deps: {
+          collectSignals: (slug: string) => FeatureModuleRegistry.collectAllSignals(slug),
+          playSignals,
+          tacticSignals,
+          rebuiltBy: 'scheduled',
+        },
+      })
+
+      console.log(`[intelligence-graph] scheduled rebuild complete: ${result.graphsBuilt} graphs, ${result.motionsGenerated} motions, ${result.errors.length} errors in ${result.durationMs}ms`)
+    },
+  })
+
   // NOTE: Email delivery is NOT migrated to the registry because it needs
   // to re-read config on each cycle to support live settings changes. This
   // requires a custom loop that can't be expressed in the registry's type system.

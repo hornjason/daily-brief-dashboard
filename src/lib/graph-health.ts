@@ -57,10 +57,14 @@ export interface CustomerHealthReport {
   totalEdges: number
   disconnectedNodeCount: number
   staleEdgeCount: number
+  /** Context note for stale edges — explains they are filtered at query time (#877) */
+  staleEdgeNote: string
   signalSourceCoverage: SignalSourceEntry[]
   coverageFraction: string
   isThinGraph: boolean
   motionCoverage: MotionCoverageInfo | null
+  /** Who triggered the last graph rebuild (#877) */
+  lastRebuiltBy: string
 }
 
 export interface PortfolioHealthReport {
@@ -195,10 +199,12 @@ export function computeCustomerGraphHealth(
     totalEdges: graph.edges.length,
     disconnectedNodeCount,
     staleEdgeCount,
+    staleEdgeNote: 'filtered at query time',
     signalSourceCoverage,
     coverageFraction,
     isThinGraph,
     motionCoverage,
+    lastRebuiltBy: graph.rebuiltBy ?? 'unknown',
   }
 }
 

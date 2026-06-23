@@ -39,10 +39,12 @@ interface CustomerHealthReport {
   totalEdges: number
   disconnectedNodeCount: number
   staleEdgeCount: number
+  staleEdgeNote?: string
   signalSourceCoverage: SignalSourceEntry[]
   coverageFraction: string
   isThinGraph: boolean
   motionCoverage: MotionCoverageInfo | null
+  lastRebuiltBy?: string
 }
 
 interface EdgeDetail {
@@ -262,8 +264,11 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
       {/* Row 4: Health Stats Summary */}
       <div className="flex items-center gap-6 text-xs text-text-secondary/70 pt-2 border-t border-border/30">
         <span>Disconnected nodes: <span className={report.disconnectedNodeCount > 0 ? 'text-yellow-400' : 'text-text-secondary'}>{report.disconnectedNodeCount}</span></span>
-        <span>Stale edges: <span className={report.staleEdgeCount > 0 ? 'text-yellow-400' : 'text-text-secondary'}>{report.staleEdgeCount}</span></span>
+        <span>Stale edges: <span className={report.staleEdgeCount > 0 ? 'text-yellow-400' : 'text-text-secondary'}>{report.staleEdgeCount}{report.staleEdgeNote ? ` (${report.staleEdgeNote})` : ''}</span></span>
         <span>Built: {new Date(report.builtAt).toLocaleString()}</span>
+        {report.lastRebuiltBy && report.lastRebuiltBy !== 'unknown' && (
+          <span className="text-text-secondary/50">via {report.lastRebuiltBy}</span>
+        )}
       </div>
     </div>
   )
@@ -485,6 +490,11 @@ export function GraphHealthPage() {
 
                     {/* Status Flags */}
                     <span className="flex-1 flex items-center justify-end gap-2">
+                      {report.lastRebuiltBy && report.lastRebuiltBy !== 'unknown' && (
+                        <span className="text-xs text-text-secondary/40">
+                          via {report.lastRebuiltBy}
+                        </span>
+                      )}
                       {report.isThinGraph && (
                         <span className="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">
                           Thin

@@ -42,6 +42,8 @@ export interface ExpansionMotionDeps {
   playSignals: Signal[]
   /** SalesHub tactic signals (portfolio-wide) */
   tacticSignals: Signal[]
+  /** Who triggered this build — stamped on persisted graph (#877) */
+  rebuiltBy?: 'on-demand' | 'scheduled' | 'manual'
 }
 
 export interface GraphDebugNode {
@@ -107,6 +109,9 @@ export async function getExpansionMotion(
     }
 
     graph = buildCustomerGraph(customerSlug, customerName, signals, graph)
+
+    // Stamp rebuiltBy on graph for health monitoring (#877)
+    graph.rebuiltBy = deps.rebuiltBy ?? 'on-demand'
 
     // Persist the rebuilt graph
     try {
@@ -214,6 +219,16 @@ export async function getExpansionMotion(
         console.warn(`[expansion-motion] Persona enrichment failed for ${customerSlug}:`, e?.message)
         // Continue — motion is still valid without enriched contacts
       }
+    }
+
+    // Persist motion to disk for health monitoring (#877)
+    try {
+      const { writeJsonAtomic } = await import('./atomic-write.ts')
+      const { resolve } = await import('path')
+      const motionPath = resolve(dataDir, customerSlug, 'motion.json')
+      writeJsonAtomic(motionPath, motion)
+    } catch (e: any) {
+      console.warn(`[expansion-motion] Failed to persist motion for ${customerSlug}:`, e?.message)
     }
   }
 
