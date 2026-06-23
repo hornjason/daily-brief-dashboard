@@ -462,35 +462,13 @@ export async function uploadManifestToDrive(
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     const drive = google.drive({ version: 'v3', auth })
 
-    // Find "SalesHub Products" folder
-    const productsFolderId = await findFolder(drive, parentFolderId, PRODUCTS_FOLDER_NAME)
-    if (!productsFolderId) {
-      console.warn('[saleshub-product-drive-sync] No "SalesHub Products" folder — skipping manifest upload')
-      return
-    }
+    // Find or create "SalesHub Products" folder
+    const productsFolderId = await findOrCreateFolder(drive, parentFolderId, PRODUCTS_FOLDER_NAME)
 
-    // Find product folder by slug
-    const foldersRes = await withQuotaRetry(
-      () => drive.files.list({
-        q: `'${productsFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id, name)',
-        pageSize: 100,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      }),
-      '[saleshub-product-drive-sync] list product folders for manifest upload',
-    )
+    // Find or create product folder by slug
+    const productFolderId = await findOrCreateFolder(drive, productsFolderId, productSlug)
 
-    const productFolder = (foldersRes.data.files ?? []).find(
-      f => f.name && slugify(f.name) === productSlug,
-    )
-
-    if (!productFolder?.id) {
-      console.warn(`[saleshub-product-drive-sync] Product folder not found for slug "${productSlug}" — skipping manifest upload`)
-      return
-    }
-
-    await uploadOrUpdateJson(drive, productFolder.id, '_pipeline-manifest.json', manifest)
+    await uploadOrUpdateJson(drive, productFolderId, '_pipeline-manifest.json', manifest)
     console.log(`[saleshub-product-drive-sync] Uploaded manifest for "${productSlug}" to Drive`)
   } catch (e: any) {
     console.warn(`[saleshub-product-drive-sync] Manifest upload failed for "${productSlug}": ${e.message}`)
