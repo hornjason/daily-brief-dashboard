@@ -29,11 +29,26 @@ import { getTdpByName } from './saleshub-knowledge-loader.ts'
 import { resolve as resolveMaterials } from './material-index.ts'
 import type { MaterialLink } from './material-index.ts'
 import { scoreTactics, type SignalDensity, nodeMatchesTdp } from './tactic-scorer.ts'
+import { normalizeTdp, getTdpKeywords } from './tdp-domains.ts'
 import type { TacticOutcome } from './deal-outcome-history.ts'
 import type { GeminiRecommendation, EnhancedGeminiRecommendation, MergedRecommendation } from './gemini-tactic-recommender.ts'
 import { sanitizePromptInput } from '../utils.ts'
 import { getDisplacementMap } from './competitive-vocabulary.ts'
 import { CONTEXT_PRIORITY, CONTEXT_VERB_MAP } from './motion-config.ts'
+
+// ── URL Sanitization (#882) ─────────────────────────────────────────────────
+
+/**
+ * Sanitize a URL from node properties: trim, cap length, reject non-URL values.
+ */
+function sanitizeUrl(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const url = String(raw).trim()
+  if (!url) return undefined
+  if (url.length > 500) return url.slice(0, 500)
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) return undefined
+  return url
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,19 +103,24 @@ export interface StrategicMotion {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** TDP-to-persona mapping: each TDP domain has its own natural buyer personas (#540) */
+/** TDP-to-persona mapping: uses canonical TDP names only (#882) */
 const TDP_PERSONAS: Record<string, string[]> = {
   'Automation': ['VP IT Operations', 'Director of Platform Engineering', 'IT Operations Lead'],
   'Container Management': ['CTO / Platform Engineering', 'VP Infrastructure', 'Director of Cloud Architecture'],
-  'Container Mgmt': ['CTO / Platform Engineering', 'VP Infrastructure', 'Director of Cloud Architecture'],
   'Server and Cloud Computing': ['VP Infrastructure', 'Cloud Architect', 'Director of IT Operations'],
   'AI Platform': ['Head of Data Science', 'CTO', 'VP AI/ML Engineering'],
-  'AI': ['Head of Data Science', 'CTO', 'VP AI/ML Engineering'],
-  'App Platform': ['VP Application Development', 'Director of Platform Engineering', 'CTO'],
   'Application Development': ['VP Application Development', 'Director of Platform Engineering', 'CTO'],
   'Virtualization': ['VP Infrastructure', 'Director of IT Operations', 'CIO'],
   'Management': ['VP IT Operations', 'Director of IT Operations', 'IT Operations Lead'],
   'Security': ['CISO', 'VP Security', 'Director of IT Security'],
+}
+
+/**
+ * Look up personas for a TDP, normalizing aliases to canonical names (#882).
+ */
+function getPersonasForTdp(tdp: string): string[] {
+  const normalized = normalizeTdp(tdp)
+  return TDP_PERSONAS[normalized] ?? TDP_PERSONAS[tdp] ?? []
 }
 
 /**
@@ -112,7 +132,7 @@ function derivePhasePersonas(
   fallbackPersonas: string[],
 ): string[] {
   const phaseTdps = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
-  const phasePersonas = [...new Set(phaseTdps.flatMap(tdp => TDP_PERSONAS[tdp] ?? []))]
+  const phasePersonas = [...new Set(phaseTdps.flatMap(tdp => getPersonasForTdp(tdp)))]
   return phasePersonas.length > 0 ? phasePersonas : fallbackPersonas
 }
 
@@ -246,7 +266,7 @@ function buildPhaseEvidence(
         evidence.push({
           module: moduleKey,
           fact: sanitizePromptInput(fact, 200),
-          url: String(node.properties?.url ?? '') || undefined,
+          url: sanitizeUrl(node.properties?.url as string),
         })
         continue
       }
@@ -288,7 +308,7 @@ function buildPhaseEvidence(
       evidence.push({
         module,
         fact: sanitizePromptInput(fact, 200),
-        url: String(node.properties?.url ?? '') || undefined,
+        url: sanitizeUrl(node.properties?.url as string),
       })
     }
   }
@@ -487,12 +507,13 @@ function buildPhaseName(prefix: string, tactics: MotionPhase['tactics']): string
  */
 function inferTdpFromProduct(productName: string): string | null {
   const lower = productName.toLowerCase()
-  if (lower.includes('ansible') || lower.includes('automation')) return 'Automation'
-  if (lower.includes('openshift') || lower.includes('container') || lower.includes('kubernetes')) return 'Container Mgmt'
-  if (lower.includes('rhel') || lower.includes('enterprise linux') || lower.includes('server')) return 'Server/Cloud OS'
-  if (lower.includes('virtualization') || lower.includes('virt')) return 'Virtualization'
+  if (lower.includes('openshift') || lower.includes('container') || lower.includes('kubernetes')) return normalizeTdp('Container Mgmt')
+  if (lower.includes('rhel') || lower.includes('enterprise linux') || lower.includes('server')) return normalizeTdp('Server/Cloud OS')
+  if (lower.includes('ansible') || lower.includes('automation') || lower.includes('aap')) return 'Automation'
   if (lower.includes('satellite')) return 'Management'
-  if (lower.includes('ai') || lower.includes('rhoai')) return 'AI Platform'
+  if (lower.includes('ai') || lower.includes('rhoai')) return normalizeTdp('AI Platform')
+  if (lower.includes('quay') || lower.includes('acs') || lower.includes('stackrox')) return 'Security'
+  if (lower.includes('virtualization') || lower.includes('virt')) return 'Virtualization'
   return null
 }
 
@@ -502,13 +523,14 @@ function inferTdpFromProduct(productName: string): string | null {
  */
 function extractCustomerTdpDomains(graph: CustomerGraph): Set<string> {
   const domains = new Set<string>()
+  const tdpKeywords = getTdpKeywords()
 
   // From subscription nodes
   const subs = findNodesByType(graph, 'subscription')
   for (const sub of subs) {
     const desc = String(sub.properties.productDescription ?? sub.name ?? '')
     const tdp = inferTdpFromProduct(desc)
-    if (tdp) domains.add(tdp)
+    if (tdp) domains.add(normalizeTdp(tdp))
   }
 
   // From case nodes (product field)
@@ -516,7 +538,7 @@ function extractCustomerTdpDomains(graph: CustomerGraph): Set<string> {
   for (const c of cases) {
     const product = String(c.properties.product ?? '')
     const tdp = inferTdpFromProduct(product)
-    if (tdp) domains.add(tdp)
+    if (tdp) domains.add(normalizeTdp(tdp))
   }
 
   // From play nodes (productAlignment)
@@ -524,7 +546,7 @@ function extractCustomerTdpDomains(graph: CustomerGraph): Set<string> {
   for (const play of plays) {
     const alignment = String(play.properties.productAlignment ?? '')
     const tdp = inferTdpFromProduct(alignment)
-    if (tdp) domains.add(tdp)
+    if (tdp) domains.add(normalizeTdp(tdp))
   }
 
   // From cloud spend → implies Server and Cloud Computing
@@ -532,7 +554,7 @@ function extractCustomerTdpDomains(graph: CustomerGraph): Set<string> {
   for (const prog of programs) {
     const progType = String(prog.properties.programType ?? '')
     if (progType === 'cloud-spend' || progType === 'marketplace') {
-      domains.add('Server and Cloud Computing')
+      domains.add(normalizeTdp('Server and Cloud Computing'))
     }
   }
 
@@ -541,7 +563,27 @@ function extractCustomerTdpDomains(graph: CustomerGraph): Set<string> {
   for (const p of products) {
     const name = String(p.properties.techName ?? p.name ?? '')
     const tdp = inferTdpFromProduct(name)
-    if (tdp) domains.add(tdp)
+    if (tdp) domains.add(normalizeTdp(tdp))
+  }
+
+  // Widen TDP discovery to engagement, intel, deal nodes (#880)
+  const engagementNodes = findNodesByType(graph, 'engagement')
+  for (const eng of engagementNodes) {
+    for (const [tdpName] of Object.entries(tdpKeywords)) {
+      if (nodeMatchesTdp(eng, tdpName)) domains.add(tdpName)
+    }
+  }
+  const intelNodes = findNodesByType(graph, 'intel')
+  for (const intel of intelNodes) {
+    for (const [tdpName] of Object.entries(tdpKeywords)) {
+      if (nodeMatchesTdp(intel, tdpName)) domains.add(tdpName)
+    }
+  }
+  const dealNodes = findNodesByType(graph, 'deal')
+  for (const deal of dealNodes) {
+    for (const [tdpName] of Object.entries(tdpKeywords)) {
+      if (nodeMatchesTdp(deal, tdpName)) domains.add(tdpName)
+    }
   }
 
   return domains

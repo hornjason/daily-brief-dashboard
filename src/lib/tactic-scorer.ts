@@ -21,6 +21,7 @@ import type {
 import { findActiveNodesByType, recencyWeight } from './graph-utils.ts'
 import type { MaterialLink } from './material-index.ts'
 import type { TacticOutcome } from './deal-outcome-history.ts'
+import { getTdpKeywords } from './tdp-domains.ts'
 
 /** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
 /** Node types that TacticScorer traverses for scoring (#594 ADR-033 gate) */
@@ -78,21 +79,9 @@ export function formatRecency(isoTimestamp: string): string {
 
 /**
  * TDP-domain keyword sets for matching node content to tactic domains.
- * Used to determine which boosts apply to which tactics.
+ * Sourced from tdp-domains.ts (single source of truth — #882).
  */
-const TDP_KEYWORDS: Record<string, string[]> = {
-  'Automation': ['ansible', 'automation', 'automate', 'playbook', 'ops', 'aap', 'puppet', 'chef', 'terraform'],
-  'Container Mgmt': ['openshift', 'container', 'kubernetes', 'k8s', 'docker', 'ocp', 'pod', 'helm'],
-  'Container Management': ['openshift', 'container', 'kubernetes', 'k8s', 'docker', 'ocp', 'pod', 'helm'],
-  'Server and Cloud Computing': ['rhel', 'linux', 'server', 'cloud', 'migrate', 'os', 'standardize'],
-  'AI': ['ai', 'ml', 'inference', 'model', 'rhoai', 'openshift ai', 'data science', 'gpu'],
-  'AI Platform': ['ai', 'ml', 'inference', 'model', 'rhoai', 'openshift ai', 'data science', 'gpu'],
-  'Virtualization': ['virtualization', 'virt', 'vmware', 'vsphere', 'vm', 'migrate', 'hypervisor'],
-  'Management': ['satellite', 'management', 'insights', 'patch', 'compliance'],
-  'Security': ['security', 'compliance', 'acs', 'stackrox', 'ciso'],
-  'App Platform': ['app', 'application', 'developer', 'devops', 'cicd', 'pipeline'],
-  'Application Development': ['app', 'application', 'developer', 'devops', 'cicd', 'pipeline'],
-}
+const TDP_KEYWORDS = getTdpKeywords()
 
 /**
  * Check if a node's content (name + properties) matches a given TDP domain.

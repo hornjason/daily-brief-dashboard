@@ -22,9 +22,10 @@ interface SignalSourceEntry {
 }
 
 interface MotionCoverageInfo {
-  referencedNodes: number
-  totalNodes: number
-  percentage: number
+  domainCoverage: number
+  signalBreadth: number
+  activeDomains: number
+  domainsWithEvidence: number
 }
 
 interface CustomerHealthReport {
@@ -249,7 +250,7 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
         </div>
       </div>
 
-      {/* Row 3: Motion Coverage */}
+      {/* Row 3: Motion Coverage — domain coverage + signal breadth (#882) */}
       {report.motionCoverage && (
         <div>
           <h4 className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
@@ -259,21 +260,24 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
             <div className="flex-1 h-4 bg-gray-800 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
-                  report.motionCoverage.percentage < 25 ? 'bg-red-500/60' :
-                  report.motionCoverage.percentage < 50 ? 'bg-yellow-500/60' :
+                  report.motionCoverage.domainCoverage < 33 ? 'bg-red-500/60' :
+                  report.motionCoverage.domainCoverage < 67 ? 'bg-yellow-500/60' :
                   'bg-green-500/60'
                 }`}
-                style={{ width: `${report.motionCoverage.percentage}%` }}
+                style={{ width: `${report.motionCoverage.domainCoverage}%` }}
               />
             </div>
             <span className={`text-sm font-medium tabular-nums ${
-              report.motionCoverage.percentage < 25 ? 'text-red-400' :
-              report.motionCoverage.percentage < 50 ? 'text-yellow-400' :
+              report.motionCoverage.domainCoverage < 33 ? 'text-red-400' :
+              report.motionCoverage.domainCoverage < 67 ? 'text-yellow-400' :
               'text-green-400'
             }`}>
-              {report.motionCoverage.referencedNodes}/{report.motionCoverage.totalNodes} nodes ({report.motionCoverage.percentage}%)
+              {report.motionCoverage.domainsWithEvidence}/{report.motionCoverage.activeDomains} domains ({report.motionCoverage.domainCoverage}%)
             </span>
-            {report.motionCoverage.percentage < 25 && (
+            <span className="text-xs text-text-secondary/60">
+              {report.motionCoverage.signalBreadth} types
+            </span>
+            {report.motionCoverage.domainCoverage < 33 && (
               <span className="text-xs text-red-400/70">Low coverage</span>
             )}
           </div>
@@ -514,15 +518,21 @@ export function GraphHealthPage() {
                       {report.coverageFraction}
                     </span>
 
-                    {/* Motion Coverage */}
-                    <span className="w-24 text-right text-sm tabular-nums">
+                    {/* Motion Coverage — domain coverage + signal breadth (#882) */}
+                    <span
+                      className="w-24 text-right text-sm tabular-nums"
+                      title={report.motionCoverage
+                        ? `Domain coverage: ${report.motionCoverage.domainsWithEvidence} of ${report.motionCoverage.activeDomains} TDP domains have evidence. Signal breadth: ${report.motionCoverage.signalBreadth} distinct source types contribute.`
+                        : 'No motion data'}
+                    >
                       {report.motionCoverage ? (
                         <span className={
-                          report.motionCoverage.percentage < 25 ? 'text-red-400' :
-                          report.motionCoverage.percentage < 50 ? 'text-yellow-400' :
+                          report.motionCoverage.domainCoverage < 33 ? 'text-red-400' :
+                          report.motionCoverage.domainCoverage < 67 ? 'text-yellow-400' :
                           'text-green-400'
                         }>
-                          {report.motionCoverage.percentage}%
+                          {report.motionCoverage.domainsWithEvidence}/{report.motionCoverage.activeDomains}
+                          <span className="text-text-secondary/50 text-xs ml-0.5">({report.motionCoverage.domainCoverage}%)</span>
                         </span>
                       ) : (
                         <span className="text-text-secondary/40">--</span>
