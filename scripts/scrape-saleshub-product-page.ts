@@ -2438,6 +2438,7 @@ export async function scrapeProductPage(
     // Write unified pipeline manifest (#874) — replaces _completeness.json
     computeGateSummary(manifest)
     writeManifest(manifest, configOutputDir)
+    writeManifest(manifest, cacheOutputDir)
     console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM, Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
     // ── Step 6: Inline enrichment — runs in the SAME process as the scraper ──
@@ -2502,6 +2503,7 @@ export async function scrapeProductPage(
         const enrichment = await enrichProductDocuments(productSlug, enrichDocs, undefined, configOutputDir)
         if (enrichment) {
           writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
+          writeJsonAtomic(resolve(cacheOutputDir, '_enriched.json'), enrichment)
           console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
 
           // Re-read manifest from disk (enrichment already wrote Gate 3 data)
