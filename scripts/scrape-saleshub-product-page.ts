@@ -15,7 +15,7 @@
 
 import { chromium } from '@playwright/test'
 import type { Page, Locator } from '@playwright/test'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
 import { resolve, relative } from 'path'
 import type { BrowserContext } from '@playwright/test'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
