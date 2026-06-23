@@ -50,6 +50,41 @@ That's it. The installer handles prerequisites, pulls the container, and opens t
 
 ---
 
+## Available Pods & Regions
+
+During setup, you select the pods and regions you manage. The shared L3 data source provides nightly-synced subscription, pipeline, and cloud spend data for each pod.
+
+### West Commercial
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Northwest** | WEST_COMM_CORP_NORTHWEST | Active |
+| **Southwest** | WEST_COMM_CORP_SOUTHWEST | Active |
+| **North Central** | WEST_COMM_CORP_NORTH_CENTRAL | Active |
+| **South Central** | WEST_COMM_CORP_SOUTH_CENTRAL | Active |
+
+### East Commercial
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
+| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
+| **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
+| **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
+
+### Central Enterprise
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **TOLA** | CENTRAL_ENT_TOLA | Active |
+| **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Active |
+
+**7 pods active** across 3 regions. Each pod includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
+
+> Want your region or pod added? Email **jhorn@redhat.com** with your Salesforce report ID and territory codes.
+
+---
+
 ## Features
 
 ### Command Center — Your Daily Brief
