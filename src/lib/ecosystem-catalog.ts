@@ -80,7 +80,8 @@ export function loadEcosystemPartner(filePath: string): EcosystemPartnerCache | 
  */
 export function loadAllEcosystemPartners(): EcosystemPartnerCache[] {
   const cacheDir = getEcosystemCacheDir()
-  const templateDir = resolve(process.env.CONFIG_DIR ?? 'config', '..', 'config-templates', 'ecosystem-catalog')
+  const appDir = resolve(import.meta.dir, '..', '..')
+  const templateDir = resolve(appDir, 'config-templates', 'ecosystem-catalog')
   const dir = (existsSync(cacheDir) && readdirSync(cacheDir).some(f => f.endsWith('.json')))
     ? cacheDir
     : existsSync(templateDir) ? templateDir : cacheDir
