@@ -13,7 +13,7 @@ import {
   type QualityValidator,
   type QualityScorecard,
   type QualityCheck,
-  initialScorecard,
+  buildScorecard,
 } from '../gemini-quality-gate.ts'
 
 const VALID_CATEGORIES = new Set([
@@ -151,9 +151,6 @@ export const documentIntelligenceValidator: QualityValidator = {
   passThreshold: 65,
   validate(output: string): QualityScorecard {
     const checks = checkDocumentIntelligence(output)
-    const passed = checks.filter(c => c.passed).length
-    const total = checks.length
-    const score = total > 0 ? Math.round((passed / total) * 100) : 0
-    return { ...initialScorecard(score), checks }
+    return buildScorecard('document-intelligence', 65, checks)
   },
 }

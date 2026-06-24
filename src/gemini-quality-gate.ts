@@ -137,9 +137,11 @@ export function buildScorecard(
   passThreshold: number,
   checks: QualityCheck[]
 ): QualityScorecard {
+  const hasRequiredFailure = checks.some(c => c.severity === 'required' && !c.passed)
   const passed = checks.filter(c => c.passed).length
   const total = checks.length
-  const score = total > 0 ? Math.round((passed / total) * 100) : 0
+  const rawScore = total > 0 ? Math.round((passed / total) * 100) : 0
+  const score = hasRequiredFailure ? 0 : rawScore
   const failures = checks.filter(c => !c.passed)
 
   return {
