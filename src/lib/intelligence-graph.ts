@@ -934,76 +934,72 @@ export function buildCustomerGraph(
     }
   }
 
-  // ── Cross-reference pass for competitive-intel nodes (#887) ──────────────
-  // Tags competitive-intel nodes with crossReferenced: true/false based on
-  // whether the competitor matches customer signals. Uses displacement
-  // vocabulary as fallback when direct entity matching fails.
+  // ── Cross-reference pass for ALL portfolio-scope nodes (#884 + #887) ─────
+  // Tags portfolio nodes with crossReferenced: true/false based on entity
+  // overlap with customer-specific nodes. Customer-specific nodes always true.
   {
-    // Collect customer node names and property values for entity matching
-    const customerNodeNames: string[] = []
-    const customerNodeProperties: string[] = []
+    const customerSources = new Set(['subscriptions', 'cases', 'pipeline', 'tech-stack', 'emails', 'ccsp', 'customer-docs', 'customer-product-intel'])
+    const portfolioSources = new Set([
+      'competitive-intel', 'news-radar', 'rh-rss', 'rh-events',
+      'product-intel', 'ecosystem-catalog', 'partner-catalog', 'saleshub-products',
+    ])
+
+    // Collect entity names from customer-specific nodes
+    const customerNodeNames = new Set<string>()
+    const customerNodeProperties = new Set<string>()
     for (const node of Object.values(nodes)) {
-      if (node.type === 'customer' || node.type === 'intel') continue
-      customerNodeNames.push(node.name.toLowerCase())
-      for (const val of Object.values(node.properties)) {
-        if (typeof val === 'string' && val.length > 2) {
-          customerNodeProperties.push(val.toLowerCase())
+      if (customerSources.has(node.sourceModule)) {
+        customerNodeNames.add(node.name.toLowerCase())
+        for (const val of Object.values(node.properties)) {
+          if (typeof val === 'string' && val.length > 3) {
+            customerNodeProperties.add(val.toLowerCase())
+          }
         }
       }
     }
 
     for (const node of Object.values(nodes)) {
-      if (node.sourceModule !== 'competitive-intel') continue
-      const competitor = String(node.properties?.competitor ?? '').toLowerCase()
-      if (!competitor) continue
+      if (portfolioSources.has(node.sourceModule)) {
+        const nodeName = node.name.toLowerCase()
+        const competitor = String(node.properties?.competitor ?? '').toLowerCase()
+        const partnerName = String(node.properties?.partnerName ?? '').toLowerCase()
+        const product = String(node.properties?.product ?? '').toLowerCase()
 
-      // Direct entity matching: check if competitor name appears in any customer node
-      let matched = false
-      for (const name of customerNodeNames) {
-        if (name.includes(competitor) || competitor.includes(name)) {
-          matched = true
-          break
-        }
-      }
-      if (!matched) {
-        for (const prop of customerNodeProperties) {
-          if (prop.includes(competitor) || competitor.includes(prop)) {
-            matched = true
-            break
+        const entityToCheck = [nodeName, competitor, partnerName, product].filter(e => e.length > 3)
+
+        const matches: string[] = []
+        for (const entity of entityToCheck) {
+          for (const cn of customerNodeNames) {
+            if (cn.includes(entity) || entity.includes(cn)) matches.push(cn)
+          }
+          for (const prop of customerNodeProperties) {
+            if (prop.includes(entity) || entity.includes(prop)) matches.push(prop)
           }
         }
-      }
 
-      // Displacement vocabulary fallback (#887): if no direct entity match,
-      // check if the competitor's displacement technologies match customer nodes
-      if (!matched) {
-        try {
-          const displacementMap = getDisplacementMap()
-          const entry = displacementMap.get(competitor)
-          if (entry) {
-            // Check if the Red Hat displacement product matches customer nodes
-            const redHatLower = entry.redHat.toLowerCase()
-            for (const name of customerNodeNames) {
-              if (name.includes(redHatLower) || redHatLower.includes(name)) {
-                matched = true
-                break
+        // Displacement vocabulary fallback for competitive-intel (#887)
+        if (matches.length === 0 && node.sourceModule === 'competitive-intel' && competitor) {
+          try {
+            const displacementMap = getDisplacementMap()
+            const entry = displacementMap.get(competitor)
+            if (entry) {
+              const redHatLower = entry.redHat.toLowerCase()
+              for (const cn of customerNodeNames) {
+                if (cn.includes(redHatLower) || redHatLower.includes(cn)) matches.push(`displacement:${entry.redHat}`)
               }
-            }
-            if (!matched) {
               for (const prop of customerNodeProperties) {
-                if (prop.includes(redHatLower) || redHatLower.includes(prop)) {
-                  matched = true
-                  break
-                }
+                if (prop.includes(redHatLower) || redHatLower.includes(prop)) matches.push(`displacement:${entry.redHat}`)
               }
             }
-          }
-        } catch {
-          // competitive-vocabulary may not be available
+          } catch { /* competitive-vocabulary may not be available */ }
         }
-      }
 
-      ;(node as any).crossReferenced = matched
+        node.crossReferenced = matches.length > 0
+        node.crossRefEvidence = [...new Set(matches)].slice(0, 5)
+      } else {
+        // Customer-specific nodes are always cross-referenced
+        node.crossReferenced = true
+      }
     }
   }
 
