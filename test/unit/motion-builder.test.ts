@@ -246,10 +246,10 @@ describe('Motion Builder — buildMotion', () => {
     expect(motion).toBeNull()
   })
 
-  it('produces motion with single play node from subscription (#573) — suppressed when sparse (#595)', async () => {
+  it('produces motion with single play node from subscription (#573) — now allowed with relaxed gate (#890)', async () => {
     // Single subscription → 1 play node via TDP mapping.
-    // #595: Graph has only 2 node types (subscription + play), which is < 3,
-    // so all phases are suppressed due to insufficient signal density.
+    // #890: Relaxed suppression from size<3 to size<2. Graph with 2 node types
+    // (subscription + play) now passes the gate since recommended-actions provides fallback.
     const minimalSignals: Signal[] = [
       {
         source: 'subscriptions', type: 'subscription', headline: 'OpenShift',
@@ -259,8 +259,8 @@ describe('Motion Builder — buildMotion', () => {
     ]
     const graph = buildCustomerGraph('sub-only', 'Sub Only Corp', minimalSignals)
     const motion = await buildMotion(graph, 'sub-only', 'Sub Only Corp', SALESHUB_PLAY_SIGNALS, SALESHUB_TACTIC_SIGNALS)
-    // #595: With < 3 signal source types, phases are suppressed → null motion
-    expect(motion).toBeNull()
+    // #890: With size<2 gate, 2 node types now pass — motion is produced
+    expect(motion).not.toBeNull()
   })
 
   it('produces motion with correct title from matched sales play', async () => {

@@ -951,7 +951,7 @@ export function buildCustomerGraph(
       if (customerSources.has(node.sourceModule)) {
         customerNodeNames.add(node.name.toLowerCase())
         for (const val of Object.values(node.properties)) {
-          if (typeof val === 'string' && val.length > 3) {
+          if (typeof val === 'string' && val.length > 4) {
             customerNodeProperties.add(val.toLowerCase())
           }
         }
@@ -965,7 +965,7 @@ export function buildCustomerGraph(
         const partnerName = String(node.properties?.partnerName ?? '').toLowerCase()
         const product = String(node.properties?.product ?? '').toLowerCase()
 
-        const entityToCheck = [nodeName, competitor, partnerName, product].filter(e => e.length > 3)
+        const entityToCheck = [nodeName, competitor, partnerName, product].filter(e => e.length > 4)
 
         const matches: string[] = []
         for (const entity of entityToCheck) {
@@ -1059,8 +1059,9 @@ export function persistGraph(graph: CustomerGraph, dataDir: string): void {
       const currentRaw = readFileSync(filePath, 'utf-8')
       const previousPath = resolve(dataDir, graph.customerId, 'intelligence-graph.previous.json')
       writeJsonAtomic(previousPath, JSON.parse(currentRaw))
-    } catch {
-      // If we can't read/parse the current file, skip creating previous snapshot
+    } catch (backupErr: any) {
+      console.warn(`[intelligence-graph] Backup write failed for ${graph.customerId}: ${backupErr?.message}`)
+      _persistErrorCount++
     }
   }
 

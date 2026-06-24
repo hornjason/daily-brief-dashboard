@@ -1447,8 +1447,9 @@ export async function buildMotion(
   const graphNodeTypes = new Set(
     Object.values(graph.nodes).map(n => n.type).filter(t => t !== 'customer')
   )
-  if (graphNodeTypes.size < 3) {
-    // Suppress all phases — graph too sparse for meaningful recommendations
+  if (graphNodeTypes.size < 2) {
+    // Suppress all phases — graph has only the customer hub node (#890)
+    // Relaxed from <3 to <2 since recommended-actions provides fallback intelligence
     phases.length = 0
   }
 
