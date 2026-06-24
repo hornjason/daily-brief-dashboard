@@ -69,6 +69,8 @@ export class BearerCaseClient implements CaseClient {
         product: c.product || undefined,
         customerName: accountToCustomer?.get(c.accountNumber),
         casesSource: 'account_number',
+        description: c.description || undefined,
+        contactName: c.contactName || undefined,
       }
       out.push(supportCase)
     }

@@ -90,6 +90,8 @@ export interface SupportCase {
   /** 'name_match' = found via company name search; 'account_number' = found via direct account number scrape */
   casesSource?: 'name_match' | 'account_number'
   customerName?: string  // BKL-UX55: resolved at scrape time from accountNumber → customer map
+  description?: string
+  contactName?: string
 }
 
 export interface Renewal {

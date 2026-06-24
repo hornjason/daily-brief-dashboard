@@ -594,6 +594,8 @@ export async function runRhScrapeWithState(): Promise<void> {
             daysOpen: 0,
             product: c.product,
             casesSource: c.casesSource,
+            description: (c as any).description || undefined,
+            contactName: (c as any).contactName || undefined,
           }
         }))
         // Re-write cache with merged results

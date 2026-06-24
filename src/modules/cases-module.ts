@@ -96,6 +96,8 @@ FeatureModuleRegistry.register({
           severity: c.severity,
           product: c.product,
           daysOpen: c.daysOpen,
+          caseDescription: c.description || undefined,
+          contactName: c.contactName || undefined,
         },
       }
     })
