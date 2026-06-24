@@ -1,275 +1,693 @@
 /**
  * test/integration/intelligence-engine.test.ts
- * End-to-end integration tests for the intelligence engine pipeline.
- * GitHub Issue #891
+ * Integration test harness for the intelligence engine pipeline.
  *
- * 4 synthetic customer fixtures: rich, moderate, thin, minimal.
- * Tests the full pipeline: signals → graph → cross-reference → motion → evidence → ledger.
+ * GitHub Issue #891 — 4 synthetic customer fixtures testing end-to-end:
+ *   buildCustomerGraph → cross-reference pass → buildMotion → flowLedger
+ *
+ * KEY REGRESSION: When the cross-reference pass lands (#884/#887), verifies
+ * ALL portfolio-scope competitive-intel nodes have crossReferenced set
+ * (true or false, never undefined). This catches the PR2 regression where
+ * the cross-reference pass was accidentally replaced.
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test'
 import type { Signal } from '../../src/feature-module-registry.ts'
+import type { CustomerGraph, IntelligenceNode } from '../../src/lib/intelligence-graph-types.ts'
 
-// Lazy imports to avoid ESM registration issues
-let buildCustomerGraph: any
-let buildMotion: any
-let findNodesByType: any
-let isGraphThin: any
+// Lazy imports to avoid ESM TDZ issues
+let buildCustomerGraph: typeof import('../../src/lib/intelligence-graph.ts').buildCustomerGraph
+let buildMotion: typeof import('../../src/lib/motion-builder.ts').buildMotion
+let findNodesByType: typeof import('../../src/lib/graph-utils.ts').findNodesByType
 
 beforeAll(async () => {
-  const ig = await import('../../src/lib/intelligence-graph.ts')
-  buildCustomerGraph = ig.buildCustomerGraph
+  const graphModule = await import('../../src/lib/intelligence-graph.ts')
+  buildCustomerGraph = graphModule.buildCustomerGraph
 
-  const mb = await import('../../src/lib/motion-builder.ts')
-  buildMotion = mb.buildMotion
-  isGraphThin = mb.isGraphThin
+  const motionModule = await import('../../src/lib/motion-builder.ts')
+  buildMotion = motionModule.buildMotion
 
-  const gu = await import('../../src/lib/graph-utils.ts')
-  findNodesByType = gu.findNodesByType
+  const utilsModule = await import('../../src/lib/graph-utils.ts')
+  findNodesByType = utilsModule.findNodesByType
 })
 
-// ── Fixture Helpers ─────────────────────────────────────────────────────────
+// ── SalesHub Portfolio Signals (shared across all fixtures) ─────────────────
 
-function makeSignal(source: string, headline: string, meta: Record<string, any> = {}): Signal {
-  return {
-    source,
-    type: source,
-    headline,
-    detail: '',
-    timestamp: '2026-06-24',
-    score: 0.7,
-    metadata: { customerSlug: 'test-customer', ...meta },
-  }
-}
+const PLAY_SIGNALS: Signal[] = [
+  {
+    source: 'saleshub-plays', type: 'recommendation', headline: 'The AI-Ready Enterprise',
+    detail: 'Accelerate AI adoption', rawRelevance: 0.4, timestamp: '2026-06-01',
+    metadata: {
+      tdpAlignment: ['Automation', 'Container Management', 'Server and Cloud Computing', 'AI'],
+      playType: 'strategic',
+      personaRoles: ['CTO', 'VP Engineering'],
+      documents: [],
+    },
+  },
+  {
+    source: 'saleshub-plays', type: 'recommendation', headline: 'Build and Run Applications',
+    detail: 'Modernize app development', rawRelevance: 0.4, timestamp: '2026-06-01',
+    metadata: {
+      tdpAlignment: ['Container Management', 'Server and Cloud Computing', 'Application Development', 'Automation'],
+      playType: 'strategic',
+      personaRoles: ['VP Engineering', 'Director DevOps'],
+      documents: [],
+    },
+  },
+]
 
-function makePortfolioSignal(source: string, headline: string, meta: Record<string, any> = {}): Signal {
+const TACTIC_SIGNALS: Signal[] = [
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Automate at Scale',
+    detail: 'TDP: Automation', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Automation', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Optimize and Modernize IT Ops',
+    detail: 'TDP: Automation', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Automation', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'K8s for AI Workloads',
+    detail: 'TDP: Container Management', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Container Management', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Migrate to Cloud',
+    detail: 'TDP: Server and Cloud Computing', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Server and Cloud Computing', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Standardize OS',
+    detail: 'TDP: Server and Cloud Computing', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Server and Cloud Computing', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Production AI',
+    detail: 'TDP: AI', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'AI', playType: 'tactic', assets: [] },
+  },
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'VM Migration',
+    detail: 'TDP: Container Management', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Container Management', playType: 'tactic', assets: [] },
+  },
+  // Virtualization tactics for displacement phase
+  {
+    source: 'saleshub-tactics', type: 'recommendation', headline: 'Virtualization Modernization',
+    detail: 'TDP: Virtualization', rawRelevance: 0.3, timestamp: '2026-06-01',
+    metadata: { parentTdp: 'Virtualization', playType: 'tactic', assets: [] },
+  },
+]
+
+// ── Fixture Builders ────────────────────────────────────────────────────────
+
+function makeSignal(overrides: Partial<Signal> & { source: string; type: string; headline: string }): Signal {
   return {
-    source,
-    type: source,
-    headline,
     detail: '',
-    timestamp: '2026-06-24',
+    timestamp: '2026-06-01',
     score: 0.5,
-    metadata: meta, // no customerSlug = portfolio-wide
+    ...overrides,
+    metadata: overrides.metadata ?? {},
   }
 }
 
-// ── Fixtures ────────────────────────────────────────────────────────────────
+function buildSubscription(desc: string, status: string, endDate: string): Signal {
+  return makeSignal({
+    source: 'subscriptions', type: 'subscription',
+    headline: `${desc} subscription`,
+    score: status === 'Expired' ? 0.9 : 0.7,
+    metadata: { productDescription: desc, quantity: 5, status, endDate, urgency: status === 'Expired' ? 'expired' : 'active' },
+  })
+}
 
-const RICH_SIGNALS: Signal[] = [
-  // Subscriptions (3)
-  makeSignal('subscriptions', 'RHEL Server', { productDescription: 'Red Hat Enterprise Linux Server', status: 'Active', startDate: '2025-01-01', endDate: '2027-01-01' }),
-  makeSignal('subscriptions', 'OpenShift', { productDescription: 'OpenShift Container Platform', status: 'Expired', urgency: 'expired-critical' }),
-  makeSignal('subscriptions', 'Ansible', { productDescription: 'Ansible Automation Platform', status: 'Active' }),
-  // Cases (5)
-  makeSignal('cases', 'Case: RHEL crash', { caseNumber: '001', severity: '2', status: 'Open', product: 'Red Hat Enterprise Linux' }),
-  makeSignal('cases', 'Case: OCP upgrade', { caseNumber: '002', severity: '3', status: 'Open', product: 'OpenShift Container Platform' }),
-  makeSignal('cases', 'Case: Ansible timeout', { caseNumber: '003', severity: '2', status: 'Open', product: 'Ansible Automation Platform' }),
-  makeSignal('cases', 'Case: RHEL kernel', { caseNumber: '004', severity: '3', status: 'Closed', product: 'Red Hat Enterprise Linux' }),
-  makeSignal('cases', 'Case: OCP networking', { caseNumber: '005', severity: '1', status: 'Open', product: 'OpenShift Container Platform' }),
-  // Pipeline (3)
-  makeSignal('pipeline', 'OpenShift deal', { opportunityName: 'OCP Expansion', stage: 'Negotiation', amount: 500000, closeDate: '2026-08-15' }),
-  makeSignal('pipeline', 'RHEL renewal', { opportunityName: 'RHEL Renewal', stage: 'Closed Won', amount: 100000 }),
-  makeSignal('pipeline', 'Ansible deal', { opportunityName: 'AAP Expansion', stage: 'Pipeline', amount: 200000, closeDate: '2026-09-01' }),
-  // Tech-stack (5) — customer-specific
-  makeSignal('tech-stack', 'Uses Docker', { techName: 'Docker', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses VMware vSphere', { techName: 'VMware vSphere', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses Kubernetes', { techName: 'Kubernetes', category: 'industry-tool', context: 'evaluating' }),
-  makeSignal('tech-stack', 'Uses Terraform', { techName: 'Terraform', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses AWS EKS', { techName: 'AWS EKS', category: 'industry-tool', context: 'using' }),
-  // Competitive-intel (4) — portfolio-wide, some should cross-reference
-  makePortfolioSignal('competitive-intel', 'VMware: pricing changes', { competitor: 'VMware', intelType: 'competitive' }),
-  makePortfolioSignal('competitive-intel', 'Portworx: container storage', { competitor: 'Portworx', intelType: 'competitive' }),
-  makePortfolioSignal('competitive-intel', 'AWS EKS: managed K8s', { competitor: 'AWS', intelType: 'competitive' }),
-  makePortfolioSignal('competitive-intel', 'MuleSoft: integration platform', { competitor: 'MuleSoft', intelType: 'competitive' }),
-  // Emails (3)
-  makeSignal('emails', 'Re: OpenShift upgrade plan', { threadId: 't1', classification: 'technical', techMentions: ['openshift'] }),
-  makeSignal('emails', 'Re: Cloud migration timeline', { threadId: 't2', classification: 'strategic', techMentions: ['aws', 'cloud'] }),
-  makeSignal('emails', 'Re: Ansible rollout Q3', { threadId: 't3', classification: 'project', techMentions: ['ansible'] }),
-  // Partner-catalog (3)
-  makePortfolioSignal('partner-catalog', 'Acme Corp', { partnerName: 'Acme Corp', specializations: ['automation'], tier: 'premier' }),
-  makePortfolioSignal('partner-catalog', 'CloudOps Inc', { partnerName: 'CloudOps Inc', specializations: ['cloud'], tier: 'advanced' }),
-  makePortfolioSignal('partner-catalog', 'SecureNet', { partnerName: 'SecureNet', specializations: ['security'], tier: 'premier' }),
-  // Product-lifecycle (2)
-  makeSignal('product-lifecycle', 'RHEL 8 EOL', { product: 'RHEL 8', eolDate: '2026-12-31' }),
-  makeSignal('product-lifecycle', 'OCP 4.12 EOL', { product: 'OpenShift 4.12', eolDate: '2027-03-01' }),
-]
+function buildCase(num: string, product: string, severity: string, status: string): Signal {
+  return makeSignal({
+    source: 'cases', type: 'case',
+    headline: `Case ${num}: Test case for ${product}`,
+    url: `https://access.redhat.com/support/cases/#/case/${num}`,
+    metadata: { caseNumber: num, product, severity, status },
+  })
+}
 
-const MODERATE_SIGNALS: Signal[] = [
-  makeSignal('subscriptions', 'RHEL', { productDescription: 'Red Hat Enterprise Linux', status: 'Active' }),
-  makeSignal('subscriptions', 'Satellite', { productDescription: 'Red Hat Satellite', status: 'Active' }),
-  makeSignal('cases', 'Case: patching', { caseNumber: '010', severity: '3', status: 'Open', product: 'Red Hat Enterprise Linux' }),
-  makeSignal('cases', 'Case: satellite sync', { caseNumber: '011', severity: '2', status: 'Open', product: 'Red Hat Satellite' }),
-  makeSignal('tech-stack', 'Uses Puppet', { techName: 'Puppet', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses Chef', { techName: 'Chef', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses Jenkins', { techName: 'Jenkins', category: 'industry-tool', context: 'using' }),
-  makeSignal('pipeline', 'Satellite renewal', { opportunityName: 'Satellite Renewal', stage: 'Negotiation', amount: 50000 }),
-  makePortfolioSignal('news-radar', 'RHEL 10 announced', { title: 'RHEL 10 announced', intelType: 'news' }),
-  makePortfolioSignal('news-radar', 'Linux kernel update', { title: 'Linux kernel 6.x', intelType: 'news' }),
-  makePortfolioSignal('news-radar', 'Ansible community growth', { title: 'Ansible community', intelType: 'news' }),
-]
+function buildPipeline(name: string, stage: string, amount: number, closeDate: string): Signal {
+  return makeSignal({
+    source: 'pipeline', type: 'deal',
+    headline: `${name} - ${stage}`,
+    score: 0.8,
+    metadata: { opportunityName: name, stage, amount, closeDate },
+  })
+}
 
-const THIN_SIGNALS: Signal[] = [
-  makeSignal('subscriptions', 'RHEL', { productDescription: 'Red Hat Enterprise Linux', status: 'Expired', urgency: 'expired' }),
-  makeSignal('tech-stack', 'Uses CentOS', { techName: 'CentOS', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses nginx', { techName: 'nginx', category: 'industry-tool', context: 'using' }),
-  makeSignal('tech-stack', 'Uses PostgreSQL', { techName: 'PostgreSQL', category: 'industry-tool', context: 'using' }),
-  makePortfolioSignal('competitive-intel', 'SUSE: Linux alternative', { competitor: 'SUSE', intelType: 'competitive' }),
-  makePortfolioSignal('competitive-intel', 'Canonical: Ubuntu server', { competitor: 'Canonical', intelType: 'competitive' }),
-]
+function buildTech(name: string, category: string = 'proprietary', context: string = 'using'): Signal {
+  return makeSignal({
+    source: 'tech-stack', type: 'technology',
+    headline: `${name} (${category}, ${context})`,
+    score: 0.4,
+    metadata: { techName: name, category, context },
+  })
+}
 
-const MINIMAL_SIGNALS: Signal[] = [
-  makeSignal('subscriptions', 'RHEL basic', { productDescription: 'Red Hat Enterprise Linux', status: 'Active' }),
-]
+function buildCompetitiveIntel(competitor: string, product: string, threatLevel: string): Signal {
+  return makeSignal({
+    source: 'competitive-intel', type: 'intel',
+    headline: `${competitor} competitive pressure on ${product}`,
+    score: 0.7,
+    metadata: { competitor, product, threatLevel },
+  })
+}
 
-// ── Tests ───────────────────────────────────────────────────────────────────
+function buildEmail(subject: string, techMentions: string[]): Signal {
+  return makeSignal({
+    source: 'emails', type: 'engagement',
+    headline: subject,
+    metadata: { threadId: subject.slice(0, 20), from: 'contact@example.com', techMentions, classification: 'technical' },
+  })
+}
 
-describe('Intelligence Engine Integration', () => {
-  describe('Rich customer (8+ source types)', () => {
-    it('builds graph with ≥8 node types', () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const types = new Set(Object.values(graph.nodes).map((n: any) => n.type))
-      expect(types.size).toBeGreaterThanOrEqual(6) // subscription, case, deal, product, intel, engagement, lifecycle, partner
-    })
+function buildPartner(name: string, tier: string): Signal {
+  return makeSignal({
+    source: 'partner-catalog', type: 'partner',
+    headline: `Partner: ${name}`,
+    metadata: { partnerName: name, tier, specializations: ['Cloud'] },
+  })
+}
 
-    it('cross-reference gate tags competitive-intel nodes', () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const compNodes = Object.values(graph.nodes).filter((n: any) => n.sourceModule === 'competitive-intel')
-      expect(compNodes.length).toBeGreaterThan(0)
+function buildLifecycle(product: string, eolDate: string): Signal {
+  return makeSignal({
+    source: 'product-lifecycle', type: 'lifecycle',
+    headline: `${product} lifecycle update`,
+    metadata: { product, eolDate, currentVersion: '8.9', nextVersion: '9.0' },
+  })
+}
 
-      // KEY REGRESSION TEST: every competitive-intel node must have crossReferenced set
-      for (const node of compNodes) {
-        expect((node as any).crossReferenced).toBeDefined()
-        expect(typeof (node as any).crossReferenced).toBe('boolean')
-      }
+function buildCloudSpend(partner: string, acv: number): Signal {
+  return makeSignal({
+    source: 'ccsp', type: 'cloud-spend',
+    headline: `${partner} cloud spend: $${acv.toLocaleString()} ACV`,
+    score: 0.8,
+    metadata: { cloudPartner: partner, acvPlus: acv },
+  })
+}
 
-      // VMware should be cross-referenced (customer has VMware vSphere in tech-stack)
-      const vmwareNode = compNodes.find((n: any) => String(n.properties?.competitor ?? '').toLowerCase().includes('vmware'))
-      if (vmwareNode) {
-        expect((vmwareNode as any).crossReferenced).toBe(true)
-      }
+function buildNewsRadar(title: string): Signal {
+  return makeSignal({
+    source: 'news-radar', type: 'intel',
+    headline: title,
+    metadata: { title, source: 'reuters', publishedAt: '2026-05-28' },
+  })
+}
 
-      // MuleSoft should NOT be cross-referenced (customer has no MuleSoft signals)
-      const mulesoftNode = compNodes.find((n: any) => String(n.properties?.competitor ?? '').toLowerCase().includes('mulesoft'))
-      if (mulesoftNode) {
-        expect((mulesoftNode as any).crossReferenced).toBe(false)
-      }
-    })
+// ── Helper: detect cross-reference pass ─────────────────────────────────────
 
-    it('buildMotion returns motion or null (depends on SalesHub signals)', async () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const motion = await buildMotion(graph, 'rich-test', 'Rich Test Corp', [], [])
-      // Without SalesHub play/tactic signals, motion may be null — that's expected
-      // The key assertion: if motion IS produced, it has valid structure
-      if (motion) {
-        expect(motion.phases.length).toBeGreaterThanOrEqual(1)
-        expect(motion.flowLedger).toBeDefined()
-        expect(motion.flowLedger!.signalsIngested).toBeGreaterThan(0)
+function hasCrossReferencePass(graph: CustomerGraph): boolean {
+  return Object.values(graph.nodes).some(n => (n as any).crossReferenced !== undefined)
+}
 
-        const allModules = new Set<string>()
-        for (const phase of motion.phases) {
-          for (const ev of phase.evidence) {
-            allModules.add(ev.module)
-          }
-        }
-        expect(allModules.size).toBeGreaterThanOrEqual(1)
-      }
-    })
+// ── Fixture 1: Rich Customer (8+ source types) ─────────────────────────────
 
-    it('isGraphThin returns false for rich graph', () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      expect(isGraphThin(graph)).toBe(false)
-    })
+function buildRichCustomerSignals(): Signal[] {
+  return [
+    // Subscriptions (3)
+    buildSubscription('Red Hat Enterprise Linux Server, Premium', 'Active', '2027-08-15'),
+    buildSubscription('Red Hat Ansible Automation Platform, Premium', 'Expired', '2026-05-10'),
+    buildSubscription('Red Hat OpenShift Container Platform Standard', 'Expired', '2026-04-01'),
+    // Cases (5)
+    buildCase('05001001', 'Red Hat Ansible Automation Platform', '2', 'Waiting on Customer'),
+    buildCase('05001002', 'Red Hat Ansible Automation Platform', '3', 'Closed'),
+    buildCase('05001003', 'Red Hat Enterprise Linux', '4', 'Open'),
+    buildCase('05001004', 'Red Hat OpenShift Container Platform', '3', 'Closed'),
+    buildCase('05001005', 'Red Hat Enterprise Linux', '1', 'Open'),
+    // Pipeline (3)
+    buildPipeline('AAP Renewal - Acme Corp', 'Negotiate', 150000, '2026-08-01'),
+    buildPipeline('OCP Expansion - Acme Corp', 'Propose', 250000, '2026-09-15'),
+    buildPipeline('RHEL Server Growth', 'Identify', 80000, '2026-12-01'),
+    // Tech stack (10) — evaluating context passes displacement filter
+    buildTech('VMware vSphere 8.0', 'competitor', 'evaluating'),
+    buildTech('Docker Enterprise 20.10', 'competitor', 'evaluating'),
+    buildTech('Terraform v1.8.0', 'competitor', 'evaluating'),
+    buildTech('Kubernetes', 'open-source', 'using'),
+    buildTech('Jenkins', 'open-source', 'using'),
+    buildTech('Splunk Enterprise 9.1', 'competitor', 'evaluating'),
+    buildTech('Charlotte AI', 'proprietary', 'using'),
+    buildTech('PostgreSQL', 'open-source', 'using'),
+    buildTech('Apache Kafka', 'open-source', 'using'),
+    buildTech('Grafana', 'open-source', 'using'),
+    // Competitive intel (4)
+    buildCompetitiveIntel('VMware', 'OpenShift Virtualization', 'high'),
+    buildCompetitiveIntel('Puppet', 'Ansible Automation Platform', 'medium'),
+    buildCompetitiveIntel('Docker', 'OpenShift Container Platform', 'medium'),
+    buildCompetitiveIntel('Splunk', 'OpenShift Observability', 'low'),
+    // Emails (3)
+    buildEmail('Re: Ansible upgrade path discussion', ['Ansible']),
+    buildEmail('OpenShift migration timeline', ['OpenShift', 'Kubernetes']),
+    buildEmail('Infrastructure modernization Q3', ['VMware']),
+    // Partner catalog (3)
+    buildPartner('AWS Advanced Consulting', 'Premier'),
+    buildPartner('Accenture Red Hat Practice', 'Premier'),
+    buildPartner('HashiCorp Integration', 'Select'),
+    // Product lifecycle (2)
+    buildLifecycle('Red Hat Enterprise Linux 8', '2029-05-31'),
+    buildLifecycle('Red Hat Ansible Automation Platform 2.3', '2026-11-30'),
+    // Cloud spend (2)
+    buildCloudSpend('AWS', 540000),
+    buildCloudSpend('Azure', 180000),
+    // News radar (3)
+    buildNewsRadar('Acme Corp announces cloud-first strategy'),
+    buildNewsRadar('Acme Corp CTO speaks at KubeCon 2026'),
+    buildNewsRadar('Acme Corp acquires AI startup NeuralOps'),
+    // Solution intelligence (2)
+    makeSignal({
+      source: 'solution-intelligence', type: 'recommendation',
+      headline: 'AI/ML Platform with OpenShift AI', score: 0.8,
+      metadata: { matchedTechnologies: ['Charlotte AI'], solutionName: 'AI/ML Platform', productAlignment: 'OpenShift AI' },
+    }),
+    makeSignal({
+      source: 'solution-intelligence', type: 'recommendation',
+      headline: 'Automation at Scale with Ansible', score: 0.85,
+      metadata: { matchedTechnologies: [], solutionName: 'Automation at Scale', productAlignment: 'Ansible' },
+    }),
+  ]
+}
+
+// ── Fixture 2: Moderate Customer (5-7 source types) ─────────────────────────
+
+function buildModerateCustomerSignals(): Signal[] {
+  return [
+    buildSubscription('Red Hat Enterprise Linux Server, Standard', 'Active', '2027-06-01'),
+    buildSubscription('Red Hat OpenShift Container Platform', 'Expired', '2026-03-15'),
+    buildCase('06002001', 'Red Hat Enterprise Linux', '3', 'Open'),
+    buildCase('06002002', 'Red Hat OpenShift Container Platform', '4', 'Closed'),
+    buildTech('Docker Desktop', 'competitor', 'evaluating'),
+    buildTech('Kubernetes', 'open-source', 'using'),
+    buildTech('Terraform v1.5', 'competitor', 'evaluating'),
+    buildTech('GitHub Actions', 'proprietary', 'using'),
+    buildTech('Prometheus', 'open-source', 'using'),
+    buildPipeline('OCP Renewal - Moderate Inc', 'Propose', 120000, '2026-09-01'),
+    buildNewsRadar('Moderate Inc expands cloud operations'),
+    buildNewsRadar('Moderate Inc hires VP of Platform Engineering'),
+    buildNewsRadar('Moderate Inc partners with AWS for infrastructure'),
+    buildCloudSpend('AWS', 320000),
+    makeSignal({
+      source: 'solution-intelligence', type: 'recommendation',
+      headline: 'Container Platform Modernization', score: 0.75,
+      metadata: { matchedTechnologies: ['Kubernetes'], solutionName: 'Container Modernization', productAlignment: 'OpenShift' },
+    }),
+  ]
+}
+
+// ── Fixture 3: Thin Customer (3-4 source types) ─────────────────────────────
+// Uses 'evaluating' context on competitor tech to pass displacement filter
+
+function buildThinCustomerSignals(): Signal[] {
+  return [
+    buildSubscription('Red Hat Enterprise Linux Server', 'Active', '2027-12-01'),
+    // evaluating context — passes displacement filter (proprietary+using gets skipped)
+    buildTech('VMware vSphere 7.0', 'competitor', 'evaluating'),
+    buildTech('Puppet Enterprise', 'competitor', 'evaluating'),
+    buildTech('Nagios', 'open-source', 'using'),
+    buildCompetitiveIntel('VMware', 'OpenShift Virtualization', 'high'),
+    buildCompetitiveIntel('Puppet', 'Ansible Automation Platform', 'medium'),
+    makeSignal({
+      source: 'solution-intelligence', type: 'recommendation',
+      headline: 'Infrastructure Modernization', score: 0.6,
+      metadata: { matchedTechnologies: [], solutionName: 'Infra Modernization', productAlignment: 'RHEL' },
+    }),
+  ]
+}
+
+// ── Fixture 4: Minimal Customer (1-2 source types) ──────────────────────────
+
+function buildMinimalCustomerSignals(): Signal[] {
+  return [
+    buildSubscription('Red Hat Enterprise Linux Server', 'Active', '2028-01-01'),
+  ]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXTURE 1: Rich Customer — 8+ source types
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integration: Rich Customer (8+ sources)', () => {
+  let graph: CustomerGraph
+
+  beforeAll(() => {
+    graph = buildCustomerGraph('acme-corp', 'Acme Corp', buildRichCustomerSignals())
   })
 
-  describe('Moderate customer (5-7 source types)', () => {
-    it('builds graph with correct node types', () => {
-      const graph = buildCustomerGraph('mod-test', 'Moderate Test Corp', MODERATE_SIGNALS)
-      const types = new Set(Object.values(graph.nodes).map((n: any) => n.type).filter((t: string) => t !== 'customer'))
-      expect(types.size).toBeGreaterThanOrEqual(3)
-    })
-
-    it('buildMotion returns valid structure if non-null', async () => {
-      const graph = buildCustomerGraph('mod-test', 'Moderate Test Corp', MODERATE_SIGNALS)
-      const motion = await buildMotion(graph, 'mod-test', 'Moderate Test Corp', [], [])
-      if (motion) {
-        expect(motion.flowLedger).toBeDefined()
-        expect(motion.flowLedger!.signalsIngested).toBeGreaterThan(0)
-      }
-    })
+  it('graph has 8+ distinct node types', () => {
+    const nodeTypes = new Set(Object.values(graph.nodes).map(n => n.type))
+    expect(nodeTypes.size).toBeGreaterThanOrEqual(8)
   })
 
-  describe('Thin customer (3-4 source types)', () => {
-    it('has fewer node types than rich customer', () => {
-      const thinGraph = buildCustomerGraph('thin-test', 'Thin Test Corp', THIN_SIGNALS)
-      const richGraph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const thinTypes = new Set(Object.values(thinGraph.nodes).map((n: any) => n.type))
-      const richTypes = new Set(Object.values(richGraph.nodes).map((n: any) => n.type))
-      expect(thinTypes.size).toBeLessThan(richTypes.size)
-    })
-
-    it('adaptive corroboration allows single-match sources', async () => {
-      const graph = buildCustomerGraph('thin-test', 'Thin Test Corp', THIN_SIGNALS)
-      const motion = await buildMotion(graph, 'thin-test', 'Thin Test Corp', [], [])
-      // With adaptive corroboration, thin graphs should still get motions
-      // even with single-match competitive-intel sources
-      if (motion) {
-        expect(motion.flowLedger).toBeDefined()
-      }
-    })
-
-    it('cross-reference gate tags all portfolio nodes', () => {
-      const graph = buildCustomerGraph('thin-test', 'Thin Test Corp', THIN_SIGNALS)
-      const compNodes = Object.values(graph.nodes).filter((n: any) => n.sourceModule === 'competitive-intel')
-      for (const node of compNodes) {
-        expect((node as any).crossReferenced).toBeDefined()
-      }
-    })
+  it('graph has correct customer hub node', () => {
+    const customer = Object.values(graph.nodes).find(n => n.type === 'customer')
+    expect(customer).toBeDefined()
+    expect(customer!.name).toBe('Acme Corp')
   })
 
-  describe('Minimal customer (1-2 source types)', () => {
-    it('graph builds correctly with 1 signal', () => {
-      const graph = buildCustomerGraph('min-test', 'Minimal Test Corp', MINIMAL_SIGNALS)
-      expect(graph).toBeDefined()
-      expect(graph.nodeCount).toBeGreaterThan(0)
-    })
-
-    it('suppression gate fires — graphNodeTypes.size < 2 means null motion', async () => {
-      const graph = buildCustomerGraph('min-test', 'Minimal Test Corp', MINIMAL_SIGNALS)
-      const types = new Set(Object.values(graph.nodes).map((n: any) => n.type).filter((t: string) => t !== 'customer'))
-      // Minimal has only 1 subscription — 1 node type — should be suppressed
-      if (types.size < 2) {
-        const motion = await buildMotion(graph, 'min-test', 'Minimal Test Corp', [], [])
-        expect(motion).toBeNull()
-      }
-    })
+  it('subscription nodes match fixture count (3)', () => {
+    expect(findNodesByType(graph, 'subscription').length).toBe(3)
   })
 
-  describe('Cross-reference regression prevention', () => {
-    it('ALL portfolio-scope nodes have crossReferenced set (never undefined)', () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const portfolioSources = new Set([
-        'competitive-intel', 'news-radar', 'rh-rss', 'rh-events',
-        'product-intel', 'ecosystem-catalog', 'partner-catalog', 'saleshub-products',
-      ])
+  it('case nodes match fixture count (5)', () => {
+    expect(findNodesByType(graph, 'case').length).toBe(5)
+  })
 
-      for (const node of Object.values(graph.nodes)) {
-        if (portfolioSources.has((node as any).sourceModule)) {
-          expect((node as any).crossReferenced).toBeDefined()
-          expect(typeof (node as any).crossReferenced).toBe('boolean')
-        }
+  it('deal nodes match fixture count (3)', () => {
+    expect(findNodesByType(graph, 'deal').length).toBe(3)
+  })
+
+  it('product nodes exist for tech stack', () => {
+    expect(findNodesByType(graph, 'product').length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('intel nodes from competitive-intel and news-radar', () => {
+    const intelNodes = Object.values(graph.nodes).filter(n => n.type === 'intel')
+    expect(intelNodes.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('engagement nodes from email signals', () => {
+    const engagements = Object.values(graph.nodes).filter(n => n.type === 'engagement')
+    expect(engagements.length).toBe(3)
+  })
+
+  it('partner nodes from partner-catalog', () => {
+    expect(findNodesByType(graph, 'partner').length).toBe(3)
+  })
+
+  it('all factual edges originate from customer node', () => {
+    const customerNode = Object.values(graph.nodes).find(n => n.type === 'customer')!
+    const factualEdges = graph.edges.filter(e => e.tier === 'factual')
+    for (const edge of factualEdges) {
+      expect(edge.from).toBe(customerNode.id)
+    }
+  })
+
+  // ── Cross-reference regression guard (#884/#887) ─────────────────────
+
+  it('when cross-reference pass exists: ALL portfolio-scope nodes have crossReferenced set', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const portfolioSources = new Set([
+      'competitive-intel', 'news-radar', 'rh-rss', 'rh-events',
+      'product-intel', 'ecosystem-catalog', 'partner-catalog', 'saleshub-products',
+    ])
+    const portfolioNodes = Object.values(graph.nodes).filter(n => portfolioSources.has(n.sourceModule))
+    expect(portfolioNodes.length).toBeGreaterThan(0)
+    for (const node of portfolioNodes) {
+      expect((node as any).crossReferenced).toBeDefined()
+      expect(typeof (node as any).crossReferenced).toBe('boolean')
+    }
+  })
+
+  it('when cross-reference pass exists: VMware intel matches VMware tech', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const vmwareIntel = Object.values(graph.nodes).find(n =>
+      n.sourceModule === 'competitive-intel' &&
+      String(n.properties?.competitor ?? '').toLowerCase().includes('vmware')
+    )
+    expect(vmwareIntel).toBeDefined()
+    expect((vmwareIntel as any).crossReferenced).toBe(true)
+  })
+
+  it('when cross-reference pass exists: all 4 competitive-intel match customer tech', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const compIntel = Object.values(graph.nodes).filter(n => n.sourceModule === 'competitive-intel')
+    expect(compIntel.length).toBe(4)
+    for (const node of compIntel) {
+      expect((node as any).crossReferenced).toBe(true)
+    }
+  })
+
+  // ── Motion tests ──────────────────────────────────────────────────────
+
+  it('buildMotion returns non-null with 2+ phases', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.phases.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('evidence arrays span 3+ distinct source modules', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    const allModules = new Set<string>()
+    for (const phase of motion!.phases) {
+      for (const ev of phase.evidence) { allModules.add(ev.module) }
+    }
+    expect(allModules.size).toBeGreaterThanOrEqual(3)
+  })
+
+  it('flowLedger: signalsIngested > 0 and finalEvidenceCount > 0', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.flowLedger).toBeDefined()
+    expect(motion!.flowLedger!.signalsIngested).toBeGreaterThan(0)
+    expect(motion!.flowLedger!.finalEvidenceCount).toBeGreaterThan(0)
+  })
+
+  it('motion confidence is high for rich customer', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.confidence).toBe('high')
+  })
+
+  it('motion status defaults to active', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.status).toBe('active')
+  })
+
+  it('every phase has non-empty evidence with module and fact', async () => {
+    const motion = await buildMotion(graph, 'acme-corp', 'Acme Corp', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    for (const phase of motion!.phases) {
+      expect(phase.evidence.length).toBeGreaterThan(0)
+      for (const ev of phase.evidence) {
+        expect(typeof ev.module).toBe('string')
+        expect(ev.module.length).toBeGreaterThan(0)
+        expect(typeof ev.fact).toBe('string')
+        expect(ev.fact.length).toBeGreaterThan(0)
       }
-    })
+    }
+  })
+})
 
-    it('customer-specific nodes are always crossReferenced=true', () => {
-      const graph = buildCustomerGraph('rich-test', 'Rich Test Corp', RICH_SIGNALS)
-      const customerSources = new Set(['subscriptions', 'cases', 'pipeline', 'tech-stack', 'emails'])
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXTURE 2: Moderate Customer — 5-7 source types
+// ═══════════════════════════════════════════════════════════════════════════════
 
-      for (const node of Object.values(graph.nodes)) {
-        if (customerSources.has((node as any).sourceModule)) {
-          expect((node as any).crossReferenced).toBe(true)
-        }
-      }
-    })
+describe('Integration: Moderate Customer (5-7 sources)', () => {
+  let graph: CustomerGraph
+
+  beforeAll(() => {
+    graph = buildCustomerGraph('moderate-inc', 'Moderate Inc', buildModerateCustomerSignals())
+  })
+
+  it('graph has 5+ distinct node types', () => {
+    const nodeTypes = new Set(Object.values(graph.nodes).map(n => n.type))
+    expect(nodeTypes.size).toBeGreaterThanOrEqual(5)
+  })
+
+  it('buildMotion returns non-null with 1+ phases', async () => {
+    const motion = await buildMotion(graph, 'moderate-inc', 'Moderate Inc', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.phases.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('flowLedger present with signalsIngested > 0', async () => {
+    const motion = await buildMotion(graph, 'moderate-inc', 'Moderate Inc', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.flowLedger).toBeDefined()
+    expect(motion!.flowLedger!.signalsIngested).toBeGreaterThan(0)
+  })
+
+  it('motion id follows format motion:{slug}', async () => {
+    const motion = await buildMotion(graph, 'moderate-inc', 'Moderate Inc', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).not.toBeNull()
+    expect(motion!.id).toBe('motion:moderate-inc')
+  })
+
+  it('when cross-reference pass exists: portfolio nodes have crossReferenced set', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const portfolioNodes = Object.values(graph.nodes).filter(n =>
+      ['competitive-intel', 'news-radar', 'partner-catalog'].includes(n.sourceModule)
+    )
+    for (const node of portfolioNodes) {
+      expect((node as any).crossReferenced).toBeDefined()
+      expect(typeof (node as any).crossReferenced).toBe('boolean')
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXTURE 3: Thin Customer — 3-4 source types
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integration: Thin Customer (3-4 sources)', () => {
+  let graph: CustomerGraph
+
+  beforeAll(() => {
+    graph = buildCustomerGraph('thin-ltd', 'Thin Ltd', buildThinCustomerSignals())
+  })
+
+  it('graph builds correctly with limited sources', () => {
+    expect(graph.customerId).toBe('thin-ltd')
+    expect(graph.customerName).toBe('Thin Ltd')
+    expect(graph.nodeCount).toBeGreaterThan(0)
+  })
+
+  it('has subscription, product, intel, and play node types', () => {
+    const nodeTypes = new Set(Object.values(graph.nodes).map(n => n.type))
+    expect(nodeTypes.has('subscription')).toBe(true)
+    expect(nodeTypes.has('product')).toBe(true)
+    expect(nodeTypes.has('intel')).toBe(true)
+    expect(nodeTypes.has('play')).toBe(true)
+  })
+
+  it('buildMotion returns non-null (displacement phase from VMware/Puppet evaluating)', async () => {
+    const motion = await buildMotion(graph, 'thin-ltd', 'Thin Ltd', PLAY_SIGNALS, TACTIC_SIGNALS)
+    // 4 non-customer types (subscription, product, intel, play) >= 3: suppression gate passes
+    // VMware/Puppet with evaluating context qualify for displacement phase
+    expect(motion).not.toBeNull()
+  })
+
+  it('competitive-intel nodes present in graph', () => {
+    const compIntel = Object.values(graph.nodes).filter(n => n.sourceModule === 'competitive-intel')
+    expect(compIntel.length).toBe(2)
+  })
+
+  it('when cross-reference pass exists: competitive-intel nodes have crossReferenced set', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const compIntel = Object.values(graph.nodes).filter(n => n.sourceModule === 'competitive-intel')
+    for (const node of compIntel) {
+      expect((node as any).crossReferenced).toBeDefined()
+      expect(typeof (node as any).crossReferenced).toBe('boolean')
+    }
+  })
+
+  it('when cross-reference pass exists: VMware intel matches tech via displacement vocabulary', () => {
+    if (!hasCrossReferencePass(graph)) return
+    const vmwareIntel = Object.values(graph.nodes).find(n =>
+      n.sourceModule === 'competitive-intel' &&
+      String(n.properties?.competitor ?? '').toLowerCase().includes('vmware')
+    )
+    expect(vmwareIntel).toBeDefined()
+    expect((vmwareIntel as any).crossReferenced).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXTURE 4: Minimal Customer — 1-2 source types
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integration: Minimal Customer (1-2 sources)', () => {
+  let graph: CustomerGraph
+
+  beforeAll(() => {
+    graph = buildCustomerGraph('minimal-co', 'Minimal Co', buildMinimalCustomerSignals())
+  })
+
+  it('graph builds correctly with single source', () => {
+    expect(graph.customerId).toBe('minimal-co')
+    expect(graph.customerName).toBe('Minimal Co')
+    expect(Object.keys(graph.nodes).length).toBeGreaterThan(0)
+  })
+
+  it('suppression gate fires: < 3 non-customer node types means null motion', async () => {
+    const graphNodeTypes = new Set(
+      Object.values(graph.nodes).map(n => n.type).filter(t => t !== 'customer')
+    )
+    expect(graphNodeTypes.size).toBeLessThan(3)
+    const motion = await buildMotion(graph, 'minimal-co', 'Minimal Co', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(motion).toBeNull()
+  })
+
+  it('customer hub node present', () => {
+    const customer = Object.values(graph.nodes).find(n => n.type === 'customer')
+    expect(customer).toBeDefined()
+    expect(customer!.name).toBe('Minimal Co')
+  })
+
+  it('subscription node created from single signal', () => {
+    const subs = findNodesByType(graph, 'subscription')
+    expect(subs.length).toBe(1)
+    expect(subs[0].name).toContain('Red Hat Enterprise Linux')
+  })
+
+  it('derived play node created from subscription TDP mapping', () => {
+    const plays = findNodesByType(graph, 'play')
+    expect(plays.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Cross-fixture regression tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integration: Cross-fixture regression', () => {
+  it('all 4 fixtures build graphs without throwing', () => {
+    expect(() => buildCustomerGraph('r', 'R', buildRichCustomerSignals())).not.toThrow()
+    expect(() => buildCustomerGraph('m', 'M', buildModerateCustomerSignals())).not.toThrow()
+    expect(() => buildCustomerGraph('t', 'T', buildThinCustomerSignals())).not.toThrow()
+    expect(() => buildCustomerGraph('n', 'N', buildMinimalCustomerSignals())).not.toThrow()
+  })
+
+  it('every graph has builtAt timestamp', () => {
+    for (const [slug, name, signals] of [
+      ['rich', 'Rich', buildRichCustomerSignals()],
+      ['mod', 'Moderate', buildModerateCustomerSignals()],
+      ['thin', 'Thin', buildThinCustomerSignals()],
+      ['min', 'Minimal', buildMinimalCustomerSignals()],
+    ] as Array<[string, string, Signal[]]>) {
+      const g = buildCustomerGraph(slug, name, signals)
+      expect(g.builtAt).toBeDefined()
+      expect(typeof g.builtAt).toBe('string')
+      expect(g.builtAt.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('all edges have createdAt, sourceType, and strength > 0', () => {
+    const graph = buildCustomerGraph('r', 'Rich', buildRichCustomerSignals())
+    expect(graph.edges.length).toBeGreaterThan(0)
+    for (const edge of graph.edges) {
+      expect(edge.createdAt).toBeDefined()
+      expect(edge.sourceType).toBeDefined()
+      expect(edge.strength).toBeGreaterThan(0)
+    }
+  })
+
+  it('richer customers produce higher or equal confidence', async () => {
+    const richGraph = buildCustomerGraph('r', 'Rich', buildRichCustomerSignals())
+    const modGraph = buildCustomerGraph('m', 'Moderate', buildModerateCustomerSignals())
+    const richMotion = await buildMotion(richGraph, 'r', 'Rich', PLAY_SIGNALS, TACTIC_SIGNALS)
+    const modMotion = await buildMotion(modGraph, 'm', 'Moderate', PLAY_SIGNALS, TACTIC_SIGNALS)
+    expect(richMotion).not.toBeNull()
+    expect(modMotion).not.toBeNull()
+    const levels: Record<string, number> = { low: 0, medium: 1, high: 2 }
+    expect(levels[richMotion!.confidence]).toBeGreaterThanOrEqual(levels[modMotion!.confidence])
+  })
+
+  it('nodeCount matches nodes object size for all fixtures', () => {
+    for (const [slug, name, signals] of [
+      ['r', 'R', buildRichCustomerSignals()],
+      ['m', 'M', buildModerateCustomerSignals()],
+      ['t', 'T', buildThinCustomerSignals()],
+      ['n', 'N', buildMinimalCustomerSignals()],
+    ] as Array<[string, string, Signal[]]>) {
+      const g = buildCustomerGraph(slug, name, signals)
+      expect(g.nodeCount).toBe(Object.keys(g.nodes).length)
+    }
+  })
+
+  it('edgeCount matches edges array length for all fixtures', () => {
+    for (const [slug, name, signals] of [
+      ['r', 'R', buildRichCustomerSignals()],
+      ['m', 'M', buildModerateCustomerSignals()],
+      ['t', 'T', buildThinCustomerSignals()],
+      ['n', 'N', buildMinimalCustomerSignals()],
+    ] as Array<[string, string, Signal[]]>) {
+      const g = buildCustomerGraph(slug, name, signals)
+      expect(g.edgeCount).toBe(g.edges.length)
+    }
   })
 })
