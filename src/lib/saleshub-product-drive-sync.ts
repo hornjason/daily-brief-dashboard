@@ -465,11 +465,12 @@ export async function uploadManifestToDrive(
     // Find or create "SalesHub Products" folder
     const productsFolderId = await findOrCreateFolder(drive, parentFolderId, PRODUCTS_FOLDER_NAME)
 
-    // Find or create product folder by slug
-    const productFolderId = await findOrCreateFolder(drive, productsFolderId, productSlug)
+    // Find or create product folder by display name (matches uploadProductToDrive)
+    const productName = manifest.productName ?? productSlug
+    const productFolderId = await findOrCreateFolder(drive, productsFolderId, productName)
 
     await uploadOrUpdateJson(drive, productFolderId, '_pipeline-manifest.json', manifest)
-    console.log(`[saleshub-product-drive-sync] Uploaded manifest for "${productSlug}" to Drive`)
+    console.log(`[saleshub-product-drive-sync] Uploaded manifest for "${productName}" to Drive`)
   } catch (e: any) {
     console.warn(`[saleshub-product-drive-sync] Manifest upload failed for "${productSlug}": ${e.message}`)
   }
