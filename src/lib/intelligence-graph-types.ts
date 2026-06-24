@@ -145,3 +145,36 @@ export interface CustomerGraph {
   /** Who triggered this graph build — on-demand, scheduled, or manual (#877) */
   rebuiltBy?: string
 }
+
+// ── Signal Flow Ledger (#886) ────────────────────────────────────────────────
+
+/**
+ * Per-source-type gate detail: tracks how many signals survive each gate
+ * in buildPhaseEvidence. Read-only instrumentation — does not change behavior.
+ */
+export interface PhaseGateDetail {
+  sourceType: string
+  ingested: number
+  tdpMatched: number
+  corroborationResult: 'passed' | 'dropped' | 'not_required'
+  crossRefPassed: number
+  crossRefFailed: number
+  evidenceProduced: number
+}
+
+/**
+ * Aggregate ledger for a single phase or motion: counts signals at each gate.
+ * Produced by buildPhaseEvidence, aggregated at motion level.
+ * Read-only instrumentation — does not change any filtering or evidence arrays.
+ */
+export interface SignalFlowLedger {
+  signalsIngested: number
+  tdpMatched: number
+  corroborationPassed: number
+  corroborationDropped: number
+  crossRefPassed: number
+  crossRefFailed: number
+  evidenceBeforeCap: number
+  finalEvidenceCount: number
+  gateDetails: PhaseGateDetail[]
+}

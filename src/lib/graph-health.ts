@@ -66,10 +66,12 @@ export interface CustomerHealthReport {
   motionCoverage: MotionCoverageInfo | null
   /** Who triggered the last graph rebuild (#877) */
   lastRebuiltBy: string
+  /** Signal yield: finalEvidenceCount / signalsIngested as percentage (#886) */
+  signalYield: number | null
 }
 
 export interface GraphHealthAlert {
-  type: 'staleness' | 'persist_error' | 'scheduler_stall'
+  type: 'staleness' | 'persist_error' | 'scheduler_stall' | 'evidence_regression'
   message: string
   severity: 'critical' | 'warning'
   count: number
@@ -197,6 +199,15 @@ export function computeCustomerGraphHealth(
     motionCoverage = computeMotionCoverageFromMotion(graph, motion)
   }
 
+  // Signal yield (#886): percentage of ingested signals that become final evidence
+  let signalYield: number | null = null
+  if (motion?.flowLedger) {
+    const { signalsIngested, finalEvidenceCount } = motion.flowLedger
+    signalYield = signalsIngested > 0
+      ? Math.round((finalEvidenceCount / signalsIngested) * 100)
+      : 0
+  }
+
   return {
     customerSlug: graph.customerId,
     customerName: graph.customerName,
@@ -215,6 +226,7 @@ export function computeCustomerGraphHealth(
     isThinGraph,
     motionCoverage,
     lastRebuiltBy: graph.rebuiltBy ?? 'unknown',
+    signalYield,
   }
 }
 
@@ -274,13 +286,29 @@ export function computeMotionCoverage(
 }
 
 /**
+ * Motion evidence snapshot for regression detection (#886).
+ * Callers read current from the just-built motion's flowLedger,
+ * and previous from the persisted motion.json file.
+ */
+export interface MotionEvidenceSnapshot {
+  customerSlug: string
+  signalsIngested: number
+  finalEvidenceCount: number
+}
+
+/**
  * Compute alerts based on portfolio-level health signals (#878).
  * Pure function — no IO, no side effects.
+ *
+ * @param currentMotions — optional current motion evidence for regression detection (#886)
+ * @param previousMotions — optional previous motion evidence for regression detection (#886)
  */
 export function computeAlerts(
   reports: CustomerHealthReport[],
   persistErrorCount: number,
   schedulerLastRun: string | null,
+  currentMotions?: MotionEvidenceSnapshot[],
+  previousMotions?: MotionEvidenceSnapshot[],
 ): GraphHealthAlert[] {
   const alerts: GraphHealthAlert[] = []
 
@@ -323,6 +351,29 @@ export function computeAlerts(
       severity: 'warning',
       count: 0,
     })
+  }
+
+  // Evidence regression (#886): fire when current finalEvidenceCount < 50% of previous
+  // and previous signalsIngested >= 10 (small graphs fluctuate naturally)
+  if (currentMotions && previousMotions && previousMotions.length > 0) {
+    const prevBySlug = new Map(previousMotions.map(p => [p.customerSlug, p]))
+    const currBySlug = new Map(currentMotions.map(c => [c.customerSlug, c]))
+    const regressionCustomers: string[] = []
+    for (const [slug, curr] of currBySlug) {
+      const prev = prevBySlug.get(slug)
+      if (!prev || prev.signalsIngested < 10 || prev.finalEvidenceCount === 0) continue
+      if (curr.finalEvidenceCount < prev.finalEvidenceCount * 0.5) {
+        regressionCustomers.push(slug)
+      }
+    }
+    if (regressionCustomers.length > 0) {
+      alerts.push({
+        type: 'evidence_regression',
+        message: `Evidence dropped >50% for: ${regressionCustomers.join(', ')}`,
+        severity: 'warning',
+        count: regressionCustomers.length,
+      })
+    }
   }
 
   return alerts

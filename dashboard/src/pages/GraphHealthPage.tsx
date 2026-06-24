@@ -46,10 +46,11 @@ interface CustomerHealthReport {
   isThinGraph: boolean
   motionCoverage: MotionCoverageInfo | null
   lastRebuiltBy?: string
+  signalYield: number | null
 }
 
 interface GraphHealthAlert {
-  type: 'staleness' | 'persist_error' | 'scheduler_stall'
+  type: 'staleness' | 'persist_error' | 'scheduler_stall' | 'evidence_regression'
   message: string
   severity: 'critical' | 'warning'
   count: number
@@ -280,6 +281,37 @@ function CustomerDetail({ report }: { report: CustomerHealthReport }) {
             {report.motionCoverage.domainCoverage < 33 && (
               <span className="text-xs text-red-400/70">Low coverage</span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Row 3b: Signal Yield (#886) — percentage of ingested signals surviving to evidence */}
+      {report.signalYield !== null && (
+        <div>
+          <h4 className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
+            Signal Yield
+          </h4>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-4 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  report.signalYield < 5 ? 'bg-red-500/60' :
+                  report.signalYield < 15 ? 'bg-yellow-500/60' :
+                  'bg-green-500/60'
+                }`}
+                style={{ width: `${Math.min(report.signalYield, 100)}%` }}
+              />
+            </div>
+            <span className={`text-sm font-medium tabular-nums ${
+              report.signalYield < 5 ? 'text-red-400' :
+              report.signalYield < 15 ? 'text-yellow-400' :
+              'text-green-400'
+            }`}>
+              {report.signalYield}%
+            </span>
+            <span className="text-xs text-text-secondary/60">
+              signals to evidence
+            </span>
           </div>
         </div>
       )}

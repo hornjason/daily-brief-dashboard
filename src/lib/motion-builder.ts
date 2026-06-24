@@ -23,6 +23,8 @@ import { callGemini } from '../gemini-call.ts'
 import type {
   CustomerGraph,
   IntelligenceNode,
+  SignalFlowLedger,
+  PhaseGateDetail,
 } from './intelligence-graph-types.ts'
 import { findNodesByType } from './graph-utils.ts'
 import { getTdpByName } from './saleshub-knowledge-loader.ts'
@@ -73,6 +75,8 @@ export interface MotionPhase {
   }>
   estimatedTcv?: number
   brief?: string
+  /** Per-phase signal flow ledger — read-only instrumentation (#886) */
+  flowLedger?: SignalFlowLedger
 }
 
 export interface EnrichedContact {
@@ -99,6 +103,8 @@ export interface StrategicMotion {
   geminiInsights?: GeminiRecommendation[]
   /** Enhanced Gemini recommendations with novel discoveries (#613) */
   enhancedRecommendations?: MergedRecommendation[]
+  /** Motion-level signal flow ledger — aggregated from phase ledgers (#886) */
+  flowLedger?: SignalFlowLedger
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -211,13 +217,24 @@ function getIntelModule(node: IntelligenceNode): string {
 /**
  * Build phase evidence by traversing the full graph for nodes matching TDP domains.
  * Replaces 4 ad-hoc evidence blocks in individual phase builders (#879 SC-1).
+ *
+ * Returns both evidence and a SignalFlowLedger for per-gate instrumentation (#886).
+ * The ledger is read-only observation — it does NOT change evidence arrays, filtering, or caps.
  */
 function buildPhaseEvidence(
   graph: CustomerGraph,
   tdpDomains: string[],
   _phaseCategory: string,
-): MotionPhase['evidence'] {
+): { evidence: MotionPhase['evidence'], ledger: SignalFlowLedger } {
   const evidence: MotionPhase['evidence'] = []
+  const gateDetails: PhaseGateDetail[] = []
+  let totalIngested = 0
+  let totalTdpMatched = 0
+  let totalCorroborationPassed = 0
+  let totalCorroborationDropped = 0
+  let totalCrossRefPassed = 0
+  let totalCrossRefFailed = 0
+
   const nodeTypes: string[] = [
     'subscription', 'case', 'deal', 'play', 'program', 'product',
     'engagement', 'intel', 'lifecycle', 'event', 'evidence', 'partner',
@@ -235,6 +252,11 @@ function buildPhaseEvidence(
         return true
       })
     }
+
+    // Ledger: count ingested (nodes available for this type after product filtering)
+    const ingested = nodes.length
+    totalIngested += ingested
+
     // Program nodes (cloud programs) match on programType, not TDP keywords
     const matching = nodeType === 'program'
       ? nodes.filter(n => {
@@ -243,17 +265,67 @@ function buildPhaseEvidence(
             tdpDomains.some(tdp => nodeMatchesTdp(n, tdp))
         })
       : nodes.filter(n => tdpDomains.some(tdp => nodeMatchesTdp(n, tdp)))
-    if (matching.length === 0) continue
+
+    const tdpMatched = matching.length
+    totalTdpMatched += tdpMatched
+
+    if (matching.length === 0) {
+      // Ledger: record gate detail even when no matches
+      if (ingested > 0) {
+        gateDetails.push({
+          sourceType: nodeType,
+          ingested,
+          tdpMatched: 0,
+          corroborationResult: 'not_required',
+          crossRefPassed: 0,
+          crossRefFailed: 0,
+          evidenceProduced: 0,
+        })
+      }
+      continue
+    }
 
     const sampleModule = nodeType === 'intel'
       ? getIntelModule(matching[0])
       : (NODE_TYPE_TO_MODULE[nodeType] ?? nodeType)
 
     // Corroboration check: news and customer-docs need 2+ matches (#879 SC-7)
-    if (CORROBORATION_REQUIRED_SOURCES.has(sampleModule) && matching.length < 2) continue
+    let corroborationResult: PhaseGateDetail['corroborationResult'] = 'not_required'
+    if (CORROBORATION_REQUIRED_SOURCES.has(sampleModule)) {
+      if (matching.length < 2) {
+        corroborationResult = 'dropped'
+        totalCorroborationDropped += tdpMatched
+        gateDetails.push({
+          sourceType: nodeType,
+          ingested,
+          tdpMatched,
+          corroborationResult,
+          crossRefPassed: 0,
+          crossRefFailed: 0,
+          evidenceProduced: 0,
+        })
+        continue
+      }
+      corroborationResult = 'passed'
+      totalCorroborationPassed += tdpMatched
+    }
+
+    // Track cross-ref and evidence counts for this source type
+    let sourceTypeCrossRefPassed = 0
+    let sourceTypeCrossRefFailed = 0
+    let sourceTypeEvidenceProduced = 0
 
     for (const node of matching) {
       const module = nodeType === 'intel' ? getIntelModule(node) : (NODE_TYPE_TO_MODULE[nodeType] ?? nodeType)
+
+      // Ledger: track cross-reference gate counts (#884 — ready for when gate lands)
+      if ((node as any).crossReferenced === false) {
+        sourceTypeCrossRefFailed++
+        totalCrossRefFailed++
+      } else if ((node as any).crossReferenced === true) {
+        sourceTypeCrossRefPassed++
+        totalCrossRefPassed++
+      }
 
       let fact = ''
       if (nodeType === 'case') {
@@ -268,6 +340,7 @@ function buildPhaseEvidence(
           fact: sanitizePromptInput(fact, 200),
           url: sanitizeUrl(node.properties?.url as string),
         })
+        sourceTypeEvidenceProduced++
         continue
       }
       if (nodeType === 'deal') {
@@ -310,10 +383,36 @@ function buildPhaseEvidence(
         fact: sanitizePromptInput(fact, 200),
         url: sanitizeUrl(node.properties?.url as string),
       })
+      sourceTypeEvidenceProduced++
     }
+
+    gateDetails.push({
+      sourceType: nodeType,
+      ingested,
+      tdpMatched,
+      corroborationResult,
+      crossRefPassed: sourceTypeCrossRefPassed,
+      crossRefFailed: sourceTypeCrossRefFailed,
+      evidenceProduced: sourceTypeEvidenceProduced,
+    })
   }
 
-  return capEvidence(evidence)
+  const evidenceBeforeCap = evidence.length
+  const capped = capEvidence(evidence)
+
+  const ledger: SignalFlowLedger = {
+    signalsIngested: totalIngested,
+    tdpMatched: totalTdpMatched,
+    corroborationPassed: totalCorroborationPassed,
+    corroborationDropped: totalCorroborationDropped,
+    crossRefPassed: totalCrossRefPassed,
+    crossRefFailed: totalCrossRefFailed,
+    evidenceBeforeCap,
+    finalEvidenceCount: capped.length,
+    gateDetails,
+  }
+
+  return { evidence: capped, ledger }
 }
 
 // ── Urgency Modifiers (#879 SC-4) ────────────────────────────────────────────
@@ -705,7 +804,7 @@ function buildAnchorPhase(
 
   // #879: Build evidence from full graph traversal
   const tdpDomains = [...expiredTdps]
-  const evidence = buildPhaseEvidence(graph, tdpDomains, 'anchor')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, tdpDomains, 'anchor')
 
   // Determine base urgency: expired subs start at high
   // #879: Apply urgency modifiers from graph signals
@@ -730,6 +829,7 @@ function buildAnchorPhase(
     tactics,
     targetPersonas: [],
     evidence,
+    flowLedger,
   }
 }
 
@@ -804,7 +904,7 @@ function buildExpandPhase(
 
   // #879: Build evidence from full graph traversal
   const expandTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
-  const evidence = buildPhaseEvidence(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'expand')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'expand')
 
   // #879: Apply urgency modifiers
   const urgency = applyUrgencyModifiers(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'high')
@@ -817,6 +917,7 @@ function buildExpandPhase(
     tactics,
     targetPersonas: [],
     evidence,
+    flowLedger,
   }
 }
 
@@ -904,7 +1005,7 @@ function buildTransformPhase(
 
   // #879: Build evidence from full graph traversal
   const transformTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
-  const evidence = buildPhaseEvidence(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'transform')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'transform')
 
   if (evidence.length === 0) return null
 
@@ -919,6 +1020,7 @@ function buildTransformPhase(
     tactics,
     targetPersonas: [],
     evidence,
+    flowLedger,
   }
 }
 
@@ -1210,9 +1312,11 @@ function buildDisplacementPhase(
     }
   })
   // Merge graph-wide evidence (excluding tech-stack to avoid duplicates with displacement evidence)
-  const graphEvidence = buildPhaseEvidence(graph, displaceTdpDomains, 'displacement')
-    .filter(e => e.module !== 'tech-stack')
+  const { evidence: rawGraphEvidence, ledger: flowLedger } = buildPhaseEvidence(graph, displaceTdpDomains, 'displacement')
+  const graphEvidence = rawGraphEvidence.filter(e => e.module !== 'tech-stack')
   const evidence = capEvidence([...displacementEvidence, ...graphEvidence])
+  // Update ledger's finalEvidenceCount to reflect the post-merge cap
+  flowLedger.finalEvidenceCount = evidence.length
 
   // #879: Apply urgency modifiers
   const urgency = applyUrgencyModifiers(graph, displaceTdpDomains, 'high')
@@ -1225,6 +1329,7 @@ function buildDisplacementPhase(
     tactics,
     targetPersonas: [],
     evidence,
+    flowLedger,
   }
 }
 
@@ -1417,6 +1522,22 @@ export async function buildMotion(
     }
   }
 
+  // #886: Aggregate motion-level flow ledger from phase ledgers
+  const phaseLedgers = phases.map(p => p.flowLedger).filter((l): l is SignalFlowLedger => !!l)
+  const motionFlowLedger: SignalFlowLedger | undefined = phaseLedgers.length > 0
+    ? {
+        signalsIngested: phaseLedgers.reduce((s, l) => s + l.signalsIngested, 0),
+        tdpMatched: phaseLedgers.reduce((s, l) => s + l.tdpMatched, 0),
+        corroborationPassed: phaseLedgers.reduce((s, l) => s + l.corroborationPassed, 0),
+        corroborationDropped: phaseLedgers.reduce((s, l) => s + l.corroborationDropped, 0),
+        crossRefPassed: phaseLedgers.reduce((s, l) => s + l.crossRefPassed, 0),
+        crossRefFailed: phaseLedgers.reduce((s, l) => s + l.crossRefFailed, 0),
+        evidenceBeforeCap: phaseLedgers.reduce((s, l) => s + l.evidenceBeforeCap, 0),
+        finalEvidenceCount: phaseLedgers.reduce((s, l) => s + l.finalEvidenceCount, 0),
+        gateDetails: phaseLedgers.flatMap(l => l.gateDetails),
+      }
+    : undefined
+
   return {
     id: `motion:${customerSlug}`,
     customerSlug,
@@ -1430,6 +1551,7 @@ export async function buildMotion(
     status: 'active',
     geminiInsights,
     enhancedRecommendations,
+    flowLedger: motionFlowLedger,
   }
 }
 
