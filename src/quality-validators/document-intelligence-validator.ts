@@ -148,9 +148,9 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
 
 export const documentIntelligenceValidator: QualityValidator = {
   contentType: 'document-intelligence',
-  passThreshold: 65,
+  passThreshold: 85,
   validate(output: string): QualityScorecard {
     const checks = checkDocumentIntelligence(output)
-    return buildScorecard('document-intelligence', 65, checks)
+    return buildScorecard('document-intelligence', 85, checks)
   },
 }

@@ -71,11 +71,11 @@ describe('Quality gate garbage-in tests', () => {
     })
     const result = documentIntelligenceValidator.validate(output)
     expect(result.passed).toBe(true)
-    expect(result.score).toBeGreaterThanOrEqual(65)
+    expect(result.score).toBeGreaterThanOrEqual(85)
   })
 
-  test('validator uses passThreshold of 65, not hardcoded 60', () => {
-    expect(documentIntelligenceValidator.passThreshold).toBe(65)
+  test('validator uses passThreshold of 85, not hardcoded 60', () => {
+    expect(documentIntelligenceValidator.passThreshold).toBe(85)
     const output = JSON.stringify({
       documentCategory: 'other',
       summary: 'Short but valid summary for testing purposes here.',
@@ -93,7 +93,7 @@ describe('Quality gate garbage-in tests', () => {
     })
     const result = documentIntelligenceValidator.validate(output)
     // Verify the scorecard carries the validator's threshold, not 60
-    expect(result.passThreshold).toBe(65)
+    expect(result.passThreshold).toBe(85)
   })
 
   test('required failure caps score at 0 even when most checks pass', () => {
@@ -123,10 +123,10 @@ describe('Quality gate garbage-in tests', () => {
   })
 
   test('only recommended failures do not cap score at 0', () => {
-    // All required checks pass, only recommended (has-links) fails
+    // All required checks pass, one recommended (has-links) fails
     const output = JSON.stringify({
       documentCategory: 'solution-brief',
-      summary: 'This is a valid summary about IT automation for enterprise customers.',
+      summary: 'This is a substantive summary about how Red Hat Ansible Automation Platform integrates with ServiceNow for IT automation. It covers how organizations can automate ITSM workflows, reduce mean time to resolution, and improve operational efficiency through event-driven automation and closed-loop remediation processes.',
       productsReferenced: [{ name: 'Red Hat Ansible Automation Platform' }],
       integrationsReferenced: [{ technology: 'ServiceNow', category: 'ITSM' }],
       useCases: ['IT automation'],
@@ -135,14 +135,14 @@ describe('Quality gate garbage-in tests', () => {
       cloudProviders: null,
       audience: 'customer',
       keyPoints: ['Automate workflows'],
-      talkTracks: null,
+      talkTracks: ['Reduce MTTR by 60% with automated incident response'],
       links: [], // recommended check fails (no links)
       actionableSteps: null,
     })
     const result = documentIntelligenceValidator.validate(output)
     // Score should NOT be 0 — only the recommended check failed
     expect(result.score).toBeGreaterThan(0)
-    // 7/8 checks pass = 88%, which is > 65 threshold
+    // 10/11 checks pass = 91%, which is > 85 threshold
     expect(result.passed).toBe(true)
   })
 })
