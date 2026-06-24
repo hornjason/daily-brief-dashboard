@@ -79,6 +79,13 @@ interface StrategicMotion {
   status: 'active' | 'dismissed' | 'pinned'
   enrichedContacts?: EnrichedContact[]
   enhancedRecommendations?: MergedRecommendation[]
+  unstructuredRecommendations?: Array<{
+    action: string
+    confidence: 'high' | 'medium' | 'emerging'
+    triggerCount: number
+    solution: { name: string; type: string; url?: string }
+    assets?: Array<{ name: string; url: string; type: string }>
+  }>
 }
 
 interface CampaignEmail {
@@ -806,6 +813,49 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
           <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
         ))}
       </div>
+
+      {/* Additional Intelligence — cross-referenced recommended actions (#888) */}
+      {motion.unstructuredRecommendations && motion.unstructuredRecommendations.length > 0 && (
+        <div className="mx-5 mb-4 border-t border-border pt-4">
+          <h3 className="text-sm font-semibold text-text-primary mb-1">Additional Intelligence</h3>
+          <p className="text-xs text-text-secondary mb-3">
+            Cross-referenced recommendations from all signal sources — not limited to TDP-aligned phases.
+          </p>
+          <div className="space-y-2">
+            {motion.unstructuredRecommendations.map((rec, i) => (
+              <div key={i} className="p-3 rounded-lg bg-bg-secondary/30 border border-border/40">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                    rec.confidence === 'high' ? 'bg-green-500/20 text-green-400' :
+                    rec.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>{rec.confidence}</span>
+                  <span className="text-xs text-text-secondary">{rec.triggerCount} signal{rec.triggerCount !== 1 ? 's' : ''}</span>
+                </div>
+                <p className="text-sm font-medium text-text-primary">{rec.action}</p>
+                {rec.solution.name && (
+                  <div className="mt-1 text-xs text-text-secondary">
+                    Solution: {rec.solution.url ? (
+                      <a href={rec.solution.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                        {rec.solution.name} <ExternalLink className="w-2.5 h-2.5 inline" />
+                      </a>
+                    ) : rec.solution.name}
+                  </div>
+                )}
+                {rec.assets && rec.assets.length > 0 && (
+                  <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                    {rec.assets.map((asset, j) => (
+                      <a key={j} href={asset.url} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-0.5 rounded border border-border/40 text-accent hover:bg-accent/10 transition-colors">
+                        {asset.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* AI-Discovered Opportunities — novel enhanced recommendations (#627) */}
       {motion.enhancedRecommendations && (

@@ -105,6 +105,14 @@ export interface StrategicMotion {
   enhancedRecommendations?: MergedRecommendation[]
   /** Motion-level signal flow ledger — aggregated from phase ledgers (#886) */
   flowLedger?: SignalFlowLedger
+  /** Cross-referenced recommendations from all signal sources (#888, ADR-032) */
+  unstructuredRecommendations?: Array<{
+    action: string
+    confidence: 'high' | 'medium' | 'emerging'
+    triggerCount: number
+    solution: { name: string; type: string; url?: string }
+    assets?: Array<{ name: string; url: string; type: string }>
+  }>
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

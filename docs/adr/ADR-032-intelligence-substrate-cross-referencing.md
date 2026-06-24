@@ -1,6 +1,6 @@
 ---
 doc-type: adr
-status: proposed
+status: active
 owner: jason
 updated: 2026-05-30
 ---
@@ -13,7 +13,16 @@ updated: 2026-05-30
 
 ## Status
 
-Proposed
+Active
+
+### Amendments
+
+- **2026-06-24 (#888):** Promoted recommended-actions as primary intelligence output on expansion motion.
+  - `collectAllSignalsUnbudgeted` and `getRecommendations` already implemented in `signal-loader.ts` / `signal-query.ts`.
+  - `nodeMatchesTdp` / `normalizeTdp` used by motion builder for TDP matching.
+  - `signalAudience: 'customer-specific'` corrected on module registration.
+  - `UNIFIED_INTELLIGENCE` feature flag gates population of `unstructuredRecommendations` on `StrategicMotion`.
+  - Recommended actions rendered as "Additional Intelligence" section in expansion motion UI.
 
 ## Context
 

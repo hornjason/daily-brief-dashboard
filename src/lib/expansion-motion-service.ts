@@ -221,6 +221,38 @@ export async function getExpansionMotion(
       }
     }
 
+    // Step 6: Populate unstructuredRecommendations when UNIFIED_INTELLIGENCE is enabled (#888)
+    if (process.env.UNIFIED_INTELLIGENCE === 'true') {
+      try {
+        const { FeatureModuleRegistry } = await import('../feature-module-registry.ts')
+        const recModule = FeatureModuleRegistry.get('recommended-actions')
+        if (recModule?.signals) {
+          const recSignals = await recModule.signals(customerSlug)
+          // Extract solution names already in phase evidence to dedup
+          const phaseEvidence = new Set(
+            motion.phases.flatMap(p => p.evidence.map(e => e.fact.toLowerCase()))
+          )
+
+          motion.unstructuredRecommendations = recSignals
+            .filter(s => !phaseEvidence.has(s.headline.toLowerCase()))
+            .map(s => ({
+              action: s.headline,
+              confidence: (String(s.metadata?.confidence ?? 'emerging')).toLowerCase() as 'high' | 'medium' | 'emerging',
+              triggerCount: Number(s.metadata?.triggerSignalCount ?? 0),
+              solution: {
+                name: String(s.metadata?.solutionName ?? ''),
+                type: String(s.metadata?.solutionType ?? ''),
+                url: s.url,
+              },
+              assets: s.metadata?.assets as Array<{ name: string; url: string; type: string }> | undefined,
+            }))
+            .slice(0, 10) // cap at 10 additional recommendations
+        }
+      } catch (e: any) {
+        console.warn(`[expansion-motion] Recommended-actions failed for ${customerSlug}:`, e?.message)
+      }
+    }
+
     // Persist motion to disk for health monitoring (#877)
     try {
       const { writeJsonAtomic } = await import('./atomic-write.ts')
