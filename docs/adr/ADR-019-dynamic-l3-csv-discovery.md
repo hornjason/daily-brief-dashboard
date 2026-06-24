@@ -1,8 +1,8 @@
 ---
 doc-type: adr
-status: proposed
+status: active
 owner: jason
-updated: 2026-05-12
+updated: 2026-06-24
 ---
 
 # ADR-019: Dynamic L3 CSV Discovery for Pipeline and CCSP Refresh

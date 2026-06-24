@@ -1,8 +1,8 @@
 ---
 doc-type: adr
-status: proposed
+status: active
 owner: jason
-updated: 2026-05-15
+updated: 2026-06-24
 ---
 
 # ADR-023: Standardized Gemini call pattern

@@ -1,8 +1,8 @@
 ---
 doc-type: adr
-status: proposed
+status: active
 owner: jason
-updated: 2026-05-23
+updated: 2026-06-24
 ---
 
 # ADR-031: SalesHub Solution Play Data Flow Through Template Engine

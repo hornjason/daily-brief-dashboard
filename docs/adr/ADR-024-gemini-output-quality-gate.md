@@ -1,8 +1,8 @@
 ---
 doc-type: adr
-status: proposed
+status: active
 owner: jason
-updated: 2026-05-18
+updated: 2026-06-24
 ---
 
 # ADR-024: Universal output quality gate for Gemini-generated content

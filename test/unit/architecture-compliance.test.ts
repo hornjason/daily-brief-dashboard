@@ -908,6 +908,50 @@ describe('Signal routing coverage — every producer routes to a named section (
   })
 })
 
+// ── ADR Implementation Tracking (#885) ──────────────────────────────────────
+// No ADR should remain "proposed" for more than 30 days without being
+// implemented (status → accepted/active) or deprecated.
+
+describe('ADR implementation tracking', () => {
+  test('no ADR should remain "proposed" for more than 30 days', () => {
+    const adrDir = resolve(__dirname, '../../docs/adr')
+    const adrFiles = readdirSync(adrDir).filter(f => f.startsWith('ADR-') && f.endsWith('.md'))
+
+    const staleAdrs: string[] = []
+    const now = Date.now()
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
+    for (const file of adrFiles) {
+      const content = readFileSync(resolve(adrDir, file), 'utf-8')
+
+      // Parse frontmatter
+      const statusMatch = content.match(/^status:\s*(.+)$/m)
+      const updatedMatch = content.match(/^updated:\s*(.+)$/m)
+
+      if (!statusMatch) continue
+      const status = statusMatch[1].trim()
+
+      if (status !== 'proposed') continue
+
+      // Check age
+      if (updatedMatch) {
+        const updatedDate = new Date(updatedMatch[1].trim()).getTime()
+        if (now - updatedDate > THIRTY_DAYS_MS) {
+          staleAdrs.push(`${file} (proposed since ${updatedMatch[1].trim()})`)
+        }
+      }
+    }
+
+    if (staleAdrs.length > 0) {
+      throw new Error(
+        `${staleAdrs.length} ADR(s) have been "proposed" for >30 days without implementation:\n` +
+        staleAdrs.map(a => `  - ${a}`).join('\n') +
+        '\n\nAction: implement the ADR and update status to "accepted"/"active", or mark as "deprecated" if no longer needed.'
+      )
+    }
+  })
+})
+
 // ── Layer 3 — React components must NOT access signal metadata (#779) ────────
 
 describe('Layer 3 — React components must not access signal metadata (#779)', () => {
