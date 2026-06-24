@@ -26,7 +26,7 @@ const CASES_SEARCH_URL =
 
 const SOLR_EXPRESSION =
   'sort=case_lastModifiedDate%20desc' +
-  '&fl=case_number,case_summary,case_status,case_severity,case_accountNumber,case_product,case_lastModifiedDate,case_createdDate,case_owner'
+  '&fl=case_number,case_summary,case_status,case_severity,case_accountNumber,case_product,case_lastModifiedDate,case_createdDate,case_owner,case_description,case_contactName'
 
 // SOLR expression for name-based discovery — adds case_account_name so we can
 // verify that returned docs actually belong to the customer (defends against
@@ -34,7 +34,7 @@ const SOLR_EXPRESSION =
 // otherwise — the cases we return must be display-equivalent to bearer-fetched.
 const SOLR_DISCOVERY_EXPRESSION =
   'sort=case_lastModifiedDate%20desc' +
-  '&fl=case_number,case_summary,case_status,case_severity,case_accountNumber,case_account_name,case_product,case_lastModifiedDate,case_createdDate,case_owner'
+  '&fl=case_number,case_summary,case_status,case_severity,case_accountNumber,case_account_name,case_product,case_lastModifiedDate,case_createdDate,case_owner,case_description,case_contactName'
 
 // Legal-entity tokens stripped from name-match comparison — copied verbatim
 // from rh-scraper.ts:1159 (the in-page evaluate()) so the bearer path matches
@@ -81,6 +81,8 @@ export interface SolrCase {
   createdDate: string
   lastModifiedDate: string
   owner: string
+  description?: string
+  contactName?: string
 }
 
 export interface SolrCasesResult {
@@ -100,6 +102,8 @@ interface SolrDoc {
   case_createdDate?: string
   case_lastModifiedDate?: string
   case_owner?: string
+  case_description?: string
+  case_contactName?: string
 }
 
 /**
@@ -197,6 +201,8 @@ export async function fetchCasesViaSolr(
     createdDate: firstString(d.case_createdDate),
     lastModifiedDate: firstString(d.case_lastModifiedDate),
     owner: firstString(d.case_owner),
+    description: firstString(d.case_description),
+    contactName: firstString(d.case_contactName),
   }))
 
   return {
