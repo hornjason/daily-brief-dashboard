@@ -169,6 +169,7 @@ export async function extractWithGemini<T>(
         console.warn(
           `[saleshub-product-enrichment] "${docName}" failed quality gate after ${gateResult.attempts} attempts (score: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`
         )
+        return null
       }
 
       const cleaned = hasSchema ? gateResult.output : stripMarkdownFences(gateResult.output)

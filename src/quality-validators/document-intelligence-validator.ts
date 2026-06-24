@@ -76,7 +76,7 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
     severity: 'required',
   })
 
-  // summary length >= 20
+  // summary must exist (required) and be substantive (recommended — triggers retry)
   const summary = parsed.summary ?? ''
   checks.push({
     name: 'has-summary',
@@ -84,6 +84,13 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
     expected: 'summary at least 20 chars',
     actual: `${summary.length} chars`,
     severity: 'required',
+  })
+  checks.push({
+    name: 'summary-depth',
+    passed: summary.length >= 300,
+    expected: 'summary at least 300 chars for substantive context',
+    actual: `${summary.length} chars`,
+    severity: 'recommended',
   })
 
   // keyPoints >= 1
@@ -123,6 +130,16 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
     passed: links.length >= 1,
     expected: 'at least 1 link',
     actual: `${links.length} links`,
+    severity: 'recommended',
+  })
+
+  // talk tracks present (recommended — triggers retry for richer output)
+  const talkTracks = parsed.talkTracks ?? []
+  checks.push({
+    name: 'has-talk-tracks',
+    passed: talkTracks.length >= 1,
+    expected: 'at least 1 talk track for AE conversations',
+    actual: `${talkTracks.length} talk tracks`,
     severity: 'recommended',
   })
 
