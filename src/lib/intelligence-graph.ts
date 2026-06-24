@@ -33,6 +33,7 @@ import type {
 } from './intelligence-graph-types.ts'
 import { computeContentHash, bfsTraverse, rankByEdgeStrength } from './graph-utils.ts'
 import { writeJsonAtomic } from './atomic-write.ts'
+import { getDisplacementMap } from './competitive-vocabulary.ts'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -930,6 +931,79 @@ export function buildCustomerGraph(
         )
         edges.push(...existingEdgesForNode)
       }
+    }
+  }
+
+  // ── Cross-reference pass for competitive-intel nodes (#887) ──────────────
+  // Tags competitive-intel nodes with crossReferenced: true/false based on
+  // whether the competitor matches customer signals. Uses displacement
+  // vocabulary as fallback when direct entity matching fails.
+  {
+    // Collect customer node names and property values for entity matching
+    const customerNodeNames: string[] = []
+    const customerNodeProperties: string[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'customer' || node.type === 'intel') continue
+      customerNodeNames.push(node.name.toLowerCase())
+      for (const val of Object.values(node.properties)) {
+        if (typeof val === 'string' && val.length > 2) {
+          customerNodeProperties.push(val.toLowerCase())
+        }
+      }
+    }
+
+    for (const node of Object.values(nodes)) {
+      if (node.sourceModule !== 'competitive-intel') continue
+      const competitor = String(node.properties?.competitor ?? '').toLowerCase()
+      if (!competitor) continue
+
+      // Direct entity matching: check if competitor name appears in any customer node
+      let matched = false
+      for (const name of customerNodeNames) {
+        if (name.includes(competitor) || competitor.includes(name)) {
+          matched = true
+          break
+        }
+      }
+      if (!matched) {
+        for (const prop of customerNodeProperties) {
+          if (prop.includes(competitor) || competitor.includes(prop)) {
+            matched = true
+            break
+          }
+        }
+      }
+
+      // Displacement vocabulary fallback (#887): if no direct entity match,
+      // check if the competitor's displacement technologies match customer nodes
+      if (!matched) {
+        try {
+          const displacementMap = getDisplacementMap()
+          const entry = displacementMap.get(competitor)
+          if (entry) {
+            // Check if the Red Hat displacement product matches customer nodes
+            const redHatLower = entry.redHat.toLowerCase()
+            for (const name of customerNodeNames) {
+              if (name.includes(redHatLower) || redHatLower.includes(name)) {
+                matched = true
+                break
+              }
+            }
+            if (!matched) {
+              for (const prop of customerNodeProperties) {
+                if (prop.includes(redHatLower) || redHatLower.includes(prop)) {
+                  matched = true
+                  break
+                }
+              }
+            }
+          }
+        } catch {
+          // competitive-vocabulary may not be available
+        }
+      }
+
+      ;(node as any).crossReferenced = matched
     }
   }
 

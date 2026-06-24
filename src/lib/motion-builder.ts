@@ -205,6 +205,19 @@ const NODE_TYPE_TO_MODULE: Record<string, string> = {
 /** Sources that require 2+ matching nodes before contributing evidence (#879 SC-7) */
 const CORROBORATION_REQUIRED_SOURCES = new Set(['news', 'customer-docs'])
 
+/**
+ * Determine whether a customer graph is "thin" — has fewer than 5 distinct
+ * node types with at least one node. Thin graphs get relaxed corroboration
+ * thresholds to avoid dropping the only available evidence. (#887)
+ */
+export function isGraphThin(graph: CustomerGraph): boolean {
+  const typesWithNodes = new Set<string>()
+  for (const node of Object.values(graph.nodes)) {
+    typesWithNodes.add(node.type)
+  }
+  return typesWithNodes.size < 5
+}
+
 /** Classify intel nodes into evidence modules */
 function getIntelModule(node: IntelligenceNode): string {
   const intelType = String(node.properties?.intelType ?? '')
@@ -225,6 +238,7 @@ function buildPhaseEvidence(
   graph: CustomerGraph,
   tdpDomains: string[],
   _phaseCategory: string,
+  isThinGraph: boolean = false,
 ): { evidence: MotionPhase['evidence'], ledger: SignalFlowLedger } {
   const evidence: MotionPhase['evidence'] = []
   const gateDetails: PhaseGateDetail[] = []
@@ -290,9 +304,13 @@ function buildPhaseEvidence(
       : (NODE_TYPE_TO_MODULE[nodeType] ?? nodeType)
 
     // Corroboration check: news and customer-docs need 2+ matches (#879 SC-7)
+    // Adaptive threshold for thin graphs (#887): single-match sources
+    // produce evidence at lower priority instead of being dropped entirely.
     let corroborationResult: PhaseGateDetail['corroborationResult'] = 'not_required'
+    let corroborationDemoted = false
     if (CORROBORATION_REQUIRED_SOURCES.has(sampleModule)) {
-      if (matching.length < 2) {
+      const threshold = isThinGraph ? 1 : 2
+      if (matching.length < threshold) {
         corroborationResult = 'dropped'
         totalCorroborationDropped += tdpMatched
         gateDetails.push({
@@ -306,8 +324,15 @@ function buildPhaseEvidence(
         })
         continue
       }
-      corroborationResult = 'passed'
-      totalCorroborationPassed += tdpMatched
+      // Thin graph with exactly 1 match: allow through but mark as demoted (#887)
+      if (isThinGraph && matching.length < 2) {
+        corroborationResult = 'passed'
+        corroborationDemoted = true
+        totalCorroborationPassed += tdpMatched
+      } else {
+        corroborationResult = 'passed'
+        totalCorroborationPassed += tdpMatched
+      }
     }
 
     // Track cross-ref and evidence counts for this source type
@@ -378,8 +403,10 @@ function buildPhaseEvidence(
         fact = `${node.name}`
       }
 
+      // #887: Demoted corroboration evidence sorts at customer-docs priority (7)
+      const effectiveModule = corroborationDemoted ? 'customer-docs' : module
       evidence.push({
-        module,
+        module: effectiveModule,
         fact: sanitizePromptInput(fact, 200),
         url: sanitizeUrl(node.properties?.url as string),
       })
@@ -804,7 +831,7 @@ function buildAnchorPhase(
 
   // #879: Build evidence from full graph traversal
   const tdpDomains = [...expiredTdps]
-  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, tdpDomains, 'anchor')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, tdpDomains, 'anchor', isGraphThin(graph))
 
   // Determine base urgency: expired subs start at high
   // #879: Apply urgency modifiers from graph signals
@@ -904,7 +931,7 @@ function buildExpandPhase(
 
   // #879: Build evidence from full graph traversal
   const expandTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
-  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'expand')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'expand', isGraphThin(graph))
 
   // #879: Apply urgency modifiers
   const urgency = applyUrgencyModifiers(graph, expandTdpDomains.length > 0 ? expandTdpDomains : ['Server and Cloud Computing'], 'high')
@@ -1005,7 +1032,7 @@ function buildTransformPhase(
 
   // #879: Build evidence from full graph traversal
   const transformTdpDomains = [...new Set(tactics.map(t => t.parentTdp).filter(Boolean))]
-  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'transform')
+  const { evidence, ledger: flowLedger } = buildPhaseEvidence(graph, transformTdpDomains.length > 0 ? transformTdpDomains : ['AI Platform', 'AI'], 'transform', isGraphThin(graph))
 
   if (evidence.length === 0) return null
 
@@ -1312,7 +1339,7 @@ function buildDisplacementPhase(
     }
   })
   // Merge graph-wide evidence (excluding tech-stack to avoid duplicates with displacement evidence)
-  const { evidence: rawGraphEvidence, ledger: flowLedger } = buildPhaseEvidence(graph, displaceTdpDomains, 'displacement')
+  const { evidence: rawGraphEvidence, ledger: flowLedger } = buildPhaseEvidence(graph, displaceTdpDomains, 'displacement', isGraphThin(graph))
   const graphEvidence = rawGraphEvidence.filter(e => e.module !== 'tech-stack')
   const evidence = capEvidence([...displacementEvidence, ...graphEvidence])
   // Update ledger's finalEvidenceCount to reflect the post-merge cap
