@@ -118,7 +118,7 @@ FeatureModuleRegistry.register({
       if (item.productTags && item.productTags.length > 0) {
         for (const tag of item.productTags) {
           const slug = normalizeProductSlug(tag)
-          if (slug && context.allRelevantProducts.includes(slug)) {
+          if (slug && context.ownedProducts.includes(slug)) {
             productMatch = true
             if (!matchedProducts.includes(slug)) matchedProducts.push(slug)
           }
