@@ -883,7 +883,14 @@ async function extractRedHeaderSections(
             const docNames: string[] = []
             for (const a of docLinks) {
               const text = (a.textContent || '').trim().slice(0, 200)
-              if (text.length > 3) docNames.push(text)
+              const href = (a as HTMLAnchorElement).href || ''
+              if (text.length > 3) {
+                docNames.push(text)
+                // (#857) Also add to currentLinks so domain docs enter the download pipeline
+                if (href.startsWith('http') && !href.includes('/app#/workspace')) {
+                  currentLinks.push({ text, href })
+                }
+              }
             }
             if (docNames.length > 0) {
               currentDomainDocMap.push({ domain: domainName, docNames })
