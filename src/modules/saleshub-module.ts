@@ -112,7 +112,12 @@ FeatureModuleRegistry.register({
         source: 'saleshub-tactics',
         type: 'recommendation',
         headline: tactic.name ?? 'Unknown Tactic',
-        detail: `TDP: ${tactic.parentTdp ?? 'Unknown'}`,
+        detail: [
+          `TDP: ${tactic.parentTdp ?? 'Unknown'}`,
+          tactic.talkTrack ? `Talk Track: ${tactic.talkTrack}` : '',
+          ...(tactic.whatToSay ?? []).slice(0, 2).map((s: string) => `What to Say: ${s}`),
+          ...(tactic.customerWins ?? []).slice(0, 2).map((s: string) => `Customer Win: ${s}`),
+        ].filter(Boolean).join('\n'),
         rawRelevance: 0.3,
         timestamp: kb.scrapedAt ?? new Date().toISOString(),
         metadata: {
