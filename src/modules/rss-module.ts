@@ -150,6 +150,8 @@ FeatureModuleRegistry.register({
           metadata.matchType = 'interest'
           metadata.context = 'evaluating'
         }
+      } else {
+        continue
       }
 
       if (matchedProducts.length > 0) {

@@ -215,24 +215,21 @@ describe('saleshub-content customer filtering (#486)', () => {
     expect(rhelDoc!.metadata?.customerSlug).toBe('test-customer')
   })
 
-  test('omits customerSlug for docs NOT matching customer subscriptions', async () => {
+  test('filters out docs NOT matching customer subscriptions (#896 SC-9)', async () => {
     const mod = FeatureModuleRegistry.get('saleshub-content')
     const signals = await mod!.signals!('test-customer')
 
-    // Customer doesn't have Satellite → Satellite doc should not match
+    // Customer doesn't have Satellite → Satellite doc should be filtered out entirely
     const satDoc = signals.find(s => s.headline.includes('Satellite Admin Guide'))
-    expect(satDoc).toBeDefined()
-    expect(satDoc!.metadata?.customerSlug).toBeUndefined()
+    expect(satDoc).toBeUndefined()
   })
 
-  test('emits all signals without customerSlug when no customer context exists', async () => {
+  test('emits zero signals when no customer context exists (#896 SC-9)', async () => {
     const mod = FeatureModuleRegistry.get('saleshub-content')
     const signals = await mod!.signals!('nonexistent-customer')
 
-    for (const signal of signals) {
-      expect(signal.metadata?.customerSlug).toBeUndefined()
-    }
-    expect(signals.length).toBeGreaterThan(0)
+    // With filtering, no products match → no signals emitted
+    expect(signals.length).toBe(0)
   })
 })
 

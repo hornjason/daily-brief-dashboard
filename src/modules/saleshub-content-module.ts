@@ -150,6 +150,7 @@ FeatureModuleRegistry.register({
       // Check if file's product (from folder name) matches customer subscriptions (#486)
       const matchTargets = [product, file.parentFolder, file.name].filter(t => t.length > 0)
       const isCustomerMatch = matchesSubscriptionProducts(matchTargets, customerCtx.products)
+      if (!isCustomerMatch) continue
 
       const metadata: Record<string, unknown> = {
         documentName: file.name,

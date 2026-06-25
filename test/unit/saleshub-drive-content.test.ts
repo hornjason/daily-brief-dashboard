@@ -28,8 +28,11 @@ interface DriveContentCache {
 
 // ── Test fixtures ─────────────────────────────────────────────────────────
 
-const TEST_CACHE_DIR = resolve(import.meta.dir, '../../data/cache/saleshub')
+const TEST_CACHE_BASE = resolve(import.meta.dir, '../../data/cache')
+const TEST_CACHE_DIR = resolve(TEST_CACHE_BASE, 'saleshub')
 const TEST_CACHE_PATH = resolve(TEST_CACHE_DIR, 'drive-content.json')
+// Customer subscription data so saleshub-content filtering matches test files (#896 SC-9)
+const TEST_SHEETS_PATH = resolve(TEST_CACHE_BASE, 'test-customer-sheets.json')
 
 function makeSampleCache(overrides: Partial<DriveContentCache> = {}): DriveContentCache {
   return {
@@ -182,8 +185,27 @@ describe('listSaleshubDriveFiles (saleshub-drive-sync.ts)', () => {
 // ── Module integration — signal emission from Drive cache ───────────────
 
 describe('saleshub-content-module signals from Drive cache (#507)', () => {
-  beforeEach(() => cleanCache())
-  afterEach(() => cleanCache())
+  let savedCacheDir: string | undefined
+  beforeEach(() => {
+    cleanCache()
+    // Set CACHE_DIR so customer-context-loader finds the sheets file (#896 SC-9)
+    savedCacheDir = process.env.CACHE_DIR
+    process.env.CACHE_DIR = TEST_CACHE_BASE
+    // Write customer subscription data matching all 3 test cache folders
+    writeFileSync(TEST_SHEETS_PATH, JSON.stringify({
+      rows: [
+        { productDescription: 'Ansible Automation Platform' },
+        { productDescription: 'Red Hat Enterprise Linux' },
+        { productDescription: 'Red Hat OpenShift Container Platform' },
+      ],
+    }))
+  })
+  afterEach(() => {
+    cleanCache()
+    try { rmSync(TEST_SHEETS_PATH, { force: true }) } catch {}
+    if (savedCacheDir !== undefined) process.env.CACHE_DIR = savedCacheDir
+    else delete process.env.CACHE_DIR
+  })
 
   test('signals emitted per file in cache', async () => {
     const cache = makeSampleCache()
