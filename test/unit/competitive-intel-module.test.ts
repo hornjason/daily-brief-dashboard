@@ -20,6 +20,9 @@ const SAMPLE_DECK_EXTRACTION = {
   salesTriggers: ['reduce IT staff but do more with less', 'consolidate virtualization licensing'],
   compensation: 'Q3 SPIFF: $5K per OpenShift Virt deal over $100K',
   keyDates: ['2026-07-01: VMware license renewal deadline for many customers'],
+  redHatProducts: ['OpenShift Virtualization', 'OpenShift Container Platform'],
+  resolvedSlugs: ['ocp', 'ocpvirt'],
+  unresolvedProducts: [],
 }
 
 const SAMPLE_CACHE = {
@@ -38,6 +41,9 @@ const SAMPLE_CACHE = {
           salesTriggers: ['reduce IT staff but do more with less'],
           compensation: 'Q3 SPIFF for OpenShift Virt',
           keyDates: ['2026-07-01'],
+          redHatProducts: ['OpenShift Virtualization', 'OpenShift Container Platform'],
+          resolvedSlugs: ['ocp', 'ocpvirt'],
+          unresolvedProducts: [],
         },
       ],
       cachedAt: '2026-04-27T00:00:00.000Z',
@@ -56,6 +62,9 @@ const SAMPLE_CACHE = {
           salesTriggers: ['edge computing', 'disconnected operations'],
           compensation: null,
           keyDates: [],
+          redHatProducts: ['OpenShift Container Platform'],
+          resolvedSlugs: ['ocp'],
+          unresolvedProducts: [],
         },
       ],
       cachedAt: '2026-04-16T00:00:00.000Z',
@@ -72,6 +81,18 @@ describe('competitive-intel-module', () => {
     // Set env vars before importing module
     process.env.CACHE_DIR = TEST_CACHE_DIR
     mkdirSync(COMPETITIVE_CACHE_DIR, { recursive: true })
+
+    // Create customer product context: test-customer owns OpenShift (ocp)
+    // so competitive signals with resolvedSlugs containing 'ocp' will match
+    writeFileSync(
+      resolve(TEST_CACHE_DIR, 'test-customer-sheets.json'),
+      JSON.stringify({
+        rows: [
+          { productDescription: 'OpenShift Container Platform', quantity: 10 },
+          { productDescription: 'Red Hat Enterprise Linux', quantity: 50 },
+        ],
+      }),
+    )
   })
 
   afterEach(() => {
@@ -215,6 +236,8 @@ describe('competitive-intel-module', () => {
       expect(first.metadata!.redHatCounter).toBeDefined()
       expect(first.metadata!.deckId).toBeDefined()
       expect(first.metadata!.deckDate).toBeDefined()
+      expect(first.metadata!.customerSlug).toBe('test-customer')
+      expect(first.metadata!.matchType).toBe('subscription')
     })
 
     it('signal has rawRelevance between 0 and 1', async () => {

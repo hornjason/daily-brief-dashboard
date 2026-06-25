@@ -93,11 +93,18 @@ Return a JSON array of extraction objects. Only include competitors explicitly d
 
 // ── Signal generation ─────────────────────────────────────────────────────────
 
-function generateSignals(cache: CompetitiveIntelCache): Signal[] {
+function generateSignals(cache: CompetitiveIntelCache, customerSlug: string, ownedProducts: string[]): Signal[] {
   const signals: Signal[] = []
 
   for (const deck of cache.decks) {
     for (const extraction of deck.extractions) {
+      // Filter: only emit signals where the competitor's Red Hat counter-products
+      // match the customer's owned products
+      const hasProductMatch = extraction.resolvedSlugs.some(
+        slug => ownedProducts.includes(slug)
+      )
+      if (!hasProductMatch) continue
+
       // Build headline: competitor + key move
       const headline = `${extraction.competitor}: ${extraction.announcement.slice(0, 100)}`
 
@@ -142,6 +149,8 @@ function generateSignals(cache: CompetitiveIntelCache): Signal[] {
           deckId: deck.deckId,
           deckDate: deck.deckDate,
           deckName: deck.deckName,
+          customerSlug,
+          matchType: 'subscription',
         },
       })
     }
@@ -417,11 +426,18 @@ FeatureModuleRegistry.register({
     }
   },
 
-  async signals(_customerSlug: string): Promise<Signal[]> {
+  async signals(customerSlug: string): Promise<Signal[]> {
     const cache = readCompetitiveCache()
     if (!cache || !cache.decks?.length) return []
 
-    return generateSignals(cache)
+    // Load customer product context for filtering (ADR-029)
+    const { getCustomerProductContext } = await import('../lib/customer-product-context.ts')
+    const context = getCustomerProductContext(customerSlug)
+
+    // No owned products → no competitive signals relevant to this customer
+    if (!context.ownedProducts.length) return []
+
+    return generateSignals(cache, customerSlug, context.ownedProducts)
   },
 })
 
