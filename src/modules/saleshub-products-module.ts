@@ -353,6 +353,46 @@ export function runGate3Advisory(productSlug: string): Gate3Result {
   }
 }
 
+// ── Seismic URL resolution (SC-13, #896) ────────────────────────────────────
+
+const SEISMIC_VIEWER_BASE = 'https://redhat.seismic.com/Link/Content/'
+const EXTENSION_RE = /\.(html|pdf|docx|pptx)$/i
+
+/**
+ * Normalize a document name for matching: strip file extensions and lowercase.
+ */
+function normalizeName(name: string): string {
+  return name.replace(EXTENSION_RE, '').toLowerCase().trim()
+}
+
+/**
+ * Search all product sections (and nested children) for an item whose name
+ * matches the given document name. Returns the contentId and/or url if found.
+ */
+export function findContentIdForDocument(
+  product: ProductPage,
+  documentName: string,
+): { contentId?: string; itemUrl?: string } {
+  const needle = normalizeName(documentName)
+  if (!needle) return {}
+
+  for (const section of Object.values(product.sections)) {
+    for (const item of section.items) {
+      if (normalizeName(item.name) === needle) {
+        return { contentId: item.contentId, itemUrl: item.url }
+      }
+      if (item.children) {
+        for (const child of item.children) {
+          if (normalizeName(child.name) === needle) {
+            return { contentId: child.contentId, itemUrl: child.url }
+          }
+        }
+      }
+    }
+  }
+  return {}
+}
+
 // ── Signal emission ──────────────────────────────────────────────────────────
 
 function emitProductSignals(
@@ -393,6 +433,12 @@ function emitProductSignals(
     for (const doc of enrichment.documents.slice(0, 10)) {
       const match = matchDocumentToCustomer(doc, customerSlug)
 
+      // SC-13: resolve Seismic viewer URL from _product.json contentId
+      const resolved = findContentIdForDocument(product, doc.documentName)
+      const seismicUrl = resolved.contentId
+        ? `${SEISMIC_VIEWER_BASE}${resolved.contentId}`
+        : resolved.itemUrl ?? undefined
+
       const metadata: Record<string, unknown> = {
         productSlug: product.slug,
         documentCategory: doc.documentCategory,
@@ -400,6 +446,7 @@ function emitProductSignals(
         redHatProducts: doc.productsReferenced.map(p => p.slug).filter(Boolean),
         sourceProductSlug: doc.sourceProductSlug,
       }
+      if (resolved.contentId) metadata.contentId = resolved.contentId
 
       if (match.matched) {
         metadata.customerSlug = customerSlug
@@ -430,6 +477,7 @@ function emitProductSignals(
         type: 'recommendation',
         headline: `${product.name} — ${cleanName}`,
         detail: doc.summary || doc.keyPoints.join('; '),
+        url: seismicUrl,
         rawRelevance: match.matched ? 0.40 : 0.35,
         timestamp,
         metadata,
