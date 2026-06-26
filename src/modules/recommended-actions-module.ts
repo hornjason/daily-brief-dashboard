@@ -175,14 +175,19 @@ function findPlayData(solutionName: string): { play: any; tdp: any } | null {
 
 // ── Signal conversion ─────────────────────────────────────────────────────────
 
-function buildTriggerSummary(triggerSignals: Signal[]): Array<{ source: string; headline: string }> {
+function buildTriggerSummary(triggerSignals: Signal[]): Array<{ source: string; headline: string; recommendedAction?: string; nextStep?: string }> {
   const seen = new Set<string>()
-  const result: Array<{ source: string; headline: string }> = []
+  const result: Array<{ source: string; headline: string; recommendedAction?: string; nextStep?: string }> = []
   for (const s of triggerSignals) {
     const key = `${s.source}:${s.headline.slice(0, 40)}`
     if (seen.has(key)) continue
     seen.add(key)
-    result.push({ source: s.source, headline: s.headline.slice(0, 80) })
+    result.push({
+      source: s.source,
+      headline: s.headline.slice(0, 80),
+      recommendedAction: s.metadata?.recommendedAction ? String(s.metadata.recommendedAction) : undefined,
+      nextStep: s.metadata?.nextStep ? String(s.metadata.nextStep) : undefined,
+    })
   }
   return result.slice(0, 8)
 }

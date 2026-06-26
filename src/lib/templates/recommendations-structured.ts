@@ -46,7 +46,7 @@ export interface RecommendationView {
   redHatProducts: string[]
   actions: string[]
   assets: Array<{ name: string; url?: string; type: string; source?: string }>
-  triggerSignals: Array<{ source: string; headline: string }>
+  triggerSignals: Array<{ source: string; headline: string; recommendedAction?: string; nextStep?: string }>
   play?: RecommendationPlayData
   tdp?: RecommendationTdpData
   customerSlug: string
@@ -97,6 +97,8 @@ export function structuredRecommendations(signals: Signal[]): RecommendationView
       triggerSignals: Array.isArray(m.triggerSignals) ? m.triggerSignals.map((ts: any) => ({
         source: String(ts?.source ?? ''),
         headline: String(ts?.headline ?? ''),
+        recommendedAction: ts?.recommendedAction ? String(ts.recommendedAction) : undefined,
+        nextStep: ts?.nextStep ? String(ts.nextStep) : undefined,
       })) : [],
       play: m.play ? {
         summary: String((m.play as any).summary ?? ''),

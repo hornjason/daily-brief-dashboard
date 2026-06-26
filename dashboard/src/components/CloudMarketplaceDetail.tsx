@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake, ExternalLink, Zap } from 'lucide-react'
+import { Cloud, ChevronDown, ChevronUp, Loader2, Award, DollarSign, Globe, Handshake, ExternalLink, Zap, AlertTriangle } from 'lucide-react'
 
 interface CloudOffering {
   name: string
@@ -64,6 +64,16 @@ const PROVIDER_COLORS: Record<string, string> = {
   Oracle: 'text-red-400 bg-red-500/10 border-red-500/20',
 }
 
+interface GapSignal {
+  headline: string
+  detail: string
+  provider: string
+  missingProduct: string
+  cloudSpend: number
+  purchasedElsewhere: boolean
+  url?: string
+}
+
 interface Props {
   customerName: string
 }
@@ -72,6 +82,7 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
   const [data, setData] = useState<CloudMarketplaceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
+  const [gapSignals, setGapSignals] = useState<GapSignal[]>([])
 
   useEffect(() => {
     fetch(`/api/customer/${encodeURIComponent(customerName)}/cloud-marketplace`)
@@ -79,6 +90,24 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
       .then(d => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
+
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/debug?source=cloud-marketplace`)
+      .then(r => r.ok ? r.json() : { signals: [] })
+      .then(d => {
+        const gaps = (d.signals ?? [])
+          .filter((s: any) => s.type === 'qualification-gap' && s.metadata?.gapType === 'marketplace-purchase')
+          .map((s: any) => ({
+            headline: s.headline,
+            detail: s.detail,
+            provider: String(s.metadata?.provider ?? ''),
+            missingProduct: String(s.metadata?.missingProduct ?? ''),
+            cloudSpend: Number(s.metadata?.cloudSpend ?? 0),
+            purchasedElsewhere: Boolean(s.metadata?.purchasedElsewhere),
+            url: s.url || undefined,
+          }))
+        setGapSignals(gaps)
+      })
+      .catch(() => setGapSignals([]))
   }, [customerName])
 
   const toggleProvider = (provider: string) => {
@@ -299,6 +328,35 @@ export function CloudMarketplaceDetail({ customerName }: Props) {
                     </div>
                   </div>
                 )}
+
+                {/* Marketplace Purchase Gaps (#899) */}
+                {(() => {
+                  const providerGaps = gapSignals.filter(g => g.provider === provider.provider)
+                  if (providerGaps.length === 0) return null
+                  return (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                          Purchase Opportunities ({providerGaps.length})
+                        </h4>
+                      </div>
+                      <div className="space-y-2">
+                        {providerGaps.map((gap, i) => (
+                          <div key={i} className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+                            <p className="text-sm font-medium text-text-primary">{gap.missingProduct}</p>
+                            <p className="text-xs text-text-secondary mt-1">{gap.detail}</p>
+                            {gap.purchasedElsewhere && (
+                              <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Purchased via other channels
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
