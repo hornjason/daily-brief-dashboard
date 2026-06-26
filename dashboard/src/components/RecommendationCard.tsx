@@ -48,7 +48,7 @@ export interface RecommendationCardProps {
   redHatProducts: string[]
   actions: string[]
   assets?: Array<{ name: string; url?: string; type: string; source?: string }>
-  triggerSignals?: Array<{ source: string; headline: string }>
+  triggerSignals?: Array<{ source: string; headline: string; recommendedAction?: string; nextStep?: string }>
   play?: PlayData
   tdp?: TdpData
   /** #494: Customer slug for action button navigation */
@@ -93,7 +93,7 @@ function handleAction(
     redHatProducts?: string[]
     play?: PlayData
     assets?: Array<{ name: string; url?: string; type: string; source?: string }>
-    triggerSignals?: Array<{ source: string; headline: string }>
+    triggerSignals?: Array<{ source: string; headline: string; recommendedAction?: string; nextStep?: string }>
   },
 ) {
   const actionLower = action.toLowerCase()
@@ -229,11 +229,25 @@ export function RecommendationCard({
           {triggerSignals && triggerSignals.length > 0 && (
             <div>
               <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Triggered By</p>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {triggerSignals.map((ts, i) => (
-                  <div key={i} className="text-xs flex items-start gap-1.5">
-                    <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono text-[10px] shrink-0">{ts.source}</span>
-                    <span className="text-text-secondary">{ts.headline}</span>
+                  <div key={i} className="text-xs">
+                    <div className="flex items-start gap-1.5">
+                      <span className="px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono text-[10px] shrink-0">{ts.source}</span>
+                      <span className="text-text-secondary">{ts.headline}</span>
+                    </div>
+                    {ts.recommendedAction && (
+                      <div className="ml-[calc(0.375rem+0.5rem)] mt-0.5 flex items-start gap-1 text-accent">
+                        <span className="shrink-0">→</span>
+                        <span>{ts.recommendedAction}</span>
+                      </div>
+                    )}
+                    {ts.nextStep && (
+                      <div className="ml-[calc(0.375rem+0.5rem)] mt-0.5 flex items-start gap-1 text-emerald-400">
+                        <span className="shrink-0">→</span>
+                        <span>{ts.nextStep}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
