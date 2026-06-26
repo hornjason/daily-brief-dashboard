@@ -1301,6 +1301,62 @@ FeatureModuleRegistry.register({
       }
     }
 
+    // #899: Purchase gap detection — flag marketplace offerings the customer
+    // hasn't purchased despite having cloud spend on that provider
+    const purchasedProducts = new Set(
+      customerRecords
+        .filter(r => r.productOfferingGroup)
+        .map(r => normalizeOfferingName(r.productOfferingGroup!).toLowerCase())
+    )
+
+    for (const cloud of marketplaceCache.clouds) {
+      const ccspPartner = providerMap[cloud.provider]
+      const hasSpend = ccspPartner && ccspClouds.has(ccspPartner)
+      if (!hasSpend) continue
+
+      const cloudACV = customerRecords
+        .filter(r => r.cloudPartner === ccspPartner)
+        .reduce((sum, r) => sum + (r.acvPlus || 0), 0)
+
+      const purchasedOnThisCloud = new Set(
+        customerRecords
+          .filter(r => r.cloudPartner === ccspPartner && r.productOfferingGroup)
+          .map(r => normalizeOfferingName(r.productOfferingGroup!).toLowerCase())
+      )
+
+      const gaps = cloud.offerings.filter(o =>
+        !purchasedOnThisCloud.has(normalizeOfferingName(o.name).toLowerCase())
+      )
+
+      for (const gap of gaps) {
+        const normalizedName = normalizeOfferingName(gap.name)
+        const headline = `Customer spends $${Math.round(cloudACV).toLocaleString()} on ${cloud.provider} but hasn't purchased ${normalizedName} via marketplace`
+        const detail = purchasedProducts.has(normalizedName.toLowerCase())
+          ? `${normalizedName} is available on ${cloud.provider} Marketplace. Customer purchases this product through other channels — consolidating through ${cloud.provider} Marketplace could count toward committed spend drawdown.`
+          : `${normalizedName} is available on ${cloud.provider} Marketplace but customer has no purchases. Position as committed spend drawdown — their existing ${cloud.provider} agreement can cover this.`
+
+        signals.push({
+          source: 'cloud-marketplace',
+          type: 'qualification-gap',
+          headline,
+          detail,
+          rawRelevance: purchasedProducts.has(normalizedName.toLowerCase()) ? 0.75 : 0.6,
+          timestamp: marketplaceCache.cachedAt,
+          url: gap.url || undefined,
+          metadata: {
+            customerSlug,
+            provider: cloud.provider,
+            gapType: 'marketplace-purchase',
+            missingProduct: normalizedName,
+            cloudSpend: cloudACV,
+            purchasedElsewhere: purchasedProducts.has(normalizedName.toLowerCase()),
+            offeringAvailability: gap.availability,
+            offeringPricing: gap.pricing,
+          },
+        })
+      }
+    }
+
     return signals
   },
 })
