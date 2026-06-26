@@ -12,6 +12,21 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
 
+const CATEGORY_ACTION: Record<string, string> = {
+  modernization: 'migration workshop',
+  automation: 'automation demo',
+  platform: 'demo',
+  marketplace: 'procurement review',
+}
+
+const PRODUCT_DISPLAY: Record<string, string> = {
+  ocp: 'OpenShift',
+  rhel: 'RHEL',
+  aap: 'Ansible Automation Platform',
+  acs: 'Advanced Cluster Security',
+  quay: 'Quay',
+}
+
 FeatureModuleRegistry.register({
   name: 'solution-intelligence',
   displayName: 'Solution Intelligence',
@@ -30,13 +45,19 @@ FeatureModuleRegistry.register({
   async signals(customerSlug: string): Promise<Signal[]> {
     const ctx = getCustomerSolutionContext(customerSlug)
     const signals: Signal[] = []
+    const customerDisplay = customerSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
     for (const play of ctx.activeSolutionPlays) {
+      const actionType = CATEGORY_ACTION[play.category] ?? 'demo'
+      const solutionName = play.redHatProducts.map(p => PRODUCT_DISPLAY[p] ?? p).join(' + ')
+      const matchedTech = play.matchedTechnologies[0] ?? play.tdp
+      const nextStep = `Schedule a ${actionType} of ${solutionName} — ${customerDisplay} already uses ${matchedTech}.`
+
       signals.push({
         source: 'solution-intelligence',
         type: 'product-intel',
         headline: `${play.playName} — ${play.matchedTechnologies.join(', ')} detected`,
-        detail: play.valueProps.join('; '),
+        detail: `${play.valueProps.join('; ')}. Next step: ${nextStep}`,
         rawRelevance: play.confidence === 'HIGH' ? 0.9 : play.confidence === 'MEDIUM' ? 0.7 : 0.5,
         timestamp: new Date().toISOString(),
         url: play.linkedAssets?.[0]?.url || undefined,  // #479: first linked asset URL
@@ -54,6 +75,7 @@ FeatureModuleRegistry.register({
           linkedAssets: play.linkedAssets,
           confidence: play.confidence,
           context: 'evaluating',
+          nextStep,
         },
       })
     }
