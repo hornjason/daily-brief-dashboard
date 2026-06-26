@@ -537,15 +537,13 @@ export async function generateWhatsNew(slug: string, forceRefresh: boolean): Pro
   const result = await callGemini(systemPrompt, userPrompt, {
     callType: 'product-whats-new',
     deltaKey,
-    responseSchema: {
-      type: 'ARRAY',
-      items: { type: 'STRING' },
-    },
   })
 
   let summary: string[]
   try {
-    summary = JSON.parse(result.text)
+    // Free-form Gemini may wrap JSON in markdown code fences — strip them
+    const cleaned = result.text.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim()
+    summary = JSON.parse(cleaned)
     if (!Array.isArray(summary)) summary = [result.text]
   } catch {
     summary = result.text.split('\n').filter(line => line.trim().length > 0).slice(0, 5)
