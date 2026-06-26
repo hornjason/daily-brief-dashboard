@@ -13,6 +13,14 @@ import { customers } from '../server-state.ts'
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CASES_PATH = resolve(CACHE_DIR, 'cases.json')
 
+function recommendedAction(product: string | undefined): string {
+  const p = (product ?? '').toLowerCase()
+  if (p.includes('ansible') || p.includes('aap')) return 'Offer automation best practices workshop'
+  if (p.includes('openshift') || p.includes('ocp')) return 'Propose architecture review session'
+  if (p.includes('rhel') || p.includes('enterprise linux')) return 'Suggest upgrade assessment or health check'
+  return `Offer technical deep-dive on ${product ?? 'Unknown'}`
+}
+
 FeatureModuleRegistry.register({
   name: 'cases',
   displayName: 'RH Cases',
@@ -98,6 +106,7 @@ FeatureModuleRegistry.register({
           daysOpen: c.daysOpen,
           caseDescription: c.description || undefined,
           contactName: c.contactName || undefined,
+          recommendedAction: recommendedAction(c.product),
         },
       }
     })
