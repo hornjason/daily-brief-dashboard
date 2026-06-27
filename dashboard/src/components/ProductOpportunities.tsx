@@ -26,6 +26,8 @@ interface SignalMetadata {
   resourceType?: string
   items?: ResourceItem[]
   links?: ResourceItem[]
+  matchType?: string[]
+  matchedTechnologies?: string[]
   [key: string]: unknown
 }
 
@@ -46,6 +48,13 @@ const CLOUD_BADGE: Record<string, { bg: string; text: string; label: string }> =
   azure:  { bg: 'bg-blue-500/15',   text: 'text-blue-400',  label: 'Azure' },
   google: { bg: 'bg-green-500/15',  text: 'text-green-400', label: 'Google' },
   gcp:    { bg: 'bg-green-500/15',  text: 'text-green-400', label: 'GCP' },
+}
+
+const MATCH_TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+  'integration':              { bg: 'bg-indigo-500/15', text: 'text-indigo-400', label: 'Integration' },
+  'competitor-displacement':  { bg: 'bg-amber-500/15',  text: 'text-amber-400',  label: 'Displacement' },
+  'competitor-context':       { bg: 'bg-amber-500/15',  text: 'text-amber-300',  label: 'Competitor' },
+  'partner':                  { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'Partner' },
 }
 
 function scoreColor(score: number): string {
@@ -187,6 +196,20 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
                       {badge && (
                         <span className={`text-xs px-1.5 py-0.5 rounded ${badge.bg} ${badge.text} font-medium`}>
                           {badge.label}
+                        </span>
+                      )}
+                      {(signal.metadata.matchType ?? []).map(mt => {
+                        const mtBadge = MATCH_TYPE_BADGE[mt]
+                        if (!mtBadge) return null
+                        return (
+                          <span key={mt} className={`text-xs px-1.5 py-0.5 rounded ${mtBadge.bg} ${mtBadge.text} font-medium`}>
+                            {mtBadge.label}
+                          </span>
+                        )
+                      })}
+                      {(signal.metadata.matchedTechnologies ?? []).length > 0 && (
+                        <span className="text-xs text-text-secondary">
+                          {signal.metadata.matchedTechnologies!.join(', ')}
                         </span>
                       )}
                       {signal.metadata.contactName && (
