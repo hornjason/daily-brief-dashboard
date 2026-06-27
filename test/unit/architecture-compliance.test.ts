@@ -14,7 +14,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test'
-import { readdirSync, readFileSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { FeatureModuleRegistry } from '../../src/feature-module-registry.ts'
 
@@ -949,6 +949,53 @@ describe('ADR implementation tracking', () => {
         '\n\nAction: implement the ADR and update status to "accepted"/"active", or mark as "deprecated" if no longer needed.'
       )
     }
+  })
+})
+
+// ── ADR Governance: proposed ADR drift detection (#885) ───────────────────────
+// Proposed ADRs older than 30 days must have a GitHub tracking issue.
+// Known-good baseline prevents false positives for tracked ADRs.
+
+describe('ADR governance: no proposed ADRs older than 30 days without tracking issues', () => {
+  // Baseline: proposed ADRs that have been acknowledged with tracking issues.
+  // If a NEW proposed ADR appears >30 days old and is NOT in this map, the test fails.
+  const TRACKED_PROPOSED_ADRS: Record<string, number> = {
+    'ADR-033-no-storage-without-action.md': 906,
+    'ADR-038-dynamic-matching-replaces-handcrafted-mappings.md': 907,
+    'ADR-040-universal-structured-output.md': 908,
+    'ADR-041-structured-document-intelligence.md': 909,
+  }
+
+  test('every proposed ADR older than 30 days has a tracking issue', () => {
+    const adrDir = resolve(__dirname, '../../docs/adr')
+    const adrFiles = readdirSync(adrDir).filter(f => f.startsWith('ADR-') && f.endsWith('.md'))
+
+    const now = Date.now()
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+    const untracked: string[] = []
+
+    for (const file of adrFiles) {
+      const fullPath = resolve(adrDir, file)
+      const content = readFileSync(fullPath, 'utf-8')
+
+      const statusMatch = content.match(/^status:\s*(.+)$/m)
+      if (!statusMatch || statusMatch[1].trim() !== 'proposed') continue
+
+      const mtime = statSync(fullPath).mtimeMs
+      if (now - mtime <= THIRTY_DAYS_MS) continue
+
+      if (!TRACKED_PROPOSED_ADRS[file]) {
+        untracked.push(`${file} — proposed, >30 days old (mtime), no tracking issue in baseline`)
+      }
+    }
+
+    expect(
+      untracked,
+      `Untracked stale proposed ADR(s) found. Either:\n` +
+      `  1. Create a GitHub issue and add the ADR to TRACKED_PROPOSED_ADRS in this test, or\n` +
+      `  2. Update the ADR status to "accepted"/"active"/"deprecated".\n` +
+      `Untracked:\n${untracked.map(u => `  - ${u}`).join('\n')}`
+    ).toEqual([])
   })
 })
 
