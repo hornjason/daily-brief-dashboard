@@ -67,6 +67,7 @@ up: down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard \
@@ -255,6 +256,7 @@ dev-up: dev-down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-dev \
@@ -307,6 +309,7 @@ test-up: test-down seed
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
 	  -e NODE_ROLE= \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -326,6 +329,7 @@ test-rebuild: build test-down seed
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
 	  -e NODE_ROLE= \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -367,6 +371,7 @@ test-up-live: test-down seed-live-clean
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
 	  -e NODE_ROLE= \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  $(if $(OAUTH_BASE_URL),-e OAUTH_BASE_URL=$(OAUTH_BASE_URL),) \
 	  --shm-size=2g \
 	  --memory=8g \
@@ -387,6 +392,7 @@ test-rebuild-live: build test-down seed-live-clean
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
 	  -e NODE_ROLE= \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -539,6 +545,7 @@ pre-promote: lint test-down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -671,6 +678,7 @@ demo-up: demo-down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -e UNIFIED_INTELLIGENCE=true \
 	  $(if $(OAUTH_BASE_URL),-e OAUTH_BASE_URL=$(OAUTH_BASE_URL),) \
 	  --shm-size=2g \
 	  --memory=8g \
