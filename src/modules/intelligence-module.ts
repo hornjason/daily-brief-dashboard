@@ -132,7 +132,17 @@ FeatureModuleRegistry.register({
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'company',
           length: data.company.length,
-          docUrl: data.companyDocUrl,
+          companyDocUrl: data.companyDocUrl,
+          detectedTechs: (() => {
+            try {
+              const techPath = resolve(CACHE_DIR, 'tech-stack', `${customerSlug}.json`)
+              if (existsSync(techPath)) {
+                const techData = JSON.parse(readFileSync(techPath, 'utf-8'))
+                return (techData.technologies ?? []).map((t: any) => t.name)
+              }
+            } catch {}
+            return []
+          })(),
           ...structured,
         },
       })
@@ -151,7 +161,7 @@ FeatureModuleRegistry.register({
           customerSlug,  // ADR-027: Mark as customer-specific
           docType: 'industry',
           length: data.industry.length,
-          docUrl: data.industryDocUrl,
+          industryDocUrl: data.industryDocUrl,
           industrySegment: data.industryClassification ?? null,
         },
       })
