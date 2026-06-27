@@ -373,3 +373,4 @@ Update this file at the end of any session where:
 - Current data state changes significantly
 
 **Before asking "does X exist?" — read this file first.**
+
