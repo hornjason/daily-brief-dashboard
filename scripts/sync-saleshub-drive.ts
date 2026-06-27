@@ -8,7 +8,7 @@
  */
 
 import { google } from 'googleapis'
-import { readFileSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs'
 import { resolve } from 'path'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/google.ts'
 import type { SalesHubProduct } from './scrape-saleshub.ts'
@@ -229,10 +229,86 @@ export async function syncSalesHubToDrive(): Promise<{ uploaded: number; shortcu
       }
     }
     console.log(`[sync-saleshub-drive] Created shortcuts for product assets`)
+
+    // Write back driveUrl for all documents in the knowledge JSON
+    const writeBackCount = await writeBackDriveUrls(drive, saleshubFolderId, knowledge, knowledgePath)
+    if (writeBackCount > 0) {
+      console.log(`[sync-saleshub-drive] Wrote driveUrl back to ${writeBackCount} document entries`)
+    }
   }
 
   console.log(`[sync-saleshub-drive] Done — ${uploaded} files uploaded, ${shortcuts} shortcuts created`)
   return { uploaded, shortcuts }
+}
+
+async function listDriveFilesRecursive(
+  drive: any,
+  folderId: string,
+): Promise<Array<{ id: string; name: string; webViewLink: string }>> {
+  const results: Array<{ id: string; name: string; webViewLink: string }> = []
+  let pageToken: string | undefined
+  do {
+    const res = await withQuotaRetry(
+      () => drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id, name, mimeType, webViewLink)',
+        pageSize: 200,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }),
+      `list files for driveUrl write-back`,
+    )
+    for (const file of res.data.files ?? []) {
+      if (!file.id || !file.name) continue
+      if (file.mimeType === 'application/vnd.google-apps.folder') {
+        const children = await listDriveFilesRecursive(drive, file.id)
+        results.push(...children)
+      } else if (file.webViewLink) {
+        results.push({ id: file.id, name: file.name, webViewLink: file.webViewLink })
+      }
+    }
+    pageToken = res.data.nextPageToken ?? undefined
+  } while (pageToken)
+  return results
+}
+
+async function writeBackDriveUrls(
+  drive: any,
+  saleshubFolderId: string,
+  knowledge: any,
+  knowledgePath: string,
+): Promise<number> {
+  const driveFiles = await listDriveFilesRecursive(drive, saleshubFolderId)
+  if (driveFiles.length === 0) return 0
+
+  const filesByName = new Map<string, { id: string; webViewLink: string }>()
+  for (const f of driveFiles) {
+    filesByName.set(f.name.toLowerCase(), { id: f.id, webViewLink: f.webViewLink })
+  }
+
+  let updated = 0
+  const collections = [
+    ...(knowledge.tdps ?? []),
+    ...(knowledge.salesPlays ?? []),
+  ]
+
+  for (const node of collections) {
+    for (const doc of node.documents ?? []) {
+      if (doc.driveUrl) continue
+      const match = filesByName.get(doc.name.toLowerCase())
+      if (match) {
+        doc.driveFileId = match.id
+        doc.driveUrl = match.webViewLink
+        updated++
+      }
+    }
+  }
+
+  if (updated > 0) {
+    writeFileSync(knowledgePath, JSON.stringify(knowledge, null, 2))
+  }
+  return updated
 }
 
 if (import.meta.main) {

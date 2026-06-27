@@ -164,6 +164,43 @@ export function getTdpByName(tdpName: string): TdpNode | undefined {
   )
 }
 
+export interface TdpInfo {
+  cheatsheetUrl: string
+  customerDeckUrl: string
+}
+
+export function getTdpInfo(tdpName: string): TdpInfo | null {
+  const tdp = getTdpByName(tdpName)
+  if (!tdp) return null
+
+  let cheatsheetUrl = tdp.cheatsheetUrl ?? ''
+  let customerDeckUrl = tdp.customerDeckUrl ?? ''
+
+  const docs: any[] = (tdp as any).documents ?? []
+  if (docs.length > 0) {
+    const csVersionId = extractVersionId(cheatsheetUrl)
+    const cdVersionId = extractVersionId(customerDeckUrl)
+
+    for (const doc of docs) {
+      if (!doc.driveUrl) continue
+      if (csVersionId && doc.versionId === csVersionId) {
+        cheatsheetUrl = doc.driveUrl
+      }
+      if (cdVersionId && doc.versionId === cdVersionId) {
+        customerDeckUrl = doc.driveUrl
+      }
+    }
+  }
+
+  return { cheatsheetUrl, customerDeckUrl }
+}
+
+function extractVersionId(url: string): string {
+  if (!url) return ''
+  const parts = url.split('/')
+  return parts[parts.length - 1] || ''
+}
+
 export function getSalesPlayByName(playName: string): SalesPlayNode | undefined {
   const kb = loadKnowledgeBase()
   if (!kb) return undefined
