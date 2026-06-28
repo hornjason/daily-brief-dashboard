@@ -11,7 +11,7 @@ updated: 2026-06-10
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-06-08 — Documentation cascade (#683) + routing ADR (#685). Signal routing expanded from 8 to 14 routes (ADR-035). Vocabulary resolvers added (product-vocabulary.ts, competitive-vocabulary.ts). RH product catalog module added. PRINCIPLES.md: 16 pre-flight questions, 21 anti-patterns, 10 contract sections + vocabulary resolver rule. Section groups expanded: customer-core +3, people +2, new sales-enablement group.
+Last updated: 2026-06-28 — docs-module: extractActionItems() added (#912). intelligence-module: companyDocUrl/industryDocUrl/detectedTechs (#910). Cases SOLR: case_description + case_contactName fields verified (#911).
 
 ---
 

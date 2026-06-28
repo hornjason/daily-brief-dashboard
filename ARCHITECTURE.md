@@ -2015,3 +2015,16 @@ Settings sync between instances is **not yet wired** (#788). `runStartupDriveMer
 - Pod ID renamed (e.g., `CENTRAL_ENT_TOLA_HP` → `CENTRAL_ENT_HIGH_PLAINS`)
 - Pod status changes (pending → active, hidden toggled)
 - Territory sheet URL changes
+
+## §34. Customer Docs Module Extractors (#912, 2026-06-28)
+
+`src/modules/docs-module.ts` reads Google Drive document corpus and emits `customer-docs` signals with 4 extraction layers:
+
+| Extractor | Patterns | Max | Metadata field |
+|-----------|----------|-----|----------------|
+| `extractTechReferences()` | 13 tech keywords (Kubernetes, Ansible, OpenShift, etc.) | unlimited | `techReferences` |
+| `extractKeyPoints()` | Strategic bullet lines (next step, recommend, opportunity) | 5 | `keyPoints` |
+| `extractStakeholders()` | Contact/Owner/Attendee regex patterns | 5 | `stakeholders` |
+| `extractActionItems()` | Task patterns (TODO, deadline, assigned to, due by) + numbered verb items | 10 | `actionItems` |
+
+All extraction is pure regex — no Gemini, no NLP. Fields are conditionally spread into signal metadata (empty arrays omitted).
