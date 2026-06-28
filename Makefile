@@ -92,6 +92,12 @@ build:
 	  exit 1; \
 	fi
 	@git worktree prune 2>/dev/null || true
+	@# #913: Auto-prune if disk space is low (<10GB free)
+	@FREE_GB=$$(df -g . 2>/dev/null | tail -1 | awk '{print $$4}'); \
+	if [ -n "$$FREE_GB" ] && [ "$$FREE_GB" -lt 10 ] 2>/dev/null; then \
+	  echo "⚠️  Low disk space ($${FREE_GB}GB free) — pruning podman storage..."; \
+	  podman system prune -af 2>/dev/null || true; \
+	fi
 	podman manifest rm $(REMOTE) 2>/dev/null || true
 	podman rmi $(REMOTE) 2>/dev/null || true
 	podman manifest create $(REMOTE)
