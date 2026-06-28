@@ -37,7 +37,7 @@ const TIMEOUT_GROUNDED = 120_000   // grounding enabled
 const TIMEOUT_LONG_FORM = 180_000  // campaign-generation, account-plan
 const TIMEOUT_STANDARD = 120_000   // default
 
-const LONG_FORM_CALL_TYPES = new Set(['campaign-generation', 'account-plan', 'value-positioning', 'daily-briefing-synthesis'])
+const LONG_FORM_CALL_TYPES = new Set(['campaign-generation', 'account-plan', 'value-positioning', 'daily-briefing-synthesis', 'enhanced-tactic-recommendation'])
 
 // ── Public API ───────────────────────────────────────────────────────────────
 

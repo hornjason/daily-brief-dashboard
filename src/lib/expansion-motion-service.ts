@@ -22,11 +22,19 @@ import { loadOutcomeHistory } from './deal-outcome-history.ts'
 import { getSimilarCustomers } from './customer-similarity.ts'
 import { enrichPersonas } from './persona-enrichment.ts'
 import { CACHE_DIR } from './paths.ts'
+import { existsSync, readFileSync, statSync } from 'fs'
+import { resolve } from 'path'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 /** Graph is considered fresh if built within this window */
 const GRAPH_FRESHNESS_MS = 60 * 60 * 1000 // 1 hour
+
+/** Motion cache is considered fresh if written within this window */
+const MOTION_FRESHNESS_MS = 4 * 60 * 60 * 1000 // 4 hours
+
+/** Slugs currently being rebuilt — prevents duplicate concurrent rebuilds */
+const _rebuildingInFlight = new Set<string>()
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +95,73 @@ export async function getExpansionMotion(
 ): Promise<StrategicMotion | null> {
   const dataDir = CACHE_DIR
 
+  // ── Stale-while-revalidate: serve cached motion immediately (#904) ──────
+  const cachedMotion = loadCachedMotion(customerSlug, dataDir)
+
+  if (cachedMotion) {
+    // Cached motion exists — return immediately
+    // If graph is stale (> 1 hour), trigger background rebuild (fire-and-forget)
+    const graph = loadGraph(customerSlug, dataDir)
+    if (!graph || isGraphStale(graph)) {
+      triggerBackgroundRebuild(customerSlug, customerName, deps)
+    }
+    return cachedMotion
+  }
+
+  // ── No cached motion — full synchronous build (first-time load) ─────────
+  return buildMotionFull(customerSlug, customerName, deps)
+}
+
+/**
+ * Load cached motion.json if it exists and is recent (< 4 hours old).
+ */
+function loadCachedMotion(customerSlug: string, dataDir: string): StrategicMotion | null {
+  const motionPath = resolve(dataDir, customerSlug, 'motion.json')
+  if (!existsSync(motionPath)) return null
+
+  try {
+    const stat = statSync(motionPath)
+    const ageMs = Date.now() - stat.mtimeMs
+    if (ageMs > MOTION_FRESHNESS_MS) return null
+
+    return JSON.parse(readFileSync(motionPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Trigger a background rebuild — fire-and-forget, with in-flight guard.
+ * Does not block the caller. Errors are logged and swallowed.
+ */
+function triggerBackgroundRebuild(
+  customerSlug: string,
+  customerName: string,
+  deps: ExpansionMotionDeps,
+): void {
+  if (_rebuildingInFlight.has(customerSlug)) return
+  _rebuildingInFlight.add(customerSlug)
+
+  buildMotionFull(customerSlug, customerName, deps)
+    .catch((e: any) => {
+      console.warn(`[expansion-motion] Background rebuild failed for ${customerSlug}:`, e?.message)
+    })
+    .finally(() => {
+      _rebuildingInFlight.delete(customerSlug)
+    })
+}
+
+/**
+ * Full synchronous motion build pipeline — graph + motion + enrichment + persist.
+ * Used for first-time loads and background rebuilds.
+ */
+async function buildMotionFull(
+  customerSlug: string,
+  customerName: string,
+  deps: ExpansionMotionDeps,
+): Promise<StrategicMotion | null> {
+  const dataDir = CACHE_DIR
+
   // #585: Ensure signal data is current before graph building
   try {
     const { ensureSignalsCurrent } = await import('../lib/signal-loader.ts')
@@ -99,9 +174,9 @@ export async function getExpansionMotion(
   let graph = loadGraph(customerSlug, dataDir)
 
   // Step 2: Rebuild if no graph or stale
-  const isStale = !graph || isGraphStale(graph)
+  const stale = !graph || isGraphStale(graph)
 
-  if (isStale) {
+  if (stale) {
     const signals = await deps.collectSignals(customerSlug)
 
     if (signals.length === 0) {
@@ -253,10 +328,9 @@ export async function getExpansionMotion(
       }
     }
 
-    // Persist motion to disk for health monitoring (#877)
+    // Persist motion to disk for health monitoring (#877) + stale-while-revalidate cache (#904)
     try {
       const { writeJsonAtomic } = await import('./atomic-write.ts')
-      const { resolve } = await import('path')
       const motionPath = resolve(dataDir, customerSlug, 'motion.json')
       writeJsonAtomic(motionPath, motion)
     } catch (e: any) {
