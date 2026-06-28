@@ -23,6 +23,13 @@ const KEY_POINT_PATTERNS = /\b(action|next step|follow up|follow-up|recommend|op
 /** SC-8: Patterns indicating transcript-like content */
 const TRANSCRIPT_CONTENT_PATTERNS = /(?:^|\n)\s*(?:Speaker\s*:|\[?\d{1,2}:\d{2})/m
 
+/** #912: Patterns indicating task-oriented action items */
+const ACTION_ITEM_PATTERNS = /\b(TODO|action item|task\s*:|deadline\s*:|due by|due date|assigned to|follow up by|complete by|deliver by)/i
+
+/** #912: Action verbs for numbered-item detection */
+const ACTION_VERBS = /^\s*\d+\.\s+(?:review|schedule|send|complete|prepare|submit|update|create|fix|deploy)\b/i
+
+
 /**
  * SC-6: Extract technology references from text content.
  * Pure regex/string matching — no NLP, no Gemini.
@@ -80,6 +87,34 @@ function extractStakeholders(text: string): string[] {
     }
   }
   return found.slice(0, 5)
+}
+
+/**
+ * #912: Extract task-oriented action items from text content.
+ * Matches TODO, action item, task:, deadline:, due by, due date, assigned to,
+ * follow up by, complete by, deliver by. Also matches numbered items (1. 2. 3.)
+ * starting with action verbs (review, schedule, send, complete, prepare, submit,
+ * update, create, fix, deploy). Returns max 10 items, strips bullet/number prefixes.
+ */
+export function extractActionItems(text: string): string[] {
+  if (!text) return []
+  const lines = text.split('\n')
+  const items: string[] = []
+  for (const line of lines) {
+    if (items.length >= 10) break
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const matchesPattern = ACTION_ITEM_PATTERNS.test(trimmed)
+    const matchesVerb = ACTION_VERBS.test(trimmed)
+    if (matchesPattern || matchesVerb) {
+      // Strip leading bullet (- or *) or number prefix (1. 2. etc)
+      const clean = trimmed.replace(/^(?:[*-]\s*|\d+\.\s*)/, '').trim()
+      if (clean.length > 0 && !items.includes(clean)) {
+        items.push(clean)
+      }
+    }
+  }
+  return items
 }
 
 /**
@@ -142,6 +177,7 @@ FeatureModuleRegistry.register({
       const techReferences = hasContent ? extractTechReferences(textContent) : []
       const keyPoints = hasContent ? extractKeyPoints(textContent) : []
       const stakeholders = hasContent ? extractStakeholders(textContent) : []
+      const actionItems = hasContent ? extractActionItems(textContent) : []
 
       // SC-8: Detect doc type
       const docType = isTranscript(f.name ?? '', hasContent ? textContent : undefined)
@@ -165,6 +201,7 @@ FeatureModuleRegistry.register({
           ...(techReferences.length > 0 && { techReferences }),
           ...(keyPoints.length > 0 && { keyPoints }),
           ...(stakeholders.length > 0 && { stakeholders }),
+          ...(actionItems.length > 0 && { actionItems }),
         },
       }
     })
