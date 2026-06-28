@@ -2028,3 +2028,14 @@ Settings sync between instances is **not yet wired** (#788). `runStartupDriveMer
 | `extractActionItems()` | Task patterns (TODO, deadline, assigned to, due by) + numbered verb items | 10 | `actionItems` |
 
 All extraction is pure regex — no Gemini, no NLP. Fields are conditionally spread into signal metadata (empty arrays omitted).
+
+## §35. Expansion Motion Stale-While-Revalidate (#904, 2026-06-28)
+
+`src/lib/expansion-motion-service.ts` uses stale-while-revalidate for the expansion-motion endpoint:
+
+- **Cached motion** (`motion.json` per customer): served immediately if < 4 hours old
+- **Background rebuild**: if graph is stale (> 1 hour), fires async rebuild (non-blocking)
+- **In-flight guard**: `_rebuildingInFlight` Set prevents duplicate concurrent rebuilds per slug
+- **First-time load**: builds synchronously when no cached motion exists
+
+`enhanced-tactic-recommendation` uses `TIMEOUT_LONG_FORM` (180s) in `gemini-call.ts` — the full graph context exceeds the 30s `TIMEOUT_STRUCTURED` tier.
