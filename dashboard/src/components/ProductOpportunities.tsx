@@ -48,6 +48,7 @@ const CLOUD_BADGE: Record<string, { bg: string; text: string; label: string }> =
   azure:  { bg: 'bg-blue-500/15',   text: 'text-blue-400',  label: 'Azure' },
   google: { bg: 'bg-green-500/15',  text: 'text-green-400', label: 'Google' },
   gcp:    { bg: 'bg-green-500/15',  text: 'text-green-400', label: 'GCP' },
+  'google cloud': { bg: 'bg-green-500/15', text: 'text-green-400', label: 'Google Cloud' },
 }
 
 const MATCH_TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
