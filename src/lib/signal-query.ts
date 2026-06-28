@@ -394,7 +394,8 @@ export function getRecommendations(
       .slice(0, 3)
       .join(' + ')
 
-    const triggerSummary = customerTriggers || rec.triggerSignals.map(s => s.headline).slice(0, 2).join(' + ')
+    const rawTrigger = customerTriggers || rec.triggerSignals.map(s => s.headline).slice(0, 2).join(' + ')
+    const triggerSummary = rawTrigger.length > 100 ? rawTrigger.slice(0, 100) + '...' : rawTrigger
 
     scored.push({
       weightedScore,
