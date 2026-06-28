@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-06-11
+updated: 2026-06-28
 ---
 
 # DailyBriefDashboard — Architecture Reference
