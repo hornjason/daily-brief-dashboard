@@ -10,7 +10,8 @@ import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleSco
 import { fetchRedHatRSS, type RSSItem } from '../rh-rss-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { getCustomerProductContext, normalizeProductSlug } from '../lib/customer-product-context.ts'
+import { getCustomerProductContext } from '../lib/customer-product-context.ts'
+import { resolveToSlug } from '../lib/product-vocabulary.ts'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-feeds.json')
 const RSS_TTL_MS = 4 * 60 * 60 * 1000  // 4 hours
@@ -117,7 +118,7 @@ FeatureModuleRegistry.register({
 
       if (item.productTags && item.productTags.length > 0) {
         for (const tag of item.productTags) {
-          const slug = normalizeProductSlug(tag)
+          const slug = resolveToSlug(tag)
           if (slug && context.ownedProducts.includes(slug)) {
             productMatch = true
             if (!matchedProducts.includes(slug)) matchedProducts.push(slug)

@@ -10,7 +10,8 @@ import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleSco
 import { fetchRHEvents, type RHEvent } from '../rh-events-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { getCustomerProductContext, normalizeProductSlug } from '../lib/customer-product-context.ts'
+import { getCustomerProductContext } from '../lib/customer-product-context.ts'
+import { resolveToSlug } from '../lib/product-vocabulary.ts'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events', 'rh-events.json')
 const CONFIG_DIR = resolve(process.env.CONFIG_DIR ?? 'data/config')
@@ -206,7 +207,7 @@ FeatureModuleRegistry.register({
 
       if (event.productTags && event.productTags.length > 0) {
         for (const tag of event.productTags) {
-          const slug = normalizeProductSlug(tag)
+          const slug = resolveToSlug(tag)
           if (slug && context.allRelevantProducts.includes(slug)) {
             productMatch = true
             if (!matchedProducts.includes(slug)) matchedProducts.push(slug)

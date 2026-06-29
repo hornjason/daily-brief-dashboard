@@ -8,7 +8,6 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { normalizeProductSlug } from '../lib/customer-product-context.ts'
 import { getAllSlugs, getAliases, resolveToSlug } from '../lib/product-vocabulary.ts'
 import { getAllCompetitors } from '../lib/competitive-vocabulary.ts'
 

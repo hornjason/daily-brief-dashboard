@@ -8,6 +8,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
+import { resolveToSlug } from './product-vocabulary.ts'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
@@ -23,43 +24,6 @@ export interface CustomerProductContext {
   allRelevantProducts: string[]
 }
 
-const PRODUCT_SLUG_MAP: Record<string, string> = {
-  'openshift': 'ocp',
-  'openshift container platform': 'ocp',
-  'openshift ai': 'rhoai',
-  'enterprise linux': 'rhel',
-  'rhel': 'rhel',
-  'ansible': 'aap',
-  'ansible automation platform': 'aap',
-  'advanced cluster security': 'acs',
-  'advanced cluster management': 'acm',
-  'quay': 'quay',
-  'developer hub': 'rhdh',
-  'satellite': 'satellite',
-  'insights': 'insights',
-}
-
-export function normalizeProductSlug(name: string): string | undefined {
-  const normalized = name.toLowerCase().trim()
-
-  if (PRODUCT_SLUG_MAP[normalized]) return PRODUCT_SLUG_MAP[normalized]
-
-  // Substring match — check more specific patterns first
-  if (normalized.includes('openshift ai') || normalized.includes('rhoai') || normalized === 'red hat ai') return 'rhoai'
-  if (normalized.includes('openshift')) return 'ocp'
-  if (normalized.includes('enterprise linux') || normalized.includes('rhel')) return 'rhel'
-  if (normalized.includes('ansible')) return 'aap'
-  if (normalized.includes('cluster security') || normalized.includes('acs')) return 'acs'
-  if (normalized.includes('cluster management') || normalized.includes('acm')) return 'acm'
-  if (normalized.includes('quay')) return 'quay'
-  if (normalized.includes('developer hub') || normalized.includes('rhdh')) return 'rhdh'
-  if (normalized.includes('satellite')) return 'satellite'
-  if (normalized.includes('insights')) return 'insights'
-  if (normalized.includes('runtimes')) return 'runtimes'
-  if (normalized.includes('integration')) return 'integration'
-
-  return undefined
-}
 
 export function getCustomerProductContext(customerSlug: string): CustomerProductContext {
   const ownedProducts = extractOwnedProducts(customerSlug)
@@ -103,7 +67,7 @@ function extractProductSlugsFromRows(rows: any[]): string[] {
     const name = (row.productDescription || row.productName || row.product || row.SKU || '').toLowerCase()
     if (!name) continue
 
-    const slug = normalizeProductSlug(name)
+    const slug = resolveToSlug(name)
     if (slug) products.push(slug)
   }
   return [...new Set(products)]
@@ -128,7 +92,7 @@ function extractInterestProducts(customerSlug: string): string[] {
     const products: string[] = []
     for (const heading of fitHeadings) {
       const productName = heading.replace('### ', '').replace(/\s*Fit$/, '').trim()
-      const slug = normalizeProductSlug(productName)
+      const slug = resolveToSlug(productName)
       if (slug) products.push(slug)
     }
 
