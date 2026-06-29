@@ -1278,8 +1278,10 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
     throw new Error('Invalid territory format')
   }
 
+  const cacheKey = `${requestedTerritory}::${aeName || ''}`
+
   if (!forceRefresh) {
-    const cached = territoryCacheMap.get(requestedTerritory)
+    const cached = territoryCacheMap.get(cacheKey)
     if (cached && Date.now() - cached.cachedAt < TERRITORY_CACHE_TTL_MS) {
       return cached.data
     }
@@ -1331,7 +1333,7 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
         const accounts = extractEnterpriseAeAccounts(fullRows, aeName)
         console.log(`[territory-lookup] ${requestedTerritory}: ${aeName} (enterprise, aeName-targeted, ${accounts.length} accounts)`)
         const lookupResult = { aeName, accounts, tableauTerritory: requestedTerritory }
-        territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
+        territoryCacheMap.set(cacheKey, { data: lookupResult, cachedAt: Date.now() })
         return lookupResult
       }
 
@@ -1349,7 +1351,7 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
         const accounts = extractEnterpriseAeAccounts(fullRows, matchedAeName)
         console.log(`[territory-lookup] ${requestedTerritory}: ${matchedAeName} (enterprise, ${accounts.length} accounts)`)
         const lookupResult = { aeName: matchedAeName, accounts, tableauTerritory: requestedTerritory }
-        territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
+        territoryCacheMap.set(cacheKey, { data: lookupResult, cachedAt: Date.now() })
         return lookupResult
       }
       break // Only one enterprise tab expected
@@ -1466,7 +1468,7 @@ export async function lookupTerritory(requestedTerritory: string, forceRefresh: 
 
       console.log(`[territory-lookup] ${requestedTerritory}: ${aeName}, ${accounts.length} accounts`)
       const lookupResult = { aeName, accounts, tableauTerritory }
-      territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
+      territoryCacheMap.set(cacheKey, { data: lookupResult, cachedAt: Date.now() })
       return lookupResult
     }
   }
