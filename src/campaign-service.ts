@@ -227,6 +227,9 @@ Each of the 6 emails MUST highlight DIFFERENT features relevant to THAT persona'
 - An IT Director cares about cost, consistency, audit trails, and vendor consolidation
 DO NOT repeat the same 3 bullets across all emails. Each persona should discover features they haven't seen in the other emails. Pull from the full breadth of the material's value propositions.
 
+## CRITICAL: Vary Peer Proof Across Emails
+Each email's peerProof field MUST cite a DIFFERENT customer win from the VERIFIED SOLUTION PLAYS data when multiple wins are available. If there is only one customer win, use it in ONE email and set peerProof to null for the others — never repeat the same proof in all 6 emails. If multiple wins exist, distribute them across personas by relevance (e.g., security win → VP Security, operations win → Head of Ops).
+
 ## MISSION ALIGNMENT — Money Connection (MA-4, MANDATORY)
 Every campaign MUST connect to the customer's financial reality. In the Campaign Summary or Customer Context section, include:
 - Pipeline value, renewal amount, or expansion opportunity from the loaded signals

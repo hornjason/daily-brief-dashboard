@@ -152,6 +152,23 @@ function validateMarkdown(output: string): QualityScorecard {
     severity: 'recommended',
   })
 
+  // 7b. Varied peer proof — different peer proof citations across emails
+  const peerProofs = emailBlocks.map(b => {
+    const match = b.match(/peer\s*proof[:\s]*(.+?)(?:\n|$)/i)
+    return match ? match[1].trim().toLowerCase() : null
+  }).filter(Boolean) as string[]
+  const uniqueProofs = new Set(peerProofs)
+  const allSamePeerProof = peerProofs.length >= 2 && uniqueProofs.size === 1
+  checks.push({
+    name: 'varied-peer-proof',
+    passed: peerProofs.length < 2 || !allSamePeerProof,
+    expected: 'Different peer proof citations across emails (not all identical)',
+    actual: peerProofs.length >= 2
+      ? (allSamePeerProof ? 'all emails cite same peer proof' : `${uniqueProofs.size} unique peer proofs`)
+      : 'insufficient emails to compare',
+    severity: 'recommended',
+  })
+
   // 8. Relationship context — each email has a relationship context line
   const relationshipCount = emailBlocks.filter(b =>
     /relationship|context|connection|rapport|history/i.test(b)
@@ -302,6 +319,22 @@ function validateStructured(campaign: any): QualityScorecard {
     passed: !allIdentical,
     expected: 'Different content across emails',
     actual: allIdentical ? 'identical bodies' : 'varied content',
+    severity: 'recommended',
+  })
+
+  // Varied peer proof — different peer proof citations across emails
+  const structuredPeerProofs = emails
+    .map((e: any) => e.peerProof)
+    .filter((p: any) => typeof p === 'string' && p.length > 0) as string[]
+  const structuredUniqueProofs = new Set(structuredPeerProofs.map((p: string) => p.trim().toLowerCase()))
+  const structuredAllSame = structuredPeerProofs.length >= 2 && structuredUniqueProofs.size === 1
+  checks.push({
+    name: 'varied-peer-proof',
+    passed: structuredPeerProofs.length < 2 || !structuredAllSame,
+    expected: 'Different peer proof citations across emails (not all identical)',
+    actual: structuredPeerProofs.length >= 2
+      ? (structuredAllSame ? 'all emails cite same peer proof' : `${structuredUniqueProofs.size} unique peer proofs`)
+      : 'insufficient emails to compare',
     severity: 'recommended',
   })
 
