@@ -76,8 +76,10 @@ function validateMarkdown(output: string): QualityScorecard {
   const posSection = posMatch
     ? output.slice(posMatch.index! + posMatch[0].length, findNextSectionEnd(output, posMatch.index! + posMatch[0].length))
     : ''
-  const posPoints = (posSection.match(/^[\s]*[-*]\s/gm) ?? []).length
+  const bulletPoints = (posSection.match(/^[\s]*[-*]\s/gm) ?? []).length
     + (posSection.match(/^\d+\.\s/gm) ?? []).length
+  const paragraphPoints = posSection.split(/\n\s*\n/).filter(p => p.trim().length >= 30 && !/^[\s]*[-*\d]/.test(p.trim())).length
+  const posPoints = bulletPoints + paragraphPoints
   checks.push({
     name: 'positioning',
     passed: posSection.trim().length > 0 && posPoints >= 2,
