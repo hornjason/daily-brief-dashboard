@@ -604,9 +604,10 @@ function filterTopTacticsPerTdp(
   const validTactics = tactics.filter(t => t.parentTdp && t.parentTdp.trim())
   const byTdp = new Map<string, MotionPhase['tactics']>()
   for (const t of validTactics) {
-    const list = byTdp.get(t.parentTdp) ?? []
+    const key = normalizeTdp(t.parentTdp)
+    const list = byTdp.get(key) ?? []
     list.push(t)
-    byTdp.set(t.parentTdp, list)
+    byTdp.set(key, list)
   }
 
   const result: MotionPhase['tactics'] = []
@@ -631,7 +632,7 @@ function filterTopTacticsPerTdp(
  * Generate a clean phase name from unique TDP domains covered by tactics.
  */
 function buildPhaseName(prefix: string, tactics: MotionPhase['tactics']): string {
-  const uniqueTdps = [...new Set(tactics.map(t => t.parentTdp).filter(t => t && t.trim()))]
+  const uniqueTdps = [...new Set(tactics.map(t => normalizeTdp(t.parentTdp)).filter(t => t && t.trim()))]
   return uniqueTdps.length > 0 ? `${prefix}: ${uniqueTdps.join(' + ')}` : prefix
 }
 
