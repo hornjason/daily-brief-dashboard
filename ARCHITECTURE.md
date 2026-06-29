@@ -1495,7 +1495,18 @@ Persistent, per-customer intelligence that accumulates over time. Replaces throw
 
 ### Playbook state
 
-`data/cache/playbooks/{customer-slug}.json` — single JSON file per customer with 8 sections:
+`data/cache/playbooks/{customer-slug}.json` — single JSON file per customer with 15 sections (10 narrative + 5 deterministic).
+
+### Progressive disclosure (§22a, #687, 2026-06-29)
+
+`src/playbook-tiers.ts` — shared tier config mapping all 15 section keys to 3 tiers:
+- **Tier 1 (always expanded):** expansionOpportunities, openActionItems, renewalsAndRisk, solutionPlays, currentPriorities — action-oriented sections the AE needs first
+- **Tier 2 (collapsed by default):** strategicPosition, keyRelationships, productAlignment, swotAnalysis, meddpicc — strategic context available on expand
+- **Tier 3 (collapsed by default):** engagementHistory, subscriptions, cases, lifecycle, teamMembers — reference data
+
+`PlaybookTab.tsx` renders sections in tier order using `PLAYBOOK_SECTION_TIERS.map()`. Single source of truth — no hardcoded orderings elsewhere. Sections with no data are hidden via `sectionHasData()` guard.
+
+### Section inventory
 
 | Section | Source | Gemini vs Deterministic |
 |---------|--------|------------------------|
