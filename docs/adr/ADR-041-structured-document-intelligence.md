@@ -1,6 +1,6 @@
 ---
 doc-type: adr
-status: proposed
+status: accepted
 owner: serena
 updated: 2026-06-22
 ---
