@@ -1,6 +1,6 @@
 ---
 doc-type: adr
-status: proposed
+status: accepted
 owner: jason
 updated: 2026-06-03
 ---
