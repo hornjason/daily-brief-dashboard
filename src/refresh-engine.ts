@@ -682,6 +682,18 @@ export function createRefreshRouter(): Hono {
       return c.json({ ok: false, error: sanitizeErr(e) }, 500)
     }
   })
+  router.post('/api/saleshub-products/refresh', async (c) => {
+    const mod = FeatureModuleRegistry.get('saleshub-products')
+    if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
+    try {
+      await mod.syncNow('')
+      FeatureModuleRegistry.recordOutcome('saleshub-products', { success: true })
+      return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      FeatureModuleRegistry.recordOutcome('saleshub-products', { success: false, error: sanitizeErr(e) })
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
+    }
+  })
   router.post('/api/refresh/rh-product-catalog', async (c) => {
     const mod = FeatureModuleRegistry.get('rh-product-catalog')
     if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
