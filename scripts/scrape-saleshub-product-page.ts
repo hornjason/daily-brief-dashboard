@@ -1301,13 +1301,9 @@ export async function expandDomainDocListPickers(
 ): Promise<{ activated: number; domainDocs: Map<string, string[]> }> {
   console.log('[product-scraper] Activating domain DocListPickers in accordion panels...')
 
-  // (#920 ITERATION 3) Scope to accordion items inside accordion widgets only —
-  // avoids matching the ~60+ DocListPickers in Business decks, Technical decks, etc.
+  // (#920 ITERATION 4) Selectors from DOM inspection of actual SalesHub page
   const accordionItems = page.locator(
-    '[class*="widget-accordion"] [class*="pf-v5-c-accordion__expanded-content"], ' +
-    '[class*="widget-accordion"] [class*="accordion-item"], ' +
-    '[class*="widget-accordion"] [class*="AccordionItem"], ' +
-    '[class*="widget-accordion"] [class*="expandable-item"]'
+    '[class*="widget-accordion"] .seismic-page-accordion-viewer'
   )
   const itemCount = await accordionItems.count()
   console.log(`[product-scraper] Found ${itemCount} accordion items in domain section`)
@@ -1321,9 +1317,8 @@ export async function expandDomainDocListPickers(
     try {
       const item = accordionItems.nth(i)
 
-      // Extract domain name from accordion heading (button/toggle element)
       const heading = item.locator(
-        'button[class*="accordion"], [class*="header"], [class*="trigger"], [class*="toggle"]'
+        '.seismic-page-divider-view-text, .seismic-page-accordion-viewer-new-header-title'
       ).first()
       const rawText = await heading.textContent({ timeout: 3_000 }).catch(() => '')
       const domainName = (rawText || '').trim().replace(/\s+/g, ' ')
