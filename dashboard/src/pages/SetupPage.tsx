@@ -290,6 +290,14 @@ interface OAuthStatus {
 function GoogleAuthSection() {
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus | null>(null)
   const [checking, setChecking] = useState(true)
+  const popupRef = useRef<Window | null>(null)
+
+  const refreshOAuthStatus = useCallback(() => {
+    fetch('/api/oauth/status')
+      .then(r => r.json())
+      .then((d: OAuthStatus) => setOauthStatus(d))
+      .catch(() => setOauthStatus({ authorized: false, configuredAt: null }))
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -300,6 +308,23 @@ function GoogleAuthSection() {
       .finally(() => setChecking(false))
     return () => controller.abort()
   }, [])
+
+  // Poll for popup close and refresh OAuth status
+  useEffect(() => {
+    if (!popupRef.current) return
+    const interval = setInterval(() => {
+      if (popupRef.current?.closed) {
+        popupRef.current = null
+        refreshOAuthStatus()
+        clearInterval(interval)
+      }
+    }, 500)
+    return () => clearInterval(interval)
+  }, [popupRef.current, refreshOAuthStatus])
+
+  const handleOAuthConnect = () => {
+    popupRef.current = window.open('/oauth/start', '_blank', 'width=600,height=700,scrollbars=yes')
+  }
 
   if (checking) {
     return (
@@ -320,7 +345,7 @@ function GoogleAuthSection() {
           </div>
           <p className="text-sm text-text-secondary">Your Google token is no longer valid. Click below to re-authenticate.</p>
           <button
-            onClick={() => window.location.href = '/oauth/start'}
+            onClick={handleOAuthConnect}
             className="flex items-center gap-2 bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             Re-authenticate with Google
@@ -353,7 +378,7 @@ function GoogleAuthSection() {
             <p className="text-xs text-text-secondary">Connected {timeAgo(oauthStatus.configuredAt)}</p>
           )}
           <button
-            onClick={() => window.location.href = '/oauth/start'}
+            onClick={handleOAuthConnect}
             className="text-sm text-text-secondary hover:text-white underline transition-colors"
           >
             Re-authorize
@@ -378,13 +403,13 @@ function GoogleAuthSection() {
       <p className="text-text-secondary text-sm">Authorize read access to Calendar, Gmail, Drive, and Sheets. One click — no scripts needed.</p>
 
       <div className="bg-bg rounded-xl p-6 border border-border space-y-4">
-        <a
-          href="/oauth/start"
-          className="flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-lg font-medium transition-colors w-full text-center"
+        <button
+          onClick={handleOAuthConnect}
+          className="flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-lg font-medium transition-colors w-full"
         >
           <ExternalLink className="w-4 h-4" />
           Connect Google Workspace
-        </a>
+        </button>
         <div className="grid grid-cols-2 gap-1.5 text-xs text-text-secondary">
           {['Gmail (read-only)', 'Google Drive (read-only)', 'Calendar (read-only)', 'Sheets (read-only)'].map(s => (
             <div key={s} className="flex items-center gap-1">

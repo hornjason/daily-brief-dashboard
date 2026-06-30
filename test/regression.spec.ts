@@ -1063,10 +1063,11 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/onCcspDashboard[\s\S]{0,200}\/site\//)
   })
 
-  test('REG-CCSP-SSO-05: ccsp-scraper CSV classifier logs auth_redirect for HTML responses', () => {
+  test('REG-CCSP-SSO-05: ccsp-tableau-fetch CSV classifier logs auth_redirect for HTML responses', () => {
     // Regression for BKL-CONN-TABLEAU-CTX-01 — "0 rows" is now classified into
     // auth_redirect / csv_empty / csv_zero_rows / csv_ok so failures are diagnosable.
-    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    // Updated post-extraction: classification logic moved to ccsp-tableau-fetch.ts.
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-tableau-fetch.ts'), 'utf8')
     expect(src).toContain('auth_redirect')
     expect(src).toContain('csv_empty')
     expect(src).toContain('csv_ok')

@@ -1,0 +1,1338 @@
+{
+  "name": "Red Hat Ansible Automation Platform",
+  "slug": "red-hat-ansible-automation-platform",
+  "description": "",
+  "pageUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd69c2062-8583-4c77-a1bf-afca6ee943de//",
+  "scrapedAt": "2026-06-23T16:11:14.592Z",
+  "tdpLinks": [],
+  "contacts": [
+    {
+      "name": "ansible-pmm",
+      "email": "ansible-pmm@redhat.com"
+    },
+    {
+      "name": "hmassey",
+      "email": "hmassey@redhat.com"
+    },
+    {
+      "name": "jbiskup",
+      "email": "jbiskup@redhat.com"
+    }
+  ],
+  "slackChannels": [],
+  "sections": {
+    "product-news": {
+      "title": "Product news",
+      "textContent": "June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversations:AAP 2.6 one-slide overviewAAP 2.6 release overview + reference guide What's new in AAP webpageRed Hat Summit press releaseWhat's new in AAP 2.7 webinar (July 14)December 2025 - Ansible Lightspeed now offers support for select 3rd-party models:Internal product announcementAnsible Lightspeed customer deckAnsible Lightspeed enablement overviewOctober 2025 - AAP 2.6 is now available! See below for new assets related to the release:AAP 2.6 one-slide overviewAAP 2.6 release overview + reference guide What's new in AAP webpageWhat's new in AAP 2.6 webinarDec 2024 - Red Hat Ansible Automation Platform was named the leader  in The Forrester Wave™: Infrastructure Automation, Q4 2024The Wave reportPress releaseOverview slide",
+      "type": "mixed",
+      "items": [
+        {
+          "name": "AAP 2.6 one-slide overview",
+          "url": "https://docs.google.com/presentation/d/1qmdG-RGdVXDOYphkewz0RA1DxRi4ku_SiPuxNUhQZEU/edit?slide=id.g3e3540a82c6_0_1812#slide=id.g3e3540a82c6_0_1812"
+        },
+        {
+          "name": "What's new in AAP webpage",
+          "url": "https://www.redhat.com/en/whats-new-red-hat-ansible-automation-platform"
+        },
+        {
+          "name": "Red Hat Summit press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-establishes-ansible-automation-platform-trusted-execution-layer-it-operations-agentic-era"
+        },
+        {
+          "name": "What's new in AAP 2.7 webinar",
+          "url": "https://www.redhat.com/en/events/webinar/whats-new-with-red-hat-ansible-automation-platform-2-7"
+        },
+        {
+          "name": "Internal product announcement",
+          "url": "https://content.redhat.com/us/en/sales-enablement/sales-programs-overview/product-launch-announcements.html#accordion-6acc6a3f7c-item-ae8e0746dd"
+        },
+        {
+          "name": "Ansible Lightspeed customer deck",
+          "url": "https://docs.google.com/presentation/d/1ks2S2SJ_zFOFj4JcEHTPdFSXOMQql-TSD9EWShB7Z5k/edit?slide=id.g351ba319158_0_24674#slide=id.g351ba319158_0_24674"
+        },
+        {
+          "name": "Ansible Lightspeed enablement overview",
+          "url": "https://docs.google.com/presentation/d/1LZTrVoqYFk_0e51tPXZW-qkEhA5rwk_xl_Ik_6gWCOk/edit?slide=id.g2920d80b76a_0_731#slide=id.g2920d80b76a_0_731"
+        },
+        {
+          "name": "What's new in AAP 2.6 webinar",
+          "url": "https://www.redhat.com/en/events/webinar/whats-new-red-hat-ansible-automation-platform-2.6"
+        },
+        {
+          "name": "The Wave report",
+          "url": "https://reprint.forrester.com/reprints/the-forrester-wave-tm-infrastructure-automation-platforms-q4-2024-bb87d219"
+        },
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-ansible-automation-platform-established-leader-infrastructure-automation-industry-research-firm"
+        },
+        {
+          "name": "Overview slide",
+          "url": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/abu-2024-forrester-wave-for-infrastructure-automation-slide.pptx"
+        }
+      ]
+    },
+    "key-resources": {
+      "title": "Key resources",
+      "type": "mixed",
+      "items": [
+        {
+          "name": "Website",
+          "url": "https://www.redhat.com/en/technologies/management/ansible"
+        },
+        {
+          "name": "Release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/release_notes/index"
+        },
+        {
+          "name": "Automation webinars",
+          "url": "https://www.redhat.com/en/events/red-hat-webinars?on-demand=automation"
+        },
+        {
+          "name": "Self-paced labs for AAP",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible"
+        },
+        {
+          "name": "Success stories",
+          "url": "https://www.redhat.com/en/success-stories"
+        },
+        {
+          "name": "Competitive",
+          "url": "https://content.redhat.com/content/rhcc/us/en/competition/competition-overview/competition-ansible.html"
+        },
+        {
+          "name": "Ansible Basics: Automation Technical Overview (DO007)",
+          "url": "https://www.redhat.com/en/services/training/do007-ansible-essentials-simplicity-automation-technical-overview"
+        },
+        {
+          "name": "RHLS 14-day free trial webpage",
+          "url": "https://www.redhat.com/en/services/training/learning-subscription"
+        },
+        {
+          "name": "Red Hat Ansible Lightspeed overview",
+          "url": "https://saleshub.redhat.com/Link/Content/DC9QbD96TMWXX8WW86qQ967f37BG"
+        },
+        {
+          "name": "AAP Sales Assisted Trial Overview & Request Instructions",
+          "url": "https://docs.google.com/presentation/d/1oST1ePUx4e8E9OagHIVKksLvUQrVywKgzdRVB3JoWkw/edit?slide=id.g3bdc8c846e4_0_811#slide=id.g3bdc8c846e4_0_811"
+        }
+      ]
+    },
+    "top-training-resources": {
+      "title": "Top training resources",
+      "type": "mixed",
+      "items": [
+        {
+          "name": "AAP: Technical seller credential learning path",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinklp%3D56329226"
+        },
+        {
+          "name": "Self-paced labs for Ansible Automation Platform",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible"
+        }
+      ]
+    },
+    "2026-automation-tdp-sales-tactics": {
+      "title": "2026 Automation TDP & Sales tactics",
+      "textContent": "Automation TDP: The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime.\n\nAIOps:Turn Intelligence into Action: This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance.\n\nOptimize and Modernize IT Ops: This tactic positions Red Hat Ansible Automation Platform as a unified foundation to eliminate tool silos and operational debt, allowing sellers to demonstrate how centralized governance secures immediate operational wins while accelerating strategic initiatives like VM modernization and cloud migration.\n\nAutomate at Scale: This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation.\n\nNetwork automation: This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability.",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Automation TDP",
+          "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime.",
+          "itemType": "tactic"
+        },
+        {
+          "name": "AIOps:Turn Intelligence into Action",
+          "description": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance.",
+          "itemType": "tactic"
+        },
+        {
+          "name": "Optimize and Modernize IT Ops",
+          "description": "This tactic positions Red Hat Ansible Automation Platform as a unified foundation to eliminate tool silos and operational debt, allowing sellers to demonstrate how centralized governance secures immediate operational wins while accelerating strategic initiatives like VM modernization and cloud migration.",
+          "itemType": "tactic"
+        },
+        {
+          "name": "Automate at Scale",
+          "description": "This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation.",
+          "itemType": "tactic"
+        },
+        {
+          "name": "Network automation",
+          "description": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability.",
+          "itemType": "tactic"
+        }
+      ]
+    },
+    "deployment-options": {
+      "title": "Deployment options",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Red Hat Ansible Automation Platform on Microsoft Azure",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/azure",
+          "domain": "Deployment optionsarrow down"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform available in AWS Marketplace",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/aws",
+          "domain": "Deployment optionsarrow down"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform available from Google Cloud Marketplace",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/google-cloud",
+          "domain": "Deployment optionsarrow down"
+        }
+      ]
+    },
+    "integrations": {
+      "title": "Integrations",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Infrastructure",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/operating-systems",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Windows",
+          "url": "https://catalog.redhat.com/en/solutions/detail/4919c355b3324020a9738fdfe1242ca7",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "VMware",
+          "url": "https://catalog.redhat.com/en/solutions/detail/32592e8d27a249418ac9894a8339dd6f",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "ServiceNow",
+          "url": "https://catalog.redhat.com/en/solutions/detail/356013c7cdf6403d9276c2776dacc979",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Dell Technologies",
+          "url": "https://catalog.redhat.com/en/solutions/detail/0836b448e0b1416798e564d23e8526a9",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Pure",
+          "url": "https://catalog.redhat.com/en/solutions/detail/6e48bd29e7be443db87ffcb67fe851a3",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "NetApp",
+          "url": "https://catalog.redhat.com/en/solutions/detail/144ce6e49db14517b8d7ffeea520e9fc",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Networks",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/network-automation",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Cisco",
+          "url": "https://catalog.redhat.com/en/solutions/detail/257cfcea8a804ac7b1f38cc1fe584726",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Juniper",
+          "url": "https://catalog.redhat.com/en/solutions/detail/492c05b2045c4448bb7e53f623f103c3",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "HPE Aruba",
+          "url": "https://catalog.redhat.com/en/solutions/detail/9746e9a36df14bb7a137656cc1834bd2",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Infoblox",
+          "url": "https://catalog.redhat.com/en/solutions/detail/34a5a63379704c88910725280790c456",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Cloud",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/cloud",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Microsoft Azure",
+          "url": "https://catalog.redhat.com/en/solutions/detail/9e2cd1fd6e2e4ef3a83651cb41e776a8",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Google Cloud Platform",
+          "url": "https://catalog.redhat.com/en/solutions/detail/57f7d9f74d304ba99838f255e9f1eed6",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "DevOps Tools",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/devops",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Splunk",
+          "url": "https://catalog.redhat.com/en/solutions/detail/a02b582e89aa47c6ad17671db2d46cc3?extIdCarryOver=true&percmp=7013a0000034e7YAAQ&sc_cid=701f2000001OH6uAAG",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Dynatrace",
+          "url": "https://catalog.redhat.com/en/solutions/detail/58a496337f884872b5e673f58266f644",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Security",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/security-automation",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "Palo Alto Networks",
+          "url": "https://catalog.redhat.com/en/solutions/detail/4a42424095be45eeb26fe2eddf670db8",
+          "domain": "Integrationsarrow down"
+        },
+        {
+          "name": "CyberArk",
+          "url": "https://catalog.redhat.com/en/solutions/detail/ad5246554c5e438181e1d34782b3c52d",
+          "domain": "Integrationsarrow down"
+        }
+      ]
+    },
+    "technical-resources": {
+      "title": "Technical resources",
+      "type": "cards",
+      "items": [
+        {
+          "name": "(Internal Only) Portfolio Architecture - Remote server management",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "7d9afdcd-417e-413a-9754-76669df49142",
+          "versionId": "b659b8fe-e4d4-4f3d-bf16-41ca5b799631",
+          "format": "PDF",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Internal Only) Red Hat Architecture - Mission Critical Application Platform",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "8e3aece4-0952-45b9-b3ba-90abe1171041",
+          "versionId": "c1caa5cb-92b8-4a70-a23f-4fa066bb29b0",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Internal only) Red Hat Architecture - Service Continuity with Partner Ecosystem (Accenture, Dynatrace, Red Hat & Trilio)",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "f443ded9-132d-49f8-ae36-cb20d1f386d4",
+          "versionId": "08964e25-90ae-4bac-a31c-41cda2e96bc8",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Mission Critical Application Platform",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "87d7ebb0-3bd1-4e2b-a6b9-66338585a9fb",
+          "versionId": "05356977-2792-46cb-a4e0-e089c0df7aaa",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Service Continuity with Partner Ecosystem (Accenture, Dynatrace, Red Hat & Trilio)",
+          "itemType": "reference-architecture",
+          "description": "General Distribution",
+          "contentId": "2ce4f9c1-265d-478e-850b-9905f86b0655",
+          "versionId": "1424e30c-b65b-4697-b493-1a5cb0bde985",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        }
+      ]
+    },
+    "e-book": {
+      "title": "E-book",
+      "type": "cards",
+      "items": [
+        {
+          "name": "10 maneiras de automatizar fluxos de trabalho de alta eficiência",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "016fead4-7599-4392-b514-bb7e838c1654",
+          "versionId": "a9587037-28e6-408a-bf01-02789581fc93",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "10 ways to automate high-efficiency workflows",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "fc8066da-5d93-416a-b4d2-627644b230a3",
+          "versionId": "024d74fc-e54a-4850-992a-f41bb989c3a0",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "A empresa automatizada",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "20533b69-4086-4af1-a657-de65c7aef0ec",
+          "versionId": "e44945f6-ece1-440c-9263-0a9a65c5c96e",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "Accelerate outcomes: Do more with Red Hat Services",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "8accb0ff-5366-4372-96e3-526e1c52f6bd",
+          "versionId": "f0489027-4efc-45a3-a250-3bbd58676a7f",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "Acelere os resultados: faça mais com o Red Hat Services",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "736c97b6-f171-4957-9f24-fc6044a70fc1",
+          "versionId": "e01d1ae1-838d-4b57-87e4-cef7f2df9921",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "Adopte una plataforma de virtualización moderna",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "89349e55-b3b9-4436-912d-671bdaf05ceb",
+          "versionId": "9fa1be16-143c-4dbe-a8d8-ca1d7545c6e9",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "Advance your automation maturity",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "51952340-363a-41ed-83ae-48efb94f8d61",
+          "versionId": "74fd7ecd-be5d-4482-a3e2-11526ca6dbfa",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        },
+        {
+          "name": "Agiliza la adopción de la automatización con una comunidad de práctica",
+          "itemType": "e-book",
+          "description": "General Distribution",
+          "contentId": "70a89487-78be-4de7-9303-9c3e7ade9045",
+          "versionId": "21e6e7f1-b530-4233-ac5b-9a4983c0477b",
+          "format": "PDF",
+          "seismicContentType": "E-book"
+        }
+      ]
+    },
+    "competitive": {
+      "title": "Competitive",
+      "type": "cards",
+      "items": [
+        {
+          "name": "101 ABU Competitive Battlecard - Puppet",
+          "itemType": "competitive-review",
+          "description": "Confidential - NDA Required",
+          "contentId": "67837e29-8808-40a5-b339-543e94fb84fe",
+          "versionId": "8b4941e4-5a0a-4405-9493-0d4f37e97a78",
+          "format": "DOCX",
+          "seismicContentType": "Competitive review"
+        },
+        {
+          "name": "201 ABU Competitive Battlecard  - Network Automation",
+          "itemType": "battlecard",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "ec97a30c-f70c-48b2-aff2-fd7fcd5f8b37",
+          "versionId": "74146a72-f633-460b-a144-a6c8c0188811",
+          "format": "PPTX",
+          "seismicContentType": "Battlecard"
+        },
+        {
+          "name": "201 ABU Competitive Battlecard - Chef",
+          "itemType": "battlecard",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "b6afcef6-4e67-4e2c-8965-31584f078614",
+          "versionId": "dee579c6-250a-4824-b8ab-1682686eb1fe",
+          "format": "PPTX",
+          "seismicContentType": "Battlecard"
+        },
+        {
+          "name": "AAP for Windows: Strategic Selling Guide",
+          "itemType": "battlecard",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "5b28108b-a9ce-4f08-a5ed-0b7ed3e62eba",
+          "versionId": "3d732daf-ba54-4415-8057-da9c149c6245",
+          "format": "DOCX",
+          "seismicContentType": "Battlecard"
+        }
+      ]
+    },
+    "enablement": {
+      "title": "Enablement",
+      "type": "cards",
+      "items": [
+        {
+          "name": "2026 Automation TDP Content - Intro deck",
+          "itemType": "enablement",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "1383f0d9-2cab-403c-9089-712c0b639991",
+          "versionId": "3f880eff-b371-4826-ab22-192140b3e169",
+          "format": "PPTX",
+          "seismicContentType": "Enablement"
+        },
+        {
+          "name": "AIOps - CY'26 Sales Tactic Intro deck",
+          "itemType": "enablement",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "f393b787-006b-40af-83c1-beaa3dc4d389",
+          "versionId": "6a5e8273-0542-4005-adc2-cbb83eac4f09",
+          "format": "PPTX",
+          "seismicContentType": "Enablement"
+        }
+      ]
+    },
+    "external-resource": {
+      "title": "External resource",
+      "type": "cards",
+      "items": [
+        {
+          "name": "3 automation use cases that drive AI value in IT operations",
+          "itemType": "external-resource",
+          "description": "General Distribution",
+          "contentId": "9e27b57d-ea5b-489c-859c-e4b5d5e201f8",
+          "versionId": "964c0006-e6a9-4359-a24e-96ce287ad0d7",
+          "format": "PNG",
+          "seismicContentType": "External resource"
+        },
+        {
+          "name": "3 use cases to unlock AI value in IT operations with Red Hat Ansible Automation Platform",
+          "itemType": "external-resource",
+          "description": "General Distribution",
+          "contentId": "14347e90-c7d0-42bc-bdcf-7e8dc7805f09",
+          "versionId": "759d4df2-0ec6-48be-bdb5-7fcf0672f8b5",
+          "format": "PNG",
+          "seismicContentType": "External resource"
+        },
+        {
+          "name": "AAP 2.5 Release Notes",
+          "itemType": "external-resource",
+          "description": "General Distribution",
+          "contentId": "c672b703-7361-4bbb-9853-59027b707c2b",
+          "versionId": "ff900c7f-2010-431c-8220-7ebbd09ccb43",
+          "format": "PNG",
+          "seismicContentType": "External resource"
+        },
+        {
+          "name": "AI solution guides for Ansible Automation Platform",
+          "itemType": "external-resource",
+          "description": "General Distribution",
+          "contentId": "e496efb0-80ce-4ec6-8209-6a99a005be56",
+          "versionId": "a3c1c2c3-03dc-40f0-a9a0-d9be2b2d3ed3",
+          "format": "PNG",
+          "seismicContentType": "External resource"
+        }
+      ]
+    },
+    "checklist": {
+      "title": "Checklist",
+      "type": "cards",
+      "items": [
+        {
+          "name": "5 AIOps use cases for Red Hat Ansible Automation Platform",
+          "itemType": "checklist",
+          "description": "General Distribution",
+          "contentId": "23c9c920-067d-4301-a4ef-31a121c2c312",
+          "versionId": "2141a0db-5a12-4830-b97f-37d65334bc67",
+          "format": "PDF",
+          "seismicContentType": "Checklist"
+        }
+      ]
+    },
+    "overview": {
+      "title": "Overview",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP + AIOps Content Kit",
+          "itemType": "overview",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "d1b98822-b60c-488e-a062-69200f982a1b",
+          "versionId": "b40ceea2-062b-4640-a2d9-4fdf70c675a6",
+          "format": "PPTX",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "AAP 2.6 One Slide Overview",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "c7d1409a-f34c-4eb3-a44b-5a18adf6dde5",
+          "versionId": "8a53dceb-d122-4dda-85c4-29d855d6d535",
+          "format": "PPTX",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "AAP 2.6 Release overview + reference guide",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "5fcaa7b9-ca75-41bb-98c6-98c644de7d75",
+          "versionId": "5a3053af-52ed-4ae7-aaf8-6aa725b54fa2",
+          "format": "PPTX",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "ABU | Ansible Automation Platform | Summit 2025 release overview",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "09dc45c1-2978-438a-8648-801ccf695e7d",
+          "versionId": "9b433304-4249-48c0-8cd7-7ce41b956001",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Accelera l'innovazione dell'IA nel cloud con Red Hat e Google Cloud",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "894633ff-89e5-4515-b363-8717375ca4b6",
+          "versionId": "7286dbd9-8d78-45ac-a450-5e85cf87e00f",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Accelerate innovation in the aviation sector with Red Hat OpenShift AI",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "2c3ac47c-cbbf-44d7-98b0-2cdd0fcd7962",
+          "versionId": "4fabb651-0b8a-42eb-972e-0188292c2227",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Accelerate your SAP operations",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "fe799b3c-a460-414c-9744-c626ae6b079f",
+          "versionId": "137e1835-1453-4b38-b6f5-bd12ea832e87",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Acelere a inovação da IA na nuvem com a Red Hat e o Google Cloud",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "f2dad4dc-a045-45f0-938e-124659b1eb21",
+          "versionId": "dd3ba8c7-a1f7-40cd-874b-f654dbf8a6a5",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Agilice la innovación de la IA en la nube con Google Cloud y Red Hat",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "7025f30b-41ad-460e-82b6-0ccd6c123750",
+          "versionId": "947944f7-8577-4246-a560-a676243d117f",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "AIOps and Ansible Automation Platform | Two pager",
+          "itemType": "overview",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "4326a983-1027-498e-866a-4c72b0735879",
+          "versionId": "2bcc62c5-d543-49b4-b6d0-93f96b08090b",
+          "format": "DOCX",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Ansible BU | Content Kit | Cisco Enterprise Networking + AAP",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "6b123c09-1e3c-4246-a8f6-667829636a20",
+          "versionId": "a6480851-dbd2-45ef-800e-ddf9615f8ab1",
+          "format": "PPTX",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Ansible Certified Content Collection for ServiceNow ITSM",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "4c50e840-568c-409a-8a92-402f77e7c199",
+          "versionId": "48124055-6554-4fd1-a380-7a9e68e39cc1",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Ansible Certified Content Collection für ServiceNow ITSM",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "3f178140-37d7-4290-8be9-43c0e1216ae6",
+          "versionId": "58b5264e-1e4d-4222-85c9-39c2bb51c237",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Ansible Certified Content Collection para ServiceNow ITSM",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "61d13096-906e-4845-bffa-11f3b20e64cf",
+          "versionId": "a1015073-5ff6-4f33-a103-bc7f08dc3b91",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        },
+        {
+          "name": "Ansible Certified Content Collection per l'ITSM di ServiceNow",
+          "itemType": "overview",
+          "description": "General Distribution",
+          "contentId": "4b0e109a-d3e1-45e6-a7af-71f0c7960e92",
+          "versionId": "2aacd8c8-ce35-4423-847c-3e919d166bca",
+          "format": "PDF",
+          "seismicContentType": "Overview"
+        }
+      ]
+    },
+    "brief": {
+      "title": "Brief",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP 2.4 EUS Brief",
+          "itemType": "brief",
+          "description": "General Distribution",
+          "contentId": "37530dba-643e-4edb-8953-8f140673b48f",
+          "versionId": "9c319c07-14d9-4261-be37-f8a2d905882d",
+          "format": "PDF",
+          "seismicContentType": "Brief"
+        },
+        {
+          "name": "AIOps によるミッションクリティカルな自動化",
+          "itemType": "brief",
+          "description": "General Distribution",
+          "contentId": "a3ee87a2-14ac-4efd-9af0-456a54f6d9e0",
+          "versionId": "4eeffbf8-b15e-4cb8-b6c4-977164e9a6a5",
+          "format": "PDF",
+          "seismicContentType": "Brief"
+        },
+        {
+          "name": "AIOps를 사용한 미션 크리티컬 자동화",
+          "itemType": "brief",
+          "description": "General Distribution",
+          "contentId": "583daa09-d932-40df-bb65-8e9a60b19382",
+          "versionId": "63bcd756-5ff7-4a3f-af04-86ebbe51426f",
+          "format": "PDF",
+          "seismicContentType": "Brief"
+        }
+      ]
+    },
+    "sales-training-presentation": {
+      "title": "Sales training presentation",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP 2.4 EUS Know - Say Do Presentation",
+          "itemType": "sales-training-presentation",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "40e2484d-33f9-4d2b-ab75-fc7e0f8ddca0",
+          "versionId": "a8a2770d-30d9-4821-b03d-4dfbee5d45cc",
+          "format": "PDF",
+          "seismicContentType": "Sales training presentation"
+        }
+      ]
+    },
+    "resources": {
+      "title": "Resources",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP 2.4 EUS | Cheatsheet",
+          "itemType": "cheatsheet",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "b74b2f77-465a-4de5-a50b-b2b416823cae",
+          "versionId": "54e5fc06-1531-4abf-85d1-0df6b95079ea",
+          "format": "PDF",
+          "seismicContentType": "Cheatsheet"
+        },
+        {
+          "name": "AIOps - CY'26 Sales Tactic Cheatsheet",
+          "itemType": "cheatsheet",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "52cbf36e-8dab-4310-9f06-7b2fe9066567",
+          "versionId": "c7079e15-f70e-4b45-b370-748a01337345",
+          "format": "PPTX",
+          "seismicContentType": "Cheatsheet"
+        }
+      ]
+    },
+    "business-decks": {
+      "title": "Business decks",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP and IBM Z Mainframe Automation Overview",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "50c0e419-bee1-4704-af8b-b3baee33a9da",
+          "versionId": "af9162e3-dcb4-4d7f-89ae-b797b48ef7d6",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "AAP for RHEL Automation Business Value",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "d522402d-65e8-4adc-9af1-9bf6feaeb32e",
+          "versionId": "9b9c54c0-4c6d-4c55-8f80-fc5ebf8cf840",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "AAP on AWS - Business deck",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "4d7f052a-80da-4cbe-af1c-aee5875bfcb4",
+          "versionId": "b2f58628-2025-4586-8713-016ff3473cec",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "AAP on Azure - Business deck",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "6a242aad-f67d-46c5-a9c0-022a20f9916c",
+          "versionId": "e2cef40c-9dc1-45bb-9804-14825625729f",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "AAP on Google Cloud - Business deck",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "a74bc95f-664d-41e7-bd53-8fabdd9428b4",
+          "versionId": "ba095034-fd78-4f03-a806-41f245245ee1",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 101 - Ansible Hybrid Cloud Automation - Introduction",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "f98e86ad-67d8-43a1-9e20-cd1eca349d2d",
+          "versionId": "e836a635-e0f4-4426-9031-5f6e40f895e5",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 101 - Ansible Private Cloud Automation - Introduction",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "ba18d3fa-0e4f-4dc0-b6ad-08022cb13d4d",
+          "versionId": "9da388e9-c5e0-4f91-ae1e-a3a71d4af5df",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Cloud-native Automation - Technical Enablement",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "94109651-1b0b-4aa7-a5cc-01ffc97c598d",
+          "versionId": "f9481e67-c779-45af-b5d0-8a9106016ab6",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Private Cloud Automation - Technical Enablement",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "51a1f377-228a-41e3-9583-12983d6800a6",
+          "versionId": "6a70cfa5-9d64-49f0-b2a6-1463a42808ac",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Public Cloud Automation - Technical Enablement",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "234a0b3e-2c20-4e3c-abb1-98cb2a785f79",
+          "versionId": "ec98b819-6053-4fe9-85c6-ca4b33448682",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | AAI | 101 /201 - Ansible Automation Platform and AI",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "d22a5540-a6a9-474b-bc3b-08433de92562",
+          "versionId": "13be056b-cdf5-4f18-821d-e80f45b44b30",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Cloud-native Automation - Customer Briefing",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "21b9c066-c434-4c3f-829f-6385f2cf8a92",
+          "versionId": "bea2a095-adf2-499b-bf0d-c6e44bb4a06a",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Private Cloud Automation - Customer Briefing",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "87433104-ab11-4a9e-8802-99cf4084989e",
+          "versionId": "02133aaa-646e-42db-90c5-e14af9bc64b5",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Public Cloud Automation - Customer Briefing",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "b8d35358-aa9b-4403-bd03-587d0885bd79",
+          "versionId": "d8588373-89ca-4a19-b1a9-db78517b7d0f",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | Ansible + Terraform 101",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "b4aef9fd-8cf3-4cc6-a90b-1db38adabacb",
+          "versionId": "181073df-4096-424e-ac5a-eee4d5e72a8b",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | Ansible + Terraform 201 Detailed Overview",
+          "itemType": "business-presentation",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "87cc3365-b284-409e-a79d-80d3771c7f00",
+          "versionId": "783da895-3ce6-4fa3-b648-d63f1322c855",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | Ansible + Vault 101",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "b1f1f47c-fa39-4c39-a1b1-b583709d136a",
+          "versionId": "ad18d809-360d-466b-808b-96f8b9e9b99a",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ASA | Ansible  Security Automation 101/201",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "ef4cf49a-93e8-4668-a17b-2795ae4ce4ed",
+          "versionId": "7ad37d16-8a28-47e1-aaf5-d91d72d2edde",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | AVA | 101 - Ansible OpenShift Virtualization Automation - Introduction",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "4208a97b-8187-4153-9864-022ff51faad0",
+          "versionId": "36a3e985-7ac5-4014-ae5f-5be9f645fa45",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | EDA | 101 - Event-Driven Ansible",
+          "itemType": "business-presentation",
+          "description": "General Distribution | 1. Discover",
+          "contentId": "decb0336-d917-4e04-b5dd-230c90a69a16",
+          "versionId": "7eabfa40-da4f-47f5-a69c-820c45df3746",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | PAC | 101 - Intro Policy Enforcement",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "0e41148c-241d-48f0-91e8-624dcbeb8f4b",
+          "versionId": "7214d46b-0f1f-4193-b34f-e65a0a660820",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU| RHEL| 101/201 deck",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "387c9038-a4aa-4873-b51b-f8ad8a56cc06",
+          "versionId": "64b45164-77d1-4f39-b25a-922d636e4c51",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU| Virt | 101/201| - Day 2 Virtual Infrastructure",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "aa6fa06c-27ae-4aa3-a366-0b31e39efba3",
+          "versionId": "55177905-eff8-4af0-9c32-f744c23f3e89",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "AIOps - CY'26 Customer Facing deck",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "45272726-e159-424c-81cd-0e5e14fd4002",
+          "versionId": "590bfb47-7ab0-4a5a-ae08-107474643ac4",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible + Vault 201 detailed overview",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "0ab94412-cd2e-4452-9904-80782ae84262",
+          "versionId": "ac53c10a-ca5d-4c86-b210-b25d951bd796",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Automation Platform + AI Content kit",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "37876455-57a2-4793-8049-4f3e16fd4553",
+          "versionId": "9ed048be-ad87-4a13-b506-d2a08e96f630",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Automation Platform with Dynatrace Business Value",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "49b68a7b-8f76-4b4d-903a-22d07cafdb6f",
+          "versionId": "b499ca9a-32aa-481e-a61f-127212956c8b",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Automation Platform with ServiceNow Business Value",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "2a777064-e5ce-4798-9e26-0f3efa87ff48",
+          "versionId": "332f1e14-01d1-46da-a4ab-89fb21191fe9",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Automation Platform with Terraform Business Value",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "a292359c-65bf-44b1-babb-dd2f9925e330",
+          "versionId": "cad4715e-ef79-4de1-9253-27a42e1f887a",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible by the Numbers",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "86697e11-0d76-4273-ae27-199bcfff2377",
+          "versionId": "044bb77f-cf9f-4e3e-8651-de4d11c26dce",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible community to enterprise with Red Hat Services",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "3542c607-8c06-4b29-a992-7472f41f2675",
+          "versionId": "0ffba8a5-ccee-4044-b3e3-b3254e0f531d",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Free to Enterprise Business Value",
+          "itemType": "business-presentation",
+          "description": "Confidential - NDA Required",
+          "contentId": "63ecc57a-29d0-4bf2-8c30-4696cf3734dc",
+          "versionId": "b9aa40d5-b9af-4a8e-bc97-c9b23902c53e",
+          "format": "PDF",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "Ansible Infrastructure Automation - 101 - Customer Briefing",
+          "itemType": "business-presentation",
+          "description": "General Distribution",
+          "contentId": "e8538c13-77fe-4aa5-a8fe-abcdbb7f53fc",
+          "versionId": "83f444b2-846e-4968-8689-2d9d4520736d",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        }
+      ]
+    },
+    "faq": {
+      "title": "FAQ",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AAP Service on AWS FAQ",
+          "itemType": "faq",
+          "description": "General Distribution",
+          "contentId": "ec146bf2-d0a1-4c4b-a5f7-597f37fa9b48",
+          "versionId": "e2c91041-8b2f-42e8-9882-e3c9e8fd2710",
+          "format": "DOCX",
+          "seismicContentType": "FAQ"
+        },
+        {
+          "name": "AI-Assisted RHEL Upgrades with AAP | Sales FAQ",
+          "itemType": "faq",
+          "description": "Confidential - NDA Required",
+          "contentId": "6bb20290-eb39-4056-aa9c-9160f5e92bf3",
+          "versionId": "b5e2fa4d-6be7-403b-b94a-16b468cf6111",
+          "format": "PDF",
+          "seismicContentType": "FAQ"
+        }
+      ]
+    },
+    "case-study": {
+      "title": "Case study",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABB boosts global efficiency with Red Hat Ansible Automation Platform",
+          "itemType": "case-study",
+          "description": "General Distribution",
+          "contentId": "d198c25a-f798-4186-8859-b6639ec18db6",
+          "versionId": "881e9752-aed7-4ff8-b385-e399990a5907",
+          "format": "PDF",
+          "seismicContentType": "Case study"
+        },
+        {
+          "name": "Advent One modernizes IT with Red Hat",
+          "itemType": "case-study",
+          "description": "General Distribution",
+          "contentId": "ea3bbcbc-0c32-4982-942c-4b30674a27a9",
+          "versionId": "ec29e342-6208-4a8f-a32c-6721dee17059",
+          "format": "PDF",
+          "seismicContentType": "Case study"
+        }
+      ]
+    },
+    "roadmap": {
+      "title": "Roadmap",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABU - Ansible Automation Platform - Q3CY26 Strategy and Technical Roadmap - FINAL",
+          "itemType": "roadmap",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "cd392cb0-08c5-4051-ad3c-b646493ee016",
+          "versionId": "a7dbb5f1-0441-4ba1-af31-e2f2e9639d46",
+          "format": "PDF",
+          "seismicContentType": "Roadmap"
+        }
+      ]
+    },
+    "partner-program-guide": {
+      "title": "Partner program guide",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABU | 101: Network automation with Cisco Meraki",
+          "itemType": "partner-program-guide",
+          "description": "General Distribution",
+          "contentId": "6337bc74-8cd0-4d5f-8d18-b4708add502f",
+          "versionId": "439218d5-435a-4ad3-8ec0-6a2ca8923309",
+          "format": "PPTX",
+          "seismicContentType": "Partner program guide"
+        }
+      ]
+    },
+    "technical-presentation": {
+      "title": "Technical presentation",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABU | AAP + AWX | 301",
+          "itemType": "technical-presentation",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "5899a46d-1ed1-403f-b4bd-1eb48204f633",
+          "versionId": "536286ec-0aec-44a4-99e2-62781bfd24bd",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "ABU | AEA | 301 - Ansible Edge Enterprise Automation - Technical Enablement",
+          "itemType": "technical-presentation",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "16bb97cc-8028-420f-8752-4c3a4a91fbf3",
+          "versionId": "f246b448-da11-4654-ae53-352794c2c2de",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "ABU | AVA | 301 - Ansible OpenShift Virtualization Automation",
+          "itemType": "technical-presentation",
+          "description": "General Distribution",
+          "contentId": "6dc110ca-4236-4cf0-8ffb-08b8dc520b0a",
+          "versionId": "b806af9d-3447-4ba0-ae53-078db1db3ea4",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "ABU | EDA | 201 Event-Driven Ansible",
+          "itemType": "technical-presentation",
+          "description": "General Distribution",
+          "contentId": "45d89682-866f-41ac-b873-16da81c8c19f",
+          "versionId": "fe95fbc1-db9a-4e28-a81a-6f8724d75051",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "ABU | Red Hat Ansible Automation Platform Technical Deck",
+          "itemType": "technical-presentation",
+          "description": "General Distribution",
+          "contentId": "c0291ab1-e447-4975-bd63-6de88560a25b",
+          "versionId": "b592a587-de26-4a8b-9eb1-142e9b5ffb51",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "Ansible Automation Platforms Labs (Roadshow)",
+          "itemType": "technical-presentation",
+          "description": "Confidential - Red Hat Only",
+          "contentId": "758a3365-e367-4be4-b9b7-4469cd13c8c9",
+          "versionId": "a19a04dc-0f5d-4873-a2eb-22ae7d332914",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "Ansible community to enterprise migration solution with Red Hat Services",
+          "itemType": "technical-presentation",
+          "description": "General Distribution",
+          "contentId": "49b4aa0b-5efb-4cc8-a8de-d3e375ef46b5",
+          "versionId": "d969c554-5ba6-451a-8df3-2ce2acf44693",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "Ansible Infrastructure Automation - 201 - Customer Briefing",
+          "itemType": "technical-presentation",
+          "description": "General Distribution",
+          "contentId": "0b5ce787-983d-44c1-a35c-3f00b179995c",
+          "versionId": "349aa782-8751-45b2-a4d9-8a926c441007",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        }
+      ]
+    },
+    "messaging-guide": {
+      "title": "Messaging guide",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABU | AAP 2.6 | Release messaging guide + internal FAQ",
+          "itemType": "messaging-guide",
+          "description": "General Distribution",
+          "contentId": "8b5ff5e9-bd97-458d-b875-271de4fd8862",
+          "versionId": "cb847500-5071-41ac-be83-22449e2d0f66",
+          "format": "PDF",
+          "seismicContentType": "Messaging guide"
+        }
+      ]
+    },
+    "sales-conversation-guide": {
+      "title": "Sales conversation guide",
+      "type": "cards",
+      "items": [
+        {
+          "name": "ABU | ANA | 201 - Ansible Network Automation - customer briefing",
+          "itemType": "sales-conversation-guide",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "80520471-cb14-4747-bc97-bc0fb76482fb",
+          "versionId": "a95444ef-4555-4942-b782-268ba01291dc",
+          "format": "PPTX",
+          "seismicContentType": "Sales conversation guide"
+        }
+      ]
+    },
+    "detail": {
+      "title": "Detail",
+      "type": "cards",
+      "items": [
+        {
+          "name": "Adopt a platform approach to OT system orchestration",
+          "itemType": "detail",
+          "description": "General Distribution",
+          "contentId": "0ea93b99-d737-45ff-8e2a-fe29b6a88542",
+          "versionId": "69abcfa8-c398-4d50-912b-c6937b53e096",
+          "format": "PDF",
+          "seismicContentType": "Detail"
+        }
+      ]
+    },
+    "demos-videos": {
+      "title": "Demos & Videos",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AIOps - CY'26 Customer Facing deck recording",
+          "itemType": "video",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "68f39e7b-8ca9-4fdf-a9de-1a1dca4b58de",
+          "versionId": "ba611df4-4cde-43d0-9ad4-5b1dad683083",
+          "format": "WEBM",
+          "seismicContentType": "Video"
+        },
+        {
+          "name": "AIOps - CY'26 Customer Pitch Video",
+          "itemType": "video",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "64bd7438-1377-4aa1-b8b5-f222cb414a99",
+          "versionId": "75162e71-b5e3-43ba-9962-bcd425822fec",
+          "format": "MP4",
+          "seismicContentType": "Video"
+        }
+      ]
+    },
+    "email-templates": {
+      "title": "Email templates",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AIOps - CY'26 Sales Tactic Email",
+          "itemType": "email",
+          "description": "Confidential - Channel NDA Required",
+          "contentId": "3377637c-107e-4263-8960-adb776f79233",
+          "versionId": "3823e7b6-57c6-49c7-a512-d551e3a3000c",
+          "format": "DOCX",
+          "seismicContentType": "Email"
+        }
+      ]
+    },
+    "sales-guide": {
+      "title": "Sales guide",
+      "type": "cards",
+      "items": [
+        {
+          "name": "AIOps Sales Tactic - Partner Version",
+          "itemType": "sales-guide",
+          "description": "Confidential - Channel NDA Required | 1. Discover",
+          "contentId": "e6c7353f-2826-4d02-b572-fcd80a7f2800",
+          "versionId": "01ed866c-1ce0-4c5e-ab94-53ddf9defe1a",
+          "format": "PDF",
+          "seismicContentType": "Sales guide"
+        }
+      ]
+    },
+    "analyst-material": {
+      "title": "Analyst material",
+      "type": "cards",
+      "items": [
+        {
+          "name": "Analyst Reports - Business Value of Red Hat Ansible",
+          "itemType": "analyst-material",
+          "description": "Confidential - NDA Required",
+          "contentId": "32a55342-579c-4f13-9480-65c5a9f0d309",
+          "versionId": "770c25b7-b41c-4a75-b071-5e783850f070",
+          "format": "PDF",
+          "seismicContentType": "Analyst material"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,4894 @@
+{
+  "productSlug": "red-hat-openshift-virtualization",
+  "enrichedAt": "2026-06-24T12:51:45.469Z",
+  "documents": [
+    {
+      "documentName": "Home",
+      "documentCategory": "other",
+      "summary": "This document serves as a sales hub, providing navigation to various sales-related content categories such as products, cross-portfolio solutions, competitive information, sales programs, and services",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [
+        "Browse all Sales materials by content type, sales play, tactic, or business case."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Products",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf3e41b707-4f29-4a23-9ee9-27736d70c8eb//"
+        },
+        {
+          "name": "Cross-portfolio",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf5c96f709-7627-4ac7-97d0-3389f5ccd798//"
+        },
+        {
+          "name": "Competitive",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf2f1af34f-f11c-497f-a946-f6192ae3b672//"
+        },
+        {
+          "name": "Sales programs",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd10ae9d7-e9cf-4d41-8cad-cb9f131415d1//"
+        },
+        {
+          "name": "Services",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf9cb0c452-9359-488f-9eab-5e02970a7c14//"
+        },
+        {
+          "name": "Services portfolio",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf5a29d0b2-92df-4480-8735-8a5f1b3602ad//"
+        },
+        {
+          "name": "red.ht/saleshubhelp",
+          "url": "https://red.ht/saleshubhelp"
+        },
+        {
+          "name": "Employee Privacy Statement",
+          "url": "https://source.redhat.com/departments/legal/legal_compliance_ethics/compliance_wiki/employee_personal_information_privacy_statement"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:53.104Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "DocCenter",
+      "documentCategory": "other",
+      "summary": "This document appears to be a content management interface, likely for an internal Red Hat sales or product document repository, allowing users to browse content by type or product and access press re",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [
+        "Browse content by type",
+        "Browse content by product",
+        "Access Red Hat Press Releases"
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "IBM and Red Hat Commit $5 Billion to Redefine the Future of Open Source in the AI Era",
+          "url": "https://www.redhat.com/en/about/press-releases/project-lightwell-secure-open-source"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:45.881Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Insights",
+      "documentCategory": "other",
+      "summary": "This document provides an overview of 'Insights' capabilities, including a data catalog explorer, self-service reports for faster business decisions, and LiveInsights dashboards for personalized analy",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [
+        "Discover and learn about the data available in our reporting interfaces.",
+        "Make smart business decisions faster with a seamless analytics experience.",
+        "Quickly access the insights that matter most with curated datasets and intuitive filters.",
+        "Get a deeper understanding of your content and unearth hidden insights with a personalized analytics experience.",
+        "Discover predefined dashboards or easily create new ones that better fit your needs."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Data catalog explorer image",
+          "url": "https://cdn-prod.seismic.com/static/frontend/c61f3135eb6780e35dbba6c1c7d1e432.png"
+        },
+        {
+          "name": "Self-service reports image",
+          "url": "https://cdn-prod.seismic.com/static/frontend/3429da46834c9d5535db08b513e52b2c.png"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:48.595Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "HomePage",
+      "documentCategory": "other",
+      "summary": "This document serves as a homepage for Red Hat Sales Hub, providing navigation to various sales-related content such as products, cross-portfolio information, competitive analysis, sales programs, ser",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [
+        "Access to Red Hat product information",
+        "Information on cross-portfolio solutions",
+        "Competitive insights for sales",
+        "Details on sales programs and services",
+        "Guidance on sales tactics and technology decision points"
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Products",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf3e41b707-4f29-4a23-9ee9-27736d70c8eb//"
+        },
+        {
+          "name": "Cross-portfolio",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf5c96f709-7627-4ac7-97d0-3389f5ccd798//"
+        },
+        {
+          "name": "Competitive",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf2f1af34f-f11c-497f-a946-f6192ae3b672//"
+        },
+        {
+          "name": "Sales programs",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd10ae9d7-e9cf-4d41-8cad-cb9f131415d1//"
+        },
+        {
+          "name": "Services",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf9cb0c452-9359-488f-9eab-5e02970a7c14//"
+        },
+        {
+          "name": "Services portfolio",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf5a29d0b2-92df-4480-8735-8a5f1b3602ad//"
+        },
+        {
+          "name": "red.ht/saleshubhelp",
+          "url": "https://red.ht/saleshubhelp"
+        },
+        {
+          "name": "Employee Privacy Statement",
+          "url": "https://source.redhat.com/departments/legal/legal_compliance_ethics/compliance_wiki/employee_personal_information_privacy_statement"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:53.163Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "All Sales Content",
+      "documentCategory": "other",
+      "summary": "This document appears to be a directory or listing of various Red Hat sales content, including general content, product-specific information, and press releases.",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "IBM",
+          "context": "coexistence"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "IBM and Red Hat Commit $5 Billion to Redefine the Future of Open Source in the AI Era",
+          "url": "https://www.redhat.com/en/about/press-releases/project-lightwell-secure-open-source"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:45.881Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Page RHSH",
+      "documentCategory": "other",
+      "summary": "This document appears to be a list of various internal Red Hat sales enablement materials, including guided selling documents, pilot programs, and assessment tools, covering topics such as application",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [],
+      "talkTracks": null,
+      "links": [],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:03.440Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Red Hat OpenShift Virtualization",
+      "documentCategory": "content-kit",
+      "summary": "This document provides resources and information about Red Hat OpenShift Virtualization, detailing its capabilities, news, technical resources, customer references, and training options.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "OpenShift Virtualization Engine (OVE)",
+          "slug": null
+        },
+        {
+          "name": "Azure Red Hat OpenShift (ARO)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Service on AWS (ROSA)",
+          "slug": null
+        },
+        {
+          "name": "Google Cloud",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Consulting for OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "VM migration",
+        "Modern application development"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": [
+        "Azure",
+        "AWS",
+        "Google Cloud"
+      ],
+      "audience": "mixed",
+      "keyPoints": [
+        "Red Hat OpenShift Virtualization reduces operational overhead by providing a single platform for virtual machines (VMs) and containers.",
+        "It facilitates migration and modernization by applying modern application development principles to VMs.",
+        "Teams can run VMs consistently across on-premise, edge, and supported cloud environments."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Press Release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-unveils-red-hat-openshift-virtualization-engine"
+        },
+        {
+          "name": "Blog post",
+          "url": "https://www.redhat.com/en/blog/introducing-red-hat-openshift-virtualization-engine"
+        },
+        {
+          "name": "Webpage",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRXh0ZXJuYWwgcmVzb3VyY2U%253D%252Flffde4def7-9d98-4bd9-9348-5b237464064e//"
+        },
+        {
+          "name": "Datasheet",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRGF0YXNoZWV0%252Flfa294edac-42c7-465f-9465-62998aee4743//"
+        },
+        {
+          "name": "Overview",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CT3ZlcnZpZXc%253D%252Flf1f0edbdc-0c13-4693-9281-a37b1e1542c3//"
+        },
+        {
+          "name": "9 essential questions to ask before a virtual machine migration",
+          "url": "https://www.redhat.com/en/blog/9-essential-questions-ask-virtual-machine-migration-challenges-strategies-and-real-world-insights?extIdCarryOver=true&intcmp=7013a0000026UTXAA2&percmp=7013a0000034splAAA&sc_cid=701f2000000txokAAA"
+        },
+        {
+          "name": "Virtualization migration assessment",
+          "url": "https://www.redhat.com/en/resources/virtualization-migration-assessment-datasheet"
+        },
+        {
+          "name": "Simplify your VM migration to Red Hat OpenShift Virtualization",
+          "url": "https://www.redhat.com/en/resources/simplify-your-virtual-machine-migration-overview?sc_cid=701f2000000txokAAA&utm_source=bambu&utm_medium=organic_social&blaid=6298200"
+        },
+        {
+          "name": "The Total Economic Impact of Red Hat Consulting for OpenShift",
+          "url": "https://www.redhat.com/rhdc/managed-files/co-forrester-tei-consulting-for-openshift-analyst-material-1396520-202409en.pdf?extIdCarryOver=true&intcmp=7013a000003Sa2oAAC&percmp=7015Y00000486qQQAQ&sc_cid=701f2000000txokAAA"
+        },
+        {
+          "name": "Managing Virtual Machines with Red Hat OpenShift Virtualization with Exam (DO317)",
+          "url": "https://www.redhat.com/en/services/training/managing-virtual-machines-red-hat-openshift-virtualization-exam?section=overview"
+        },
+        {
+          "name": "Managing Virtual Machines with Red Hat OpenShift Virtualization (DO316)",
+          "url": "https://www.redhat.com/en/services/training/do316-managing-virtual-machines-red-hat-openshift-virtualization?section=Outline"
+        },
+        {
+          "name": "Red Hat Certified Specialist in OpenShift Virtualization (EX316)",
+          "url": "https://www.redhat.com/en/services/training/red-hat-certified-specialist-openshift-virtualization-ex316"
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "url": "https://www.redhat.com/en/services/training/learning-subscription"
+        },
+        {
+          "name": "#forum-openshift-virtualization",
+          "url": "https://redhat.enterprise.slack.com/archives/C068X44C8VB"
+        },
+        {
+          "name": "OpenShift Virtualization Page",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+        },
+        {
+          "name": "MTV Product Page",
+          "url": "https://developers.redhat.com/products/mtv"
+        },
+        {
+          "name": "Why Migrate to Red Hat?",
+          "url": "https://www.redhat.com/en/topics/virtualization/why-migrate-your-virtual-machines-to-red-hat"
+        },
+        {
+          "name": "Virtualization migration page",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRXh0ZXJuYWwgcmVzb3VyY2U%253D%252Flf8437c0c9-4019-4041-93b9-9201cec7c430//"
+        },
+        {
+          "name": "Learning Path",
+          "url": "https://cloud.redhat.com/learn/getting-started-red-hat-openshift-virtualization"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:04.464Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Press Release",
+      "documentCategory": "other",
+      "summary": "Red Hat announces the general availability of Red Hat OpenShift Virtualization Engine, a new edition of Red Hat OpenShift focused exclusively on virtualization workloads, providing a tailored experien",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Virtualization",
+        "Application modernization",
+        "VM migration",
+        "Automation of VM management"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Modernizing virtual environments to meet IT demands",
+          "industry": null
+        },
+        {
+          "scenario": "Managing virtual machines with budget constraints, seeking streamlined options for scale, performance, and security",
+          "industry": null
+        },
+        {
+          "scenario": "Transitioning from other virtualization platforms",
+          "industry": null
+        },
+        {
+          "scenario": "Automating VM migrations and day-to-day VM management tasks",
+          "industry": null
+        },
+        {
+          "scenario": "Centralizing VM lifecycle management and streamlining tasks like VM provisioning, monitoring, and compliance",
+          "industry": null
+        }
+      ],
+      "cloudProviders": [
+        "AWS"
+      ],
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat OpenShift Virtualization Engine provides a dedicated, virtualization-centric offering for deploying, managing, and scaling virtual machines.",
+        "The new offering is designed to address uncertainty and rising costs in the virtualization market by providing a cost-efficient, streamlined solution.",
+        "It maximizes the value of existing virtualization investments by entitling only essential OpenShift features for virtualization, leading to simplified operations and improved efficiency.",
+        "Red Hat OpenShift Virtualization Engine runs on on-premises hardware supporting Red Hat Enterprise Linux and supported bare metal cloud services, offering consistent performance across the hybrid clou",
+        "It includes tools like the migration toolkit for virtualization and integrates with Red Hat Ansible Automation Platform to simplify VM migrations and automate management tasks.",
+        "Red Hat Advanced Cluster Management for Virtualization is introduced to centralize VM lifecycle management and streamline tasks across virtualized environments."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+        },
+        {
+          "name": "migration toolkit for virtualization",
+          "url": "https://developers.redhat.com/products/mtv/overview"
+        },
+        {
+          "name": "Virtualization Migration Assessment",
+          "url": "https://www.redhat.com/en/resources/virtualization-migration-assessment-datasheet?sc_cid=7015Y000003t9G4QAI"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/virtual-infrastructure-management"
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "url": "https://www.redhat.com/en/technologies/management/advanced-cluster-management"
+        },
+        {
+          "name": "here",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization-engine"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization-engine"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "url": "https://www.redhat.com/en/blog/introducing-red-hat-openshift-virtualization-engine"
+        },
+        {
+          "name": "Red Hat",
+          "url": "https://red.ht/IOS5vm"
+        },
+        {
+          "name": "Red Hat newsroom",
+          "url": "https://red.ht/1qeXuma"
+        },
+        {
+          "name": "Red Hat blog",
+          "url": "https://red.ht/1zzgkXp"
+        },
+        {
+          "name": "Red Hat on Twitter",
+          "url": "https://bit.ly/2FVq6ik"
+        },
+        {
+          "name": "Red Hat on Facebook",
+          "url": "https://on.fb.me/JVGXMi"
+        },
+        {
+          "name": "Red Hat videos on YouTube",
+          "url": "https://bit.ly/JEkzvc"
+        },
+        {
+          "name": "Red Hat on LinkedIn",
+          "url": "https://linkd.in/1AlOAXq"
+        },
+        {
+          "name": "Red Hat",
+          "url": "https://www.redhat.com"
+        },
+        {
+          "name": "Award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "trusted adviser to the Fortune 500",
+          "url": "https://www.redhat.com/en/about/trusted?sc_cid=70160000000e5syAAA"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Learn more about Red Hat OpenShift Virtualization Engine",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization-engine"
+        },
+        {
+          "step": "Read a blog post with more details about Red Hat OpenShift Virtualization Engine",
+          "url": "https://www.redhat.com/en/blog/introducing-red-hat-openshift-virtualization-engine"
+        },
+        {
+          "step": "Contact Red Hat PR"
+        },
+        {
+          "step": "Subscribe to the feed"
+        }
+      ],
+      "workshops": null,
+      "demos": [
+        {
+          "name": "Red Hat Advanced Cluster Management for Virtualization",
+          "url": "https://app.arcade.software/share/PIbyWf2YD2A6BqwXp6hz"
+        }
+      ],
+      "enrichedAt": "2026-06-24T12:50:11.132Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Blog post",
+      "documentCategory": "other",
+      "summary": "This blog post introduces Red Hat OpenShift Virtualization Engine, a new edition of OpenShift focused solely on virtualization workloads, simplifying VM deployment and management while offering a clea",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "KVM",
+          "slug": null
+        },
+        {
+          "name": "KubeVirt",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux CoreOS",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenStack Services on OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Container Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "KVM",
+          "category": "Virtualization"
+        },
+        {
+          "technology": "KubeVirt",
+          "category": "Virtualization"
+        },
+        {
+          "technology": "CSI (Container Storage Interface)",
+          "category": "Storage"
+        },
+        {
+          "technology": "Dell/EMC",
+          "category": "Storage"
+        },
+        {
+          "technology": "HPE",
+          "category": "Storage"
+        },
+        {
+          "technology": "IBM",
+          "category": "Storage"
+        },
+        {
+          "technology": "NetApp",
+          "category": "Storage"
+        },
+        {
+          "technology": "Portworx",
+          "category": "Storage"
+        },
+        {
+          "technology": "Hitachi",
+          "category": "Storage"
+        },
+        {
+          "technology": "Infinidat",
+          "category": "Storage"
+        },
+        {
+          "technology": "Grafana",
+          "category": "Monitoring"
+        }
+      ],
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Virtualization workloads management",
+        "VM deployment and scaling",
+        "Containerization and application modernization",
+        "Bare metal cluster deployment and management",
+        "Multi-tenant virtualization environments",
+        "Automated provisioning of virtual machines",
+        "At-scale migration of VMs",
+        "Automated migration and management of related infrastructure (networks, storage)",
+        "Routine task automation for virtual machines",
+        "Centralized management of clusters and applications across diverse VM landscape"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat OpenShift Virtualization Engine provides a dedicated option focused entirely on virtualization workloads, reducing unnecessary complexity and cost.",
+        "It simplifies the process of deploying, managing, and scaling virtual machines.",
+        "OpenShift Virtualization Engine offers an easy path to containerization and modernization through an upgrade to broader OpenShift editions.",
+        "It leverages OpenShift Virtualization for modern VM infrastructure using KVM and KubeVirt, allowing a single platform for virtualized and containerized apps.",
+        "Includes robust management capabilities for bare metal OpenShift deployment and management, including automated installer options and over-the-air updates.",
+        "Features a dedicated virtualization administrator view within the web-based management UI for enhanced productivity.",
+        "Supports enterprise storage and networking capabilities, including network policy engine for microsegmentation and CSI for storage integration.",
+        "Offers enhanced virtualization experience with user workload monitoring by namespaces, enhanced virtual machine platform logging, and automated provisioning of virtual machines with OpenShift GitOps."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Developer blog",
+          "url": "https://developers.redhat.com/blog"
+        },
+        {
+          "name": "Red Hat Partner Connect blog",
+          "url": "https://connect.redhat.com/en/blog"
+        },
+        {
+          "name": "Red Hat’s partner ecosystem",
+          "url": "https://catalog.redhat.com/platform/red-hat-openshift/virtualization"
+        },
+        {
+          "name": "fencing agent remediation",
+          "url": "https://access.redhat.com/articles/7057929"
+        },
+        {
+          "name": "Migrate VMs to OpenShift Virtualization in an interactive demo",
+          "url": "https://www.redhat.com/architect/portfolio/detail/64-migrate-vm-demo"
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Virtualization",
+          "url": "https://app.arcade.software/share/PIbyWf2YD2A6BqwXp6hz"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Learn about OpenShift Virtualization Engine"
+        },
+        {
+          "step": "Explore OpenShift Virtualization Engine’s capabilities"
+        },
+        {
+          "step": "Migrate VMs to OpenShift Virtualization in an interactive demo",
+          "url": "https://www.redhat.com/architect/portfolio/detail/64-migrate-vm-demo"
+        },
+        {
+          "step": "Learn more in our subscription guide"
+        },
+        {
+          "step": "Try Red Hat OpenShift Container Platform"
+        },
+        {
+          "step": "Read Hybrid Cloud Strategy for Dummies"
+        },
+        {
+          "step": "Read Hybrid Cloud Strategy For Dummies®, 4th Red Hat® Special Edition"
+        },
+        {
+          "step": "Read about Red Hat named a Leader in 2024 Gartner® Magic Quadrant™ for Container Management"
+        },
+        {
+          "step": "Try Red Hat OpenShift"
+        }
+      ],
+      "workshops": null,
+      "demos": [
+        {
+          "name": "Migrate VMs to OpenShift Virtualization in an interactive demo",
+          "url": "https://www.redhat.com/architect/portfolio/detail/64-migrate-vm-demo"
+        }
+      ],
+      "enrichedAt": "2026-06-24T12:50:10.712Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Webpage",
+      "documentCategory": "other",
+      "summary": "This document is a placeholder for a web page that cannot be viewed directly within the current interface. It provides a button to open the content in a new link.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [
+        "Content is available via an external link, not directly viewable in the current interface."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Red Hat OpenShift Virtualization Engine.png",
+          "url": "https://saleshub.redhat.com/gateway/services/bss/tenants/redhat//api/image/v1/tmpurl/images?t=redhat&c=redhat&id=bc19cc29-49f3-48af-9209-09de660a28de&requestsize=ExtraLarge&et=29705300&isfullcontainername=True&fn=Red%20Hat%20OpenShift%20Virtualization%20Engine.png&sig=ffzRkHpxIQFRriQTWKABaK64fRFGeVlNHCiByMzKP0U%3D"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:49:55.749Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Datasheet",
+      "documentCategory": "other",
+      "summary": "This document is a datasheet for Red Hat OpenShift Virtualization Engine, providing an overview of its features and benefits.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [],
+      "talkTracks": null,
+      "links": [],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:12.655Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Overview",
+      "documentCategory": "other",
+      "summary": "This document appears to be an overview or introductory piece for Red Hat OpenShift Virtualization Engine, likely part of a larger content kit or presentation.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [],
+      "talkTracks": null,
+      "links": [],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:12.886Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "9 essential questions to ask before a virtual machine migration",
+      "documentCategory": "other",
+      "summary": "This document outlines 9 essential questions to ask before a virtual machine migration, focusing on challenges, strategies, and real-world insights to help organizations update their traditional virtu",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Virtual machine migration",
+        "Application modernization",
+        "Infrastructure modernization",
+        "Hybrid cloud environments",
+        "Multicloud environments",
+        "Automated provisioning of virtual machines",
+        "Lifecycle management of virtual machines",
+        "Monitoring and performance management of virtual machines"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Migrating virtual machine workloads to Red Hat OpenShift Virtualization to modernize applications and infrastructure.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Migrating to OpenShift Virtualization offers the flexibility to modernize applications and infrastructure at your own pace, connects and centralizes environments, and helps retire legacy systems faste",
+        "A well-planned roadmap is crucial for a quick and safe virtual machine migration, and Red Hat Consulting provides tailored solutions.",
+        "Unified platforms for virtual machines and containers optimize resource use, eliminate duplicate efforts, and adapt to diverse workloads.",
+        "Supporting teams with migration experts and targeted training is essential for adopting a new virtualization platform.",
+        "Prioritizing workloads for migration, starting with low-risk ones, and tracking key consumption indicators helps achieve value faster.",
+        "OpenShift Virtualization offers flexible networking options, including Pod network and Linux or OVS bridge, to connect virtual machines.",
+        "Selecting the proper storage backend for the cluster is important, supporting virtual machine live migrations, snapshots, and clones.",
+        "Virtual machine backup can be approached via OpenShift APIs for data protection or third-party data protection vendors, considering scalability, security, and recovery capabilities.",
+        "OpenShift Virtualization offers flexible provisioning methods, including ClickOps, API, Red Hat Ansible Automation Platform, and GitOps, for streamlined deployments and consistent configurations.",
+        "The Migration Toolkit for Virtualization, combined with Ansible Automation Platform, facilitates continuous transfer of virtualized workloads and automates migration tasks.",
+        "Red Hat Advanced Cluster Management for Kubernetes helps efficiently control clusters and applications from a single console for large and complex cluster deployments.",
+        "Built-in observability tools in Red Hat OpenShift, or integration with third-party monitoring systems, are critical for Day 2 operations to monitor health and performance.",
+        "The combination of Ansible Automation Platform and OpenShift Virtualization automates many Day 2 tasks across the entire VM lifecycle."
+      ],
+      "talkTracks": [
+        "Virtualization strategy updates",
+        "Cost reduction through virtualization modernization",
+        "Application and infrastructure modernization with OpenShift Virtualization",
+        "Unified platform for VMs and containers",
+        "Automated VM migration and management",
+        "Day 2 operations for virtual machines on OpenShift"
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&extIdCarryOver=true&intcmp=7013a000003Sl59AAC&sc_cid=RHCTG0250000454096&percmp=RHCTG0250000466729&_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Developer blog",
+          "url": "https://developers.redhat.com/blog"
+        },
+        {
+          "name": "Red Hat Partner Connect blog",
+          "url": "https://connect.redhat.com/en/blog"
+        },
+        {
+          "name": "virtualization",
+          "url": "https://access.redhat.com/products/red-hat-virtualization"
+        },
+        {
+          "name": "partner ecosystem",
+          "url": "https://catalog.redhat.com/platform/red-hat-openshift/virtualization#virtualization-overview"
+        },
+        {
+          "name": "OpenShift APIs for data protection",
+          "url": "https://access.redhat.com/articles/5456281"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Subscribe to Red Hat TV at no-cost",
+          "url": "https://tv.redhat.com/?intcmp=7013a000003Sq0iAAC"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Start with a Virtualization Migration Assessment with Red Hat Consulting to understand existing architecture, workloads, and determine migration complexity."
+        },
+        {
+          "step": "Prepare for the learning curve by supporting teams early in the migration journey with migration experts and targeted training."
+        },
+        {
+          "step": "Conduct confidence testing of easy, medium, and hard workloads to validate assumptions about migration complexity and prioritize low-risk workloads."
+        },
+        {
+          "step": "Deploy the Migration Toolkit for Virtualization to efficiently migrate virtual machines from alternative providers to Red Hat OpenShift."
+        },
+        {
+          "step": "Automate management of Day 2 tasks across the entire VM lifecycle using Ansible Automation Platform and OpenShift Virtualization."
+        },
+        {
+          "step": "Take the Managing Virtual Machines with Red Hat OpenShift Virtualization (DO317) course and exam bundle to learn essential skills."
+        },
+        {
+          "step": "Engage Red Hat Technical Account Managers to address risks, enhance productivity, and support long-term operations."
+        },
+        {
+          "step": "Contact Red Hat Consulting for expert insights and tailored strategies for an efficient migration."
+        }
+      ],
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:32.453Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Virtualization migration assessment",
+      "documentCategory": "solution-brief",
+      "summary": "This document outlines Red Hat Consulting's Virtualization Migration Assessment, an experience-driven framework to help organizations plan and execute VM infrastructure migrations, providing a clear r",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "traditional virtualization provider",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": [
+        {
+          "partnerName": "TEKsystems Global Services",
+          "solutionArea": "Other"
+        }
+      ],
+      "useCases": [
+        "VM migration",
+        "Virtualization environment optimization",
+        "IT modernization",
+        "Containerization",
+        "AI platform implementation",
+        "Application migration",
+        "Improving developer experience"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Migrating virtual machines (VMs) away from outdated or costly traditional virtualization environments.",
+          "industry": null
+        },
+        {
+          "scenario": "Reevaluating IT goals for broader modernization, including containerization, AI platform implementation, or application migration.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": [
+        "AWS"
+      ],
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat Consulting provides an experience-driven framework for virtualization migration.",
+        "The assessment helps organizations understand, plan, and strategize VM infrastructure migrations.",
+        "Red Hat experts conduct workshops to assess current environments, gather requirements, and define future state goals.",
+        "The process identifies virtualization use cases, Day 2 operations, and security/compliance requirements.",
+        "The outcome is a high-level solution roadmap for safe and timely VM migration, including pilot scope and modernization efforts.",
+        "The assessment can be tailored for broader IT modernization goals beyond virtualization, such as containerization or AI platform implementation.",
+        "Red Hat Consulting offers advanced expertise with open source and proprietary systems, aligning teams and streamlining processes.",
+        "Red Hat Training and Certification provides specialized skills for operating new platforms, including Red Hat OpenShift skills paths.",
+        "Red Hat Technical Account Managers (TAMs) offer personalized support to prevent problems and minimize disruption."
+      ],
+      "talkTracks": [
+        "Virtualization migration strategy and planning",
+        "Cost reduction in virtualization environments",
+        "Accelerating innovation through VM infrastructure migration",
+        "Modernization beyond virtualization (containerization, AI platforms, application migration)",
+        "Red Hat Consulting's expertise in open source and proprietary systems",
+        "Training and certification for new platforms",
+        "Proactive support with Technical Account Managers"
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "www.redhat.com",
+          "url": "https://www.redhat.com/"
+        },
+        {
+          "name": "@red-hat",
+          "url": "https://www.inkedin.com/company/red-hat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.x.com/RedHat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "@red_hat",
+          "url": "https://www.instagram.com/red_hat"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Contact your business account representative to unlock savings on Red Hat OpenShift subscriptions."
+        },
+        {
+          "step": "Connect with Red Hat Consulting to discuss a Virtualization Migration Assessment for your organization."
+        }
+      ],
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:24.343Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Simplify your VM migration to Red Hat OpenShift Virtualization",
+      "documentCategory": "solution-brief",
+      "summary": "This document outlines how Red Hat services, including consulting, training, and technical account management, can help organizations safely and rapidly migrate virtual machines to Red Hat OpenShift V",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "VM migration",
+        "Modernizing operations for virtualized and containerized workloads"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Migrating virtual machines to a modern platform to address rising subscription costs, vendor lock-in, and limited modernization potential.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat OpenShift Virtualization helps organizations accelerate the migration of their traditional virtual machines (VMs) to a scalable, modern infrastructure platform through a rapid approach that mi",
+        "Red Hat offers a comprehensive suite of services—from consulting to training and certification to technical guidance—that support the entire migration journey.",
+        "Red Hat OpenShift Virtualization offers a simple and reliable platform to migrate and host existing VMs.",
+        "Red Hat OpenShift Virtualization runs and is built on mature Kernel-based Virtual Machines (KVM) technology.",
+        "Red Hat OpenShift Virtualization provides the flexibility to modernize at a later date.",
+        "Red Hat OpenShift Virtualization manages VMs and containers on a unified platform, or the management of VMs only with Red Hat OpenShift Virtualization Engine.",
+        "Red Hat Consulting helps organizations maximize the effectiveness—and therefore value—of their Red Hat technology investment.",
+        "Red Hat Consulting offers customized support that addresses every step of VM migration across 3 distinct phases: Establish a strategy, Lay a foundation to accelerate migration, and Evolve.",
+        "Red Hat Training and Certification helps organizations improve employee effectiveness, IT performance and agility, and governance.",
+        "Red Hat Technical Account Managers (TAMs) serve as a single point of contact for technical advice and ongoing support, helping achieve migration goals and prepare for modernization."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "workload flexibility and management consistency",
+          "url": "https://www.redhat.com/en/resources/consulting-reduces-downtime-openshift-overview"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "www.redhat.com",
+          "url": "https://www.redhat.com/"
+        },
+        {
+          "name": "@red-hat",
+          "url": "https://www.inkedin.com/company/redhat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.x.com/RedHat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "@red_hat",
+          "url": "https://www.instagram.com/red_hat"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Start a trial"
+        },
+        {
+          "step": "Buy a learning subscription"
+        },
+        {
+          "step": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "step": "Contact sales"
+        },
+        {
+          "step": "Contact customer service"
+        },
+        {
+          "step": "See Red Hat jobs"
+        },
+        {
+          "step": "Explore training"
+        },
+        {
+          "step": "Explore services"
+        },
+        {
+          "step": "Explore Red Hat AI"
+        },
+        {
+          "step": "See our approach"
+        },
+        {
+          "step": "Explore solutions"
+        },
+        {
+          "step": "Speak to a Red Hatter to learn more about the benefits, and how to get started with a Virtualization Migration Assessment."
+        }
+      ],
+      "workshops": null,
+      "demos": [],
+      "enrichedAt": "2026-06-24T12:50:24.843Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "The Total Economic Impact of Red Hat Consulting for OpenShift",
+      "documentCategory": "case-study",
+      "summary": "This document, a Total Economic Impact (TEI) study by Forrester, evaluates the financial benefits and costs associated with Red Hat Consulting for OpenShift, providing a framework to assess its potent",
+      "productsReferenced": [
+        {
+          "name": "OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Consulting",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat Consulting for OpenShift provides significant economic benefits, including improved operational efficiency and faster time to market.",
+        "The study offers a framework to evaluate the financial impact of Red Hat Consulting services.",
+        "Organizations can achieve substantial ROI by leveraging Red Hat Consulting expertise for OpenShift deployments."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "https://www.forrester.com/research/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/research/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/blogs/category/customer-obsession/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/blogs/category/customer-obsession/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/consulting/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/consulting/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.redhat.com/en/technologies/cloud-computing/openshift",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift"
+        },
+        {
+          "name": "https://www.redhat.com/en/services/consulting",
+          "url": "https://www.redhat.com/en/services/consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/the-multicloud-container-platforms-landscape-q2-2023/RES179435?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/the-multicloud-container-platforms-landscape-q2-2023/RES179435?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/the-forrester-wave-tm-multicloud-container-platforms-q4-2023/RES178526?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/the-forrester-wave-tm-multicloud-container-platforms-q4-2023/RES178526?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/blogs/ai-platforms-and-big-promises-what-we-saw-at-red-hat-summit/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/blogs/ai-platforms-and-big-promises-what-we-saw-at-red-hat-summit/?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/getting-started-with-kubernetes/RES178765?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/getting-started-with-kubernetes/RES178765?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/selecting-your-kubernetes-strategy/RES179211?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/selecting-your-kubernetes-strategy/RES179211?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/best-practices-kubernetes/RES177015?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/best-practices-kubernetes/RES177015?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/kubernetes-your-innovation-platform/RES178983?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/kubernetes-your-innovation-platform/RES178983?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://www.forrester.com/report/the-roi-of-kubernetes-and-containers/RES180091?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting",
+          "url": "https://www.forrester.com/report/the-roi-of-kubernetes-and-containers/RES180091?utm_source=forrester_tei&utm_medium=web&utm_campaign=consulting"
+        },
+        {
+          "name": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html",
+          "url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:51:01.593Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Managing Virtual Machines with Red Hat OpenShift Virtualization with Exam (DO317)",
+      "documentCategory": "workshop",
+      "summary": "This document outlines a training course (DO317) focused on managing virtual machines with Red Hat OpenShift Virtualization, including an exam for certification. It covers essential skills for creatin",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Certified Specialist in OpenShift Virtualization (EX316)",
+          "slug": null
+        },
+        {
+          "name": "Migration Toolkit for Virtualization",
+          "slug": null
+        },
+        {
+          "name": "OpenShift APIs for Data Protection (OADP)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration I: Operating a Production Cluster (DO180)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat System Administration I (RH124)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat System Administration II (RH134)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration II: Configuring a Production Cluster (DO280)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration III: Scaling Deployments in the Enterprise (DO380)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Data Foundation (DO370)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Installation Lab (DO322)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Managing virtualized workloads on OpenShift",
+        "Integrating traditional server-based applications with cloud-native applications",
+        "CI/CD for virtualized workloads",
+        "DevOps for virtualized workloads",
+        "SRE for virtualized workloads",
+        "Migrating VMs from compatible hypervisors to OpenShift Virtualization"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Learn to create, access, and manage virtual machines (VMs) on OpenShift using the Red Hat OpenShift Virtualization operator.",
+        "Understand how to control CPU, memory, storage, and networking resources for VMs using Kubernetes features.",
+        "Explore sample architectures for High Availability (HA) of VMs using standard Kubernetes features and OpenShift Virtualization extensions.",
+        "Discover strategies to connect VMs on OpenShift to external data center services and migrate VMs from compatible hypervisors.",
+        "Gain skills to deploy and manage virtualized workloads on OpenShift, realizing operational savings and easing integration with cloud-native applications."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Take our free assessment",
+          "url": "https://skills.ole.redhat.com/"
+        },
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": [],
+      "demos": [],
+      "enrichedAt": "2026-06-24T12:50:56.822Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Managing Virtual Machines with Red Hat OpenShift Virtualization (DO316)",
+      "documentCategory": "workshop",
+      "summary": "This document outlines the \"Red Hat OpenShift Virtualization Administration Rapid Track course (DO316)\", designed for administrators to learn how to create and manage virtual machines on OpenShift usi",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration I: Operating a Production Cluster (DO180)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat System Administration I (RH124)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Certified Specialist in OpenShift Virtualization (EX316)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration II: Configuring a Production Cluster (DO280)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Administration III: Scaling Deployments in the Enterprise (DO380)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Data Foundation (DO370)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Installation Lab (DO322)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Kubernetes",
+          "category": "Other"
+        }
+      ],
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Virtual machine management",
+        "Virtual machine networking",
+        "Virtual machine storage management",
+        "Virtual machine migration",
+        "Virtual machine backup and restore",
+        "Virtual machine provisioning",
+        "High-availability virtual machines"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Migrating workloads from traditional hypervisors to OpenShift Virtualization.",
+          "industry": null
+        },
+        {
+          "scenario": "Supporting virtualized workloads, either independently from or in the same OpenShift cluster as containerized workloads.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Learn to deploy the OpenShift Virtualization operator and configure its options.",
+        "Master creation, management, and monitoring of virtual machines in Red Hat OpenShift Virtualization.",
+        "Understand comprehensive and flexible networking for virtual machines within an OpenShift environment.",
+        "Configure and manage persistent storage, snapshots, and cloning for virtual machine data protection and efficient image creation.",
+        "Implement role-based access controls and user permissions using OpenShift OAuth server concepts and custom resources.",
+        "Migrate virtual machines from other hypervisors to Red Hat OpenShift Virtualization using the migration toolkit for virtualization (MTV) operator.",
+        "Back up and restore virtual machines using the OpenShift APIs for Data Protection (OADP) operator.",
+        "Create and manage custom instance types, templates, and boot sources for virtual machine provisioning.",
+        "Control virtual machine placement on cluster nodes and rebalance workloads using Kubernetes resources and descheduler evictions.",
+        "Implement high-availability virtual machines resilient to failures, maintenance, and cluster upgrades."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Take our free assessment",
+          "url": "https://www.redhat.com/rhtapps/assessment/"
+        },
+        {
+          "name": "Red Hat OpenShift Administration I: Operating a Production Cluster (DO180)",
+          "url": "https://www.redhat.com/en/services/training/do180-red-hat-openshift-I-containers-kubernetes"
+        },
+        {
+          "name": "Red Hat OpenShift Administration II: Configuring a Production Cluster (DO280)",
+          "url": "https://www.redhat.com/en/services/training/red-hat-openshift-administration-ii-configuring-a-production-cluster"
+        },
+        {
+          "name": "Red Hat OpenShift Administration III: Scaling Deployments in the Enterprise (DO380)",
+          "url": "https://www.redhat.com/en/services/training/do380-red-hat-openshift-administration-III-scaling-kubernetes-deployments-enterprise"
+        },
+        {
+          "name": "Enterprise Kubernetes Storage with Red Hat OpenShift Data Foundation (DO370)",
+          "url": "https://www.redhat.com/en/services/training/do370-enterprise-kubernetes-storage-with-red-hat-openshift-data-foundation"
+        },
+        {
+          "name": "Red Hat OpenShift Installation Lab (DO322)",
+          "url": "https://www.redhat.com/en/services/training/red-hat-openshift-installation-lab-0"
+        },
+        {
+          "name": "Assess your skills",
+          "url": "https://skills.ole.redhat.com/en"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Choose a location to get started"
+        },
+        {
+          "step": "Take our free assessment to gauge whether this offering is the best fit for your skills.",
+          "url": "https://www.redhat.com/rhtapps/assessment/"
+        },
+        {
+          "step": "Explore training and certification options."
+        },
+        {
+          "step": "Read about the benefits of Red Hat Learning Subscription."
+        },
+        {
+          "step": "Find out more about private training options."
+        },
+        {
+          "step": "Learn more about Red Hat Learning Subscription."
+        },
+        {
+          "step": "Find out how to build your skills path with Red Hat Learning Subscription."
+        },
+        {
+          "step": "Assess your skills with a free skills assessment.",
+          "url": "https://skills.ole.redhat.com/en"
+        }
+      ],
+      "workshops": [
+        {
+          "name": "Red Hat OpenShift Virtualization Administration Rapid Track course",
+          "url": "https://www.redhat.com/en/services/training/do316-red-hat-openshift-virtualization-administration-rapid-track-course"
+        }
+      ],
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:51.393Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Red Hat Certified Specialist in OpenShift Virtualization (EX316)",
+      "documentCategory": "other",
+      "summary": "This document describes the Red Hat Certified Specialist in OpenShift Virtualization exam (EX316), outlining the knowledge, skills, and abilities required to plan, deploy, and manage virtual machines ",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Container Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Kubernetes SDN",
+          "category": "Networking"
+        },
+        {
+          "technology": "Multus CNI plug-in",
+          "category": "Networking"
+        },
+        {
+          "technology": "NMstate operator",
+          "category": "Other"
+        },
+        {
+          "technology": "OpenShift APIs for Data Protection (OADP)",
+          "category": "Other"
+        },
+        {
+          "technology": "cloud-init",
+          "category": "Other"
+        }
+      ],
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Planning, deploying, and managing virtual machines in an OpenShift Container Platform environment",
+        "Configuring Kubernetes networking for virtual machines",
+        "Connecting virtual machines to external networks",
+        "Configuring Kubernetes storage for virtual machines",
+        "Backup and restore of virtual machines with OADP",
+        "Managing virtual machine templates and snapshots",
+        "Migrating virtual machines from compatible hypervisors",
+        "Cloning virtual machines",
+        "Performing virtual machine live migrations",
+        "Performing node maintenance and OpenShift Virtualization updates",
+        "Managing virtual machine load balancing with Kubernetes networking resources",
+        "Configuring health probes for virtual machines",
+        "Preparing virtual machines for node failure"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [
+        "The EX316 exam tests the ability to plan, deploy, and manage virtual machines using the Red Hat OpenShift Virtualization operator in a Red Hat OpenShift Container Platform environment.",
+        "Passing this exam leads to becoming a Red Hat Certified Specialist in OpenShift Virtualization, which contributes towards earning a Red Hat Certified Architect (RHCA®).",
+        "The exam is based on Red Hat OpenShift Container Platform 4.18.",
+        "The exam covers deploying the OpenShift Virtualization operator, running and accessing virtual machines, configuring Kubernetes networking and storage for virtual machines, using OpenShift APIs for Da",
+        "Candidates should have experience equivalent to Red Hat Certified System Administrator Rapid Track Course (RH200), Red Hat OpenShift Virtualization Administration I (DO156), and Red Hat OpenShift Virt"
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Red Hat Certification Central",
+          "url": "https://www.redhat.com/rhtapps/certification/"
+        },
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&extIdCarryOver=true&intcmp=7013a000003Sl59AAC&sc_cid=RHCTG0250000454096&percmp=RHCTG0250000466729&_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Get started"
+        }
+      ],
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:56.272Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Red Hat Learning Subscription",
+      "documentCategory": "other",
+      "summary": "This document describes the Red Hat Learning Subscription, a program offering various tiers of access to Red Hat's technical training courses, certifications, and hands-on labs to help individuals and",
+      "productsReferenced": [
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Upskilling IT professionals",
+        "Continuous skill growth in evolving technologies",
+        "Tracking skill development progress and identifying gaps",
+        "Aligning training investments with business priorities and performance goals",
+        "Preparing for certification exams"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat Learning Subscription provides access to comprehensive learning curriculum for technical skills and knowledge.",
+        "It offers guided learning and trusted certification.",
+        "Training is available virtually with practice opportunities anywhere.",
+        "It provides a comprehensive curriculum for all levels of proficiency, from basics to advanced technologies.",
+        "Cloud-based labs offer 24/7 access to hands-on experience.",
+        "Exam readiness tools and certification testing are included to validate IT proficiency."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Log in",
+          "url": "https://rol.redhat.com/"
+        },
+        {
+          "name": "several flexible training options",
+          "url": "https://www.redhat.com/en/resources/skills-to-power-the-future-detail"
+        },
+        {
+          "name": "Contact",
+          "url": "https://www.redhat.com/en/services/training/learning-subscription/how-to-buy"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Log in to access your account",
+          "url": "https://rol.redhat.com/"
+        },
+        {
+          "step": "Try the Red Hat Learning Subscription"
+        },
+        {
+          "step": "Buy the Red Hat Learning Subscription"
+        },
+        {
+          "step": "View more FAQs"
+        }
+      ],
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:50:54.275Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "OpenShift Virtualization Page",
+      "documentCategory": "solution-brief",
+      "summary": "This document describes Red Hat OpenShift Virtualization, a feature of Red Hat OpenShift that integrates virtual machines into a hybrid cloud platform, enabling migration, management, and modernizatio",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Service on AWS",
+          "slug": null
+        },
+        {
+          "name": "Microsoft Azure Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Dedicated",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift on IBM Cloud",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Platform Plus",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Container Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Kubernetes Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Lightspeed",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Quay",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Security for Kubernetes",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Developer Suite",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Consulting",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Developer Hub",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "VMware",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Migrate and run VMs with cloud-native benefits",
+        "Manage VMs alongside containers and serverless workloads with a unified set of tools",
+        "Modernize workloads at your own pace by adopting containers, implementing microservices, or integrating AI",
+        "CI/CD",
+        "AI/ML",
+        "Cloud-native applications",
+        "Application modernization",
+        "Databases and data analytics",
+        "GitOps",
+        "Virtualization",
+        "OpenShift Operators",
+        "Edge",
+        "Security",
+        "Java",
+        "Serverless"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Improved operational efficiency by moving critical VMs to a new platform without service interruptions.",
+          "industry": null
+        },
+        {
+          "scenario": "Reducing complexities and enabling consistent applications using VMs and containers.",
+          "industry": "Automotive"
+        },
+        {
+          "scenario": "Creating greater consistency in development and operations with a unified platform for VMs and containers.",
+          "industry": "Telecommunications"
+        },
+        {
+          "scenario": "Increasing availability and stability to speed production and deliver innovative services ahead of the market.",
+          "industry": null
+        },
+        {
+          "scenario": "Migrating to new systems while retaining existing hardware, reducing investment and operational costs and preparing for future applications including AI tools.",
+          "industry": "Education"
+        }
+      ],
+      "cloudProviders": [
+        "AWS",
+        "Microsoft Azure",
+        "Google Cloud",
+        "IBM Cloud"
+      ],
+      "audience": "customer",
+      "keyPoints": [
+        "Red Hat OpenShift Virtualization helps organizations migrate, run, and manage traditional virtual machines (VMs) alongside modern workloads on a unified, hybrid cloud application platform.",
+        "It allows migration and running of VMs with cloud-native benefits.",
+        "It enables managing VMs alongside containers and serverless workloads with a unified set of tools.",
+        "It supports modernizing workloads at your own pace by adopting containers, implementing microservices, or integrating AI, without disrupting traditional VMs.",
+        "It offers simplified VM migrations with included migration services and access to a certified partner ecosystem.",
+        "It provides practical paths towards modernization through operational consistency for VMs using CI/CD pipelines, GitOps workflows, and service mesh.",
+        "It offers innovation opportunity with a modern, flexible platform prepared for emerging workloads like AI.",
+        "It automates the full end-to-end lifecycle of VMs at scale with Red Hat Ansible Automation Platform.",
+        "Red Hat OpenShift Virtualization Engine offers a streamlined, cost-efficient solution for VM-only workloads.",
+        "It simplifies VM and container operations by maintaining the health and performance of entire fleets across clusters with Red Hat Advanced Cluster Management.",
+        "It enhances Red Hat OpenShift skills with expert guidance through the Level Up program."
+      ],
+      "talkTracks": [
+        "Simplified VM migrations",
+        "Platform modernization",
+        "Centralized management",
+        "Faster time to production with modern tooling",
+        "AI readiness",
+        "Automate your VM investments at scale",
+        "Access a cost-effective VM-only solution",
+        "Simplify VM and container operations"
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Red Hat OpenShift Service on AWS",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_service_on_aws/4"
+        },
+        {
+          "name": "Microsoft Azure Red Hat OpenShift",
+          "url": "https://docs.openshift.com/aro/4/welcome/index.html"
+        },
+        {
+          "name": "Red Hat OpenShift Dedicated",
+          "url": "https://docs.redhat.com/en/documentation/openshift_dedicated/4"
+        },
+        {
+          "name": "Red Hat OpenShift on IBM Cloud",
+          "url": "https://cloud.ibm.com/docs/openshift?topic=openshift-getting-started&amp;interface=ui"
+        },
+        {
+          "name": "Red Hat OpenShift Platform Plus",
+          "url": "https://docs.redhat.com/en/documentation/openshift_platform_plus/4"
+        },
+        {
+          "name": "Red Hat OpenShift Container Platform",
+          "url": "https://docs.redhat.com/en/documentation/openshift_container_platform/4.13"
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/"
+        },
+        {
+          "name": "Red Hat OpenShift Lightspeed",
+          "url": "https://docs.openshift.com/lightspeed/1.0tp1/about/ols-about-openshift-lightspeed.html"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_virtualization/"
+        },
+        {
+          "name": "Red Hat Quay",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_quay/3.8"
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/2.11"
+        },
+        {
+          "name": "Red Hat Advanced Cluster Security for Kubernetes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.5"
+        },
+        {
+          "name": "OpenShift learning paths",
+          "url": "https://cloud.redhat.com/learn"
+        },
+        {
+          "name": "Red Hat OpenShift Library",
+          "url": "https://access.redhat.com/articles/7052429"
+        },
+        {
+          "name": "Ask an OpenShift Admin",
+          "url": "https://www.youtube.com/playlist?list=PLaR6Rq6Z4IqdsG6b09q4QIv_Yq5fNL7zh"
+        },
+        {
+          "name": "Red Hat OpenShift Service on AWS hands-on experience",
+          "url": "https://console.redhat.com/openshift/overview/rosa/hands-on?source=rhhe7&amp;intcmp=7015Y000003sdOhQAI"
+        },
+        {
+          "name": "Developer sandbox",
+          "url": "https://developers.redhat.com/developer-sandbox"
+        },
+        {
+          "name": "migration toolkit for virtualization",
+          "url": "https://developers.redhat.com/products/mtv/overview"
+        },
+        {
+          "name": "Watch the presentation",
+          "url": "https://www.youtube.com/live/Gr8jomztY2s?t=1602s"
+        },
+        {
+          "name": "included migration services",
+          "url": "https://developers.redhat.com/products/mtv/overview"
+        },
+        {
+          "name": "Keep learning",
+          "url": "https://cloud.redhat.com/learn/high-level-guide-red-hat-openshift-virtualization-vmware-admin"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://access.redhat.com/articles/7067871"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Try Red Hat OpenShift Container Platform"
+        },
+        {
+          "step": "Buy Red Hat OpenShift"
+        },
+        {
+          "step": "Learn about Red Hat OpenShift Virtualization"
+        },
+        {
+          "step": "Read the e-book: 15 reasons to adopt Red Hat OpenShift Virtualization"
+        },
+        {
+          "step": "Read the IDC report: Beyond Cost and Compliance: How Red Hat Is Shaping AI, Sovereignty, and Modernization"
+        },
+        {
+          "step": "Read the blog post about SiriusXM modernizing virtualization"
+        },
+        {
+          "step": "Watch the presentation about Ford's platform modernization",
+          "url": "https://www.youtube.com/live/Gr8jomztY2s?t=1602s"
+        },
+        {
+          "step": "Find out how Reist Telecom unifies VMs and containers in the press release"
+        },
+        {
+          "step": "Access the case study about sahibinden.com increasing availability and stability"
+        },
+        {
+          "step": "Access the case study about Finis Terrae University achieving unified management"
+        },
+        {
+          "step": "Explore customer success stories for VM migration and modernization"
+        },
+        {
+          "step": "Explore the Red Hat OpenShift Virtualization learning hub"
+        },
+        {
+          "step": "Try the interactive demo for migrating virtual machines with Red Hat OpenShift Virtualization"
+        },
+        {
+          "step": "Learn how Red Hat Ansible Automation Platform automates virtual infrastructure management"
+        },
+        {
+          "step": "Explore Red Hat OpenShift Virtualization Engine solution"
+        },
+        {
+          "step": "Explore Red Hat Advanced Cluster Management solution"
+        },
+        {
+          "step": "Meet Red Hat's virtualization partners"
+        },
+        {
+          "step": "Learn more about the Level Up program for OpenShift virtualization"
+        },
+        {
+          "step": "Download the e-book: Migrate and manage virtual infrastructure"
+        },
+        {
+          "step": "Access interactive demos of Red Hat OpenShift Virtualization"
+        },
+        {
+          "step": "Keep learning with a high-level guide to Red Hat OpenShift Virtualization as a VMware admin",
+          "url": "https://cloud.redhat.com/learn/high-level-guide-red-hat-openshift-virtualization-vmware-admin"
+        },
+        {
+          "step": "Learn more about the Red Hat OpenShift Virtualization reference implementation guide",
+          "url": "https://access.redhat.com/articles/7067871"
+        },
+        {
+          "step": "Learn more about Red Hat OpenShift"
+        }
+      ],
+      "workshops": [],
+      "demos": [],
+      "enrichedAt": "2026-06-24T12:51:45.460Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "MTV Product Page",
+      "documentCategory": "other",
+      "summary": "This document describes the Migration Toolkit for Virtualization (MTV), a tool designed to safely and quickly migrate virtual machines to Red Hat OpenShift with minimal downtime. It highlights MTV's c",
+      "productsReferenced": [
+        {
+          "name": "Migration toolkit for virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenStack Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat build of OpenJDK",
+          "slug": null
+        },
+        {
+          "name": "Red Hat JBoss Enterprise Application Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Dev Spaces",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Developer Toolset",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Zabbix",
+          "category": "Monitoring"
+        },
+        {
+          "technology": "Prometheus",
+          "category": "Monitoring"
+        },
+        {
+          "technology": "Thanos",
+          "category": "Monitoring"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "VMware",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": [
+        {
+          "partnerName": "NVIDIA",
+          "solutionArea": "Other"
+        }
+      ],
+      "useCases": [
+        "Mass migration of virtual machines",
+        "Migrating virtual machines from various source providers to OpenShift Virtualization",
+        "Managing Linux and Windows VMs within OpenShift",
+        "Importing and cloning existing VMs",
+        "Managing network interface controllers and storage disks for VMs",
+        "Live-migrating VMs between nodes",
+        "Automated migration of hundreds or more VMs to OpenShift Virtualization"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [
+        "Migrate virtual machines safely and quickly to Red Hat OpenShift with minimal downtime.",
+        "Assess existing VMs, identify critical workloads, and build a migration plan.",
+        "Available as a one-click download in the OpenShift Operator Hub.",
+        "Provides a suite of tools to simplify the migration process with minimal downtime and risk.",
+        "Supports migration from various source providers including Red Hat Virtualization, Red Hat OpenStack Platform, Red Hat OpenShift Virtualization remote clusters, VMware, Open Virtual Appliances (OVAs),",
+        "Accelerate migrations with existing, supported storage systems through storage offloading functionality.",
+        "Automated migration of hundreds or more VMs to OpenShift Virtualization can be achieved by combining MTV with Red Hat Ansible Automation Platform.",
+        "Offers automatic, pre-migration validation services to flag compatibility issues.",
+        "Provides concurrent migration options to accelerate migrations.",
+        "Features guided migration planning with a structured, step-by-step workflow.",
+        "Enables warm migrations for critical workloads to minimize downtime."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "AI learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI interactive demos",
+          "url": "https://www.redhat.com/en/interactive-experiences#ai-platform"
+        },
+        {
+          "name": "AI quickstarts",
+          "url": "https://docs.redhat.com/en/learn/ai-quickstarts"
+        },
+        {
+          "name": "No-cost AI training",
+          "url": "https://docs.redhat.com/en/ai-foundations"
+        },
+        {
+          "name": "AI product application development",
+          "url": "https://www.redhat.com/en/technologies/all-products#artificial-intelligence"
+        },
+        {
+          "name": "AI and Node.js cheat sheet",
+          "url": "https://developers.redhat.com/cheat-sheets/ai-nodejs"
+        },
+        {
+          "name": "Explore the solution",
+          "url": "https://www.redhat.com/en/products/ai/factory-with-nvidia"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Guided learning",
+          "url": "http://docs.redhat.com/en/learn/guided-learning"
+        },
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        },
+        {
+          "name": "Interactive demos",
+          "url": "https://www.redhat.com/en/interactive-experiences"
+        },
+        {
+          "name": "AI/ML",
+          "url": "https://developers.redhat.com/topics/ai-ml"
+        },
+        {
+          "name": "Automation",
+          "url": "https://developers.redhat.com/topics/automation"
+        },
+        {
+          "name": "Kubernetes",
+          "url": "https://developers.redhat.com/topics/kubernetes"
+        },
+        {
+          "name": "Courses and exams",
+          "url": "https://www.redhat.com/en/services/training/all-courses-exams"
+        },
+        {
+          "name": "Certifications",
+          "url": "https://www.redhat.com/en/services/certifications"
+        },
+        {
+          "name": "Skills assessments",
+          "url": "https://www.redhat.com/en/services/skills-assessment"
+        },
+        {
+          "name": "Red Hat Academy",
+          "url": "https://www.redhat.com/en/services/training/red-hat-academy"
+        },
+        {
+          "name": "Learning subscription",
+          "url": "https://www.redhat.com/en/services/training/learning-subscription"
+        },
+        {
+          "name": "Explore training",
+          "url": "https://www.redhat.com/en/services/training-and-certification"
+        },
+        {
+          "name": "Red Hat AI",
+          "url": "https://developers.redhat.com/products/red-hat-ai"
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "url": "https://developers.redhat.com/products/openshift/download"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Live AI events",
+          "url": "https://www.redhat.com/en/events/ai"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Red Hat Accelerators",
+          "url": "https://access.redhat.com/accelerators"
+        },
+        {
+          "name": "Community discussions",
+          "url": "https://access.redhat.com/discussions/"
+        },
+        {
+          "name": "Videos",
+          "url": "https://www.youtube.com/@RedHatDevelopers"
+        },
+        {
+          "name": "Github",
+          "url": "https://github.com/redhat-developer"
+        },
+        {
+          "name": "Customer service",
+          "url": "https://www.redhat.com/en/contact/customer-service"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Regional contacts",
+          "url": "https://access.redhat.com/support/contact"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/en/search?searchType=Partners"
+        },
+        {
+          "name": "Getting Started with Red Hat OpenShift Virtualization",
+          "url": "https://developers.redhat.com/products/openshift/virtualization"
+        },
+        {
+          "name": "Download/Sign up for Red Hat OpenShift",
+          "url": "https://developers.redhat.com/products/openshift/download"
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "url": "https://developers.redhat.com/products/openshift/virtualization"
+        },
+        {
+          "name": "virtual machines (VMs)",
+          "url": "https://www.redhat.com/en/topics/virtualization/what-is-a-virtual-machine"
+        },
+        {
+          "name": "hypervisors",
+          "url": "https://www.redhat.com/en/topics/virtualization/what-is-a-hypervisor"
+        },
+        {
+          "name": "virtualization",
+          "url": "https://developers.redhat.com/topics/virtualization"
+        },
+        {
+          "name": "containers",
+          "url": "https://developers.redhat.com/topics/containers"
+        },
+        {
+          "name": "Click to try",
+          "url": "https://www.redhat.com/en/products/interactive-walkthrough/migrate-virtual-machines"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/redhat.com/en/blog/accelerate-virtual-machine-migration-with-mtv"
+        },
+        {
+          "name": "Others",
+          "url": "https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/latest/html/release_notes/index"
+        },
+        {
+          "name": "storage offloading functionality",
+          "url": "https://www.redhat.com/en/redhat.com/en/blog/accelerate-virtual-machine-migration-with-mtv"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "url": "https://developers.redhat.com/products/ansible/overview"
+        },
+        {
+          "name": "concurrent migration options",
+          "url": "https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.9/html/installing_and_using_the_migration_toolkit_for_virtualization/mtv-performance-recommendation_mtv#mtv-performance-multiple-vms-concurrently_mtv"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.9/html/installing_and_using_the_migration_toolkit_for_virtualization/index"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.youtube.com/watch?v=Rp8YcDgSrZo"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://cloud.redhat.com/learning/learn:getting-started-red-hat-openshift-virtualization/resource/resources:migrating-existing-v"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/blog/migration-toolkit-virtualization-faqs-field"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/blog/learning-resources-migrate-openshift-virtualization"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.youtube.com/watch?v=IIINYlfAzM8"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/engage/migrate-virtual-machines-ebook"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/resources/virtualization-migration-toolkit-overview"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://developers.redhat.com/products/openshift/virtualization"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://developers.redhat.com/products/ansible/overview"
+        },
+        {
+          "name": "Learn more",
+          "url": "https://www.redhat.com/en/technologies/management/advanced-cluster-management"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/showcase/red-hat-developer"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/channel/UC7noUdfWp-ukXUlAsJnSm-Q"
+        },
+        {
+          "name": "Twitter",
+          "url": "https://twitter.com/rhdevelopers"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/redhat"
+        },
+        {
+          "name": "Red Hat AI",
+          "url": "https://developers.redhat.com/products/red-hat-ai"
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "url": "https://developers.redhat.com/products/rhel/overview"
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "url": "https://developers.redhat.com/products/openshift/overview"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "url": "https://developers.redhat.com/products/ansible/overview"
+        },
+        {
+          "name": "Developer Sandbox",
+          "url": "https://developers.redhat.com/developer-sandbox"
+        },
+        {
+          "name": "Interactive tutorials",
+          "url": "https://developers.redhat.com/learn#assembly-id-70181"
+        },
+        {
+          "name": "API catalog",
+          "url": "https://developers.redhat.com/api-catalog/"
+        },
+        {
+          "name": "About us",
+          "url": "https://developers.redhat.com/about"
+        },
+        {
+          "name": "Contact sales",
+          "url": "https://developers.redhat.com/contact-sales"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners/"
+        },
+        {
+          "name": "Site status dashboard",
+          "url": "https://status.redhat.com/"
+        },
+        {
+          "name": "Report a security problem",
+          "url": "https://access.redhat.com/security/team/contact/"
+        },
+        {
+          "name": "About Red Hat",
+          "url": "https://redhat.com/en/about/company"
+        },
+        {
+          "name": "Jobs",
+          "url": "https://redhat.com/en/jobs"
+        },
+        {
+          "name": "Events",
+          "url": "https://redhat.com/en/events"
+        },
+        {
+          "name": "Locations",
+          "url": "https://redhat.com/en/about/office-locations"
+        },
+        {
+          "name": "Contact Red Hat",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://redhat.com/en/blog"
+        },
+        {
+          "name": "Inclusion at Red Hat",
+          "url": "https://www.redhat.com/en/about/our-culture/diversity-equity-inclusion"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Privacy statement",
+          "url": "https://redhat.com/en/about/privacy-policy"
+        },
+        {
+          "name": "Terms of use",
+          "url": "https://redhat.com/en/about/terms-use"
+        },
+        {
+          "name": "All policies and guidelines",
+          "url": "https://redhat.com/en/about/all-policies-guidelines"
+        },
+        {
+          "name": "Digital accessibility",
+          "url": "https://redhat.com/en/about/digital-accessibility"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Get started with the migration toolkit for virtualization",
+          "url": "https://developers.redhat.com/content-gateway/link/3885665"
+        },
+        {
+          "step": "Try OpenShift Virtualization in our free Developer Sandbox",
+          "url": "https://developers.redhat.com/content-gateway/link/3888606"
+        },
+        {
+          "step": "Click to try interactive walkthrough for migrating virtual machines",
+          "url": "https://www.redhat.com/en/products/interactive-walkthrough/migrate-virtual-machines"
+        },
+        {
+          "step": "Learn more about accelerating virtual machine migration with MTV",
+          "url": "https://www.redhat.com/en/redhat.com/en/blog/accelerate-virtual-machine-migration-with-mtv"
+        },
+        {
+          "step": "Learn more about migrating virtual machines using the migration toolkit for virtualization (product documentation)",
+          "url": "https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.9/html/installing_and_using_the_migration_toolkit_for_virtualization/index"
+        },
+        {
+          "step": "Learn more about VMware to OpenShift Virtualization Migration (video)",
+          "url": "https://www.youtube.com/watch?v=Rp8YcDgSrZo"
+        },
+        {
+          "step": "Learn more about getting started with Red Hat OpenShift Virtualization",
+          "url": "https://cloud.redhat.com/learning/learn:getting-started-red-hat-openshift-virtualization/resource/resources:migrating-existing-v"
+        },
+        {
+          "step": "Learn more about Migration toolkit for virtualization: FAQs from the field",
+          "url": "https://www.redhat.com/en/blog/migration-toolkit-virtualization-faqs-field"
+        },
+        {
+          "step": "Learn more about 7 learning resources to migrate to OpenShift Virtualization",
+          "url": "https://www.redhat.com/en/blog/learning-resources-migrate-openshift-virtualization"
+        },
+        {
+          "step": "Learn more about a demo of importing VMs with migration toolkit for virtualization",
+          "url": "https://www.youtube.com/watch?v=IIINYlfAzM8"
+        },
+        {
+          "step": "Learn more about migrating virtual machines: A virtual administrator’s guide",
+          "url": "https://www.redhat.com/en/engage/migrate-virtual-machines-ebook"
+        },
+        {
+          "step": "Learn more about easing the VM journey with the migration toolkit for virtualization",
+          "url": "https://www.redhat.com/en/resources/virtualization-migration-toolkit-overview"
+        }
+      ],
+      "workshops": [
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        }
+      ],
+      "demos": [
+        {
+          "name": "AI interactive demos",
+          "url": "https://www.redhat.com/en/interactive-experiences#ai-platform"
+        },
+        {
+          "name": "Interactive demos",
+          "url": "https://www.redhat.com/en/interactive-experiences"
+        },
+        {
+          "name": "A demo of importing VMs with migration toolkit for virtualization",
+          "url": "https://www.youtube.com/watch?v=IIINYlfAzM8"
+        }
+      ],
+      "enrichedAt": "2026-06-24T12:51:26.747Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Why Migrate to Red Hat_",
+      "documentCategory": "other",
+      "summary": "This document explains the benefits of migrating virtual machines to Red Hat, focusing on Red Hat OpenShift Virtualization as a solution to modernize infrastructure, reduce costs, and simplify managem",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux KVM",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "VMware",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "VM migration",
+        "Application modernization",
+        "Cost reduction",
+        "Developer productivity",
+        "Simplified management",
+        "Live migration",
+        "IT automation"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Modernize on your own terms: Keep critical application components while gaining flexibility to modernize workloads and skills over time.",
+        "Reduce operational costs: Save on infrastructure costs to invest in advanced application-development technologies.",
+        "Increase developer productivity: Self-service capabilities enable rapid and reliable deployment of VM configurations.",
+        "Simplify management: Unified platform for VMs, containers, and serverless workloads standardizes infrastructure deployment and management.",
+        "Innovate fearlessly with KubeVirt: Build virtual infrastructure on open source technology for complete control and application portability.",
+        "Automate your migration: Use automation to accelerate delivery, from migration at scale to Day 2 operations and remediation.",
+        "Manage and modernize at your own pace: Monitor security and performance from a single console with additional support and partner integrations."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "container",
+          "url": "https://www.redhat.com/en/topics/containers"
+        },
+        {
+          "name": "Virtualization Migration Assessment",
+          "url": "https://assessments.redhat.com/index.html?surveyId=RTA001"
+        },
+        {
+          "name": "Migration Toolkit for Virtualization",
+          "url": "https://www.redhat.com/en/media/oembed?url=https%3A//www.youtube.com/watch%3Fv%3DFid24-qHHtU&amp;max_width=0&amp;max_height=0&amp;view_mode=wysiwyg_linked&amp;hash=NGGbl91kBLgeIsZph7PpztY_LFugMl1UfaV3W1MFoso"
+        },
+        {
+          "name": "Is OpenShift Virtualization right for your VMs?",
+          "url": "https://www.redhat.com/en/media/oembed?url=https%3A//youtu.be/3C_yTNwBGWU%3Fsi%3DJBajPeUeWgiv6fw1&amp;max_width=0&amp;max_height=0&amp;view_mode=wysiwyg_linked&amp;hash=Df4ebZjDhg8xvsg32NGe1G9j9H8H1mOuqPPy6LNegSo"
+        },
+        {
+          "name": "migration toolkit for virtualization",
+          "url": "https://access.redhat.com/products/migration-toolkits-virtualization"
+        },
+        {
+          "name": "Explore Red Hat OpenShift Virtualization as a VMware admin",
+          "url": "https://cloud.redhat.com/learn/high-level-guide-red-hat-openshift-virtualization-vmware-admin"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Migrate VMs with Red Hat"
+        },
+        {
+          "step": "Get the resource: The state of virtualization ebook"
+        },
+        {
+          "step": "Take the Virtualization Migration Assessment by Red Hat Consulting",
+          "url": "https://assessments.redhat.com/index.html?surveyId=RTA001"
+        },
+        {
+          "step": "Learn how to migrate from VMware"
+        },
+        {
+          "step": "Learn more about live migration"
+        },
+        {
+          "step": "Contact Red Hat Consulting for customized guidance"
+        },
+        {
+          "step": "Try an interactive demo to migrate virtual machines with Red Hat"
+        },
+        {
+          "step": "Explore Red Hat OpenShift Virtualization as a VMware admin",
+          "url": "https://cloud.redhat.com/learn/high-level-guide-red-hat-openshift-virtualization-vmware-admin"
+        },
+        {
+          "step": "Explore our virtualization solution"
+        },
+        {
+          "step": "Keep reading: All Red Hat product trials"
+        },
+        {
+          "step": "Get the resource: Migrate and manage virtual infrastructure ebook"
+        }
+      ],
+      "workshops": null,
+      "demos": [],
+      "enrichedAt": "2026-06-24T12:51:38.025Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Virtualization migration page",
+      "documentCategory": "other",
+      "summary": "This document is a placeholder for a web page that cannot be viewed directly within the current interface. It is titled \"Migrate and modernize VMs with Red Hat.\"",
+      "productsReferenced": [],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "VM migration",
+        "VM modernization"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "keyPoints": [
+        "Migrate and modernize VMs with Red Hat"
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Preview image",
+          "url": "https://saleshub.redhat.com/gateway/services/bss/tenants/redhat//api/image/v1/tmpurl/images?t=redhat&c=redhat&id=5079712a-2bf4-413d-87de-a7a798e73d3c&requestsize=ExtraLarge&et=29705301&isfullcontainername=True&fn=Migrate%20and%20modernize%20VMs%20with%20Red%20Hat.png&sig=NrkBlSjZFrQ9ENb7e6ShIYipRZbLZqpWkSIxLFfmlWY%3D"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:51:04.163Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    },
+    {
+      "documentName": "Learning Path",
+      "documentCategory": "other",
+      "summary": "This learning path provides steps to configure Red Hat OpenShift Virtualization, deploy new virtual machines, and import existing ones to a new environment, simplifying VM management within containeri",
+      "productsReferenced": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "VM management",
+        "Deploying new virtual machines",
+        "Importing existing virtual machines",
+        "Running virtual machines alongside containers"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "keyPoints": [
+        "Run virtual machines (VMs) within a container and on a single platform.",
+        "Simplify VM management and reduce time to production.",
+        "Incorporate virtual machines into containerized workflows without drastically altering existing infrastructure.",
+        "Configure Red Hat OpenShift Virtualization.",
+        "Deploy new virtual machines.",
+        "Import existing virtual machines to a new environment.",
+        "A configured environment ready to run and manage virtual machines.",
+        "A virtual machine created within your OpenShift environment.",
+        "An imported virtual machine within your OpenShift environment."
+      ],
+      "talkTracks": null,
+      "links": [
+        {
+          "name": "Console",
+          "url": "https://console.redhat.com"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developers",
+          "url": "https://developers.redhat.com"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Blog",
+          "url": "https://www.redhat.com/en/blog/channel/hybrid-cloud-infrastructure"
+        },
+        {
+          "name": "Red Hat® OpenShift® Virtualization",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization"
+        },
+        {
+          "name": "virtual machines (VMs)",
+          "url": "https://www.redhat.com/en/topics/virtualization/what-is-a-virtual-machine"
+        },
+        {
+          "name": "container",
+          "url": "https://www.redhat.com/en/topics/containers/whats-a-linux-container"
+        },
+        {
+          "name": "Red Hat account",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Red Hat Hybrid Cloud Console",
+          "url": "https://console.redhat.com/"
+        },
+        {
+          "name": "Get started on developers.redhat.com",
+          "url": "https://developers.redhat.com/learn/openshift/develop-on-openshift"
+        },
+        {
+          "name": "What is OpenShift?",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift"
+        },
+        {
+          "name": "Understanding virtualization",
+          "url": "https://www.redhat.com/en/topics/virtualization"
+        },
+        {
+          "name": "What is a Kubernetes cluster?",
+          "url": "https://www.redhat.com/en/topics/containers/what-is-a-kubernetes-cluster"
+        },
+        {
+          "name": "Load balancing VMs with Virtualization",
+          "url": "https://www.youtube.com/watch?v=JhCznR-bU2M"
+        },
+        {
+          "name": "Automating Windows VM creation in Virtualization",
+          "url": "https://www.youtube.com/watch?v=-xBSW8bNb-U"
+        },
+        {
+          "name": "Testing software emulation with Virtualization",
+          "url": "https://developers.redhat.com/blog/2020/09/17/how-to-switch-red-hat-openshift-virtualization-from-hardware-virtualization-to-software-emulation"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/redhat"
+        },
+        {
+          "name": "Twitter",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Red Hat AI",
+          "url": "https://www.redhat.com/en/products/ai"
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "url": "https://www.redhat.com/en/technologies/cloud-computing/openshift"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "url": "https://www.redhat.com/en/technologies/management/ansible"
+        },
+        {
+          "name": "See all products",
+          "url": "https://www.redhat.com/en/technologies/all-products"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://www.redhat.com/en/services/training-and-certification"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Red Hat value calculator",
+          "url": "https://www.redhat.com/en/solutions/value-calculator/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Product trial center",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "Console",
+          "url": "https://cloud.redhat.com/"
+        },
+        {
+          "name": "Contact sales",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Contact customer service",
+          "url": "https://www.redhat.com/en/contact/customer-service"
+        },
+        {
+          "name": "Contact training",
+          "url": "https://www.redhat.com/en/services/training-and-certification/contact-us"
+        },
+        {
+          "name": "Social",
+          "url": "https://www.redhat.com/en/about/social"
+        },
+        {
+          "name": "About Red Hat",
+          "url": "https://redhat.com/en/about/company"
+        },
+        {
+          "name": "Jobs",
+          "url": "https://redhat.com/en/jobs"
+        },
+        {
+          "name": "Events",
+          "url": "https://redhat.com/en/events"
+        },
+        {
+          "name": "Locations",
+          "url": "https://redhat.com/en/about/office-locations"
+        },
+        {
+          "name": "Contact Red Hat",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://redhat.com/en/blog"
+        },
+        {
+          "name": "Inclusion at Red Hat",
+          "url": "https://www.redhat.com/en/about/our-culture/diversity-equity-inclusion"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Privacy statement",
+          "url": "https://redhat.com/en/about/privacy-policy"
+        },
+        {
+          "name": "Terms of use",
+          "url": "https://redhat.com/en/about/terms-use"
+        },
+        {
+          "name": "All policies and guidelines",
+          "url": "https://redhat.com/en/about/all-policies-guidelines"
+        },
+        {
+          "name": "Digital accessibility",
+          "url": "https://redhat.com/en/about/digital-accessibility"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-24T12:51:11.541Z",
+      "sourceProductSlug": "red-hat-openshift-virtualization"
+    }
+  ]
+}

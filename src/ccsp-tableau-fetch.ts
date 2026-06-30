@@ -28,7 +28,7 @@
 
 import type { Page, ElementHandle } from '@playwright/test'
 import { readFileSync } from 'fs'
-import { parseCsvToObjects } from './csv-parse.ts'
+import { parseCsvToObjects, splitCsvLines, parseCsvRow } from './csv-parse.ts'
 import { parseTerritoryParts } from './lib/territory.ts'
 
 // Direct embed URL — used for URL-based filtering (filter params must precede any hash fragment).
@@ -390,10 +390,21 @@ export async function fetchPodCsv(input: TableauFetchInput): Promise<TableauFetc
             `[ccsp-tableau] ${aeName}: auth_redirect — CSV endpoint returned HTML (SSO redirect, session invalid in shared context)`,
           )
         } else {
-          classification = 'csv_zero_rows'
-          console.warn(
-            `[ccsp-tableau] ${aeName}: csv_zero_rows — parsed 0 rows from non-empty body: ${trimmed.slice(0, 120)}`,
-          )
+          // Detect header-only CSV: has header line but no data rows
+          const lines = splitCsvLines(csvText.startsWith('﻿') ? csvText.slice(1) : csvText)
+          if (lines.length === 1) {
+            const headers = parseCsvRow(lines[0])
+            const headerPreview = headers.slice(0, 3).join(', ')
+            classification = 'csv_zero_rows'
+            console.warn(
+              `[ccsp-tableau] ${aeName}: csv_zero_rows — header present (${headers.length} columns: [${headerPreview}]) but no data rows (filter mismatch or territory scope issue)`,
+            )
+          } else {
+            classification = 'csv_zero_rows'
+            console.warn(
+              `[ccsp-tableau] ${aeName}: csv_zero_rows — parsed 0 rows from non-empty body: ${trimmed.slice(0, 120)}`,
+            )
+          }
         }
       } else {
         const firstRow = rows[0] ?? {}

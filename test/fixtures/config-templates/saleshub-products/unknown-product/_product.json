@@ -1,0 +1,54 @@
+{
+  "name": "Unknown Product",
+  "slug": "unknown-product",
+  "description": "",
+  "pageUrl": "https://saleshub.redhat.com/lf/application/red-hat-ansible-automation-platform",
+  "scrapedAt": "2026-06-29T18:40:07.669Z",
+  "tdpLinks": [],
+  "contacts": [],
+  "slackChannels": [],
+  "sections": {
+    "all-content": {
+      "title": "All Content",
+      "type": "links",
+      "items": [
+        {
+          "name": "Skip to Main Content",
+          "url": "https://saleshub.redhat.com#reach-skip-nav"
+        },
+        {
+          "name": "Home",
+          "url": "https://saleshub.redhat.com/apps/home"
+        },
+        {
+          "name": "DocCenter",
+          "url": "https://saleshub.redhat.com/apps/doccenter/"
+        },
+        {
+          "name": "Engagements",
+          "url": "https://saleshub.redhat.com/apps/engagementcenter/"
+        },
+        {
+          "name": "Insights",
+          "url": "https://saleshub.redhat.com/apps/insights"
+        },
+        {
+          "name": "Learning",
+          "url": "https://saleshub.redhat.com/apps/learning"
+        },
+        {
+          "name": "Skills",
+          "url": "https://saleshub.redhat.com/apps/skills"
+        },
+        {
+          "name": "WorkSpace",
+          "url": "https://saleshub.redhat.com/app#/workspace/"
+        },
+        {
+          "name": "HomePage",
+          "url": "https://saleshub.redhat.com/apps/home"
+        }
+      ]
+    }
+  }
+}

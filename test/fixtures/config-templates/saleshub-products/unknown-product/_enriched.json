@@ -1,0 +1,50 @@
+{
+  "productSlug": "unknown-product",
+  "enrichedAt": "2026-06-29T18:40:34.370Z",
+  "documents": [
+    {
+      "documentName": "DocCenter",
+      "documentCategory": "other",
+      "summary": "This document serves as a content hub, DocCenter, providing access to various Red Hat-related materials, including press releases and content organized by product. It allows users to browse and search",
+      "productsReferenced": [
+        {
+          "name": "Red Hat",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "IBM",
+          "context": "coexistence"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": null,
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "internal",
+      "keyPoints": [
+        "Centralized access to Red Hat content",
+        "Browse content by product",
+        "Access Red Hat press releases"
+      ],
+      "talkTracks": [
+        "Discuss the breadth of Red Hat's product portfolio and available resources.",
+        "Highlight Red Hat's commitment to open source and its future in AI.",
+        "Showcase Red Hat's latest announcements through press releases."
+      ],
+      "links": [
+        {
+          "name": "IBM and Red Hat Commit $5 Billion to Redefine the Future of Open Source in the AI Era",
+          "url": "https://www.redhat.com/en/about/press-releases/project-lightwell-secure-open-source"
+        }
+      ],
+      "actionableSteps": null,
+      "workshops": null,
+      "demos": null,
+      "enrichedAt": "2026-06-29T18:40:17.195Z",
+      "sourceProductSlug": "unknown-product"
+    }
+  ]
+}
