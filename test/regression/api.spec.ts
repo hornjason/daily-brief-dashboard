@@ -3827,3 +3827,32 @@ test('@destructive REG-SUP-DEAD-01: scrape/all response never includes supportab
     expect(scrapers, 'scrape/all results must not include supportable').not.toContain('supportable')
   }
 })
+
+// ── REG-OAUTH-AUTOCLOSE-01: OAuth buttons use popup pattern (setup-connection-autoclose) ──
+// Setup OAuth buttons must open in popup and auto-close after successful auth, matching
+// the VNC popup pattern (REG-033). This prevents manual return-to-setup friction.
+test.describe('REG-OAUTH-AUTOCLOSE-01: OAuth popup pattern (setup-connection-autoclose)', () => {
+  test('SetupPage GoogleAuthSection has popupRef for OAuth window', () => {
+    const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'SetupPage.tsx'), 'utf8')
+    expect(src).toContain('const popupRef = useRef<Window | null>(null)')
+    expect(src).toContain('popupRef.current = window.open')
+  })
+
+  test('SetupPage GoogleAuthSection polls for popup close and refreshes status', () => {
+    const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'SetupPage.tsx'), 'utf8')
+    expect(src).toContain('popupRef.current?.closed')
+    expect(src).toContain('refreshOAuthStatus')
+  })
+
+  test('OAuth callback detects popup context with window.opener', () => {
+    const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'setup-routes.ts'), 'utf8')
+    expect(src).toContain('window.opener')
+    expect(src).toContain('window.close()')
+  })
+
+  test('OAuth callback preserves redirect for non-popup navigation', () => {
+    const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'setup-routes.ts'), 'utf8')
+    const successPath = src.slice(src.indexOf('Google Workspace Connected'), src.indexOf('Google Workspace Connected') + 1000)
+    expect(successPath).toContain('window.location.href')
+  })
+})

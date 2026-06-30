@@ -245,6 +245,11 @@ export function createSetupRouter(): Hono {
         <p style="color:#94a3b8">${escHtml(msg)}</p>
         ${detail ? `<code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#fca5a5">${escHtml(detail)}</code>` : ''}
         <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
+        <script>
+          if (window.opener) {
+            setTimeout(() => window.close(), 3000);
+          }
+        </script>
       </body></html>`, 400)
 
     if (error) {
@@ -267,6 +272,11 @@ export function createSetupRouter(): Hono {
               💡 If you're the admin: switching the GCP OAuth consent screen from <strong style="color:#94a3b8">External → Internal</strong>
               means any @redhat.com user can connect without being added individually.
             </p>
+            <script>
+              if (window.opener) {
+                setTimeout(() => window.close(), 5000);
+              }
+            </script>
           </body></html>`, 403)
       }
       return errorPage('Google returned an error', error)
@@ -298,8 +308,18 @@ export function createSetupRouter(): Hono {
         <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
           <h2 style="color:#34d399">✓ Google Workspace Connected</h2>
           <p style="color:#94a3b8">Calendar, Gmail, Drive, and Sheets access authorized.</p>
-          <p style="color:#94a3b8">Redirecting to setup wizard…</p>
-          <meta http-equiv="refresh" content="1;url=/dashboard/setup?step=2">
+          <p style="color:#94a3b8" id="status">Closing window…</p>
+          <script>
+            if (window.opener) {
+              // Opened as popup — auto-close after brief delay for user feedback
+              document.getElementById('status').textContent = 'Success! Closing window…';
+              setTimeout(() => window.close(), 1000);
+            } else {
+              // Direct navigation — redirect to setup
+              document.getElementById('status').textContent = 'Redirecting to setup wizard…';
+              setTimeout(() => window.location.href = '/dashboard/setup?step=2', 1000);
+            }
+          </script>
           <p><a href="/dashboard/setup?step=2" style="color:#818cf8">Continue →</a></p>
         </body></html>`)
     } catch (e: any) {

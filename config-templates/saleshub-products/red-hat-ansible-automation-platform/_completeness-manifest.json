@@ -1,0 +1,225 @@
+{
+  "productSlug": "red-hat-ansible-automation-platform",
+  "sourceOfTruth": "Jason screenshots 2026-06-29 (product page visual inventory)",
+  "manifestDate": "2026-06-29",
+  "sections": {
+    "product-news": {
+      "pageVisible": 16,
+      "captured": 16,
+      "enriched": 9,
+      "items": [
+        { "name": "AAP 2.6 one-slide overview", "captured": true, "enriched": false },
+        { "name": "AAP 2.6 release overview + reference guide", "captured": true, "enriched": false },
+        { "name": "What's new in AAP webpage", "captured": true, "enriched": true },
+        { "name": "Red Hat Summit press release", "captured": true, "enriched": true },
+        { "name": "What's new in AAP 2.7 webinar", "captured": true, "enriched": true },
+        { "name": "Internal product announcement", "captured": true, "enriched": false },
+        { "name": "Ansible Lightspeed customer deck", "captured": true, "enriched": false },
+        { "name": "Ansible Lightspeed enablement overview", "captured": true, "enriched": false },
+        { "name": "What's new in AAP 2.6 webinar", "captured": true, "enriched": true },
+        { "name": "The Wave report", "captured": true, "enriched": false },
+        { "name": "Press release", "captured": true, "enriched": true },
+        { "name": "Overview slide", "captured": true, "enriched": false },
+        { "name": "What's new in AAP webpage (Oct)", "captured": true, "enriched": true },
+        { "name": "AAP 2.6 one-slide overview (Oct)", "captured": true, "enriched": false },
+        { "name": "AAP 2.6 release overview (Oct)", "captured": true, "enriched": false },
+        { "name": "What's new in AAP 2.6 webinar (Oct)", "captured": true, "enriched": false }
+      ]
+    },
+    "business-decks": {
+      "pageVisible": 3,
+      "captured": 0,
+      "enriched": 0,
+      "note": "DocListPicker shows 3 visible thumbnails: Pitch Deck, What's New in AAP 2.6 Customer Deck, Red Hat Ansible Automation Platform. 33 items in _product.json but from CDS API, not page capture.",
+      "items": [
+        { "name": "Pitch Deck - Red Hat Ansible Automation...", "captured": false, "enriched": false },
+        { "name": "What's New in AAP 2.6 Customer Deck", "captured": false, "enriched": false },
+        { "name": "Red Hat Ansible Automation Platform...", "captured": false, "enriched": false }
+      ]
+    },
+    "technical-decks": {
+      "pageVisible": 2,
+      "captured": 0,
+      "enriched": 0,
+      "items": [
+        { "name": "Red Hat Ansible Automation Platform...", "captured": false, "enriched": false },
+        { "name": "Red Hat Ansible Automation Platform... (2)", "captured": false, "enriched": false }
+      ]
+    },
+    "key-resources": {
+      "pageVisible": 13,
+      "captured": 13,
+      "enriched": 7,
+      "items": [
+        { "name": "Website", "captured": true, "enriched": true },
+        { "name": "Release notes", "captured": true, "enriched": true },
+        { "name": "Automation webinars", "captured": true, "enriched": true },
+        { "name": "Self-paced labs for AAP", "captured": true, "enriched": true },
+        { "name": "Success stories", "captured": true, "enriched": true },
+        { "name": "Competitive (Internal only)", "captured": true, "enriched": false },
+        { "name": "Ansible Basics: Automation Technical Overview (DO007)", "captured": true, "enriched": true },
+        { "name": "RHLS 14-day free trial webpage", "captured": true, "enriched": true },
+        { "name": "AAP: Seller credential learning path", "captured": true, "enriched": false },
+        { "name": "AAP 2.6 Release overview + reference guide", "captured": true, "enriched": false },
+        { "name": "Red Hat Ansible Lightspeed overview", "captured": true, "enriched": false },
+        { "name": "AAP Sales Assisted Trial Overview", "captured": true, "enriched": false },
+        { "name": "AAP: Technical seller credential learning path", "captured": true, "enriched": false }
+      ]
+    },
+    "top-training-resources": {
+      "pageVisible": 3,
+      "captured": 3,
+      "enriched": 2,
+      "items": [
+        { "name": "AAP: Technical seller credential learning path", "captured": true, "enriched": false },
+        { "name": "Ansible Basics: Automation Technical Overview (DO007)", "captured": true, "enriched": true },
+        { "name": "Self-paced labs for Ansible Automation Platform", "captured": true, "enriched": true }
+      ]
+    },
+    "top-services-resources": {
+      "pageVisible": 1,
+      "captured": 0,
+      "enriched": 0,
+      "note": "Shows DocListPicker with 'Red Hat Ansible Automation Platform skills path' thumbnail",
+      "items": [
+        { "name": "Red Hat Ansible Automation Platform skills path", "captured": false, "enriched": false }
+      ]
+    },
+    "deployment-options": {
+      "pageVisible": 3,
+      "captured": 3,
+      "enriched": 3,
+      "items": [
+        { "name": "Red Hat Ansible Automation Platform on Microsoft Azure", "captured": true, "enriched": true },
+        { "name": "Red Hat Ansible Automation Platform available in AWS Marketplace", "captured": true, "enriched": true },
+        { "name": "Red Hat Ansible Automation Platform available from Google Cloud Marketplace", "captured": true, "enriched": true }
+      ]
+    },
+    "integrations": {
+      "pageVisible": 21,
+      "captured": 21,
+      "enriched": 21,
+      "note": "Integration partner labels (Infrastructure, Windows, VMware, etc.) — enriched as domain summaries",
+      "items": [
+        { "name": "Infrastructure", "captured": true, "enriched": true },
+        { "name": "Windows", "captured": true, "enriched": true },
+        { "name": "VMware", "captured": true, "enriched": true },
+        { "name": "ServiceNow", "captured": true, "enriched": true },
+        { "name": "Dell Technologies", "captured": true, "enriched": true },
+        { "name": "HPE", "captured": true, "enriched": true },
+        { "name": "Pure", "captured": true, "enriched": true },
+        { "name": "SAP", "captured": true, "enriched": true },
+        { "name": "NetApp", "captured": true, "enriched": true },
+        { "name": "Networks", "captured": true, "enriched": true },
+        { "name": "Cisco", "captured": true, "enriched": true },
+        { "name": "Juniper", "captured": true, "enriched": true },
+        { "name": "HPE Aruba", "captured": true, "enriched": true },
+        { "name": "Infoblox", "captured": true, "enriched": true },
+        { "name": "Cloud", "captured": true, "enriched": true },
+        { "name": "AWS", "captured": true, "enriched": true },
+        { "name": "Microsoft Azure", "captured": true, "enriched": true },
+        { "name": "Google Cloud Platform", "captured": true, "enriched": true },
+        { "name": "DevOps Tools", "captured": true, "enriched": true },
+        { "name": "Splunk", "captured": true, "enriched": true },
+        { "name": "Dynatrace", "captured": true, "enriched": true }
+      ]
+    },
+    "domains-aiops": {
+      "pageVisible": 3,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "Unlock the full potential of AIOps with automation", "captured": false, "enriched": false },
+        { "name": "AIOps Business Value", "captured": false, "enriched": false },
+        { "name": "5 AIOps use cases for Red Hat Ansible Automation Platform", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-event-driven-ansible": {
+      "pageVisible": 3,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "ABU EDA 101 - Event-Driven Ansible", "captured": false, "enriched": false },
+        { "name": "ABU EDA 201 Event-Driven Ansible", "captured": false, "enriched": false },
+        { "name": "Internal version Event Driven Ansible Content Kit", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-network-automation": {
+      "pageVisible": 5,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "Network automation guide", "captured": false, "enriched": false },
+        { "name": "Ansible Network Automation - 201 - Customer Briefing", "captured": false, "enriched": false },
+        { "name": "Ansible Network Automation - 301 - Technical Deck", "captured": false, "enriched": false },
+        { "name": "ABU ANA 201 - Ansible Network Automation - customer briefing", "captured": false, "enriched": false },
+        { "name": "201 ABU Competitive Battlecard - Network Automation", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-hybrid-cloud-automation": {
+      "pageVisible": 7,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "ABU ACA 101 - Ansible Hybrid Cloud Automation - Introduction", "captured": false, "enriched": false },
+        { "name": "ABU ACA 201 - Ansible Public Cloud Automation - Customer Briefing", "captured": false, "enriched": false },
+        { "name": "ABU ACA 301 - Ansible Public Cloud Automation - Technical Enablement", "captured": false, "enriched": false },
+        { "name": "ABU ACA 201 - Ansible Cloud-native Automation - Customer Briefing", "captured": false, "enriched": false },
+        { "name": "ABU ACA 301 - Ansible Cloud-native Automation - Technical Enablement", "captured": false, "enriched": false },
+        { "name": "ABU ACA 201 - Ansible Private Cloud Automation - Customer Briefing", "captured": false, "enriched": false },
+        { "name": "ABU ACA 301 - Ansible Private Cloud Automation - Technical Enablement", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-virtual-infrastructure-automation": {
+      "pageVisible": 2,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "ABU AVA 101 - Ansible OpenShift Virtualization Automation - Introduction", "captured": false, "enriched": false },
+        { "name": "ABU AVA 301 - Ansible OpenShift Virtualization Automation", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-edge-automation": {
+      "pageVisible": 2,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "Edge Pricing Ansible Automation Platform", "captured": false, "enriched": false },
+        { "name": "ABU AEA 301 - Ansible Edge Enterprise Automation - Technical Enablement", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-infrastructure-automation": {
+      "pageVisible": 1,
+      "captured": 0,
+      "enriched": 0,
+      "gap": "DocListPicker not clicked into",
+      "items": [
+        { "name": "Sales Kit - Ansible Automation Platform for RHEL (Cross-sell)", "captured": false, "enriched": false }
+      ]
+    },
+    "domains-security-automation": {
+      "pageVisible": 0,
+      "captured": 0,
+      "enriched": 0,
+      "note": "No files available on page"
+    }
+  },
+  "summary": {
+    "totalPageVisible": 80,
+    "totalCaptured": 56,
+    "totalEnriched": 42,
+    "captureRate": "70%",
+    "enrichmentRate": "53% of visible, 75% of captured",
+    "criticalGaps": [
+      "23 Domain DocListPicker documents (0% captured) — #920",
+      "Business decks DocListPicker not fully captured",
+      "Technical decks DocListPicker not fully captured"
+    ]
+  }
+}
