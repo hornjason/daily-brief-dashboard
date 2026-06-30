@@ -15,6 +15,7 @@ interface IntelligenceStatus {
   industryDocUrl?: string
   error?: string
   completedAt?: string
+  source?: string
 }
 
 export function AccountIntelligencePanel({ customerName }: AccountIntelligencePanelProps) {
@@ -28,7 +29,11 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
       .then(r => r.json())
       .then((d: IntelligenceStatus) => {
         setStatus(d)
-        if (d.status === 'running') setGenerating(true)
+        // Start polling if generation is running OR if Drive discovery just found docs
+        // (which means auto-trigger fired or is about to fire)
+        if (d.status === 'running' || d.source === 'drive-discovery') {
+          setGenerating(true)
+        }
       })
       .catch(() => {})
   }, [customerName])
@@ -52,6 +57,9 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
   }, [polledStatus])
 
   async function handleGenerate() {
+    // Prevent duplicate trigger if auto-generation already running
+    if (status?.status === 'running') return
+
     setGenerating(true)
     setStatus({ status: 'running', step: 'identifying industry' })
     try {
