@@ -894,6 +894,7 @@ export async function writeCcspSheet(
 
   if (allRows.length === 0) {
     // First-run / genuinely empty — write placeholder
+    console.warn(`[ccsp] ${aeName}: CCSP scrape returned 0 rows — verify Tableau authentication and data availability`)
     await withQuotaRetry(
       () => sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -916,24 +917,26 @@ export async function writeCcspSheet(
   }
   const headers = Array.from(headerSet)
 
-  // BKL-M51: Validate that scraped data has required columns before writing.
+  // BKL-M51: Validate that scraped data has required columns before writing (only when rows exist).
   // The Tableau .csv endpoint sometimes returns the summary view (4 cols: Metric cal,
   // Opportunity Close Fiscal Year, Opportunity fiscal Year Quarter, ACV plus) instead
   // of the Raw Data view (~32 cols including Account Name). Writing truncated data
   // overwrites the good data in the sheet and breaks fetchCCSPData() column detection.
-  const hasAccountCol = headers.some(h => {
-    const lower = h.toLowerCase()
-    return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
-  })
-  const hasAcvCol = headers.some(h => {
-    const lower = h.toLowerCase()
-    return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
-  })
-  if (!hasAccountCol || !hasAcvCol) {
-    const missing = [!hasAccountCol && 'Account Name', !hasAcvCol && 'ACV Plus'].filter(Boolean).join(', ')
-    console.warn(`[ccsp] ${aeName}: scraped data missing required columns (${missing}). Got ${headers.length} columns: [${headers.join(', ')}]. Skipping sheet write to protect existing data. This usually means the Tableau .csv endpoint returned the summary view instead of Raw Data.`)
-    if (existingSheetId) return spreadsheetId
-    // For new sheets, still write so the sheet exists (but log the warning)
+  if (allRows.length > 0) {
+    const hasAccountCol = headers.some(h => {
+      const lower = h.toLowerCase()
+      return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
+    })
+    const hasAcvCol = headers.some(h => {
+      const lower = h.toLowerCase()
+      return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
+    })
+    if (!hasAccountCol || !hasAcvCol) {
+      const missing = [!hasAccountCol && 'Account Name', !hasAcvCol && 'ACV Plus'].filter(Boolean).join(', ')
+      console.warn(`[ccsp] ${aeName}: scraped data missing required columns (${missing}). Got ${headers.length} columns: [${headers.join(', ')}]. Skipping sheet write to protect existing data. This usually means the Tableau .csv endpoint returned the summary view instead of Raw Data.`)
+      if (existingSheetId) return spreadsheetId
+      // For new sheets, still write so the sheet exists (but log the warning)
+    }
   }
 
   // Build sheet data: headers + rows (sanitize data rows to prevent formula injection)
