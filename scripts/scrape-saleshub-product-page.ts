@@ -875,7 +875,7 @@ async function extractRedHeaderSections(
               '[class*="header"], [class*="trigger"], [class*="toggle"], ' +
               '[class*="Header"], button[class*="accordion"]'
             )
-            const domainName = heading ? (heading.textContent || '').trim() : ''
+            const domainName = heading ? (heading.textContent || '').trim().replace(/\s*arrow\s*(up|down)\s*$/i, '') : ''
             if (!domainName || domainName.length < 3) continue
 
             // Collect document names from links inside this panel
@@ -1321,7 +1321,7 @@ export async function expandDomainDocListPickers(
         '.seismic-page-divider-view-text, .seismic-page-accordion-viewer-new-header-title'
       ).first()
       const rawText = await heading.textContent({ timeout: 3_000 }).catch(() => '')
-      const domainName = (rawText || '').trim().replace(/\s+/g, ' ')
+      const domainName = (rawText || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
       if (!domainName || domainName.length < 3) continue
 
       // Find DocListPicker inside this accordion item
