@@ -38,6 +38,7 @@ import {
 import type {
   ProductPage,
   ProductSection,
+  ProductEnrichment,
   SectionItem,
 } from '../src/types/saleshub-product-types.ts'
 
@@ -2184,6 +2185,97 @@ function generateCompletenessReport(
   }
 }
 
+function generateCompletenessManifest(
+  sections: Record<string, ProductSection>,
+  enrichedPath: string,
+  productSlug: string,
+): object {
+  let enrichedNames: Set<string> | null = null
+  if (existsSync(enrichedPath)) {
+    try {
+      const enrichment: ProductEnrichment = JSON.parse(readFileSync(enrichedPath, 'utf-8'))
+      enrichedNames = new Set(
+        (enrichment.documents ?? []).map(d => d.documentName.toLowerCase()),
+      )
+    } catch { /* enriched file unreadable — treat as no enrichment */ }
+  }
+
+  const sectionResults: Array<{
+    sectionName: string
+    sectionKey: string
+    pageVisibleCount: number
+    capturedCount: number
+    enrichedCount: number
+    gap: boolean
+    gapType: string | null
+    items: Array<{ name: string; captured: boolean; enriched: boolean }>
+  }> = []
+
+  let totalPageVisible = 0
+  let totalCaptured = 0
+  let totalEnriched = 0
+  let totalGapSections = 0
+
+  const collectItems = (section: ProductSection): Array<{ name: string; captured: boolean; enriched: boolean }> => {
+    const items: Array<{ name: string; captured: boolean; enriched: boolean }> = []
+    for (const item of section.items) {
+      const enriched = enrichedNames
+        ? enrichedNames.has(item.name.toLowerCase())
+        : false
+      items.push({ name: item.name, captured: true, enriched })
+    }
+    if (section.subsections) {
+      for (const sub of section.subsections) {
+        for (const item of sub.items) {
+          const enriched = enrichedNames
+            ? enrichedNames.has(item.name.toLowerCase())
+            : false
+          items.push({ name: item.name, captured: true, enriched })
+        }
+      }
+    }
+    return items
+  }
+
+  for (const [sectionKey, section] of Object.entries(sections)) {
+    const items = collectItems(section)
+    const pageVisibleCount = items.length
+    const capturedCount = items.length
+    const enrichedCount = items.filter(i => i.enriched).length
+    const hasEnrichmentGap = enrichedNames !== null && items.some(i => !i.enriched)
+    const gap = hasEnrichmentGap
+    const gapType = gap ? 'enrichment_incomplete' : null
+
+    sectionResults.push({
+      sectionName: section.title,
+      sectionKey,
+      pageVisibleCount,
+      capturedCount,
+      enrichedCount,
+      gap,
+      gapType,
+      items,
+    })
+
+    totalPageVisible += pageVisibleCount
+    totalCaptured += capturedCount
+    totalEnriched += enrichedCount
+    if (gap) totalGapSections++
+  }
+
+  return {
+    product: productSlug,
+    generatedAt: new Date().toISOString(),
+    sections: sectionResults,
+    totals: {
+      pageVisible: totalPageVisible,
+      captured: totalCaptured,
+      enriched: totalEnriched,
+      gapSections: totalGapSections,
+    },
+  }
+}
+
 export async function scrapeProductPage(
   url: string = DEFAULT_URL,
   externalContext?: BrowserContext,
@@ -2637,6 +2729,12 @@ export async function scrapeProductPage(
     } catch (e: any) {
       console.warn(`[product-scraper] Inline enrichment failed (non-blocking): ${e.message}`)
     }
+
+    // Generate completeness manifest (#924) — after enrichment, before Drive upload
+    const completenessManifest = generateCompletenessManifest(sections, resolve(configOutputDir, '_enriched.json'), productSlug) as { totals: { pageVisible: number; enriched: number; gapSections: number } }
+    writeJsonAtomic(resolve(configOutputDir, '_completeness-manifest.json'), completenessManifest)
+    writeJsonAtomic(resolve(cacheOutputDir, '_completeness-manifest.json'), completenessManifest)
+    console.log(`[product-scraper] Completeness manifest: ${completenessManifest.totals.pageVisible} visible, ${completenessManifest.totals.enriched} enriched, ${completenessManifest.totals.gapSections} gaps`)
 
     // Upload all product data to Drive for cross-node visibility (#874 PR 3)
     try {
