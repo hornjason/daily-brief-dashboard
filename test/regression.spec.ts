@@ -2594,3 +2594,61 @@ test.describe('REG-035: Bootstrap scaffold persists product driveFolder IDs (#34
     expect(src).toContain('product.driveFolder')
   })
 })
+
+// ── REG-CCSP-ZERO-ROWS-01: CCSP zero rows fix (#20260630-000000) ──
+// Verifies that when writeCcspSheet() receives zero rows, it provides detailed
+// diagnostic output and doesn't crash due to ReferenceError on hasAccountCol/hasAcvCol.
+test.describe('REG-CCSP-ZERO-ROWS-01: CCSP zero rows and misleading error message', () => {
+  test('hasAccountCol and hasAcvCol declared before validation block', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    const writeCcspSheetFn = src.substring(
+      src.indexOf('export async function writeCcspSheet'),
+      src.indexOf('export function filterCcspRowsForAe') !== -1
+        ? src.indexOf('export function filterCcspRowsForAe')
+        : src.length
+    )
+    // hasAccountCol and hasAcvCol must be declared with let/const BEFORE the if (allRows.length > 0) block
+    const letDecl = writeCcspSheetFn.indexOf('let hasAccountCol')
+    const constDecl = writeCcspSheetFn.indexOf('const hasAccountCol')
+    const declIndex = letDecl !== -1 ? letDecl : constDecl
+    const validationBlock = writeCcspSheetFn.indexOf('if (allRows.length > 0)')
+    expect(declIndex).toBeGreaterThan(-1) // hasAccountCol must be declared
+    expect(declIndex).toBeLessThan(validationBlock) // and declared BEFORE the validation block
+  })
+
+  test('zero-row error message includes diagnostic details', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    const writeCcspSheetFn = src.substring(
+      src.indexOf('export async function writeCcspSheet'),
+      src.indexOf('export function filterCcspRowsForAe') !== -1
+        ? src.indexOf('export function filterCcspRowsForAe')
+        : src.length
+    )
+    // Error message should include AE name, Tableau URL, and filter verification steps
+    const zeroRowsSection = writeCcspSheetFn.substring(
+      writeCcspSheetFn.indexOf('if (allRows.length === 0)'),
+      writeCcspSheetFn.indexOf('// Collect all unique headers')
+    )
+    expect(zeroRowsSection).toContain('TABLEAU_BASE_URL')
+    expect(zeroRowsSection).toContain('Verify: (1)')
+    expect(zeroRowsSection).toContain('territories') // or 'territory' or 'filter'
+  })
+
+  test('validation logic only runs when allRows.length > 0', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    const writeCcspSheetFn = src.substring(
+      src.indexOf('export async function writeCcspSheet'),
+      src.indexOf('export function filterCcspRowsForAe') !== -1
+        ? src.indexOf('export function filterCcspRowsForAe')
+        : src.length
+    )
+    // Column validation should be guarded by if (allRows.length > 0)
+    expect(writeCcspSheetFn).toContain('if (allRows.length > 0)')
+    const validationBlock = writeCcspSheetFn.substring(
+      writeCcspSheetFn.indexOf('if (allRows.length > 0)'),
+      writeCcspSheetFn.indexOf('// Build sheet data')
+    )
+    expect(validationBlock).toContain('hasAccountCol')
+    expect(validationBlock).toContain('hasAcvCol')
+  })
+})

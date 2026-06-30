@@ -893,8 +893,16 @@ export async function writeCcspSheet(
   // The existingSheetId + 0 rows case was handled by the early return above.
 
   if (allRows.length === 0) {
-    // First-run / genuinely empty — write placeholder
-    console.warn(`[ccsp] ${aeName}: CCSP scrape returned 0 rows — verify Tableau authentication and data availability`)
+    // First-run / genuinely empty — provide detailed diagnostic info
+    const periods = results.map(r => r.accountPeriod).filter(Boolean).join(', ')
+    console.warn(
+      `[ccsp] ${aeName}: CCSP scrape returned 0 rows after filtering.\n` +
+      `  Periods scraped: ${periods || 'none'}\n` +
+      `  Filters applied: ${results.length} territory filter(s)\n` +
+      `  Verify: (1) Tableau authentication at ${TABLEAU_BASE_URL}\n` +
+      `  Verify: (2) Data exists in Tableau for these territories\n` +
+      `  Verify: (3) Filter values match Tableau dashboard filters exactly`
+    )
     await withQuotaRetry(
       () => sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -922,12 +930,16 @@ export async function writeCcspSheet(
   // Opportunity Close Fiscal Year, Opportunity fiscal Year Quarter, ACV plus) instead
   // of the Raw Data view (~32 cols including Account Name). Writing truncated data
   // overwrites the good data in the sheet and breaks fetchCCSPData() column detection.
+  // Declare variables BEFORE the validation block so they're in scope at line 949.
+  let hasAccountCol = false
+  let hasAcvCol = false
+
   if (allRows.length > 0) {
-    const hasAccountCol = headers.some(h => {
+    hasAccountCol = headers.some(h => {
       const lower = h.toLowerCase()
       return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
     })
-    const hasAcvCol = headers.some(h => {
+    hasAcvCol = headers.some(h => {
       const lower = h.toLowerCase()
       return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
     })
