@@ -69,6 +69,7 @@ import { TechStackTab } from '../components/tabs/TechStackTab'
 import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 import { IntelligenceInsightsCard } from '../components/RecommendationCard'
 import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
+import { ExpansionOpportunitiesPanel } from '../components/ExpansionOpportunitiesPanel'
 import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { TopPlaysCard } from '../components/TopPlaysCard'
@@ -1845,6 +1846,7 @@ export function CustomerDetailPage() {
           <SignalInventoryPanel customerName={customerName} />
           <IntelligenceInsightsCard customerName={customerName} />
           <AccountPlanPanel customerName={customerName} />
+          <ExpansionOpportunitiesPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
           <div className="bg-surface border border-border rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
