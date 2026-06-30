@@ -34,7 +34,7 @@ const SCORING_VERSION = 'adr027-v1'
 // Timeout tiers (ms) — see ADR-023
 const TIMEOUT_STRUCTURED = 30_000  // responseSchema present
 const TIMEOUT_GROUNDED = 120_000   // grounding enabled
-const TIMEOUT_LONG_FORM = 180_000  // campaign-generation, account-plan
+const TIMEOUT_LONG_FORM = 240_000  // campaign-generation, account-plan
 const TIMEOUT_STANDARD = 120_000   // default
 
 const LONG_FORM_CALL_TYPES = new Set(['campaign-generation', 'account-plan', 'value-positioning', 'daily-briefing-synthesis', 'enhanced-tactic-recommendation'])
