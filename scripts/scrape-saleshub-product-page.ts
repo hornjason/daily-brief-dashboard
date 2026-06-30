@@ -1299,62 +1299,59 @@ export async function expandAllAccordions(page: Page): Promise<number> {
 export async function expandDomainDocListPickers(
   page: Page,
 ): Promise<{ activated: number; domainDocs: Map<string, string[]> }> {
-  console.log('[product-scraper] Activating DocListPicker widgets in accordion panels...')
+  console.log('[product-scraper] Activating domain DocListPickers in accordion panels...')
 
-  const pickerSelectors = [
-    '[class*="docListPicker"]',
-    '[class*="DocListPicker"]',
-    '.seismic-page-docListPicker-Viewer-title',
-  ]
-  const combinedSelector = pickerSelectors.join(', ')
+  // (#920 ITERATION 3) Scope to accordion items inside accordion widgets only —
+  // avoids matching the ~60+ DocListPickers in Business decks, Technical decks, etc.
+  const accordionItems = page.locator(
+    '[class*="widget-accordion"] [class*="pf-v5-c-accordion__expanded-content"], ' +
+    '[class*="widget-accordion"] [class*="accordion-item"], ' +
+    '[class*="widget-accordion"] [class*="AccordionItem"], ' +
+    '[class*="widget-accordion"] [class*="expandable-item"]'
+  )
+  const itemCount = await accordionItems.count()
+  console.log(`[product-scraper] Found ${itemCount} accordion items in domain section`)
 
-  const pickers = page.locator(combinedSelector)
-  const pickerCount = await pickers.count()
-  console.log(`[product-scraper] Found ${pickerCount} DocListPicker widgets`)
-
-  if (pickerCount === 0) return { activated: 0, domainDocs: new Map() }
+  if (itemCount === 0) return { activated: 0, domainDocs: new Map() }
 
   let activated = 0
   const domainDocs = new Map<string, string[]>()
 
-  for (let i = 0; i < pickerCount; i++) {
+  for (let i = 0; i < itemCount; i++) {
     try {
-      const picker = pickers.nth(i)
+      const item = accordionItems.nth(i)
+
+      // Extract domain name from accordion heading (button/toggle element)
+      const heading = item.locator(
+        'button[class*="accordion"], [class*="header"], [class*="trigger"], [class*="toggle"]'
+      ).first()
+      const rawText = await heading.textContent({ timeout: 3_000 }).catch(() => '')
+      const domainName = (rawText || '').trim().replace(/\s+/g, ' ')
+      if (!domainName || domainName.length < 3) continue
+
+      // Find DocListPicker inside this accordion item
+      const picker = item.locator('[class*="docListPicker"], [class*="DocListPicker"]').first()
+      const hasPicker = await picker.count().catch(() => 0)
+      if (!hasPicker) continue
+
+      // Click to trigger CDS API call
       await picker.scrollIntoViewIfNeeded({ timeout: 3_000 })
       await picker.click({ timeout: 3_000 })
       await page.waitForTimeout(2_500)
       activated++
 
-      // (#920 ITERATION 2) Extract domain name from the closest accordion heading
-      const domainName = await picker.evaluate((el: Element) => {
-        const accordionItem = el.closest(
-          '[class*="accordion-item"], [class*="AccordionItem"], ' +
-          '[class*="expandable-item"], [class*="pf-v5-c-accordion__expanded-content"]'
-        ) || el.closest('[class*="accordion"]') || el.parentElement
-        if (!accordionItem) return ''
-        const heading = accordionItem.querySelector(
-          '[class*="header"], [class*="trigger"], [class*="toggle"], ' +
-          '[class*="Header"], button[class*="accordion"]'
-        )
-        return heading ? (heading.textContent || '').trim() : ''
-      })
-
-      if (!domainName || domainName.length < 3) continue
-
-      // Extract document names from rendered picker content using multiple selectors
-      const docNames = await picker.evaluate((el: Element) => {
+      // Extract document names from rendered content
+      const docNames = await item.evaluate((el: Element) => {
         const names: string[] = []
+        const seen = new Set<string>()
         const selectors = [
           'table tr td:first-child',
           '[class*="row"] [class*="title"]',
           '[class*="row"] [class*="name"]',
-          '[class*="item"] [class*="title"]',
-          '[class*="docListPicker"] td',
           'table td a',
           'table td span',
           'td:first-child',
         ]
-        const seen = new Set<string>()
         for (const sel of selectors) {
           for (const node of el.querySelectorAll(sel)) {
             const text = (node.textContent || '').trim().slice(0, 200)
@@ -1365,7 +1362,6 @@ export async function expandDomainDocListPickers(
           }
           if (names.length > 0) break
         }
-        // Fallback: if no structured selectors matched, try all text nodes in table rows
         if (names.length === 0) {
           for (const row of el.querySelectorAll('tr')) {
             const text = (row.textContent || '').trim().split('\n')[0]?.trim().slice(0, 200)
@@ -1379,20 +1375,19 @@ export async function expandDomainDocListPickers(
       })
 
       if (docNames.length > 0) {
-        const existing = domainDocs.get(domainName) || []
-        domainDocs.set(domainName, [...existing, ...docNames])
-        console.log(`[product-scraper] DocListPicker ${i}: domain="${domainName}" → ${docNames.length} docs`)
+        domainDocs.set(domainName, docNames)
+        console.log(`[product-scraper] Domain "${domainName}": ${docNames.length} docs`)
       }
     } catch (e: any) {
-      console.warn(`[product-scraper] Could not activate DocListPicker ${i}: ${(e.message ?? '').slice(0, 60)}`)
+      console.warn(`[product-scraper] Domain accordion ${i}: ${(e.message ?? '').slice(0, 60)}`)
     }
   }
 
   await page.waitForTimeout(2_000)
-  console.log(`[product-scraper] Activated ${activated}/${pickerCount} DocListPicker widgets`)
+  console.log(`[product-scraper] Activated ${activated}/${itemCount} domain DocListPickers`)
   if (domainDocs.size > 0) {
     const totalDocs = [...domainDocs.values()].reduce((sum, arr) => sum + arr.length, 0)
-    console.log(`[product-scraper] DocListPicker domain mapping: ${totalDocs} docs across ${domainDocs.size} domains`)
+    console.log(`[product-scraper] Domain mapping: ${totalDocs} docs across ${domainDocs.size} domains`)
   }
   return { activated, domainDocs }
 }
