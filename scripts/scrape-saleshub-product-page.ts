@@ -1296,7 +1296,9 @@ export async function expandAllAccordions(page: Page): Promise<number> {
  * responses, and extractRedHeaderSections() picks up the rendered `a[href]`
  * links from the DOM.
  */
-export async function expandDomainDocListPickers(page: Page): Promise<number> {
+export async function expandDomainDocListPickers(
+  page: Page,
+): Promise<{ activated: number; domainDocs: Map<string, string[]> }> {
   console.log('[product-scraper] Activating DocListPicker widgets in accordion panels...')
 
   const pickerSelectors = [
@@ -1310,9 +1312,11 @@ export async function expandDomainDocListPickers(page: Page): Promise<number> {
   const pickerCount = await pickers.count()
   console.log(`[product-scraper] Found ${pickerCount} DocListPicker widgets`)
 
-  if (pickerCount === 0) return 0
+  if (pickerCount === 0) return { activated: 0, domainDocs: new Map() }
 
   let activated = 0
+  const domainDocs = new Map<string, string[]>()
+
   for (let i = 0; i < pickerCount; i++) {
     try {
       const picker = pickers.nth(i)
@@ -1320,6 +1324,65 @@ export async function expandDomainDocListPickers(page: Page): Promise<number> {
       await picker.click({ timeout: 3_000 })
       await page.waitForTimeout(2_500)
       activated++
+
+      // (#920 ITERATION 2) Extract domain name from the closest accordion heading
+      const domainName = await picker.evaluate((el: Element) => {
+        const accordionItem = el.closest(
+          '[class*="accordion-item"], [class*="AccordionItem"], ' +
+          '[class*="expandable-item"], [class*="pf-v5-c-accordion__expanded-content"]'
+        ) || el.closest('[class*="accordion"]') || el.parentElement
+        if (!accordionItem) return ''
+        const heading = accordionItem.querySelector(
+          '[class*="header"], [class*="trigger"], [class*="toggle"], ' +
+          '[class*="Header"], button[class*="accordion"]'
+        )
+        return heading ? (heading.textContent || '').trim() : ''
+      })
+
+      if (!domainName || domainName.length < 3) continue
+
+      // Extract document names from rendered picker content using multiple selectors
+      const docNames = await picker.evaluate((el: Element) => {
+        const names: string[] = []
+        const selectors = [
+          'table tr td:first-child',
+          '[class*="row"] [class*="title"]',
+          '[class*="row"] [class*="name"]',
+          '[class*="item"] [class*="title"]',
+          '[class*="docListPicker"] td',
+          'table td a',
+          'table td span',
+          'td:first-child',
+        ]
+        const seen = new Set<string>()
+        for (const sel of selectors) {
+          for (const node of el.querySelectorAll(sel)) {
+            const text = (node.textContent || '').trim().slice(0, 200)
+            if (text.length > 3 && !seen.has(text)) {
+              seen.add(text)
+              names.push(text)
+            }
+          }
+          if (names.length > 0) break
+        }
+        // Fallback: if no structured selectors matched, try all text nodes in table rows
+        if (names.length === 0) {
+          for (const row of el.querySelectorAll('tr')) {
+            const text = (row.textContent || '').trim().split('\n')[0]?.trim().slice(0, 200)
+            if (text && text.length > 3 && !seen.has(text)) {
+              seen.add(text)
+              names.push(text)
+            }
+          }
+        }
+        return names
+      })
+
+      if (docNames.length > 0) {
+        const existing = domainDocs.get(domainName) || []
+        domainDocs.set(domainName, [...existing, ...docNames])
+        console.log(`[product-scraper] DocListPicker ${i}: domain="${domainName}" → ${docNames.length} docs`)
+      }
     } catch (e: any) {
       console.warn(`[product-scraper] Could not activate DocListPicker ${i}: ${(e.message ?? '').slice(0, 60)}`)
     }
@@ -1327,7 +1390,11 @@ export async function expandDomainDocListPickers(page: Page): Promise<number> {
 
   await page.waitForTimeout(2_000)
   console.log(`[product-scraper] Activated ${activated}/${pickerCount} DocListPicker widgets`)
-  return activated
+  if (domainDocs.size > 0) {
+    const totalDocs = [...domainDocs.values()].reduce((sum, arr) => sum + arr.length, 0)
+    console.log(`[product-scraper] DocListPicker domain mapping: ${totalDocs} docs across ${domainDocs.size} domains`)
+  }
+  return { activated, domainDocs }
 }
 
 // ── Per-product document download (SC-2) ────────────────────────────────────
@@ -2228,7 +2295,7 @@ export async function scrapeProductPage(
     await expandAllAccordions(page)
 
     // Activate DocListPicker widgets to trigger CDS API loads (#920)
-    await expandDomainDocListPickers(page)
+    const { domainDocs } = await expandDomainDocListPickers(page)
 
     // Screenshot audit artifact (#874 — Gate 0)
     // Saved BEFORE extractRedHeaderSections() so the screenshot shows the fully-expanded page
@@ -2241,6 +2308,15 @@ export async function scrapeProductPage(
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
     const { sections, domainDocLookup } = await extractRedHeaderSections(page)
+    // (#920) Merge DocListPicker domain mapping into domainDocLookup before API tagging
+    for (const [domain, docNames] of domainDocs) {
+      for (const docName of docNames) {
+        domainDocLookup.set(docName.toLowerCase().slice(0, 50), domain)
+      }
+    }
+    if (domainDocs.size > 0) {
+      console.log(`[product-scraper] domainDocLookup after DocListPicker merge: ${domainDocLookup.size} entries across ${new Set(domainDocLookup.values()).size} domains`)
+    }
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
     // ── Pipeline manifest: Gate 0 — DOM visibility (#874) ─────────────────
