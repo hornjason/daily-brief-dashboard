@@ -1287,6 +1287,49 @@ export async function expandAllAccordions(page: Page): Promise<number> {
   return accordionCount
 }
 
+// ── DocListPicker activation (#920) ─────────────────────────────────────────
+
+/**
+ * Clicks DocListPicker widgets inside expanded accordion panels to trigger
+ * CDS API calls that load document table rows. The CDS interception set up
+ * by setupCdsInterception() passively captures documents from the API
+ * responses, and extractRedHeaderSections() picks up the rendered `a[href]`
+ * links from the DOM.
+ */
+export async function expandDomainDocListPickers(page: Page): Promise<number> {
+  console.log('[product-scraper] Activating DocListPicker widgets in accordion panels...')
+
+  const pickerSelectors = [
+    '[class*="docListPicker"]',
+    '[class*="DocListPicker"]',
+    '.seismic-page-docListPicker-Viewer-title',
+  ]
+  const combinedSelector = pickerSelectors.join(', ')
+
+  const pickers = page.locator(combinedSelector)
+  const pickerCount = await pickers.count()
+  console.log(`[product-scraper] Found ${pickerCount} DocListPicker widgets`)
+
+  if (pickerCount === 0) return 0
+
+  let activated = 0
+  for (let i = 0; i < pickerCount; i++) {
+    try {
+      const picker = pickers.nth(i)
+      await picker.scrollIntoViewIfNeeded({ timeout: 3_000 })
+      await picker.click({ timeout: 3_000 })
+      await page.waitForTimeout(2_500)
+      activated++
+    } catch (e: any) {
+      console.warn(`[product-scraper] Could not activate DocListPicker ${i}: ${(e.message ?? '').slice(0, 60)}`)
+    }
+  }
+
+  await page.waitForTimeout(2_000)
+  console.log(`[product-scraper] Activated ${activated}/${pickerCount} DocListPicker widgets`)
+  return activated
+}
+
 // ── Per-product document download (SC-2) ────────────────────────────────────
 
 // ── Viewer Follow-Through Extraction (#874) ─────────────────────────────────
@@ -2183,6 +2226,9 @@ export async function scrapeProductPage(
     // Expand all accordions BEFORE DOM extraction (#874 — Gate 0)
     // Content inside collapsed accordions is invisible to extractRedHeaderSections()
     await expandAllAccordions(page)
+
+    // Activate DocListPicker widgets to trigger CDS API loads (#920)
+    await expandDomainDocListPickers(page)
 
     // Screenshot audit artifact (#874 — Gate 0)
     // Saved BEFORE extractRedHeaderSections() so the screenshot shows the fully-expanded page
