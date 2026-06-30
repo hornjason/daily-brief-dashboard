@@ -41,6 +41,7 @@ export interface PipelineManifest {
   scrapedAt: string
   gates: {
     gate0_domItemCount: number
+    gate0_apiItemCount: number
     gate1_scrapedCount: number
     gate1_dedupedCount: number
     gate1_filteredCount: number
@@ -140,6 +141,7 @@ export function createManifest(productSlug: string, productName: string): Pipeli
     scrapedAt: new Date().toISOString(),
     gates: {
       gate0_domItemCount: 0,
+      gate0_apiItemCount: 0,
       gate1_scrapedCount: 0,
       gate1_dedupedCount: 0,
       gate1_filteredCount: 0,
@@ -180,7 +182,8 @@ export function addGate0Entry(
     gate3_enrichmentOutcome: null,
     gate3_enrichmentReason: null,
   })
-  manifest.gates.gate0_domItemCount = manifest.documents.length
+  manifest.gates.gate0_domItemCount = manifest.documents.filter(d => d.source.includes('dom')).length
+  manifest.gates.gate0_apiItemCount = manifest.documents.filter(d => d.source.includes('api') && !d.source.includes('dom')).length
 }
 
 // ── Gate 1: Scrape + dedup + filter ──────────────────────────────────────────
@@ -245,7 +248,10 @@ export function computeGateSummary(manifest: PipelineManifest): void {
   const docs = manifest.documents
   const g = manifest.gates
 
-  g.gate0_domItemCount = docs.filter(d => d.gate0_visible).length || docs.length
+  g.gate0_domItemCount = docs.filter(d => d.source.includes('dom') && d.gate0_visible).length
+    || docs.filter(d => d.source.includes('dom')).length
+    || docs.length  // fallback for legacy manifests without source tags
+  g.gate0_apiItemCount = docs.filter(d => d.source.includes('api') && !d.source.includes('dom')).length
   g.gate1_scrapedCount = docs.filter(d => d.gate1_scraped).length
   g.gate1_dedupedCount = docs.filter(d => !d.gate1_deduped).length  // count of REMOVED dupes
   g.gate1_filteredCount = docs.filter(d => d.gate2_skippedReason === 'non-english').length

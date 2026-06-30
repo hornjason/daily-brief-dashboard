@@ -43,6 +43,7 @@ describe('pipeline-manifest', () => {
 
     test('initializes all gate counters to zero', () => {
       expect(manifest.gates.gate0_domItemCount).toBe(0)
+      expect(manifest.gates.gate0_apiItemCount).toBe(0)
       expect(manifest.gates.gate1_scrapedCount).toBe(0)
       expect(manifest.gates.gate1_dedupedCount).toBe(0)
       expect(manifest.gates.gate1_filteredCount).toBe(0)
@@ -86,6 +87,18 @@ describe('pipeline-manifest', () => {
     test('supports multiple source types', () => {
       addGate0Entry(manifest, 'Doc C', 's1', ['dom', 'cds', 'api'])
       expect(manifest.documents[0].source).toEqual(['dom', 'cds', 'api'])
+    })
+
+    test('gate0_domItemCount excludes api-only items (#928)', () => {
+      addGate0Entry(manifest, 'DOM Doc', 's1', ['dom'])
+      addGate0Entry(manifest, 'API Doc', 's2', ['api'])
+      addGate0Entry(manifest, 'Both Doc', 's3', ['dom', 'api'])
+      // DOM count: DOM Doc + Both Doc = 2 (api-only excluded)
+      expect(manifest.gates.gate0_domItemCount).toBe(2)
+      // API-only count: API Doc = 1
+      expect(manifest.gates.gate0_apiItemCount).toBe(1)
+      // Total documents: 3
+      expect(manifest.documents).toHaveLength(3)
     })
   })
 
@@ -273,6 +286,35 @@ describe('pipeline-manifest', () => {
       expect(manifest.gates.gate1_blocked).toBe(false)
       expect(manifest.gates.gate2_enrichmentCoverage).toBe(0)
       expect(manifest.gates.gate2_enrichmentAlert).toBe(false)
+    })
+
+    test('gate0_domItemCount excludes api-only items in summary (#928)', () => {
+      // 3 DOM items + 2 API-only items
+      addGate0Entry(manifest, 'DOM A', 's1', ['dom'])
+      addGate0Entry(manifest, 'DOM B', 's2', ['dom'])
+      addGate0Entry(manifest, 'DOM C', 's3', ['dom'])
+      addGate0Entry(manifest, 'API X', 's4', ['api'])
+      addGate0Entry(manifest, 'API Y', 's5', ['api'])
+
+      computeGateSummary(manifest)
+
+      // DOM count should be 3, not 5
+      expect(manifest.gates.gate0_domItemCount).toBe(3)
+      // API-only count should be 2
+      expect(manifest.gates.gate0_apiItemCount).toBe(2)
+      // pass rate computed against DOM count only
+      expect(manifest.gates.gate1_scrapedCount).toBe(5) // all 5 are scraped
+      expect(manifest.gates.gate1_passRate).toBeCloseTo(5 / 3, 2) // scraped/dom
+    })
+
+    test('gate0_domItemCount counts dom+api items as DOM (#928)', () => {
+      addGate0Entry(manifest, 'Both', 's1', ['dom', 'api'])
+      addGate0Entry(manifest, 'API only', 's2', ['api'])
+
+      computeGateSummary(manifest)
+
+      expect(manifest.gates.gate0_domItemCount).toBe(1) // dom+api = dom
+      expect(manifest.gates.gate0_apiItemCount).toBe(1) // api-only
     })
   })
 

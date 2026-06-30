@@ -2204,6 +2204,8 @@ function generateCompletenessManifest(
     sectionName: string
     sectionKey: string
     pageVisibleCount: number
+    domVisibleCount: number
+    apiMergedCount: number
     capturedCount: number
     enrichedCount: number
     gap: boolean
@@ -2212,17 +2214,21 @@ function generateCompletenessManifest(
   }> = []
 
   let totalPageVisible = 0
+  let totalDomVisible = 0
+  let totalApiMerged = 0
   let totalCaptured = 0
   let totalEnriched = 0
   let totalGapSections = 0
 
-  const collectItems = (section: ProductSection): Array<{ name: string; captured: boolean; enriched: boolean }> => {
-    const items: Array<{ name: string; captured: boolean; enriched: boolean }> = []
+  const collectItems = (section: ProductSection): Array<{ name: string; captured: boolean; enriched: boolean; isApiOnly: boolean }> => {
+    const items: Array<{ name: string; captured: boolean; enriched: boolean; isApiOnly: boolean }> = []
     for (const item of section.items) {
       const enriched = enrichedNames
         ? enrichedNames.has(item.name.toLowerCase())
         : false
-      items.push({ name: item.name, captured: true, enriched })
+      // API-merged items have seismicContentType set; DOM items do not (#928)
+      const isApiOnly = !!(item as any).seismicContentType && !(item as any)._domSource
+      items.push({ name: item.name, captured: true, enriched, isApiOnly })
     }
     if (section.subsections) {
       for (const sub of section.subsections) {
@@ -2230,7 +2236,8 @@ function generateCompletenessManifest(
           const enriched = enrichedNames
             ? enrichedNames.has(item.name.toLowerCase())
             : false
-          items.push({ name: item.name, captured: true, enriched })
+          const isApiOnly = !!(item as any).seismicContentType && !(item as any)._domSource
+          items.push({ name: item.name, captured: true, enriched, isApiOnly })
         }
       }
     }
@@ -2240,6 +2247,8 @@ function generateCompletenessManifest(
   for (const [sectionKey, section] of Object.entries(sections)) {
     const items = collectItems(section)
     const pageVisibleCount = items.length
+    const domVisibleCount = items.filter(i => !i.isApiOnly).length
+    const apiMergedCount = items.filter(i => i.isApiOnly).length
     const capturedCount = items.length
     const enrichedCount = items.filter(i => i.enriched).length
     const hasEnrichmentGap = enrichedNames !== null && items.some(i => !i.enriched)
@@ -2250,6 +2259,8 @@ function generateCompletenessManifest(
       sectionName: section.title,
       sectionKey,
       pageVisibleCount,
+      domVisibleCount,
+      apiMergedCount,
       capturedCount,
       enrichedCount,
       gap,
@@ -2258,6 +2269,8 @@ function generateCompletenessManifest(
     })
 
     totalPageVisible += pageVisibleCount
+    totalDomVisible += domVisibleCount
+    totalApiMerged += apiMergedCount
     totalCaptured += capturedCount
     totalEnriched += enrichedCount
     if (gap) totalGapSections++
@@ -2269,6 +2282,8 @@ function generateCompletenessManifest(
     sections: sectionResults,
     totals: {
       pageVisible: totalPageVisible,
+      domVisible: totalDomVisible,
+      apiMerged: totalApiMerged,
       captured: totalCaptured,
       enriched: totalEnriched,
       gapSections: totalGapSections,
@@ -2650,7 +2665,7 @@ export async function scrapeProductPage(
     computeGateSummary(manifest)
     writeManifest(manifest, configOutputDir)
     writeManifest(manifest, cacheOutputDir)
-    console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM, Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
+    console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM + ${manifest.gates.gate0_apiItemCount} API-only (${manifest.documents.length} total), Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
     // ── Step 6: Inline enrichment — runs in the SAME process as the scraper ──
     // This ensures scrape → extract → enrich → manifest update all happen on one machine.
