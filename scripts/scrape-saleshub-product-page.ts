@@ -1299,7 +1299,7 @@ export async function expandAllAccordions(page: Page): Promise<number> {
  */
 export async function expandDomainDocListPickers(
   page: Page,
-): Promise<{ activated: number; domainDocs: Map<string, string[]> }> {
+): Promise<{ activated: number; domainDocs: Map<string, Array<{ name: string; url: string }>> }> {
   console.log('[product-scraper] Activating domain DocListPickers in accordion panels...')
 
   // (#920 ITERATION 4) Selectors from DOM inspection of actual SalesHub page
@@ -1312,7 +1312,7 @@ export async function expandDomainDocListPickers(
   if (itemCount === 0) return { activated: 0, domainDocs: new Map() }
 
   let activated = 0
-  const domainDocs = new Map<string, string[]>()
+  const domainDocs = new Map<string, Array<{ name: string; url: string }>>()
 
   for (let i = 0; i < itemCount; i++) {
     try {
@@ -1336,10 +1336,29 @@ export async function expandDomainDocListPickers(
       await page.waitForTimeout(2_500)
       activated++
 
-      // Extract document names from rendered content
-      const docNames = await item.evaluate((el: Element) => {
-        const names: string[] = []
+      // Extract document names AND hrefs from rendered content (#939)
+      const docEntries = await item.evaluate((el: Element) => {
+        const entries: Array<{ name: string; url: string }> = []
         const seen = new Set<string>()
+
+        // Helper: find the closest href for a given node
+        function findHref(node: Element): string {
+          // Check if the node itself is an anchor
+          if (node.tagName === 'A' && (node as HTMLAnchorElement).href) {
+            return (node as HTMLAnchorElement).href
+          }
+          // Check for anchor children (e.g., seismic-page-docListPicker-cl-list-item-name)
+          const anchor = node.querySelector('a.seismic-page-docListPicker-cl-list-item-name, a[href]')
+          if (anchor) return (anchor as HTMLAnchorElement).href || ''
+          // Check parent row/container for an anchor
+          const row = node.closest('tr') || node.closest('[class*="row"]')
+          if (row) {
+            const rowAnchor = row.querySelector('a.seismic-page-docListPicker-cl-list-item-name, a[href]')
+            if (rowAnchor) return (rowAnchor as HTMLAnchorElement).href || ''
+          }
+          return ''
+        }
+
         const selectors = [
           'table tr td:first-child',
           '[class*="row"] [class*="title"]',
@@ -1353,26 +1372,26 @@ export async function expandDomainDocListPickers(
             const text = (node.textContent || '').trim().slice(0, 200)
             if (text.length > 3 && !seen.has(text)) {
               seen.add(text)
-              names.push(text)
+              entries.push({ name: text, url: findHref(node as Element) })
             }
           }
-          if (names.length > 0) break
+          if (entries.length > 0) break
         }
-        if (names.length === 0) {
+        if (entries.length === 0) {
           for (const row of el.querySelectorAll('tr')) {
             const text = (row.textContent || '').trim().split('\n')[0]?.trim().slice(0, 200)
             if (text && text.length > 3 && !seen.has(text)) {
               seen.add(text)
-              names.push(text)
+              entries.push({ name: text, url: findHref(row as Element) })
             }
           }
         }
-        return names
+        return entries
       })
 
-      if (docNames.length > 0) {
-        domainDocs.set(domainName, docNames)
-        console.log(`[product-scraper] Domain "${domainName}": ${docNames.length} docs`)
+      if (docEntries.length > 0) {
+        domainDocs.set(domainName, docEntries)
+        console.log(`[product-scraper] Domain "${domainName}": ${docEntries.length} docs`)
       }
     } catch (e: any) {
       console.warn(`[product-scraper] Domain accordion ${i}: ${(e.message ?? '').slice(0, 60)}`)
@@ -1382,8 +1401,9 @@ export async function expandDomainDocListPickers(
   await page.waitForTimeout(2_000)
   console.log(`[product-scraper] Activated ${activated}/${itemCount} domain DocListPickers`)
   if (domainDocs.size > 0) {
-    const totalDocs = [...domainDocs.values()].reduce((sum, arr) => sum + arr.length, 0)
-    console.log(`[product-scraper] Domain mapping: ${totalDocs} docs across ${domainDocs.size} domains`)
+    const totalDocs = [...domainDocs.values()].reduce((sum, entries) => sum + entries.length, 0)
+    const withUrls = [...domainDocs.values()].reduce((sum, entries) => sum + entries.filter(e => e.url).length, 0)
+    console.log(`[product-scraper] Domain mapping: ${totalDocs} docs (${withUrls} with URLs) across ${domainDocs.size} domains`)
   }
   return { activated, domainDocs }
 }
@@ -2593,14 +2613,32 @@ export async function scrapeProductPage(
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
     const { sections, domainDocLookup } = await extractRedHeaderSections(page)
-    // (#920) Merge DocListPicker domain mapping into domainDocLookup before API tagging
-    for (const [domain, docNames] of domainDocs) {
-      for (const docName of docNames) {
-        domainDocLookup.set(docName.toLowerCase().slice(0, 50), domain)
+    // (#920/#939) Merge DocListPicker domain mapping into domainDocLookup + create domain sections
+    for (const [domain, docEntries] of domainDocs) {
+      const domainKey = slugify(domain)
+      // Build or extend the domain section with items from DocListPicker
+      if (!sections[domainKey]) {
+        sections[domainKey] = { title: domain, type: 'cards', items: [] }
+      }
+      const existingNames = new Set(sections[domainKey].items.map(i => i.name.toLowerCase().slice(0, 50)))
+      for (const entry of docEntries) {
+        // Always populate domainDocLookup for API tagging
+        domainDocLookup.set(entry.name.toLowerCase().slice(0, 50), domain)
+        // Dedup: only add if not already in this domain section
+        if (existingNames.has(entry.name.toLowerCase().slice(0, 50))) continue
+        existingNames.add(entry.name.toLowerCase().slice(0, 50))
+        const sectionItem: SectionItem = {
+          name: entry.name,
+          url: entry.url || undefined,
+          domain,
+          _domSource: true,
+        } as SectionItem & { _domSource: boolean }
+        sections[domainKey].items.push(sectionItem)
       }
     }
     if (domainDocs.size > 0) {
       console.log(`[product-scraper] domainDocLookup after DocListPicker merge: ${domainDocLookup.size} entries across ${new Set(domainDocLookup.values()).size} domains`)
+      console.log(`[product-scraper] Created/updated ${domainDocs.size} domain sections in _product.json`)
     }
     console.log(`[product-scraper] Extracted ${Object.keys(sections).length} sections from DOM`)
 
@@ -2646,22 +2684,45 @@ export async function scrapeProductPage(
           const sectionName = typeToSection[contentType] || contentType
           const sectionKey = slugify(sectionName)
 
-          const items: SectionItem[] = docs.map(doc => {
-            const item: any = {
-              name: doc.name,
-              url: doc.downloadUrl || undefined,
-              itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
-              description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
-              contentId: (doc as any).contentId || undefined,
-              versionId: doc.versionId || undefined,
-              format: (doc as any).format || undefined,
-              seismicContentType: contentType,
-            }
-            // (#858 Fix 2) Tag API documents with their Domain accordion section
-            const domain = domainDocLookup.get(doc.name.toLowerCase().slice(0, 50))
-            if (domain) item.domain = domain
-            return item
-          })
+          const items: SectionItem[] = docs
+            .filter(doc => {
+              // (#939) Skip items already placed in a domain section — avoid duplicate placement
+              const domain = domainDocLookup.get(doc.name.toLowerCase().slice(0, 50))
+              if (domain) {
+                // Item is in a domain section — enrich the domain section item instead
+                const domainKey = slugify(domain)
+                if (sections[domainKey]) {
+                  const domainItem = sections[domainKey].items.find(
+                    i => i.name.toLowerCase().slice(0, 50) === doc.name.toLowerCase().slice(0, 50)
+                  )
+                  if (domainItem) {
+                    if (!domainItem.contentId && (doc as any).contentId) domainItem.contentId = (doc as any).contentId
+                    if (!domainItem.versionId && doc.versionId) domainItem.versionId = doc.versionId
+                    if (!domainItem.url && doc.downloadUrl) domainItem.url = doc.downloadUrl
+                    if (!(domainItem as any).format && (doc as any).format) (domainItem as any).format = (doc as any).format
+                    if (!(domainItem as any).seismicContentType) (domainItem as any).seismicContentType = contentType
+                    return false // skip adding to content-type section
+                  }
+                }
+              }
+              return true
+            })
+            .map(doc => {
+              const item: any = {
+                name: doc.name,
+                url: doc.downloadUrl || undefined,
+                itemType: contentType.toLowerCase().replace(/\s+/g, '-'),
+                description: `${doc.distributionTerms || ''} | ${doc.salesStage || ''}`.trim().replace(/^\||\|$/g, '').trim() || undefined,
+                contentId: (doc as any).contentId || undefined,
+                versionId: doc.versionId || undefined,
+                format: (doc as any).format || undefined,
+                seismicContentType: contentType,
+              }
+              // (#858 Fix 2) Tag API documents with their Domain accordion section
+              const domain = domainDocLookup.get(doc.name.toLowerCase().slice(0, 50))
+              if (domain) item.domain = domain
+              return item
+            })
 
           if (sections[sectionKey]) {
             // Merge with existing section — add API docs, update existing with contentId/versionId
