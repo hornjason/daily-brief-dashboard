@@ -1567,12 +1567,146 @@ async function extractWithFollowThrough(
   return { extracted, skipped }
 }
 
+/**
+ * downloadViaViewerUrl — proven browser-based download for doccenter viewer pages (#929)
+ *
+ * Ported from /tmp/batch-download-v2.ts (8/8 success rate).
+ * Handles two paths:
+ *   - PDF: Click [aria-label="Download"] → wait for download event → saveAs
+ *   - PPTX/DOCX: Intercept download/formats POST for auth token + body,
+ *     then POST to Seismic download API → fetch blob URL → save
+ */
+async function downloadViaViewerUrl(
+  context: BrowserContext,
+  viewerUrl: string,
+  outputPath: string,
+  itemName: string,
+): Promise<{ success: boolean; size?: number; format?: string }> {
+  const dlPage = await context.newPage()
+  try {
+    // Navigate to viewer page with networkidle to ensure full load
+    await dlPage.goto(viewerUrl, { waitUntil: 'networkidle', timeout: 45_000 })
+    await dlPage.waitForTimeout(3_000)
+
+    // Detect file type from Content Details panel
+    const fileType = await dlPage.evaluate(() => {
+      const text = document.body.innerText || ''
+      return text.match(/File Type\n(.+)/)?.[1]?.trim() || 'unknown'
+    })
+
+    // Check for error pages
+    const pageText = await dlPage.innerText('body').catch(() => '')
+    if (/content\s+not\s+found|page\s+not\s+found|404/i.test(pageText.slice(0, 500))) {
+      return { success: false }
+    }
+
+    // ── PDF path: direct download event ──────────────────────────────────
+    if (fileType === 'PDF') {
+      const downloadPromise = dlPage.waitForEvent('download', { timeout: 20_000 })
+      await dlPage.click('[aria-label="Download"]')
+      const dl = await downloadPromise
+      const pdfPath = outputPath.replace(/\.[^.]+$/, '.pdf')
+      await dl.saveAs(pdfPath)
+      const size = readFileSync(pdfPath).length
+      console.log(`[product-scraper] Viewer download OK (PDF): ${itemName.slice(0, 50)} (${size} bytes)`)
+      return { success: true, size, format: 'PDF' }
+    }
+
+    // ── PPTX/DOCX path: intercept formats POST, then call download API ──
+    let authToken = ''
+    let downloadBody: any = null
+
+    dlPage.on('request', req => {
+      if (req.url().includes('download/formats') && req.method() === 'POST') {
+        authToken = req.headers().authorization || ''
+        try {
+          downloadBody = JSON.parse(req.postData() || '{}')
+        } catch { /* ignore parse errors */ }
+      }
+    })
+
+    await dlPage.click('[aria-label="Download"]')
+    await dlPage.waitForTimeout(3_000)
+
+    if (!downloadBody || !authToken) {
+      console.log(`[product-scraper] Viewer download: no formats request intercepted for ${itemName.slice(0, 50)}`)
+      return { success: false }
+    }
+
+    // POST to Seismic download endpoint with captured auth + body
+    const postBody = {
+      ContentV1: {
+        repository: downloadBody.Content?.repository || 'doccenter',
+        type: downloadBody.Content?.type || 'file',
+        name: downloadBody.Content?.name || itemName,
+        libraryContent: downloadBody.Content?.libraryContent,
+      },
+      ApplicationWatermarkData: downloadBody.ApplicationWatermarkData,
+      Expiration: null,
+      Format: fileType, // PPTX, DOCX, etc.
+    }
+
+    const resp = await fetch(
+      'https://saleshub.redhat.com/gateway/services/caugs/tenants/redhat/v1/download',
+      {
+        method: 'POST',
+        headers: { 'Authorization': authToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify(postBody),
+      },
+    )
+
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '')
+      console.log(`[product-scraper] Viewer download POST failed: ${resp.status} — ${errBody.slice(0, 100)}`)
+      return { success: false }
+    }
+
+    const contentType = resp.headers.get('content-type') || ''
+    const ext = fileType.toLowerCase() || 'bin'
+    const finalPath = outputPath.replace(/\.[^.]+$/, `.${ext}`)
+
+    if (contentType.includes('json')) {
+      // JSON response — contains a blob download URL
+      const json = await resp.json() as Record<string, any>
+      // CRITICAL: Response field is `Url` (capital U), check both cases
+      const blobUrl = json.Url || json.url || json.downloadUrl || json.blobUrl
+      if (!blobUrl) {
+        console.log(`[product-scraper] Viewer download: no blob URL in JSON response for ${itemName.slice(0, 50)}`)
+        return { success: false }
+      }
+
+      const blobResp = await fetch(blobUrl)
+      if (!blobResp.ok) {
+        console.log(`[product-scraper] Viewer download: blob fetch failed ${blobResp.status} for ${itemName.slice(0, 50)}`)
+        return { success: false }
+      }
+
+      const buf = await blobResp.arrayBuffer()
+      writeFileSync(finalPath, Buffer.from(buf))
+      console.log(`[product-scraper] Viewer download OK (${fileType}): ${itemName.slice(0, 50)} (${buf.byteLength} bytes)`)
+      return { success: true, size: buf.byteLength, format: fileType }
+    } else {
+      // Binary response — the file itself
+      const buf = await resp.arrayBuffer()
+      writeFileSync(finalPath, Buffer.from(buf))
+      console.log(`[product-scraper] Viewer download OK (${fileType}): ${itemName.slice(0, 50)} (${buf.byteLength} bytes)`)
+      return { success: true, size: buf.byteLength, format: fileType }
+    }
+  } catch (e: any) {
+    console.warn(`[product-scraper] Viewer download error for ${itemName.slice(0, 50)}: ${(e.message ?? '').slice(0, 80)}`)
+    return { success: false }
+  } finally {
+    await dlPage.close()
+  }
+}
+
 async function downloadProductDocuments(
   page: Page,
   context: BrowserContext,
   sections: Record<string, ProductSection>,
   productSlug: string,
   authCtx: { auth: string; headers: Record<string, string>; searchUrl: string },
+  manifest: PipelineManifest | null = null,
 ): Promise<void> {
   // ── Phase 1: Expand all accordion sections (safety net — may re-collapse) ──
   await expandAllAccordions(page)
@@ -1753,11 +1887,65 @@ async function downloadProductDocuments(
   }
   console.log(`[product-scraper] Phase 3a complete: ${viewerExtracted} extracted, ${viewerSkipped} skipped`)
 
-  // ── Phase 3b: File downloads — SECONDARY, only for items not already extracted ──
-  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
-    // Skip items that already have viewer-extracted content
+  // ── Phase 3a2: Browser-based viewer download for doccenter items (#929) ────
+  // Items with doccenter viewer URLs get downloaded via the proven browser
+  // Download button pattern (PDF direct + PPTX/DOCX API intercept).
+  // This runs BEFORE the generic file download loop to acquire files that
+  // the old viewer click-to-download failed on (PPTX/DOCX).
+  const viewerDownloadDir = resolve(productDir, 'downloads', 'viewer')
+  mkdirSync(viewerDownloadDir, { recursive: true })
+  const viewerDownloadedNames = new Set<string>()
+  let viewerDownloaded = 0
+
+  for (const { item, sectionKey } of downloadQueue) {
+    if (!item.url) continue
+    // Only target doccenter viewer URLs
+    if (!item.url.includes('doccenter') || !item.url.includes('/doc/')) continue
+    // Skip if already extracted via Phase 3a
     const safeName = sanitizeFilename(item.name).slice(0, 60)
-    if (viewerExtractedNames.has(safeName)) {
+    if (viewerExtractedNames.has(safeName)) continue
+
+    // Check if already downloaded (cached)
+    const safeFilename = sanitizeFilename(item.name)
+    const existingInViewer = existsSync(viewerDownloadDir)
+      ? readdirSync(viewerDownloadDir).filter((f: string) => f.startsWith(safeFilename.slice(0, 60)))
+      : []
+    if (existingInViewer.length > 0) {
+      viewerDownloadedNames.add(safeName)
+      viewerDownloaded++
+      continue
+    }
+
+    const outputPath = resolve(viewerDownloadDir, `${safeFilename}.bin`)
+    const result = await downloadViaViewerUrl(context, item.url, outputPath, item.name)
+    if (result.success) {
+      viewerDownloadedNames.add(safeName)
+      viewerDownloaded++
+      downloaded++
+      consecutiveFailures = 0
+      // Update pipeline manifest gate 2 (#929)
+      if (manifest) {
+        const ext = (result.format || 'bin').toLowerCase()
+        const dlPath = outputPath.replace(/\.[^.]+$/, `.${ext}`)
+        updateGate2(manifest, item.name, {
+          gate2_downloaded: true,
+          gate2_acquisitionMethod: 'viewer-download',
+          gate2_downloadPath: dlPath,
+        })
+      }
+    }
+    // Brief pause between viewer downloads
+    await new Promise(r => setTimeout(r, 1_000))
+  }
+  if (viewerDownloaded > 0) {
+    console.log(`[product-scraper] Phase 3a2 complete: ${viewerDownloaded} viewer downloads`)
+  }
+
+  // ── Phase 3b: File downloads — SECONDARY, only for items not already extracted/downloaded ──
+  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+    // Skip items that already have viewer-extracted content or viewer downloads (#929)
+    const safeName = sanitizeFilename(item.name).slice(0, 60)
+    if (viewerExtractedNames.has(safeName) || viewerDownloadedNames.has(safeName)) {
       continue
     }
     if (consecutiveFailures >= CIRCUIT_BREAKER) {
@@ -2590,7 +2778,7 @@ export async function scrapeProductPage(
       console.log('[product-scraper] Skipping downloads (Gate 1 blocked)')
     } else if (!skipDownloads && authCtx) {
       console.log('[product-scraper] Step 5: Downloading documents into product directory...')
-      await downloadProductDocuments(page, context, sections, slugify(header.name), authCtx)
+      await downloadProductDocuments(page, context, sections, slugify(header.name), authCtx, manifest)
     } else if (skipDownloads) {
       console.log('[product-scraper] Skipping downloads (--skip-downloads flag)')
     } else {
