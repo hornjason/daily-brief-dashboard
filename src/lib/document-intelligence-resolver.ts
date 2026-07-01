@@ -84,12 +84,13 @@ export function sanitizeDocumentIntelligence(raw: DocumentIntelligence): Documen
       step: sanitizeStr(a.step),
       url: a.url ? sanitizeUrl(a.url) || undefined : undefined,
     })) ?? null,
-    workshops: raw.workshops
-      ?.map(w => ({ name: sanitizeStr(w.name), url: sanitizeUrl(w.url) }))
-      .filter(w => w.url.length > 0) ?? null,
-    demos: raw.demos
-      ?.map(d => ({ name: sanitizeStr(d.name), url: sanitizeUrl(d.url) }))
-      .filter(d => d.url.length > 0) ?? null,
+    tdpAlignment: raw.tdpAlignment?.map(t => sanitizeStr(t)) ?? null,
+    buyingStage: (['awareness', 'discovery', 'evaluation', 'justification', 'expansion'] as const)
+      .includes(raw.buyingStage) ? raw.buyingStage : 'awareness',
+    targetPersona: raw.targetPersona?.map(t => sanitizeStr(t)) ?? null,
+    customerProblem: raw.customerProblem ? sanitizeStr(raw.customerProblem, 2000) : null,
+    conversationOpener: raw.conversationOpener ? sanitizeStr(raw.conversationOpener, 1000) : null,
+    techStackTriggers: raw.techStackTriggers?.map(t => sanitizeStr(t)) ?? null,
   }
 }
 

@@ -106,13 +106,19 @@ export interface DocumentIntelligence {
   // Who the document is FOR
   audience: 'internal' | 'partner' | 'customer' | 'mixed'
 
+  // How the document CONNECTS to customer conversations
+  tdpAlignment: string[] | null
+  buyingStage: 'awareness' | 'discovery' | 'evaluation' | 'justification' | 'expansion'
+  targetPersona: string[] | null
+  customerProblem: string | null
+  conversationOpener: string | null
+  techStackTriggers: string[] | null
+
   // What the document CONTAINS
   keyPoints: string[]
   talkTracks: string[] | null
   links: Array<{ name: string; url: string }>
   actionableSteps: Array<{ step: string; url?: string }> | null
-  workshops: Array<{ name: string; url: string }> | null
-  demos: Array<{ name: string; url: string }> | null
 
   // Provenance
   enrichedAt: string

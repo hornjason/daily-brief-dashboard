@@ -23,6 +23,7 @@ const VALID_CATEGORIES = new Set([
 ])
 
 const VALID_AUDIENCES = new Set(['internal', 'partner', 'customer', 'mixed'])
+const VALID_BUYING_STAGES = new Set(['awareness', 'discovery', 'evaluation', 'justification', 'expansion'])
 
 function checkDocumentIntelligence(output: string): QualityCheck[] {
   const checks: QualityCheck[] = []
@@ -142,6 +143,83 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
     actual: `${talkTracks.length} talk tracks`,
     severity: 'recommended',
   })
+
+  // New mission-aligned checks — only counted when fields are present in output
+  // (backward-compatible: existing enriched data without these fields is unaffected)
+  if ('buyingStage' in parsed) {
+    const buyingStage = parsed.buyingStage ?? 'awareness'
+    const buyingStageValid = VALID_BUYING_STAGES.has(buyingStage)
+    checks.push({
+      name: 'valid-buying-stage',
+      passed: buyingStageValid,
+      expected: 'one of: awareness, discovery, evaluation, justification, expansion',
+      actual: buyingStage || '(empty)',
+      severity: 'required',
+    })
+
+    if (buyingStageValid) {
+      const cat = parsed.documentCategory ?? ''
+      const incoherent =
+        (cat === 'case-study' && buyingStage === 'awareness') ||
+        (cat === 'battlecard' && buyingStage === 'awareness') ||
+        (cat === 'competitive-review' && buyingStage === 'awareness')
+      checks.push({
+        name: 'buying-stage-coherence',
+        passed: !incoherent,
+        expected: 'buying stage coherent with document category',
+        actual: incoherent ? `${cat} classified as ${buyingStage}` : 'coherent',
+        severity: 'recommended',
+      })
+    }
+  }
+
+  const isReferenceDoc = category === 'reference-architecture' || category === 'other'
+
+  if ('customerProblem' in parsed) {
+    const customerProblem = parsed.customerProblem ?? ''
+    checks.push({
+      name: 'has-customer-problem',
+      passed: isReferenceDoc || customerProblem.length >= 20,
+      expected: 'customer problem at least 20 chars for non-reference docs',
+      actual: isReferenceDoc ? 'reference doc — skipped' : `${customerProblem.length} chars`,
+      severity: 'recommended',
+    })
+  }
+
+  if ('tdpAlignment' in parsed) {
+    const tdpAlignment = parsed.tdpAlignment ?? []
+    checks.push({
+      name: 'has-tdp-alignment',
+      passed: isReferenceDoc || tdpAlignment.length >= 1,
+      expected: 'at least 1 TDP alignment for non-reference docs',
+      actual: isReferenceDoc ? 'reference doc — skipped' : `${tdpAlignment.length} TDPs`,
+      severity: 'recommended',
+    })
+  }
+
+  if ('conversationOpener' in parsed) {
+    const conversationOpener = parsed.conversationOpener ?? ''
+    const isCustomerFacing = audience === 'customer' || audience === 'mixed'
+    checks.push({
+      name: 'has-conversation-opener',
+      passed: !isCustomerFacing || conversationOpener.length >= 30,
+      expected: 'conversation opener at least 30 chars for customer-facing docs',
+      actual: !isCustomerFacing ? 'non-customer-facing — skipped' : `${conversationOpener.length} chars`,
+      severity: 'recommended',
+    })
+  }
+
+  if ('techStackTriggers' in parsed) {
+    const techStackTriggers = parsed.techStackTriggers ?? []
+    const hasIntegrations = (parsed.integrationsReferenced ?? []).length > 0
+    checks.push({
+      name: 'has-tech-stack-triggers',
+      passed: !hasIntegrations || techStackTriggers.length > 0,
+      expected: 'tech stack triggers present when integrations are referenced',
+      actual: !hasIntegrations ? 'no integrations — skipped' : `${techStackTriggers.length} triggers`,
+      severity: 'recommended',
+    })
+  }
 
   return checks
 }
