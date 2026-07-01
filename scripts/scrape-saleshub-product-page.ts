@@ -2882,19 +2882,32 @@ export async function scrapeProductPage(
       console.warn('[product-scraper] Title element not found within timeout -- proceeding anyway')
     }
 
-    // Scroll down to trigger lazy loading
+    // Scroll down to trigger lazy loading — multi-pass for SPA lazy-loaded content (#942)
     console.log('[product-scraper] Scrolling page to trigger lazy loading...')
     await page.evaluate(async () => {
       const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
-      const scrollHeight = document.body.scrollHeight
-      const step = window.innerHeight
-      for (let y = 0; y < scrollHeight; y += step) {
-        window.scrollTo(0, y)
-        await delay(300)
+      let prevHeight = 0
+      let passes = 0
+      const MAX_PASSES = 8
+      while (passes < MAX_PASSES) {
+        const scrollHeight = document.body.scrollHeight
+        if (scrollHeight === prevHeight && passes > 0) break // height stabilized
+        prevHeight = scrollHeight
+        const step = window.innerHeight
+        for (let y = 0; y < scrollHeight; y += step) {
+          window.scrollTo(0, y)
+          await delay(200)
+        }
+        // Stay at bottom for lazy load to trigger
+        window.scrollTo(0, document.body.scrollHeight)
+        await delay(2000)
+        passes++
       }
       window.scrollTo(0, 0)
     })
-    await page.waitForTimeout(2_000)
+    await page.waitForTimeout(3_000)
+    const finalHeight = await page.evaluate(() => document.body.scrollHeight)
+    console.log(`[product-scraper] Lazy load scroll complete — final page height: ${finalHeight}px`)
 
     // Extract product header
     const header = await extractProductHeader(page)
