@@ -107,6 +107,10 @@ export function stripMarkdownFences(text: string): string {
   return text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()
 }
 
+// ── Enrichment timeout ───────────────────────────────────────────────────────
+
+const ENRICHMENT_TIMEOUT_MS = 60_000
+
 // ── Shared extraction ceremony ─────────────────────────────────────────────
 
 /**
@@ -146,7 +150,11 @@ export async function extractWithGemini<T>(
     // When responseSchema is set, Gemini returns clean JSON — skip fence stripping
     const hasSchema = !!config.responseSchema
 
-    const initialResult = await gemini(systemPrompt, userPrompt, opts)
+    // Per-document timeout — prevents a single slow Gemini call from blocking the batch (#934)
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Enrichment timeout after ${ENRICHMENT_TIMEOUT_MS / 1000}s`)), ENRICHMENT_TIMEOUT_MS)
+    )
+    const initialResult = await Promise.race([gemini(systemPrompt, userPrompt, opts), timeoutPromise])
 
     if (config.validator) {
       const initialText = hasSchema ? initialResult.text : stripMarkdownFences(initialResult.text)
@@ -182,7 +190,12 @@ export async function extractWithGemini<T>(
       return config.parseResult(parsed, docName, fallbacks)
     }
   } catch (e: any) {
-    console.warn(`[saleshub-product-enrichment] Failed to enrich "${docName}": ${e.message}`)
+    const isTimeout = e.message?.includes('timeout') || e.message?.includes('Enrichment timeout') || e.name === 'AbortError'
+    if (isTimeout) {
+      console.warn(`[saleshub-product-enrichment] Timeout enriching "${docName}" — skipping (limit: ${ENRICHMENT_TIMEOUT_MS / 1000}s)`)
+    } else {
+      console.warn(`[saleshub-product-enrichment] Failed to enrich "${docName}": ${e.message}`)
+    }
     return null
   }
 }
@@ -201,7 +214,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
     },
     summary: {
       type: 'string',
-      description: '1-2 sentence summary of the document\'s primary purpose and content.',
+      description: 'Comprehensive summary paragraph covering the document purpose, key content, target audience, and main value propositions. Be thorough — at least 3-5 sentences.',
     },
     productsReferenced: {
       type: 'array',
