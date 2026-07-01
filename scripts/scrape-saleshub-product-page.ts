@@ -444,9 +444,9 @@ export function detectNavigationPage(
   }
 }
 
-// Default product page URL -- OpenShift Virtualization (update with correct URL when known)
+// Default product page URL -- Ansible Automation Platform (AAP)
 const DEFAULT_URL =
-  'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//'
+  'https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd69c2062-8583-4c77-a1bf-afca6ee943de//'
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 200)
@@ -670,8 +670,8 @@ async function extractAccordionSections(
       const expanded = await trigger.getAttribute('aria-expanded')
       if (expanded !== 'true') {
         try {
-          await trigger.click({ timeout: 3000 })
-          await page.waitForTimeout(500) // Wait for expand animation
+          await trigger.click({ timeout: 10000 })
+          await page.waitForTimeout(2000)
         } catch {
           // Click failed -- may be non-interactive
         }

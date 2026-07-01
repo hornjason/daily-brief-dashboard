@@ -214,6 +214,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
     },
     summary: {
       type: 'string',
+      maxLength: 2000,
       description: 'Comprehensive summary paragraph covering the document purpose, key content, target audience, and main value propositions. Be thorough — at least 3-5 sentences.',
     },
     productsReferenced: {
@@ -251,7 +252,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
         required: ['name', 'context'],
       },
       nullable: true,
-      description: 'Competitor technologies or products referenced. Set null if no competitors are mentioned.',
+      description: 'Competitor technologies or products referenced — including indirect references like "legacy tools", "manual approaches", "incumbent solutions", or named alternatives (Puppet, Chef, Terraform, Ansible Tower vs AAP). Extract the competitive context even when competitors are implied rather than named. Only set null if the document makes zero competitive references.',
     },
     partnerSolutions: {
       type: 'array',
@@ -305,7 +306,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
       nullable: true,
-      description: 'Recommended talk tracks for sales conversations. Set null if none present.',
+      description: 'Recommended talk tracks for sales conversations — key messages a seller should deliver about this content. Extract even implicit selling points like competitive advantages, ROI claims, or customer success references. Only set null if the document is purely technical reference with no selling angle.',
     },
     links: {
       type: 'array',
@@ -372,7 +373,9 @@ Return valid JSON matching the provided schema.
 1. Every claim MUST come from the provided document content.
 2. If the document does not mention a technology/product/competitor, set the field to null.
 3. Never extrapolate integrations not explicitly discussed.
-4. Preserve all URLs exactly.`
+4. Preserve all URLs exactly.
+5. For talkTracks: extract selling angles even when not explicitly labeled as talk tracks. Key messages, value propositions, and competitive differentiators count.
+6. For competitorsReferenced: capture both named competitors AND indirect references to alternative approaches.`
 
 const DOCUMENT_INTELLIGENCE_USER_PROMPT = (docName: string, content: string) =>
   `Extract structured intelligence from this Red Hat document: "${docName}"
