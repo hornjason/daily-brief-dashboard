@@ -17,6 +17,7 @@ import { createHash } from 'crypto'
 import { existsSync, readFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { startObservation } from '@langfuse/tracing'
 import { getGeminiToken } from './gemini-auth.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
@@ -98,68 +99,102 @@ export async function callGemini(
   // ── Step 2: Resolve model ──────────────────────────────────────────────────
   const modelName = resolveModel(options.model ?? 'full', callType)
 
+  // ── Langfuse generation span ──────────────────────────────────────────────
+  const generation = (() => {
+    try {
+      return startObservation(
+        callType,
+        {
+          model: modelName,
+          input: { systemPrompt: systemPrompt.slice(0, 500), userPrompt: userPrompt.slice(0, 500) },
+        },
+        { asType: 'generation' }
+      )
+    } catch { return null }
+  })()
+  if (generation && customerName) {
+    try { generation.update({ metadata: { customerName } }) } catch {}
+  }
+
   // ── Step 3: Resolve timeout ────────────────────────────────────────────────
   const timeoutMs = resolveTimeout(options)
 
   // ── Step 4: Build request body ─────────────────────────────────────────────
   const requestBody = buildRequestBody(systemPrompt, userPrompt, options, modelName)
 
-  // ── Step 5: Call Gemini ────────────────────────────────────────────────────
-  const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${modelName}:generateContent`
+  try {
+    // ── Step 5: Call Gemini ────────────────────────────────────────────────────
+    const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${modelName}:generateContent`
 
-  const response = await fetchGeminiWithRetry(
-    url,
-    getGeminiToken,
-    JSON.stringify(requestBody),
-    {
+    const response = await fetchGeminiWithRetry(
+      url,
+      getGeminiToken,
+      JSON.stringify(requestBody),
+      {
+        callType,
+        customerName,
+        model: modelName,
+        project: PROJECT_ID,
+        location: LOCATION,
+        timeoutMs,
+        logPrefix: `[callGemini:${callType}]`,
+        signal: options.signal,
+      }
+    )
+
+    // ── Step 6: Extract response ───────────────────────────────────────────────
+    const responseBody = await response.json()
+    const text = extractText(responseBody)
+    const { inputTokens, outputTokens } = extractTokens(responseBody)
+
+    // ── Step 6b: Extract grounding metadata (if present) ──────────────────────
+    const rawGrounding = responseBody.candidates?.[0]?.groundingMetadata
+    const groundingMetadata = rawGrounding ? {
+      groundingChunks: rawGrounding.groundingChunks,
+      groundingSupports: rawGrounding.groundingSupports,
+      webSearchQueries: rawGrounding.webSearchQueries,
+    } : undefined
+
+    // ── Step 7: Cost tracking ──────────────────────────────────────────────────
+    recordGeminiUsage({
+      timestamp: new Date().toISOString(),
       callType,
-      customerName,
+      customerName: customerName ?? 'unknown',
+      inputTokens,
+      outputTokens,
       model: modelName,
-      project: PROJECT_ID,
-      location: LOCATION,
-      timeoutMs,
-      logPrefix: `[callGemini:${callType}]`,
-      signal: options.signal,
+    })
+
+    // ── Step 8: Delta store ────────────────────────────────────────────────────
+    if (deltaKey) {
+      const inputHash = hashInputs(systemPrompt, userPrompt, options.responseSchema)
+      writeDeltaCache(deltaKey, inputHash, { text, model: modelName })
     }
-  )
 
-  // ── Step 6: Extract response ───────────────────────────────────────────────
-  const responseBody = await response.json()
-  const text = extractText(responseBody)
-  const { inputTokens, outputTokens } = extractTokens(responseBody)
+    if (generation) {
+      try {
+        generation.update({
+          output: { text: text.slice(0, 500) },
+          usageDetails: { input: inputTokens, output: outputTokens },
+        })
+        generation.end()
+      } catch {}
+    }
 
-  // ── Step 6b: Extract grounding metadata (if present) ──────────────────────
-  const rawGrounding = responseBody.candidates?.[0]?.groundingMetadata
-  const groundingMetadata = rawGrounding ? {
-    groundingChunks: rawGrounding.groundingChunks,
-    groundingSupports: rawGrounding.groundingSupports,
-    webSearchQueries: rawGrounding.webSearchQueries,
-  } : undefined
-
-  // ── Step 7: Cost tracking ──────────────────────────────────────────────────
-  recordGeminiUsage({
-    timestamp: new Date().toISOString(),
-    callType,
-    customerName: customerName ?? 'unknown',
-    inputTokens,
-    outputTokens,
-    model: modelName,
-  })
-
-  // ── Step 8: Delta store ────────────────────────────────────────────────────
-  if (deltaKey) {
-    const inputHash = hashInputs(systemPrompt, userPrompt, options.responseSchema)
-    writeDeltaCache(deltaKey, inputHash, { text, model: modelName })
-  }
-
-  return {
-    text,
-    cached: false,
-    inputTokens,
-    outputTokens,
-    model: modelName,
-    groundingChunks: groundingMetadata?.groundingChunks,
-    groundingMetadata,
+    return {
+      text,
+      cached: false,
+      inputTokens,
+      outputTokens,
+      model: modelName,
+      groundingChunks: groundingMetadata?.groundingChunks,
+      groundingMetadata,
+    }
+  } catch (err) {
+    if (generation) {
+      try { generation.update({ output: { error: String(err) } }); generation.end() } catch {}
+    }
+    throw err
   }
 }
 

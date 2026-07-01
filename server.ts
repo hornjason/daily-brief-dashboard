@@ -1,3 +1,4 @@
+import './src/langfuse-instrumentation.ts'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
