@@ -1408,6 +1408,311 @@ export async function expandDomainDocListPickers(
   return { activated, domainDocs }
 }
 
+// ── Carousel Thumbnail Click-Through (#940) ─────────────────────────────────
+// Business decks and Technical decks appear as scrollable thumbnail carousels.
+// Items have contentId/versionId from the CDS API but NO viewer URLs.
+// Clicking a thumbnail opens the Seismic viewer — capture that URL.
+
+async function captureCarouselViewerUrls(
+  page: import('playwright').Page
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>()
+  const productPageUrl = page.url()
+
+  console.log('[product-scraper] (#940) Discovering carousel DOM structure...')
+
+  // Step 1: Discover the actual carousel/card sections on the page
+  const carouselInfo = await page.evaluate(() => {
+    const info: Array<{
+      sectionTitle: string
+      cardCount: number
+      sectionSelector: string
+      cards: Array<{ name: string; index: number }>
+    }> = []
+
+    // Look for sections containing card grids — Seismic uses various patterns
+    const sectionSelectors = [
+      '[class*="seismic-page-section-cards"]',
+      '[class*="card-grid"]',
+      '[class*="CardGrid"]',
+      '[class*="carousel"]',
+      '[class*="Carousel"]',
+    ]
+
+    for (const sel of sectionSelectors) {
+      const sections = document.querySelectorAll(sel)
+      for (const section of sections) {
+        // Find the section heading
+        const heading = section.closest('[class*="widget"]')?.querySelector('h1, h2, h3, [class*="title"]')
+        const title = (heading?.textContent || '').trim()
+
+        // Find card elements within
+        const cardSels = ['[class*="card"]', '[class*="Card"]', '[class*="tile"]', '[class*="Tile"]', '[role="listitem"]']
+        let cards: Element[] = []
+        for (const cSel of cardSels) {
+          const found = section.querySelectorAll(cSel)
+          if (found.length > 0) {
+            cards = Array.from(found)
+            break
+          }
+        }
+
+        if (cards.length === 0) continue
+
+        const cardNames = cards.map((card, idx) => {
+          const nameEl = card.querySelector('h2, h3, h4, h5, [class*="title"], [class*="Title"], [class*="name"]')
+          const name = (nameEl?.textContent || card.textContent || '').trim().slice(0, 200)
+          return { name, index: idx }
+        }).filter(c => c.name.length > 3)
+
+        info.push({
+          sectionTitle: title,
+          cardCount: cards.length,
+          sectionSelector: sel,
+          cards: cardNames,
+        })
+      }
+    }
+
+    // Fallback: look for DocListPicker Viewer sections with thumbnail images
+    if (info.length === 0) {
+      const viewerSections = document.querySelectorAll('[class*="docListPicker-Viewer"]')
+      for (const section of viewerSections) {
+        const heading = section.querySelector('h1, [class*="title"]')
+        const title = (heading?.textContent || '').trim()
+        // Look for clickable thumbnail items
+        const items = section.querySelectorAll('[class*="item"], [class*="card"], a[href], [role="button"]')
+        if (items.length === 0) continue
+        const cardNames = Array.from(items).map((item, idx) => {
+          const name = (item.textContent || '').trim().split('\n')[0]?.trim().slice(0, 200) || ''
+          return { name, index: idx }
+        }).filter(c => c.name.length > 3)
+
+        info.push({
+          sectionTitle: title,
+          cardCount: items.length,
+          sectionSelector: '[class*="docListPicker-Viewer"]',
+          cards: cardNames,
+        })
+      }
+    }
+
+    return info
+  })
+
+  if (carouselInfo.length === 0) {
+    console.log('[product-scraper] (#940) No carousel/card sections found on page')
+    return results
+  }
+
+  console.log(`[product-scraper] (#940) Found ${carouselInfo.length} carousel sections:`)
+  for (const section of carouselInfo) {
+    console.log(`  - "${section.sectionTitle}": ${section.cardCount} cards (selector: ${section.sectionSelector})`)
+    for (const card of section.cards.slice(0, 5)) {
+      console.log(`    [${card.index}] ${card.name.slice(0, 80)}`)
+    }
+    if (section.cards.length > 5) {
+      console.log(`    ... and ${section.cards.length - 5} more`)
+    }
+  }
+
+  // Step 2: Filter to Business decks and Technical decks sections
+  const targetSections = carouselInfo.filter(s => {
+    const title = s.sectionTitle.toLowerCase()
+    return title.includes('business deck') || title.includes('technical deck')
+      || title.includes('business presentation') || title.includes('technical presentation')
+  })
+
+  if (targetSections.length === 0) {
+    console.log('[product-scraper] (#940) No Business/Technical deck carousel sections found — skipping click-through')
+    return results
+  }
+
+  console.log(`[product-scraper] (#940) Will click through ${targetSections.reduce((sum, s) => sum + s.cards.length, 0)} cards across ${targetSections.length} sections`)
+
+  // Step 3: Click each card, capture viewer URL, go back
+  for (const section of targetSections) {
+    console.log(`[product-scraper] (#940) Processing section: "${section.sectionTitle}"`)
+
+    // Re-discover cards each iteration to handle DOM changes after navigation
+    const processedNames = new Set<string>()
+    let scrollAttempts = 0
+    const maxScrollAttempts = 10
+    let hasMoreCards = true
+
+    while (hasMoreCards && scrollAttempts < maxScrollAttempts) {
+      // Find the section container by title text
+      const sectionHeadings = page.locator(`h1:has-text("${section.sectionTitle}"), h2:has-text("${section.sectionTitle}")`)
+      const headingCount = await sectionHeadings.count().catch(() => 0)
+      if (headingCount === 0) {
+        console.warn(`[product-scraper] (#940) Section heading "${section.sectionTitle}" not found — may have been lost after navigation`)
+        break
+      }
+
+      // Get the parent widget/container of this heading
+      const headingEl = sectionHeadings.first()
+      const container = headingEl.locator('xpath=ancestor::*[contains(@class, "widget") or contains(@class, "Widget") or contains(@class, "section")]').first()
+      const containerExists = (await container.count().catch(() => 0)) > 0
+      const searchRoot = containerExists ? container : page.locator(`text="${section.sectionTitle}"`).first().locator('..')
+
+      // Find cards within this section
+      const cardSelectors = ['[class*="card"]', '[class*="Card"]', '[class*="tile"]', '[class*="Tile"]', '[role="listitem"]', '[class*="item"]']
+      let cardLocator: import('playwright').Locator | null = null
+      let cardCount = 0
+
+      for (const cSel of cardSelectors) {
+        const loc = searchRoot.locator(cSel)
+        const count = await loc.count().catch(() => 0)
+        if (count > 0) {
+          cardLocator = loc
+          cardCount = count
+          break
+        }
+      }
+
+      if (!cardLocator || cardCount === 0) {
+        // Fallback: click by card name text from the discovery phase
+        console.log(`[product-scraper] (#940) No card elements found via selectors — trying text-based clicks`)
+        for (const card of section.cards) {
+          if (processedNames.has(card.name)) continue
+          processedNames.add(card.name)
+          try {
+            const textLocator = page.locator(`text="${card.name.slice(0, 60)}"`).first()
+            if ((await textLocator.count()) === 0) continue
+
+            await textLocator.scrollIntoViewIfNeeded({ timeout: 3_000 })
+            await textLocator.click({ timeout: 5_000 })
+
+            // Wait for viewer page to load
+            await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+            await page.waitForTimeout(2_000)
+
+            const viewerUrl = page.url()
+            if (viewerUrl !== productPageUrl && viewerUrl.includes('/doccenter/')) {
+              results.set(card.name, viewerUrl)
+              console.log(`[product-scraper] (#940)   "${card.name.slice(0, 60)}" -> ${viewerUrl.slice(0, 120)}`)
+            }
+
+            // Navigate back
+            await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(async () => {
+              console.warn('[product-scraper] (#940) goBack failed — re-navigating to product page')
+              await page.goto(productPageUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+            })
+            await page.waitForTimeout(2_000)
+          } catch (e: any) {
+            console.warn(`[product-scraper] (#940) Text click failed for "${card.name.slice(0, 60)}": ${(e.message ?? '').slice(0, 80)}`)
+            // Ensure we're back on the product page
+            if (page.url() !== productPageUrl) {
+              await page.goto(productPageUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+              await page.waitForTimeout(3_000)
+            }
+          }
+        }
+        break // No scrolling to do with text-based approach
+      }
+
+      // Process visible cards
+      for (let i = 0; i < cardCount; i++) {
+        const card = cardLocator.nth(i)
+        let cardName = ''
+
+        try {
+          // Extract card name
+          const nameEl = card.locator('h2, h3, h4, h5, [class*="title"], [class*="Title"], [class*="name"]').first()
+          if ((await nameEl.count()) > 0) {
+            cardName = (await nameEl.innerText({ timeout: 3_000 }).catch(() => '')).trim()
+          }
+          if (!cardName) {
+            cardName = (await card.innerText({ timeout: 3_000 }).catch(() => '')).trim().split('\n')[0]?.trim() || ''
+          }
+          cardName = cardName.slice(0, 200)
+          if (!cardName || cardName.length < 3 || processedNames.has(cardName)) continue
+          processedNames.add(cardName)
+
+          // Scroll card into view if needed
+          const isVisible = await card.isVisible().catch(() => false)
+          if (!isVisible) {
+            await card.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+            await page.waitForTimeout(500)
+          }
+
+          // Click the card thumbnail
+          await card.click({ timeout: 5_000 })
+
+          // Wait for viewer page to load
+          await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+          await page.waitForTimeout(2_000)
+
+          const viewerUrl = page.url()
+          if (viewerUrl !== productPageUrl && viewerUrl.includes('/doccenter/')) {
+            results.set(cardName, viewerUrl)
+            console.log(`[product-scraper] (#940)   "${cardName.slice(0, 60)}" -> ${viewerUrl.slice(0, 120)}`)
+          } else {
+            console.log(`[product-scraper] (#940)   "${cardName.slice(0, 60)}" — no viewer URL (stayed on page or unexpected URL)`)
+          }
+
+          // Go back to product page
+          await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(async () => {
+            console.warn('[product-scraper] (#940) goBack failed — re-navigating to product page')
+            await page.goto(productPageUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+          })
+          await page.waitForTimeout(2_000)
+
+          // Wait for section to re-render after navigation
+          await page.waitForSelector(`text="${section.sectionTitle}"`, { timeout: 10_000 }).catch(() => {})
+        } catch (e: any) {
+          console.warn(`[product-scraper] (#940) Card ${i} ("${cardName.slice(0, 40)}"): ${(e.message ?? '').slice(0, 80)}`)
+          // Ensure we're back on the product page
+          if (page.url() !== productPageUrl) {
+            await page.goto(productPageUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+            await page.waitForTimeout(3_000)
+          }
+        }
+      }
+
+      // Try scrolling to reveal more cards via next/prev arrows
+      hasMoreCards = false
+      const arrowSelectors = [
+        '[class*="arrow-right"]', '[class*="arrow-next"]', '[class*="next"]',
+        '[class*="Arrow"]', 'button[aria-label*="next" i]', 'button[aria-label*="Next"]',
+      ]
+      for (const arrowSel of arrowSelectors) {
+        const arrow = searchRoot.locator(arrowSel).first()
+        if ((await arrow.count().catch(() => 0)) > 0 && (await arrow.isVisible().catch(() => false))) {
+          await arrow.click({ timeout: 3_000 }).catch(() => {})
+          await page.waitForTimeout(1_500)
+          hasMoreCards = true
+          break
+        }
+      }
+
+      // Alternative: horizontal scroll the carousel container
+      if (!hasMoreCards) {
+        try {
+          const scrolled = await searchRoot.evaluate((el: Element) => {
+            const scrollable = el.querySelector('[class*="scroll"], [class*="carousel"], [style*="overflow"]')
+              || (el.scrollWidth > el.clientWidth ? el : null)
+            if (scrollable && scrollable.scrollWidth > scrollable.clientWidth) {
+              scrollable.scrollLeft += scrollable.clientWidth
+              return true
+            }
+            return false
+          })
+          if (scrolled) {
+            await page.waitForTimeout(1_500)
+            hasMoreCards = true
+          }
+        } catch { /* no scrollable container */ }
+      }
+
+      scrollAttempts++
+    }
+  }
+
+  console.log(`[product-scraper] (#940) Captured ${results.size} viewer URLs from carousel thumbnails`)
+  return results
+}
+
 // ── Per-product document download (SC-2) ────────────────────────────────────
 
 // ── Viewer Follow-Through Extraction (#874) ─────────────────────────────────
@@ -2788,6 +3093,31 @@ export async function scrapeProductPage(
       if (tagged > 0) {
         console.log(`[product-scraper] Domain tagging: ${tagged} items tagged in final pass`)
       }
+    }
+
+    // ── Carousel thumbnail click-through for viewer URLs (#940) ──────────
+    // Business decks and Technical decks items have contentId/versionId from API
+    // but no viewer URLs. Click each thumbnail to discover the viewer URL.
+    const carouselUrls = await captureCarouselViewerUrls(page)
+    if (carouselUrls.size > 0) {
+      let matched = 0
+      for (const [name, viewerUrl] of carouselUrls) {
+        for (const sectionKey of Object.keys(sections)) {
+          const section = sections[sectionKey]
+          if (!section) continue
+          // Case-insensitive partial match — card text may not exactly match item.name
+          const item = section.items.find(i =>
+            i.name.toLowerCase().includes(name.toLowerCase().slice(0, 50))
+            || name.toLowerCase().includes(i.name.toLowerCase().slice(0, 50))
+          )
+          if (item && !item.url) {
+            item.url = viewerUrl
+            matched++
+            break // matched in one section, skip others
+          }
+        }
+      }
+      console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched}/${carouselUrls.size} matched to section items`)
     }
 
     // ── Dedup across all sections (#873) ──────────────────────────────────
