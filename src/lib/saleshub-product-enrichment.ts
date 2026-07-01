@@ -367,23 +367,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
 
 const DOCUMENT_INTELLIGENCE_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat sales and product documents.
 Extract intelligence about what the document covers — products, integrations, competitors, partner solutions, use cases, and key messaging.
-Return ONLY valid JSON (no markdown fences, no explanation) with these fields:
-- documentCategory: one of "content-kit", "messaging-guide", "battlecard", "case-study", "competitive-review", "solution-brief", "design-guide", "workshop", "demo", "reference-architecture", "migration-guide", "other"
-- summary: comprehensive paragraph (3-5 sentences minimum) covering document purpose, key content, target audience, and main value propositions
-- productsReferenced: array of {name: string} for Red Hat products mentioned
-- integrationsReferenced: array of {technology: string, category: string} or null
-- competitorsReferenced: array of {name: string, context: "displacement"|"comparison"|"migration-from"|"coexistence"} or null
-- partnerSolutions: array of {partnerName: string, solutionArea: string} or null
-- useCases: array of strings or null
-- customerScenarios: array of {scenario: string, industry: string|null} or null
-- cloudProviders: array of strings or null
-- audience: one of "internal", "partner", "customer", "mixed"
-- keyPoints: array of strings
-- talkTracks: array of strings or null
-- links: array of {name: string, url: string}
-- actionableSteps: array of {step: string, url: string|null} or null
-- workshops: array of {name: string, url: string} or null
-- demos: array of {name: string, url: string} or null
+Return valid JSON matching the provided schema.
 
 ## GROUNDING RULES (MANDATORY)
 1. Every claim MUST come from the provided document content.
@@ -408,8 +392,7 @@ const documentIntelligenceConfig: ExtractionConfig<DocumentIntelligence> = {
   userPromptFn: DOCUMENT_INTELLIGENCE_USER_PROMPT,
   validator: documentIntelligenceValidator,
   callType: 'document-intelligence-extraction',
-  // responseSchema removed: Vertex AI structured output truncates strings to 200 chars.
-  // Free-form JSON + validator produces full-length summaries.
+  responseSchema: DOCUMENT_INTELLIGENCE_SCHEMA,
   parseResult: (parsed, docName) => ({
     documentName: docName,
     documentCategory: parsed.documentCategory ?? 'other',

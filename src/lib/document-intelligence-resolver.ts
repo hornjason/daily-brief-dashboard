@@ -36,10 +36,10 @@ const PATH_TRAVERSAL_RE = /\.\.\//g
  * - Reject fields with path-traversal characters
  */
 export function sanitizeDocumentIntelligence(raw: DocumentIntelligence): DocumentIntelligence {
-  const sanitizeStr = (s: string): string => {
+  const sanitizeStr = (s: string, maxLen = MAX_NAME_LENGTH): string => {
     if (!s) return s
     let cleaned = s.replace(HTML_TAG_RE, '').replace(PATH_TRAVERSAL_RE, '')
-    if (cleaned.length > MAX_NAME_LENGTH) cleaned = cleaned.slice(0, MAX_NAME_LENGTH)
+    if (cleaned.length > maxLen) cleaned = cleaned.slice(0, maxLen)
     return cleaned
   }
 
@@ -53,7 +53,7 @@ export function sanitizeDocumentIntelligence(raw: DocumentIntelligence): Documen
   return {
     ...raw,
     documentName: sanitizeStr(raw.documentName),
-    summary: sanitizeStr(raw.summary),
+    summary: sanitizeStr(raw.summary, 5000),
     productsReferenced: raw.productsReferenced.map(p => ({
       ...p,
       name: sanitizeStr(p.name),
