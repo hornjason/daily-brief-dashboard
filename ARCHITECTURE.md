@@ -2050,3 +2050,16 @@ All extraction is pure regex — no Gemini, no NLP. Fields are conditionally spr
 - **First-time load**: builds synchronously when no cached motion exists
 
 `enhanced-tactic-recommendation` uses `TIMEOUT_LONG_FORM` (180s) in `gemini-call.ts` — the full graph context exceeds the 30s `TIMEOUT_STRUCTURED` tier.
+
+## §36. Universal Document Intelligence Schema (#944, 2026-07-01)
+
+`DocumentIntelligence` in `src/types/saleshub-product-types.ts` includes 6 mission-aligned fields that bridge documents to customer conversations:
+
+- `tdpAlignment: string[] | null` — TDP names this content supports (inferred from content)
+- `buyingStage: 'awareness' | 'discovery' | 'evaluation' | 'justification' | 'expansion'` — where in the buying cycle this content fits
+- `targetPersona: string[] | null` — who should receive this content (CTO, DevOps Lead, etc.)
+- `customerProblem: string | null` — business problem this content addresses
+- `conversationOpener: string | null` — one sentence an AE can use to introduce this content
+- `techStackTriggers: string[] | null` — customer technologies that make this content relevant
+
+Schema is universal — zero product-specific code. Works for AAP, OCP-V, RHEL, and future products. Gemini extracts fields from document content via structured output. `matchDocumentToCustomer()` in `saleshub-products-module.ts` uses `techStackTriggers` alongside `integrationsReferenced` for customer matching. Quality validator enforces `buyingStage` enum membership and coherence (e.g., battlecards cannot be "awareness").
