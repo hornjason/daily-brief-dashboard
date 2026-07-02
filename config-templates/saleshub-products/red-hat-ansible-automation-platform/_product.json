@@ -3,22 +3,9 @@
   "slug": "red-hat-ansible-automation-platform",
   "description": "",
   "pageUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flfd69c2062-8583-4c77-a1bf-afca6ee943de//",
-  "scrapedAt": "2026-06-23T16:11:14.592Z",
+  "scrapedAt": "2026-07-02T14:12:32.357Z",
   "tdpLinks": [],
-  "contacts": [
-    {
-      "name": "ansible-pmm",
-      "email": "ansible-pmm@redhat.com"
-    },
-    {
-      "name": "hmassey",
-      "email": "hmassey@redhat.com"
-    },
-    {
-      "name": "jbiskup",
-      "email": "jbiskup@redhat.com"
-    }
-  ],
+  "contacts": [],
   "slackChannels": [],
   "sections": {
     "product-news": {
@@ -171,17 +158,17 @@
         {
           "name": "Red Hat Ansible Automation Platform on Microsoft Azure",
           "url": "https://www.redhat.com/en/technologies/management/ansible/azure",
-          "domain": "Deployment optionsarrow down"
+          "domain": "Deployment options"
         },
         {
           "name": "Red Hat Ansible Automation Platform available in AWS Marketplace",
           "url": "https://www.redhat.com/en/technologies/management/ansible/aws",
-          "domain": "Deployment optionsarrow down"
+          "domain": "Deployment options"
         },
         {
           "name": "Red Hat Ansible Automation Platform available from Google Cloud Marketplace",
           "url": "https://www.redhat.com/en/technologies/management/ansible/google-cloud",
-          "domain": "Deployment optionsarrow down"
+          "domain": "Deployment options"
         }
       ]
     },
@@ -192,107 +179,324 @@
         {
           "name": "Infrastructure",
           "url": "https://www.redhat.com/en/technologies/management/ansible/operating-systems",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Windows",
           "url": "https://catalog.redhat.com/en/solutions/detail/4919c355b3324020a9738fdfe1242ca7",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "VMware",
           "url": "https://catalog.redhat.com/en/solutions/detail/32592e8d27a249418ac9894a8339dd6f",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "ServiceNow",
           "url": "https://catalog.redhat.com/en/solutions/detail/356013c7cdf6403d9276c2776dacc979",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Dell Technologies",
           "url": "https://catalog.redhat.com/en/solutions/detail/0836b448e0b1416798e564d23e8526a9",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Pure",
           "url": "https://catalog.redhat.com/en/solutions/detail/6e48bd29e7be443db87ffcb67fe851a3",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "NetApp",
           "url": "https://catalog.redhat.com/en/solutions/detail/144ce6e49db14517b8d7ffeea520e9fc",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Networks",
           "url": "https://www.redhat.com/en/technologies/management/ansible/network-automation",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Cisco",
           "url": "https://catalog.redhat.com/en/solutions/detail/257cfcea8a804ac7b1f38cc1fe584726",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Juniper",
           "url": "https://catalog.redhat.com/en/solutions/detail/492c05b2045c4448bb7e53f623f103c3",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "HPE Aruba",
           "url": "https://catalog.redhat.com/en/solutions/detail/9746e9a36df14bb7a137656cc1834bd2",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Infoblox",
           "url": "https://catalog.redhat.com/en/solutions/detail/34a5a63379704c88910725280790c456",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Cloud",
           "url": "https://www.redhat.com/en/technologies/management/ansible/cloud",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Microsoft Azure",
           "url": "https://catalog.redhat.com/en/solutions/detail/9e2cd1fd6e2e4ef3a83651cb41e776a8",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Google Cloud Platform",
           "url": "https://catalog.redhat.com/en/solutions/detail/57f7d9f74d304ba99838f255e9f1eed6",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "DevOps Tools",
           "url": "https://www.redhat.com/en/technologies/management/ansible/devops",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Splunk",
           "url": "https://catalog.redhat.com/en/solutions/detail/a02b582e89aa47c6ad17671db2d46cc3?extIdCarryOver=true&percmp=7013a0000034e7YAAQ&sc_cid=701f2000001OH6uAAG",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Dynatrace",
           "url": "https://catalog.redhat.com/en/solutions/detail/58a496337f884872b5e673f58266f644",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Security",
           "url": "https://www.redhat.com/en/technologies/management/ansible/security-automation",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "Palo Alto Networks",
           "url": "https://catalog.redhat.com/en/solutions/detail/4a42424095be45eeb26fe2eddf670db8",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
         },
         {
           "name": "CyberArk",
           "url": "https://catalog.redhat.com/en/solutions/detail/ad5246554c5e438181e1d34782b3c52d",
-          "domain": "Integrationsarrow down"
+          "domain": "Integrations"
+        }
+      ]
+    },
+    "aiops": {
+      "title": "AIOps",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Unlock the full potential of AIOps with automation",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRS1ib29r%252Flf1058c698-6b46-436d-b80e-87d2454e42a8//",
+          "domain": "AIOps"
+        },
+        {
+          "name": "AIOps Business Value",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf1bbaf33d-7fe2-436d-a396-c932b52eaa35//",
+          "domain": "AIOps"
+        },
+        {
+          "name": "5 AIOps use cases for Red Hat Ansible Automation Platform",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQ2hlY2tsaXN0%252Flf2141a0db-5a12-4830-b97f-37d65334bc67//",
+          "domain": "AIOps",
+          "contentId": "23c9c920-067d-4301-a4ef-31a121c2c312",
+          "versionId": "2141a0db-5a12-4830-b97f-37d65334bc67",
+          "format": "PDF",
+          "seismicContentType": "Checklist"
+        }
+      ]
+    },
+    "event-driven-ansible": {
+      "title": "Event-Driven Ansible",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "ABU | EDA | 101 - Event-Driven Ansible",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf7eabfa40-da4f-47f5-a69c-820c45df3746//",
+          "domain": "Event-Driven Ansible",
+          "contentId": "decb0336-d917-4e04-b5dd-230c90a69a16",
+          "versionId": "7eabfa40-da4f-47f5-a69c-820c45df3746",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | EDA | 201 Event-Driven Ansible",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flffe95fbc1-db9a-4e28-a81a-6f8724d75051//",
+          "domain": "Event-Driven Ansible",
+          "contentId": "45d89682-866f-41ac-b873-16da81c8c19f",
+          "versionId": "fe95fbc1-db9a-4e28-a81a-6f8724d75051",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        },
+        {
+          "name": "Internal version Event Driven Ansible Content Kit",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CU2FsZXMgZ3VpZGU%253D%252Flf61c2cbbd-40a8-4e2f-9bb8-2bfc1a4ad3b4//",
+          "domain": "Event-Driven Ansible"
+        }
+      ]
+    },
+    "network-automation": {
+      "title": "Network Automation",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Network automation guide",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRS1ib29r%252Flf29285641-df90-4f4e-b722-01a352979e93//",
+          "domain": "Network Automation"
+        },
+        {
+          "name": "Ansible Network Automation - 201 - Customer Briefing",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flf802349a0-c864-47b9-a53e-b8399da942d0//",
+          "domain": "Network Automation"
+        },
+        {
+          "name": "Ansible Network Automation - 301 - Technical Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf16151092-70a3-4b02-bd30-f64ca2752019//",
+          "domain": "Network Automation"
+        },
+        {
+          "name": "ABU | ANA | 201 - Ansible Network Automation - customer briefing",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CU2FsZXMgY29udmVyc2F0aW9uIGd1aWRl%252Flfa95444ef-4555-4942-b782-268ba01291dc//",
+          "domain": "Network Automation",
+          "contentId": "80520471-cb14-4747-bc97-bc0fb76482fb",
+          "versionId": "a95444ef-4555-4942-b782-268ba01291dc",
+          "format": "PPTX",
+          "seismicContentType": "Sales conversation guide"
+        },
+        {
+          "name": "201 ABU Competitive Battlecard  - Network Automation",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQmF0dGxlY2FyZA%253D%253D%252Flf74146a72-f633-460b-a144-a6c8c0188811//",
+          "domain": "Network Automation",
+          "contentId": "ec97a30c-f70c-48b2-aff2-fd7fcd5f8b37",
+          "versionId": "74146a72-f633-460b-a144-a6c8c0188811",
+          "format": "PPTX",
+          "seismicContentType": "Battlecard"
+        }
+      ]
+    },
+    "hybrid-cloud-automation": {
+      "title": "Hybrid Cloud Automation",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "ABU ACA 101 - Ansible Hybrid Cloud Automation - Introduction",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfe836a635-e0f4-4426-9031-5f6e40f895e5//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "f98e86ad-67d8-43a1-9e20-cd1eca349d2d",
+          "versionId": "e836a635-e0f4-4426-9031-5f6e40f895e5",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Public Cloud Automation - Customer Briefing",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfd8588373-89ca-4a19-b1a9-db78517b7d0f//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "b8d35358-aa9b-4403-bd03-587d0885bd79",
+          "versionId": "d8588373-89ca-4a19-b1a9-db78517b7d0f",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Public Cloud Automation - Technical Enablement",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfec98b819-6053-4fe9-85c6-ca4b33448682//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "234a0b3e-2c20-4e3c-abb1-98cb2a785f79",
+          "versionId": "ec98b819-6053-4fe9-85c6-ca4b33448682",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Cloud-native Automation - Customer Briefing",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfbea2a095-adf2-499b-bf0d-c6e44bb4a06a//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "21b9c066-c434-4c3f-829f-6385f2cf8a92",
+          "versionId": "bea2a095-adf2-499b-bf0d-c6e44bb4a06a",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Cloud-native Automation - Technical Enablement",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flff9481e67-c779-45af-b5d0-8a9106016ab6//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "94109651-1b0b-4aa7-a5cc-01ffc97c598d",
+          "versionId": "f9481e67-c779-45af-b5d0-8a9106016ab6",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | ACA | 201 - Ansible Private Cloud Automation - Customer Briefing",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf02133aaa-646e-42db-90c5-e14af9bc64b5//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "87433104-ab11-4a9e-8802-99cf4084989e",
+          "versionId": "02133aaa-646e-42db-90c5-e14af9bc64b5",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU ACA 301 - Ansible Private Cloud Automation - Technical Enablement",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf6a70cfa5-9d64-49f0-b2a6-1463a42808ac//",
+          "domain": "Hybrid Cloud Automation",
+          "contentId": "51a1f377-228a-41e3-9583-12983d6800a6",
+          "versionId": "6a70cfa5-9d64-49f0-b2a6-1463a42808ac",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        }
+      ]
+    },
+    "virtual-infrastructure-automation": {
+      "title": "Virtual Infrastructure Automation",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "ABU | AVA | 101 - Ansible OpenShift Virtualization Automation - Introduction",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf36a3e985-7ac5-4014-ae5f-5be9f645fa45//",
+          "domain": "Virtual Infrastructure Automation",
+          "contentId": "4208a97b-8187-4153-9864-022ff51faad0",
+          "versionId": "36a3e985-7ac5-4014-ae5f-5be9f645fa45",
+          "format": "PPTX",
+          "seismicContentType": "Business presentation"
+        },
+        {
+          "name": "ABU | AVA | 301 - Ansible OpenShift Virtualization Automation",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flfb806af9d-3447-4ba0-ae53-078db1db3ea4//",
+          "domain": "Virtual Infrastructure Automation",
+          "contentId": "6dc110ca-4236-4cf0-8ffb-08b8dc520b0a",
+          "versionId": "b806af9d-3447-4ba0-ae53-078db1db3ea4",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        }
+      ]
+    },
+    "edge-automation": {
+      "title": "Edge Automation",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Edge Pricing Ansible Automation Platform",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfb1ed63c8-1fc3-4a28-91e5-4cd252ed55c0//",
+          "domain": "Edge Automation"
+        },
+        {
+          "name": "ABU | AEA | 301 - Ansible Edge Enterprise Automation - Technical Enablement",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flff246b448-da11-4654-ae53-352794c2c2de//",
+          "domain": "Edge Automation",
+          "contentId": "16bb97cc-8028-420f-8752-4c3a4a91fbf3",
+          "versionId": "f246b448-da11-4654-ae53-352794c2c2de",
+          "format": "PPTX",
+          "seismicContentType": "Technical presentation"
+        }
+      ]
+    },
+    "infrastructure-automation": {
+      "title": "Infrastructure Automation",
+      "type": "accordion",
+      "items": [
+        {
+          "name": "Sales Kit - Ansible Automation Platform for RHEL (Cross-sell)",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CU2FsZXMgZ3VpZGU%253D%252Flf06d14a6b-686c-41eb-ac54-9d13f76e54c3//",
+          "domain": "Infrastructure Automation"
         }
       ]
     },
@@ -310,12 +514,39 @@
           "seismicContentType": "Reference architecture"
         },
         {
+          "name": "(Internal only) Red Hat Architecture - Event Driven Automation",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "5625921f-1a5e-4006-9de1-e0690b61e550",
+          "versionId": "e03c4e50-116c-4aa2-b482-4cbf38b877ba",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
           "name": "(Internal Only) Red Hat Architecture - Mission Critical Application Platform",
           "itemType": "reference-architecture",
           "description": "Confidential - Red Hat Only | 3. Propose",
           "contentId": "8e3aece4-0952-45b9-b3ba-90abe1171041",
           "versionId": "c1caa5cb-92b8-4a70-a23f-4fa066bb29b0",
           "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Internal only) Red Hat Architecture - Near Zero Downtime Maintenance for SAP",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "6ee2d9bf-7dcd-48de-b828-bb6b176c6313",
+          "versionId": "d4cfdd4e-25f4-4be6-865e-65d57d6b953a",
+          "format": "PDF",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Internal only) Red Hat Architecture - Self-Healing Infrastructure",
+          "itemType": "reference-architecture",
+          "description": "Confidential - Red Hat Only | 3. Propose",
+          "contentId": "5f00b5eb-0a03-4d69-8323-53a0bc8ed72a",
+          "versionId": "d0809681-b0ac-44c8-8cdb-2af782007358",
+          "format": "PDF",
           "seismicContentType": "Reference architecture"
         },
         {
@@ -328,12 +559,57 @@
           "seismicContentType": "Reference architecture"
         },
         {
+          "name": "(Public) Red Hat Architecture - Cloud factory",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "b2881e97-abca-48d0-8f9d-870ba8003987",
+          "versionId": "9004b23a-d479-47ef-8229-e6e3c5e6a3e4",
+          "format": "PDF",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Event Driven Automation",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "c61cc004-cb65-45af-8534-7376717881c6",
+          "versionId": "2c2b8e47-d6c5-459c-8d0b-24353fd07634",
+          "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
           "name": "(Public) Red Hat Architecture - Mission Critical Application Platform",
           "itemType": "reference-architecture",
           "description": "General Distribution | 3. Propose",
           "contentId": "87d7ebb0-3bd1-4e2b-a6b9-66338585a9fb",
           "versionId": "05356977-2792-46cb-a4e0-e089c0df7aaa",
           "format": "PPTX",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Near Zero Downtime Maintenance for SAP",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "eeb4d413-34ec-4aeb-9add-c25633708b0a",
+          "versionId": "8efc86de-2a22-4229-86ca-bec1fc9eca01",
+          "format": "PDF",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Remote server management",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "549f1791-550e-4f5a-91b0-ab14a814fbd4",
+          "versionId": "1bf99bb3-61e8-4eaa-ac71-7af09a262cb9",
+          "format": "PDF",
+          "seismicContentType": "Reference architecture"
+        },
+        {
+          "name": "(Public) Red Hat Architecture - Self-Healing Infrastructure",
+          "itemType": "reference-architecture",
+          "description": "General Distribution | 3. Propose",
+          "contentId": "3973feb8-8b01-4d69-b5ee-d8524de07f16",
+          "versionId": "0b616a12-3ce2-4119-9e9a-7e64930cfcb2",
+          "format": "PDF",
           "seismicContentType": "Reference architecture"
         },
         {
@@ -439,15 +715,6 @@
           "seismicContentType": "Competitive review"
         },
         {
-          "name": "201 ABU Competitive Battlecard  - Network Automation",
-          "itemType": "battlecard",
-          "description": "Confidential - Red Hat Only",
-          "contentId": "ec97a30c-f70c-48b2-aff2-fd7fcd5f8b37",
-          "versionId": "74146a72-f633-460b-a144-a6c8c0188811",
-          "format": "PPTX",
-          "seismicContentType": "Battlecard"
-        },
-        {
           "name": "201 ABU Competitive Battlecard - Chef",
           "itemType": "battlecard",
           "description": "Confidential - Red Hat Only",
@@ -536,17 +803,7 @@
     "checklist": {
       "title": "Checklist",
       "type": "cards",
-      "items": [
-        {
-          "name": "5 AIOps use cases for Red Hat Ansible Automation Platform",
-          "itemType": "checklist",
-          "description": "General Distribution",
-          "contentId": "23c9c920-067d-4301-a4ef-31a121c2c312",
-          "versionId": "2141a0db-5a12-4830-b97f-37d65334bc67",
-          "format": "PDF",
-          "seismicContentType": "Checklist"
-        }
-      ]
+      "items": []
     },
     "overview": {
       "title": "Overview",
@@ -657,33 +914,6 @@
           "description": "General Distribution",
           "contentId": "4c50e840-568c-409a-8a92-402f77e7c199",
           "versionId": "48124055-6554-4fd1-a380-7a9e68e39cc1",
-          "format": "PDF",
-          "seismicContentType": "Overview"
-        },
-        {
-          "name": "Ansible Certified Content Collection für ServiceNow ITSM",
-          "itemType": "overview",
-          "description": "General Distribution",
-          "contentId": "3f178140-37d7-4290-8be9-43c0e1216ae6",
-          "versionId": "58b5264e-1e4d-4222-85c9-39c2bb51c237",
-          "format": "PDF",
-          "seismicContentType": "Overview"
-        },
-        {
-          "name": "Ansible Certified Content Collection para ServiceNow ITSM",
-          "itemType": "overview",
-          "description": "General Distribution",
-          "contentId": "61d13096-906e-4845-bffa-11f3b20e64cf",
-          "versionId": "a1015073-5ff6-4f33-a103-bc7f08dc3b91",
-          "format": "PDF",
-          "seismicContentType": "Overview"
-        },
-        {
-          "name": "Ansible Certified Content Collection per l'ITSM di ServiceNow",
-          "itemType": "overview",
-          "description": "General Distribution",
-          "contentId": "4b0e109a-d3e1-45e6-a7af-71f0c7960e92",
-          "versionId": "2aacd8c8-ce35-4423-847c-3e919d166bca",
           "format": "PDF",
           "seismicContentType": "Overview"
         }
@@ -811,47 +1041,11 @@
           "seismicContentType": "Business presentation"
         },
         {
-          "name": "ABU ACA 101 - Ansible Hybrid Cloud Automation - Introduction",
-          "itemType": "business-presentation",
-          "description": "Confidential - NDA Required",
-          "contentId": "f98e86ad-67d8-43a1-9e20-cd1eca349d2d",
-          "versionId": "e836a635-e0f4-4426-9031-5f6e40f895e5",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
           "name": "ABU ACA 101 - Ansible Private Cloud Automation - Introduction",
           "itemType": "business-presentation",
           "description": "General Distribution",
           "contentId": "ba18d3fa-0e4f-4dc0-b6ad-08022cb13d4d",
           "versionId": "9da388e9-c5e0-4f91-ae1e-a3a71d4af5df",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU ACA 301 - Ansible Cloud-native Automation - Technical Enablement",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "94109651-1b0b-4aa7-a5cc-01ffc97c598d",
-          "versionId": "f9481e67-c779-45af-b5d0-8a9106016ab6",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU ACA 301 - Ansible Private Cloud Automation - Technical Enablement",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "51a1f377-228a-41e3-9583-12983d6800a6",
-          "versionId": "6a70cfa5-9d64-49f0-b2a6-1463a42808ac",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU ACA 301 - Ansible Public Cloud Automation - Technical Enablement",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "234a0b3e-2c20-4e3c-abb1-98cb2a785f79",
-          "versionId": "ec98b819-6053-4fe9-85c6-ca4b33448682",
           "format": "PPTX",
           "seismicContentType": "Business presentation"
         },
@@ -862,33 +1056,6 @@
           "contentId": "d22a5540-a6a9-474b-bc3b-08433de92562",
           "versionId": "13be056b-cdf5-4f18-821d-e80f45b44b30",
           "format": "PDF",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU | ACA | 201 - Ansible Cloud-native Automation - Customer Briefing",
-          "itemType": "business-presentation",
-          "description": "Confidential - NDA Required",
-          "contentId": "21b9c066-c434-4c3f-829f-6385f2cf8a92",
-          "versionId": "bea2a095-adf2-499b-bf0d-c6e44bb4a06a",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU | ACA | 201 - Ansible Private Cloud Automation - Customer Briefing",
-          "itemType": "business-presentation",
-          "description": "Confidential - NDA Required",
-          "contentId": "87433104-ab11-4a9e-8802-99cf4084989e",
-          "versionId": "02133aaa-646e-42db-90c5-e14af9bc64b5",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU | ACA | 201 - Ansible Public Cloud Automation - Customer Briefing",
-          "itemType": "business-presentation",
-          "description": "Confidential - NDA Required",
-          "contentId": "b8d35358-aa9b-4403-bd03-587d0885bd79",
-          "versionId": "d8588373-89ca-4a19-b1a9-db78517b7d0f",
-          "format": "PPTX",
           "seismicContentType": "Business presentation"
         },
         {
@@ -924,24 +1091,6 @@
           "description": "General Distribution",
           "contentId": "ef4cf49a-93e8-4668-a17b-2795ae4ce4ed",
           "versionId": "7ad37d16-8a28-47e1-aaf5-d91d72d2edde",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU | AVA | 101 - Ansible OpenShift Virtualization Automation - Introduction",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "4208a97b-8187-4153-9864-022ff51faad0",
-          "versionId": "36a3e985-7ac5-4014-ae5f-5be9f645fa45",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "ABU | EDA | 101 - Event-Driven Ansible",
-          "itemType": "business-presentation",
-          "description": "General Distribution | 1. Discover",
-          "contentId": "decb0336-d917-4e04-b5dd-230c90a69a16",
-          "versionId": "7eabfa40-da4f-47f5-a69c-820c45df3746",
           "format": "PPTX",
           "seismicContentType": "Business presentation"
         },
@@ -1032,33 +1181,6 @@
           "description": "General Distribution",
           "contentId": "86697e11-0d76-4273-ae27-199bcfff2377",
           "versionId": "044bb77f-cf9f-4e3e-8651-de4d11c26dce",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "Ansible community to enterprise with Red Hat Services",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "3542c607-8c06-4b29-a992-7472f41f2675",
-          "versionId": "0ffba8a5-ccee-4044-b3e3-b3254e0f531d",
-          "format": "PPTX",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "Ansible Free to Enterprise Business Value",
-          "itemType": "business-presentation",
-          "description": "Confidential - NDA Required",
-          "contentId": "63ecc57a-29d0-4bf2-8c30-4696cf3734dc",
-          "versionId": "b9aa40d5-b9af-4a8e-bc97-c9b23902c53e",
-          "format": "PDF",
-          "seismicContentType": "Business presentation"
-        },
-        {
-          "name": "Ansible Infrastructure Automation - 101 - Customer Briefing",
-          "itemType": "business-presentation",
-          "description": "General Distribution",
-          "contentId": "e8538c13-77fe-4aa5-a8fe-abcdbb7f53fc",
-          "versionId": "83f444b2-846e-4968-8689-2d9d4520736d",
           "format": "PPTX",
           "seismicContentType": "Business presentation"
         }
@@ -1156,33 +1278,6 @@
           "seismicContentType": "Technical presentation"
         },
         {
-          "name": "ABU | AEA | 301 - Ansible Edge Enterprise Automation - Technical Enablement",
-          "itemType": "technical-presentation",
-          "description": "Confidential - Channel NDA Required",
-          "contentId": "16bb97cc-8028-420f-8752-4c3a4a91fbf3",
-          "versionId": "f246b448-da11-4654-ae53-352794c2c2de",
-          "format": "PPTX",
-          "seismicContentType": "Technical presentation"
-        },
-        {
-          "name": "ABU | AVA | 301 - Ansible OpenShift Virtualization Automation",
-          "itemType": "technical-presentation",
-          "description": "General Distribution",
-          "contentId": "6dc110ca-4236-4cf0-8ffb-08b8dc520b0a",
-          "versionId": "b806af9d-3447-4ba0-ae53-078db1db3ea4",
-          "format": "PPTX",
-          "seismicContentType": "Technical presentation"
-        },
-        {
-          "name": "ABU | EDA | 201 Event-Driven Ansible",
-          "itemType": "technical-presentation",
-          "description": "General Distribution",
-          "contentId": "45d89682-866f-41ac-b873-16da81c8c19f",
-          "versionId": "fe95fbc1-db9a-4e28-a81a-6f8724d75051",
-          "format": "PPTX",
-          "seismicContentType": "Technical presentation"
-        },
-        {
           "name": "ABU | Red Hat Ansible Automation Platform Technical Deck",
           "itemType": "technical-presentation",
           "description": "General Distribution",
@@ -1197,24 +1292,6 @@
           "description": "Confidential - Red Hat Only",
           "contentId": "758a3365-e367-4be4-b9b7-4469cd13c8c9",
           "versionId": "a19a04dc-0f5d-4873-a2eb-22ae7d332914",
-          "format": "PPTX",
-          "seismicContentType": "Technical presentation"
-        },
-        {
-          "name": "Ansible community to enterprise migration solution with Red Hat Services",
-          "itemType": "technical-presentation",
-          "description": "General Distribution",
-          "contentId": "49b4aa0b-5efb-4cc8-a8de-d3e375ef46b5",
-          "versionId": "d969c554-5ba6-451a-8df3-2ce2acf44693",
-          "format": "PPTX",
-          "seismicContentType": "Technical presentation"
-        },
-        {
-          "name": "Ansible Infrastructure Automation - 201 - Customer Briefing",
-          "itemType": "technical-presentation",
-          "description": "General Distribution",
-          "contentId": "0b5ce787-983d-44c1-a35c-3f00b179995c",
-          "versionId": "349aa782-8751-45b2-a4d9-8a926c441007",
           "format": "PPTX",
           "seismicContentType": "Technical presentation"
         }
@@ -1238,17 +1315,7 @@
     "sales-conversation-guide": {
       "title": "Sales conversation guide",
       "type": "cards",
-      "items": [
-        {
-          "name": "ABU | ANA | 201 - Ansible Network Automation - customer briefing",
-          "itemType": "sales-conversation-guide",
-          "description": "Confidential - Channel NDA Required",
-          "contentId": "80520471-cb14-4747-bc97-bc0fb76482fb",
-          "versionId": "a95444ef-4555-4942-b782-268ba01291dc",
-          "format": "PPTX",
-          "seismicContentType": "Sales conversation guide"
-        }
-      ]
+      "items": []
     },
     "detail": {
       "title": "Detail",
