@@ -233,11 +233,10 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "IT Automation",
-        "Application Modernization",
-        "Cloud Management",
-        "Security Automation",
-        "AI/ML Operations"
+        "Automation",
+        "Application Development",
+        "Management",
+        "AI Platform"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -702,10 +701,10 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation and Management",
-        "Artificial Intelligence",
-        "Hybrid Cloud Operations",
-        "IT Operations Management"
+        "Automation",
+        "AI Platform",
+        "Server and Cloud Computing",
+        "Management"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -1101,10 +1100,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation and Management",
-        "Hybrid Cloud Automation",
-        "IT Operations Management",
-        "Security and Compliance"
+        "Automation",
+        "Management",
+        "Security"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -1348,10 +1346,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation and Orchestration",
-        "IT Operations Management",
-        "Hybrid Cloud Management",
-        "AI/ML Operations"
+        "Automation",
+        "Management",
+        "AI Platform"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -1627,10 +1624,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "IT Automation",
-        "Hybrid Cloud Management",
-        "AI/ML Operations",
-        "Infrastructure as Code"
+        "Automation",
+        "Management",
+        "AI Platform"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -2077,13 +2073,10 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "IT Automation",
-        "Hybrid Cloud Management",
-        "Network Automation",
-        "Virtualization Management",
-        "Cloud Automation",
-        "Security Automation",
-        "DevOps"
+        "Automation",
+        "Management",
+        "Virtualization",
+        "Application Development"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -2610,11 +2603,10 @@
       ],
       "audience": "mixed",
       "tdpAlignment": [
-        "IT Automation",
-        "Hybrid Cloud Management",
+        "Automation",
+        "Management",
         "Application Development",
-        "Security Automation",
-        "AI/ML Operations"
+        "AI Platform"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -3013,11 +3005,10 @@
       "audience": "customer",
       "tdpAlignment": [
         "Automation",
-        "Hybrid Cloud Infrastructure",
-        "AI/ML Operations",
-        "Network Automation",
-        "Security and Compliance",
-        "Application Modernization"
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Security",
+        "Application Development"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -3420,12 +3411,12 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "AI/ML Operations",
-        "Container Platform Security",
-        "Hybrid Cloud Management",
-        "Application Modernization",
-        "IT Automation",
-        "Virtualization Modernization"
+        "AI Platform",
+        "Container Management",
+        "Management",
+        "Application Development",
+        "Automation",
+        "Virtualization"
       ],
       "buyingStage": "justification",
       "targetPersona": [
@@ -3742,7 +3733,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation and Orchestration"
+        "Automation"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -4037,11 +4028,10 @@
       "tdpAlignment": [
         "Application Development",
         "Automation",
-        "Cloud Computing",
-        "Container Platform Security",
-        "Hybrid Cloud Management",
-        "Linux Platform Management",
-        "AI/ML Operations",
+        "Server and Cloud Computing",
+        "Container Management",
+        "Management",
+        "AI Platform",
         "Virtualization"
       ],
       "buyingStage": "awareness",
@@ -4306,11 +4296,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "IT Automation",
-        "Network Automation",
-        "Cloud Automation",
-        "Hybrid Cloud Management",
-        "Event-Driven Automation"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -4850,10 +4837,9 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Cloud Automation",
-        "Hybrid Cloud Management",
-        "IT Automation",
-        "Cloud Security"
+        "Automation",
+        "Management",
+        "Security"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -5560,11 +5546,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Automation",
-        "Cloud Management",
-        "Infrastructure Automation",
-        "Network Automation",
-        "Security Automation"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -5986,12 +5969,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Infrastructure Automation",
-        "Operating System Management",
-        "Hybrid Cloud Management",
-        "ITSM Integration",
-        "Security Automation",
-        "Configuration Management"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -6440,10 +6419,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Automation",
-        "Infrastructure Automation",
-        "IT Operations Management",
-        "DevOps Automation"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -6745,9 +6722,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Management",
-        "IT Automation",
-        "Virtualization Management"
+        "Management",
+        "Automation",
+        "Virtualization"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -7025,8 +7002,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "IT Automation",
-        "Service Management Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -7294,9 +7270,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Infrastructure Automation",
-        "Storage Automation",
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -7562,10 +7536,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Storage Automation",
-        "Data Management",
-        "IT Operations Management",
-        "Disaster Recovery"
+        "Automation",
+        "Management",
+        "Server and Cloud Computing"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -7833,9 +7806,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Storage Automation",
-        "Hybrid Cloud Management",
-        "IT Automation"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -8256,11 +8228,9 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation",
-        "IT Automation",
-        "Hybrid Cloud Management",
-        "Edge Computing",
-        "Security Automation"
+        "Automation",
+        "Management",
+        "Server and Cloud Computing"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -8756,8 +8726,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation",
-        "IT Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -9032,10 +9001,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation",
-        "IT Automation",
-        "Configuration Management",
-        "Continuous Compliance"
+        "Automation",
+        "Management",
+        "Security"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -9325,8 +9293,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation",
-        "Datacenter Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -9620,9 +9587,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation",
-        "Hybrid Cloud Automation",
-        "IT Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -10001,11 +9966,10 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Management",
-        "Cloud Automation",
-        "Infrastructure Automation",
-        "Cloud Security",
-        "Cloud Governance"
+        "Management",
+        "Automation",
+        "Security",
+        "Server and Cloud Computing"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -10426,10 +10390,9 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Cloud Automation",
-        "Hybrid Cloud Management",
-        "Infrastructure as Code",
-        "Cloud Migration"
+        "Automation",
+        "Management",
+        "Server and Cloud Computing"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -10731,10 +10694,10 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Management",
-        "Cloud Automation",
-        "DevOps and CI/CD",
-        "Container Platform Security"
+        "Management",
+        "Automation",
+        "Application Development",
+        "Container Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -11153,10 +11116,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "CI/CD Automation",
-        "DevOps Transformation",
-        "Infrastructure Automation",
-        "Security Automation"
+        "Automation",
+        "Application Development"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -11573,8 +11534,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation Management",
-        "Observability and Monitoring"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -11845,10 +11806,9 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Automation",
-        "Application Performance Management",
-        "IT Operations Management",
-        "Observability and Monitoring"
+        "Automation",
+        "Application Development",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -12287,11 +12247,8 @@
       ],
       "audience": "customer",
       "tdpAlignment": [
-        "Security Automation",
-        "Compliance Automation",
-        "IT Operations Automation",
-        "Cloud Security",
-        "DevSecOps"
+        "Automation",
+        "Security"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -12732,9 +12689,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Security Automation",
-        "Hybrid Cloud Security",
-        "DevSecOps"
+        "Automation",
+        "Security"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13028,9 +12984,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation Security",
-        "DevSecOps",
-        "Secrets Management"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13293,8 +13248,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Automation",
-        "AIOps"
+        "Automation"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -13350,7 +13304,7 @@
       "audience": "customer",
       "tdpAlignment": [
         "Automation",
-        "IT Operations Management"
+        "Management"
       ],
       "buyingStage": "awareness",
       "targetPersona": null,
@@ -13393,7 +13347,7 @@
       "audience": "customer",
       "tdpAlignment": [
         "Automation",
-        "IT Operations Management"
+        "Management"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -13437,8 +13391,7 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Automation and Management",
-        "IT Operations Automation"
+        "Automation"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -13494,7 +13447,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "awareness",
       "targetPersona": [
@@ -13541,7 +13494,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13587,7 +13540,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13636,7 +13589,7 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13690,7 +13643,7 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Network Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -13741,7 +13694,7 @@
       "cloudProviders": null,
       "audience": "mixed",
       "tdpAlignment": [
-        "Hybrid Cloud Automation"
+        "Automation"
       ],
       "buyingStage": "awareness",
       "targetPersona": null,
@@ -13790,8 +13743,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Cloud Automation",
-        "Hybrid Cloud Management"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -13849,8 +13802,8 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Cloud Automation",
-        "Public Cloud Management"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -13904,9 +13857,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Container Platform Automation",
-        "Cloud-Native Application Development",
-        "Hybrid Cloud Automation"
+        "Automation",
+        "Application Development"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -13965,9 +13917,9 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Cloud-Native Development",
-        "Automation and Orchestration",
-        "Container Platform Security"
+        "Server and Cloud Computing",
+        "Automation",
+        "Container Management"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -14033,8 +13985,8 @@
       "cloudProviders": null,
       "audience": "customer",
       "tdpAlignment": [
-        "Hybrid Cloud Automation",
-        "Private Cloud Management"
+        "Automation",
+        "Management"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -14091,8 +14043,7 @@
       "cloudProviders": null,
       "audience": "mixed",
       "tdpAlignment": [
-        "Private Cloud Automation",
-        "Hybrid Cloud Automation"
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -14150,8 +14101,8 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Hybrid Cloud Management and Automation",
-        "Container Platform Virtualization"
+        "Automation",
+        "Virtualization"
       ],
       "buyingStage": "discovery",
       "targetPersona": [
@@ -14207,9 +14158,9 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Container Platform Security",
-        "Hybrid Cloud Management",
-        "Automation and Orchestration"
+        "Container Management",
+        "Management",
+        "Automation"
       ],
       "buyingStage": "evaluation",
       "targetPersona": [
@@ -14267,7 +14218,7 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Edge Computing",
+        "Server and Cloud Computing",
         "Automation"
       ],
       "buyingStage": "evaluation",
@@ -14319,7 +14270,7 @@
       "cloudProviders": null,
       "audience": "internal",
       "tdpAlignment": [
-        "Edge Computing",
+        "Server and Cloud Computing",
         "Automation"
       ],
       "buyingStage": "evaluation",
@@ -14376,8 +14327,7 @@
       "audience": "internal",
       "tdpAlignment": [
         "Automation",
-        "Hybrid Cloud Management",
-        "IT Operations Management"
+        "Management"
       ],
       "buyingStage": "expansion",
       "targetPersona": [
