@@ -5,19 +5,27 @@
  * Tests the Search API with a sample of document names from different sections
  * to validate: (1) can we find docs by name, (2) do we get usable URLs back.
  *
- * Requires: Mac Mini with active SalesHub auth (browser session).
+ * Requires: Mac Mini with active SalesHub auth (session-state.json).
  * Usage: bun scripts/phase0-search-probe.ts
  *
  * This is a READ-ONLY probe — no downloads, no file writes beyond the report.
  */
 
 import { chromium } from '@playwright/test'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
 const PROFILE_VERSION_ID = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const SALESHUB_URL = 'https://saleshub.redhat.com'
-const COOKIE_PATH = process.env.COOKIE_PATH || resolve(import.meta.dir, '../data-sync/rh-profile/saleshub-cookies.json')
+const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
+const CHROMIUM_PATH = process.env.CHROMIUM_PATH ?? '/usr/bin/chromium-browser'
+
+const BASE_CHROMIUM_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+]
 
 // ── Test samples: one or two items from each gap category ──────────────────
 // Priority 1: Page-visible items we can't currently get
@@ -51,6 +59,7 @@ interface SearchResult {
   format?: string
   downloadUrl?: string
   viewerUrl?: string
+  resultCount?: number
   error?: string
 }
 
@@ -59,54 +68,68 @@ async function main() {
   console.log(`Testing ${TEST_SAMPLES.length} document names from different gap categories`)
   console.log()
 
-  // Launch browser with saved cookies
-  let cookies: any[] = []
-  try {
-    cookies = JSON.parse(readFileSync(COOKIE_PATH, 'utf-8'))
-    console.log(`Loaded ${cookies.length} cookies from ${COOKIE_PATH}`)
-  } catch (e) {
-    console.error(`Failed to load cookies: ${e}`)
-    console.error('Run this on Mac Mini where SalesHub auth exists')
-    process.exit(1)
+  // Load session state (same as scraper)
+  const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
+  if (!existsSync(sessionStatePath)) {
+    // Fallback for local dev
+    const localPath = resolve(import.meta.dir, '../data-sync/rh-profile/session-state.json')
+    if (!existsSync(localPath)) {
+      console.error(`No session-state.json at ${sessionStatePath} or ${localPath}`)
+      console.error('Run this on Mac Mini where SalesHub auth exists')
+      process.exit(1)
+    }
   }
 
-  const browser = await chromium.launch({ headless: true })
-  const context = await browser.newContext()
-  await context.addCookies(cookies)
+  const statePath = existsSync(sessionStatePath)
+    ? sessionStatePath
+    : resolve(import.meta.dir, '../data-sync/rh-profile/session-state.json')
+  const sessionState = JSON.parse(readFileSync(statePath, 'utf-8'))
+  console.log(`Loaded ${sessionState.cookies?.length ?? 0} cookies from ${statePath}`)
+
+  // Launch browser same way as scraper
+  const execPath = existsSync(CHROMIUM_PATH) ? CHROMIUM_PATH : undefined
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: execPath,
+    args: [...BASE_CHROMIUM_ARGS, '--disable-blink-features=AutomationControlled', '--headless=new'],
+  })
+
+  const context = await browser.newContext({
+    storageState: sessionState,
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  })
+
   const page = await context.newPage()
 
-  // Navigate to SalesHub to establish session
+  // Navigate to SalesHub to establish session + capture auth
   console.log('Navigating to SalesHub...')
-  await page.goto(`${SALESHUB_URL}/app/#/doccenter/${PROFILE_VERSION_ID}/main///`, {
-    waitUntil: 'networkidle',
-    timeout: 30_000,
-  })
-  console.log(`Page loaded: ${page.url()}`)
-
-  // Capture auth token from network requests
   let authToken = ''
   const headers: Record<string, string> = {}
 
-  const capturePromise = new Promise<void>((resolve) => {
-    const timeout = setTimeout(resolve, 10_000)
-    page.on('request', (req) => {
-      const url = req.url()
-      if (url.includes('gateway/services/search') || url.includes('api/doccenter')) {
-        const reqHeaders = req.headers()
-        if (reqHeaders.authorization && reqHeaders.authorization.startsWith('Bearer')) {
-          authToken = reqHeaders.authorization
-          Object.assign(headers, reqHeaders)
-          clearTimeout(timeout)
-          resolve()
-        }
+  page.on('request', (req) => {
+    const url = req.url()
+    if ((url.includes('gateway/services/search') || url.includes('api/doccenter')) && !authToken) {
+      const reqHeaders = req.headers()
+      if (reqHeaders.authorization?.startsWith('Bearer')) {
+        authToken = reqHeaders.authorization
+        Object.assign(headers, reqHeaders)
       }
-    })
+    }
   })
 
-  // Trigger a search to capture auth
-  await page.fill('input[placeholder="Search"]', 'test').catch(() => {})
-  await page.keyboard.press('Enter').catch(() => {})
-  await capturePromise
+  await page.goto(`${SALESHUB_URL}/app/#/doccenter/${PROFILE_VERSION_ID}/main///`, {
+    waitUntil: 'networkidle',
+    timeout: 45_000,
+  })
+  console.log(`Page loaded: ${page.url()}`)
+
+  // If auth not captured from page load, trigger a search
+  if (!authToken) {
+    console.log('Auth not captured from page load, triggering search...')
+    await page.fill('input[placeholder="Search"]', 'ansible').catch(() => {})
+    await page.keyboard.press('Enter').catch(() => {})
+    await new Promise(r => setTimeout(r, 5_000))
+  }
 
   if (!authToken) {
     console.error('Could not capture auth token. Session may be expired.')
@@ -147,7 +170,7 @@ async function main() {
         Options: { WithAggregation: false, WithDocument: true },
       }
 
-      const response = await page.evaluate(async (args) => {
+      const response: any = await page.evaluate(async (args: any) => {
         try {
           const res = await fetch(args.url, {
             method: 'POST',
@@ -182,26 +205,31 @@ async function main() {
         continue
       }
 
-      // Parse results — Seismic wraps in Documents or Results array
+      // Parse results — Seismic wraps in various shapes
       const data = response.data
-      const docs = data?.Documents ?? data?.Results ?? data?.results ?? []
+      const docs = data?.Documents ?? data?.Results ?? data?.results ?? data?.documents ?? []
 
       if (docs.length === 0) {
-        results.push({ ...sample, found: false, error: 'No results returned' })
-        console.log(`  ❌ No results`)
+        // Log the raw response shape for debugging
+        const keys = Object.keys(data ?? {}).join(', ')
+        results.push({ ...sample, found: false, error: `No results (response keys: ${keys})` })
+        console.log(`  ❌ No results (response keys: ${keys})`)
+        // Dump first 500 chars if small
+        const raw = JSON.stringify(data).slice(0, 500)
+        console.log(`  Raw: ${raw}`)
         continue
       }
 
       // Take the best match (first result)
       const best = docs[0]
-      const apiName = best.Name ?? best.name ?? best.Title ?? 'unknown'
+      const apiName = best.Name ?? best.name ?? best.Title ?? best.title ?? 'unknown'
       const contentId = best.Id ?? best.ContentId ?? best.id ?? best.contentId ?? ''
       const versionId = best.VersionId ?? best.versionId ?? ''
-      const format = best.Format ?? best.format ?? best.Type ?? ''
+      const format = best.Format ?? best.format ?? best.Type ?? best.type ?? ''
       const downloadUrl = contentId && versionId
         ? `${SALESHUB_URL}/api/doccenter/download/${contentId}/${versionId}`
         : (best.DownloadUrl ?? best.downloadUrl ?? '')
-      const viewerUrl = best.Url ?? best.url ?? best.ViewerUrl ?? ''
+      const viewerUrl = best.Url ?? best.url ?? best.ViewerUrl ?? best.viewerUrl ?? ''
 
       results.push({
         ...sample,
@@ -212,12 +240,13 @@ async function main() {
         format,
         downloadUrl: downloadUrl || undefined,
         viewerUrl: viewerUrl || undefined,
+        resultCount: docs.length,
       })
 
-      const nameMatch = apiName.toLowerCase().includes(sample.name.toLowerCase().slice(0, 20)) ? '✅ name match' : '⚠️ fuzzy'
-      console.log(`  ✅ Found: "${apiName.slice(0, 60)}" | ${format} | ${nameMatch}`)
-      if (downloadUrl) console.log(`     Download URL: ${downloadUrl.slice(0, 100)}`)
-      if (docs.length > 1) console.log(`     (${docs.length} total results)`)
+      const nameMatch = apiName.toLowerCase().includes(sample.name.toLowerCase().slice(0, 15)) ? '✅ match' : '⚠️ fuzzy'
+      console.log(`  ✅ Found: "${apiName.slice(0, 70)}" | ${format} | ${nameMatch} | ${docs.length} results`)
+      if (contentId) console.log(`     contentId: ${contentId}`)
+      if (downloadUrl) console.log(`     download: ${downloadUrl.slice(0, 120)}`)
 
     } catch (e: any) {
       results.push({ ...sample, found: false, error: e.message })
@@ -225,7 +254,7 @@ async function main() {
     }
 
     // Brief pause between searches
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise(r => setTimeout(r, 800))
   }
 
   await browser.close()
@@ -233,32 +262,41 @@ async function main() {
   // ── Summary ──────────────────────────────────────────────────────────────
 
   console.log()
-  console.log('═══ RESULTS ═══════════════════════════════════')
+  console.log('═══ PHASE 0 PROBE RESULTS ═════════════════════')
   console.log()
 
   const found = results.filter(r => r.found)
   const notFound = results.filter(r => !r.found)
+  const withDownload = found.filter(r => r.downloadUrl)
 
-  console.log(`Found: ${found.length}/${results.length}`)
-  console.log(`Not found: ${notFound.length}/${results.length}`)
+  console.log(`Found via API:     ${found.length}/${results.length}`)
+  console.log(`With download URL: ${withDownload.length}/${results.length}`)
+  console.log(`Not found:         ${notFound.length}/${results.length}`)
   console.log()
 
-  if (found.length > 0) {
-    console.log('── FOUND ──')
-    for (const r of found) {
-      const hasUrl = r.downloadUrl ? '📥 has download URL' : (r.viewerUrl ? '👁️ viewer URL only' : '❌ no URL')
-      console.log(`  [${r.section}] "${r.name}"`)
-      console.log(`    → API: "${r.apiName}" | ${r.format} | ${hasUrl}`)
-      if (r.downloadUrl) console.log(`    → ${r.downloadUrl}`)
-      console.log()
-    }
+  console.log('── FOUND ──')
+  for (const r of found) {
+    const hasUrl = r.downloadUrl ? '📥 download URL' : (r.viewerUrl ? '👁️ viewer only' : '❌ no URL')
+    console.log(`  ✅ [${r.section}] "${r.name}"`)
+    console.log(`     → "${r.apiName}" | ${r.format} | ${hasUrl} | ${r.resultCount} results`)
   }
+  console.log()
 
   if (notFound.length > 0) {
     console.log('── NOT FOUND ──')
     for (const r of notFound) {
-      console.log(`  [${r.section}] "${r.name}" — ${r.error}`)
+      console.log(`  ❌ [${r.section}] "${r.name}" — ${r.error}`)
     }
+    console.log()
+  }
+
+  console.log('── VERDICT ──')
+  if (found.length >= 7) {
+    console.log('✅ Search API is viable for Phase 0 — proceed with full implementation')
+  } else if (found.length >= 4) {
+    console.log('⚠️ Partial success — Search API works but may need query tuning')
+  } else {
+    console.log('❌ Search API not returning useful results — investigate response format')
   }
 }
 
