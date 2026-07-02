@@ -193,25 +193,28 @@ export function deduplicateAcrossSections(
       const item = section.items[i]
       const normalizedName = item.name.toLowerCase().trim()
       const hasContentId = Boolean((item as any).contentId)
+      const itemUrl = (item.url ?? '').toLowerCase()
 
-      const existing = seen.get(normalizedName)
+      // Dedup key includes URL — same name + different URL = different item
+      // (e.g., Cisco under Networks vs Cisco under Security)
+      const dedupeKey = normalizedName + '|' + itemUrl
+
+      const existing = seen.get(dedupeKey)
       if (existing) {
         // Decide which to keep — prefer the one with contentId
         if (hasContentId && !existing.hasContentId) {
-          // Current is better — remove the existing one
           toRemove.push({
             sectionKey: existing.sectionKey,
             itemIdx: existing.itemIdx,
             name: item.name,
             section: existing.sectionKey,
           })
-          seen.set(normalizedName, { sectionKey, itemIdx: i, hasContentId })
+          seen.set(dedupeKey, { sectionKey, itemIdx: i, hasContentId })
         } else {
-          // Existing is same or better — remove current
           toRemove.push({ sectionKey, itemIdx: i, name: item.name, section: sectionKey })
         }
       } else {
-        seen.set(normalizedName, { sectionKey, itemIdx: i, hasContentId })
+        seen.set(dedupeKey, { sectionKey, itemIdx: i, hasContentId })
       }
     }
   }
@@ -467,7 +470,7 @@ const GARBAGE_PATTERNS = [
 
 function isGarbage(text: string): boolean {
   const trimmed = text.trim()
-  if (trimmed.length < 3) return true
+  if (trimmed.length < 2) return true
   if (/^\s*$/.test(trimmed)) return true
   return GARBAGE_PATTERNS.some((p) => p.test(trimmed))
 }
@@ -885,7 +888,7 @@ async function extractRedHeaderSections(
             for (const a of docLinks) {
               const text = (a.textContent || '').trim().slice(0, 200)
               const href = (a as HTMLAnchorElement).href || ''
-              if (text.length > 3) {
+              if (text.length >= 2) {
                 docNames.push(text)
                 // (#857) Also add to currentLinks so domain docs enter the download pipeline
                 if (href.startsWith('http') && !href.includes('/app#/workspace')) {
@@ -926,7 +929,7 @@ async function extractRedHeaderSections(
             for (const a of subAnchors) {
               const text = (a.textContent || '').trim().slice(0, 200)
               const href = (a as HTMLAnchorElement).href || ''
-              if (text.length > 3 && href.startsWith('http') && !href.includes('/app#/workspace')) {
+              if (text.length >= 2 && href.startsWith('http') && !href.includes('/app#/workspace')) {
                 subLinks.push({ text, href })
               }
             }
@@ -959,7 +962,7 @@ async function extractRedHeaderSections(
         for (const a of anchors) {
           const text = (a.textContent || '').trim().slice(0, 200)
           const href = (a as HTMLAnchorElement).href || ''
-          if (text.length > 3 && href.startsWith('http') && !href.includes('/app#/workspace')) {
+          if (text.length >= 2 && href.startsWith('http') && !href.includes('/app#/workspace')) {
             currentLinks.push({ text, href })
           }
         }
@@ -1117,7 +1120,7 @@ async function extractSidebar(page: Page): Promise<{
     for (const el of rightLinks) {
       const text = (el.textContent || '').trim()
       const href = (el as HTMLAnchorElement).href || ''
-      if (text.length > 3 && href.startsWith('http')) {
+      if (text.length >= 2 && href.startsWith('http')) {
         data.sidebarLinks.push({ name: text.slice(0, 100), url: href })
       }
     }
@@ -1370,7 +1373,7 @@ export async function expandDomainDocListPickers(
         for (const sel of selectors) {
           for (const node of el.querySelectorAll(sel)) {
             const text = (node.textContent || '').trim().slice(0, 200)
-            if (text.length > 3 && !seen.has(text)) {
+            if (text.length >= 2 && !seen.has(text)) {
               seen.add(text)
               entries.push({ name: text, url: findHref(node as Element) })
             }
@@ -1380,7 +1383,7 @@ export async function expandDomainDocListPickers(
         if (entries.length === 0) {
           for (const row of el.querySelectorAll('tr')) {
             const text = (row.textContent || '').trim().split('\n')[0]?.trim().slice(0, 200)
-            if (text && text.length > 3 && !seen.has(text)) {
+            if (text && text.length >= 2 && !seen.has(text)) {
               seen.add(text)
               entries.push({ name: text, url: findHref(row as Element) })
             }
