@@ -333,40 +333,47 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
       nullable: true,
       description: 'Actionable steps with optional URLs. Set null if none present.',
     },
-    workshops: {
+    tdpAlignment: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          url: { type: 'string' },
-        },
-        required: ['name', 'url'],
-      },
+      items: { type: 'string' },
       nullable: true,
-      description: 'Workshops or labs referenced. Set null if none.',
+      description: 'TDP (Technical Decision Point) names this content supports — infer from topic and domain. Set null if no clear TDP alignment.',
     },
-    demos: {
+    buyingStage: {
+      type: 'string',
+      enum: ['awareness', 'discovery', 'evaluation', 'justification', 'expansion'],
+      description: 'Buying stage this content best supports: awareness (thought leadership), discovery (pain identification), evaluation (competitive/technical), justification (ROI/success stories), expansion (cross-sell/upgrade).',
+    },
+    targetPersona: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          url: { type: 'string' },
-        },
-        required: ['name', 'url'],
-      },
+      items: { type: 'string' },
       nullable: true,
-      description: 'Demos or interactive experiences referenced. Set null if none.',
+      description: 'Target personas based on document tone, depth, and stated audience (e.g., "CTO", "Platform Engineer", "IT Director"). Set null if not determinable.',
+    },
+    customerProblem: {
+      type: 'string',
+      nullable: true,
+      description: 'The specific business problem this content addresses. Must be at least 20 characters and specific to be useful. Set null if purely reference material.',
+    },
+    conversationOpener: {
+      type: 'string',
+      nullable: true,
+      description: 'One sentence an AE can use to introduce this content in a customer conversation. Set null if not customer-facing.',
+    },
+    techStackTriggers: {
+      type: 'array',
+      items: { type: 'string' },
+      nullable: true,
+      description: 'Customer-side technologies that make this content relevant (e.g., "VMware", "Terraform", "Jenkins"). Focus on customer tech stack, not Red Hat products. Set null if technology-agnostic.',
     },
   },
-  required: ['documentCategory', 'summary', 'productsReferenced', 'audience', 'keyPoints', 'links'],
+  required: ['documentCategory', 'summary', 'productsReferenced', 'audience', 'keyPoints', 'links', 'buyingStage'],
 }
 
 // ── ADR-041: Document Intelligence Prompts ─────────────────────────────────
 
 const DOCUMENT_INTELLIGENCE_SYSTEM_PROMPT = `You are a structured data extraction engine for Red Hat sales and product documents.
-Extract intelligence about what the document covers — products, integrations, competitors, partner solutions, use cases, and key messaging.
+You're enriching sales content for an AE intelligence dashboard. Extract not just what the document SAYS, but how it CONNECTS to customer conversations.
 Return valid JSON matching the provided schema.
 
 ## GROUNDING RULES (MANDATORY)
@@ -375,7 +382,13 @@ Return valid JSON matching the provided schema.
 3. Never extrapolate integrations not explicitly discussed.
 4. Preserve all URLs exactly.
 5. For talkTracks: extract selling angles even when not explicitly labeled as talk tracks. Key messages, value propositions, and competitive differentiators count.
-6. For competitorsReferenced: capture both named competitors AND indirect references to alternative approaches.`
+6. For competitorsReferenced: capture both named competitors AND indirect references to alternative approaches.
+7. For tdpAlignment: extract TDP names the content supports. Infer from topic and domain — e.g., a document about container security aligns with "Container Platform Security" TDP.
+8. For buyingStage: classify depth — thought leadership/overviews = awareness, pain identification/problem framing = discovery, competitive comparisons/technical deep-dives = evaluation, ROI analyses/customer success stories = justification, cross-sell/upgrade/expansion content = expansion.
+9. For targetPersona: extract from document tone, technical depth, and stated audience — executive summaries target CxO, architecture guides target Platform Engineers, business cases target IT Directors.
+10. For customerProblem: identify the specific business problem this content addresses. Must be at least 20 characters and specific — not generic like "improve efficiency." Example: "Managing heterogeneous VM workloads across on-prem and cloud without a unified control plane."
+11. For conversationOpener: write one sentence an AE can use to introduce this content naturally. Example: "I noticed you're running VMware — we have a migration assessment that other customers in your situation found helpful."
+12. For techStackTriggers: extract customer-side technologies that make this content relevant. Focus on what the CUSTOMER might have in their environment (VMware, Terraform, Jenkins, ServiceNow), not Red Hat product names.`
 
 const DOCUMENT_INTELLIGENCE_USER_PROMPT = (docName: string, content: string) =>
   `Extract structured intelligence from this Red Hat document: "${docName}"
@@ -408,12 +421,16 @@ const documentIntelligenceConfig: ExtractionConfig<DocumentIntelligence> = {
     customerScenarios: parsed.customerScenarios ?? null,
     cloudProviders: parsed.cloudProviders ?? null,
     audience: parsed.audience ?? 'internal',
+    tdpAlignment: parsed.tdpAlignment ?? null,
+    buyingStage: parsed.buyingStage ?? 'awareness',
+    targetPersona: parsed.targetPersona ?? null,
+    customerProblem: parsed.customerProblem ?? null,
+    conversationOpener: parsed.conversationOpener ?? null,
+    techStackTriggers: parsed.techStackTriggers ?? null,
     keyPoints: parsed.keyPoints ?? [],
     talkTracks: parsed.talkTracks ?? null,
     links: parsed.links ?? [],
     actionableSteps: parsed.actionableSteps ?? null,
-    workshops: parsed.workshops ?? null,
-    demos: parsed.demos ?? null,
     enrichedAt: new Date().toISOString(),
     sourceProductSlug: '', // set by caller
   }),

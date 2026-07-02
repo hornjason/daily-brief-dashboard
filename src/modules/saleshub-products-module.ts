@@ -251,6 +251,14 @@ export function matchDocumentToCustomer(
     matchedItems.push(...partnerMatches.map(p => p.partnerName))
   }
 
+  // Check techStackTriggers matches
+  const triggerMatches = (doc.techStackTriggers ?? [])
+    .filter(tr => techNames.some(ct => matches(tr, ct)))
+  if (triggerMatches.length > 0) {
+    matchTypes.push('tech-stack-trigger')
+    matchedItems.push(...triggerMatches)
+  }
+
   return {
     matched: matchTypes.length > 0,
     matchTypes,
@@ -457,6 +465,11 @@ function emitProductSignals(
         metadata.useCases = doc.useCases
         metadata.talkTracks = doc.talkTracks
         metadata.actionableSteps = doc.actionableSteps
+        metadata.tdpAlignment = doc.tdpAlignment
+        metadata.buyingStage = doc.buyingStage
+        metadata.targetPersona = doc.targetPersona
+        metadata.customerProblem = doc.customerProblem
+        metadata.conversationOpener = doc.conversationOpener
 
         // Check CCSP cloud spend for cloud-specific documents
         const clouds = doc.cloudProviders ?? []
