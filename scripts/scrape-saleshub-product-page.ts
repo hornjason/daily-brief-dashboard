@@ -1777,6 +1777,15 @@ async function extractSinglePage(
     }, VIEWER_CONTENT_SELECTORS)
 
     const sanitizedHtml = sanitizeViewerHtml(rawHtml)
+
+    // Seismic slide decks: HTML extraction captures div wrappers with little text.
+    // Fall back to innerText when the text-to-HTML ratio is very low.
+    const strippedText = sanitizedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    const textRatio = sanitizedHtml.length > 0 ? strippedText.length / sanitizedHtml.length : 0
+    if (textRatio < 0.3 && innerText.length > 200) {
+      return { content: innerText, contentLength: innerText.length }
+    }
+
     if (sanitizedHtml.length < 100) {
       return { content: null, reason: `Sanitized content too short (${sanitizedHtml.length} chars)`, contentLength: sanitizedHtml.length }
     }
