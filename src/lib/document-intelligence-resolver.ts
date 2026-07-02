@@ -21,6 +21,7 @@ import type {
 import { resolveToSlug } from './product-vocabulary.ts'
 import { resolveDisplacement } from './competitive-vocabulary.ts'
 import type { EcosystemPartnerCache } from './ecosystem-catalog.ts'
+import { TDP_DOMAINS } from './tdp-domains.ts'
 
 // ── Sanitization ────────────────────────────────────────────────────────────
 
@@ -91,6 +92,12 @@ export function sanitizeDocumentIntelligence(raw: DocumentIntelligence): Documen
     customerProblem: raw.customerProblem ? sanitizeStr(raw.customerProblem, 2000) : null,
     conversationOpener: raw.conversationOpener ? sanitizeStr(raw.conversationOpener, 1000) : null,
     techStackTriggers: raw.techStackTriggers?.map(t => sanitizeStr(t)) ?? null,
+    workshops: raw.workshops
+      ?.map(w => ({ name: sanitizeStr(w.name), url: sanitizeUrl(w.url) }))
+      .filter(w => w.url.length > 0) ?? null,
+    demos: raw.demos
+      ?.map(d => ({ name: sanitizeStr(d.name), url: sanitizeUrl(d.url) }))
+      .filter(d => d.url.length > 0) ?? null,
   }
 }
 
@@ -151,6 +158,123 @@ export function resolvePartnerSolutions(
   })
 }
 
+// ── TDP Alignment Resolution (#962) ────────────────────────────────────────
+
+/**
+ * Edge-case mappings for free-form TDP values that have no lexical overlap
+ * with any keyword in TDP_DOMAINS. These are deterministic fallbacks —
+ * the keyword system handles the other 58+ values automatically.
+ */
+const TDP_EDGE_CASES: Record<string, string> = {
+  'disaster recovery': 'Server and Cloud Computing',
+  'edge computing': 'Server and Cloud Computing',
+  'itsm integration': 'Management',
+  'observability and monitoring': 'Management',
+  'infrastructure as code': 'Automation',
+}
+
+/**
+ * Resolve a single free-form TDP string to a canonical TDP domain name.
+ * Resolution order:
+ * 1. Exact canonical match (case-insensitive)
+ * 2. Exact alias match
+ * 3. Keyword-weighted matching (sum of matched keyword char lengths)
+ * 4. Acronym matching (first letter of each word)
+ * 5. Edge-case lookup
+ * 6. Canonical name substring check
+ * Returns null if no match — caller drops unresolvable values.
+ */
+function resolveSingleTdp(tdp: string): string | null {
+  const lowered = tdp.toLowerCase()
+
+  // Step 1: Already canonical (case-insensitive)
+  for (const canonical of Object.keys(TDP_DOMAINS)) {
+    if (canonical.toLowerCase() === lowered) return canonical
+  }
+
+  // Step 2: Exact alias match
+  for (const [canonical, domain] of Object.entries(TDP_DOMAINS)) {
+    for (const alias of domain.aliases) {
+      if (alias.toLowerCase() === lowered) return canonical
+    }
+  }
+
+  // Step 3: Keyword-weighted matching
+  // Score = sum of character lengths of all matched keywords.
+  // Longer keywords contribute more, naturally preferring specific matches.
+  // When tied, prefer the domain with the shorter canonical name (more specific).
+  const stripped = lowered.replace(/[^a-z0-9 ]/g, '') // normalize ci/cd → cicd
+  let bestScore = 0
+  const candidates: string[] = []
+
+  for (const [canonical, domain] of Object.entries(TDP_DOMAINS)) {
+    let score = 0
+    for (const kw of domain.keywords) {
+      if (lowered.includes(kw) || stripped.includes(kw)) {
+        score += kw.length
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score
+      candidates.length = 0
+      candidates.push(canonical)
+    } else if (score === bestScore && score > 0) {
+      candidates.push(canonical)
+    }
+  }
+
+  if (candidates.length === 1) return candidates[0]
+  if (candidates.length > 1) {
+    // Tie-break: check if input contains a canonical domain name
+    for (const c of candidates) {
+      if (lowered.includes(c.toLowerCase())) return c
+    }
+    // Final tie-break: shorter canonical name = more specific domain
+    candidates.sort((a, b) => a.length - b.length)
+    return candidates[0]
+  }
+
+  // Step 4: Acronym matching — "Artificial Intelligence" → "ai"
+  const words = lowered.split(/[\s/,&-]+/).filter(w => w.length > 0)
+  if (words.length >= 2) {
+    const acronym = words.map(w => w[0]).join('')
+    for (const [canonical, domain] of Object.entries(TDP_DOMAINS)) {
+      if (domain.keywords.includes(acronym)) return canonical
+    }
+  }
+
+  // Step 5: Edge-case lookup for values with no lexical keyword overlap
+  const edgeCase = TDP_EDGE_CASES[lowered]
+  if (edgeCase) return edgeCase
+
+  // Step 6: Canonical domain name substring check
+  for (const canonical of Object.keys(TDP_DOMAINS)) {
+    if (lowered.includes(canonical.toLowerCase())) return canonical
+  }
+
+  // No match — drop
+  return null
+}
+
+/**
+ * Map an array of free-form TDP values to canonical TDP domain names.
+ * - Resolves each value via keyword matching, alias lookup, and edge-case fallback
+ * - Deduplicates the result
+ * - Returns null if input is null/empty or all values are unresolvable
+ */
+export function resolveTdpAlignment(tdps: string[] | null): string[] | null {
+  if (!tdps || tdps.length === 0) return null
+
+  const resolved: string[] = []
+  for (const tdp of tdps) {
+    const mapped = resolveSingleTdp(tdp)
+    if (mapped) resolved.push(mapped)
+  }
+
+  if (resolved.length === 0) return null
+  return [...new Set(resolved)]
+}
+
 // ── Composed Resolution ─────────────────────────────────────────────────────
 
 /**
@@ -172,5 +296,6 @@ export function resolveDocumentIntelligence(
     partnerSolutions: sanitized.partnerSolutions
       ? resolvePartnerSolutions(sanitized.partnerSolutions, partners)
       : null,
+    tdpAlignment: resolveTdpAlignment(sanitized.tdpAlignment),
   }
 }
