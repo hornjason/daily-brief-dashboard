@@ -368,6 +368,16 @@ export function isEnrichableContent(innerText: string): boolean {
   if (/youtube\.com|youtu\.be/i.test(lower)) return false
   if (/watch\s+this\s+video\s+on\s+youtube/i.test(lower)) return false
 
+  // Check for SSO/login pages (#966)
+  if (lower.includes('ssolandingpage') || lower.includes('log in | red hat content center')) return false
+  if (lower.includes('sign in for red hat') && lower.includes('sign in to get started')) return false
+
+  // Check for Seismic viewer chrome — metadata panel without document content (#966)
+  if (lower.includes('share with colleagues') && lower.includes('content details') && lower.includes('content type')) {
+    const textOnly = innerText.replace(/\s+/g, ' ').trim()
+    if (textOnly.length < 1500) return false
+  }
+
   return true
 }
 
@@ -2140,20 +2150,60 @@ async function downloadProductDocuments(
     const urlLower = (item.url ?? '').toLowerCase()
     if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) continue
 
-    // External Red Hat domains — fetch directly via HTTP instead of Seismic viewer
+    // External domains — route by type (#966)
     try {
       const parsedUrl = new URL(item.url)
       const host = parsedUrl.hostname
       const isSeismic = host.includes('saleshub.redhat.com') || host.includes('seismic.com')
-      const isRedHatDomain = host.includes('redhat.com') || host.includes('google.com')
+      const isRedHatDomain = host.includes('redhat.com')
+      const isGoogleDocs = host.includes('docs.google.com') || host.includes('slides.google.com')
+      const isForrester = host.includes('forrester.com')
 
-      if (!isSeismic && !isRedHatDomain) {
+      if (!isSeismic && !isRedHatDomain && !isGoogleDocs && !isForrester) {
         viewerSkipped++
         continue
       }
 
+      // Google Docs/Slides — use browser context (has Google SSO cookies) (#966)
+      if (isGoogleDocs) {
+        const sectionSlugE = slugify(sectionTitle)
+        const extractDir = resolve(productDir, 'extracted', sectionSlugE)
+        const extractFilename = `${sanitizeFilename(item.name)}.html`
+        const extractPath = resolve(extractDir, extractFilename)
+        if (existsSync(extractPath)) {
+          viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+          viewerExtracted++
+          continue
+        }
+
+        try {
+          const gPage = await context.newPage()
+          try {
+            await gPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+            await gPage.waitForTimeout(5_000)
+            const gText = await gPage.innerText('body').catch(() => '')
+            if (gText.length > 200) {
+              mkdirSync(extractDir, { recursive: true })
+              writeFileSync(extractPath, gText, 'utf-8')
+              viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+              viewerExtracted++
+              console.log(`[product-scraper] Google Docs extracted: ${item.name.slice(0, 50)} (${gText.length} chars)`)
+            } else {
+              viewerSkipped++
+              console.log(`[product-scraper] Google Docs too short: ${item.name.slice(0, 50)} (${gText.length} chars)`)
+            }
+          } finally {
+            await gPage.close()
+          }
+        } catch (e: any) {
+          console.warn(`[product-scraper] Google Docs extraction failed for ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+          viewerSkipped++
+        }
+        continue
+      }
+
       if (!isSeismic) {
-        // Fetch external Red Hat domain content directly via HTTP
+        // Fetch external content (redhat.com, forrester.com) directly via HTTP
         const sectionSlugE = slugify(sectionTitle)
         const extractDir = resolve(productDir, 'extracted', sectionSlugE)
         const extractFilename = `${sanitizeFilename(item.name)}.html`
@@ -2172,6 +2222,12 @@ async function downloadProductDocuments(
           })
           if (resp.ok) {
             const html = await resp.text()
+            // Detect SSO/login pages — these are not real content (#966)
+            if (html.includes('ssolandingpage') || html.includes('Log in | Red Hat Content Center') || html.includes('Sign in for Red Hat')) {
+              console.log(`[product-scraper] SSO login page detected for "${item.name.slice(0, 50)}" — skipping HTTP extraction`)
+              viewerSkipped++
+              continue
+            }
             const cleaned = sanitizeViewerHtml(html)
             // Extract meaningful text — skip if too short
             const textOnly = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
