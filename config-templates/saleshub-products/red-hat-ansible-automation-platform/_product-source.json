@@ -1,0 +1,230 @@
+{
+  "name": "Red Hat Ansible Automation Platform",
+  "slug": "red-hat-ansible-automation-platform",
+  "source": "screenshots",
+  "sourceFiles": ["aap-page-01.png", "aap-page-02.png", "aap-page-03.png"],
+  "createdAt": "2026-07-02T15:45:00-05:00",
+  "sections": {
+    "product-news": {
+      "title": "Product news",
+      "type": "link-list",
+      "items": [
+        {"name": "AAP 2.6 one-slide overview", "group": "June 2026 - AAP 2.7"},
+        {"name": "AAP 2.6 release overview + reference guide", "group": "June 2026 - AAP 2.7"},
+        {"name": "What's new in AAP webpage", "group": "June 2026 - AAP 2.7"},
+        {"name": "Red Hat Summit press release", "group": "June 2026 - AAP 2.7"},
+        {"name": "What's new in AAP 2.7 webinar (July 14)", "group": "June 2026 - AAP 2.7"},
+        {"name": "Internal product announcement", "group": "December 2025 - Ansible Lightspeed"},
+        {"name": "Ansible Lightspeed customer deck", "group": "December 2025 - Ansible Lightspeed"},
+        {"name": "Ansible Lightspeed enablement overview", "group": "December 2025 - Ansible Lightspeed"},
+        {"name": "AAP 2.6 one-slide overview", "group": "October 2025 - AAP 2.6"},
+        {"name": "AAP 2.6 release overview + reference guide", "group": "October 2025 - AAP 2.6"},
+        {"name": "What's new in AAP webpage", "group": "October 2025 - AAP 2.6"},
+        {"name": "What's new in AAP 2.6 webinar", "group": "October 2025 - AAP 2.6"},
+        {"name": "The Wave report", "group": "Dec 2024 - Forrester Wave"},
+        {"name": "Press release", "group": "Dec 2024 - Forrester Wave"},
+        {"name": "Overview slide", "group": "Dec 2024 - Forrester Wave"}
+      ]
+    },
+    "business-decks": {
+      "title": "Business decks",
+      "type": "carousel",
+      "items": [
+        {"name": "Pitch Deck - Red Hat Ansible Automation..."},
+        {"name": "What's New in AAP 2.6 Customer Deck"},
+        {"name": "Red Hat Ansible Automation Platform..."}
+      ]
+    },
+    "technical-decks": {
+      "title": "Technical decks",
+      "type": "carousel",
+      "items": [
+        {"name": "Red Hat Ansible Automation Platform..."}
+      ]
+    },
+    "key-resources": {
+      "title": "Key resources",
+      "type": "link-list",
+      "items": [
+        {"name": "Website"},
+        {"name": "Release notes"},
+        {"name": "Automation webinars"},
+        {"name": "Self-paced labs for AAP"},
+        {"name": "Success stories (filter by product → Ansible)"},
+        {"name": "Competitive (Internal only)"},
+        {"name": "Ansible Basics: Automation Technical Overview (DO007)"},
+        {"name": "RHLS 14-day free trial webpage"},
+        {"name": "AAP Seller credential learning path (coming soon)"},
+        {"name": "AAP 2.6 Release overview + reference guide"},
+        {"name": "Red Hat Ansible Lightspeed overview"},
+        {"name": "AAP Sales Assisted Trial Overview & Request Instructions"}
+      ]
+    },
+    "top-training-resources": {
+      "title": "Top training resources",
+      "type": "link-list",
+      "items": [
+        {"name": "AAP: Technical seller credential learning path"},
+        {"name": "Ansible Basics: Automation Technical Overview (DO007)"},
+        {"name": "Self-paced labs for Ansible Automation Platform"}
+      ]
+    },
+    "top-services-resources": {
+      "title": "Top services resources",
+      "type": "link-list",
+      "items": [
+        {"name": "Red Hat Ansible Automation Platform skills path"}
+      ]
+    },
+    "2026-automation-tdp-sales-tactics": {
+      "title": "2026 Automation TDP & Sales tactics",
+      "type": "table",
+      "note": "Navigation links to TDP sub-pages, not documents. Inline descriptions captured.",
+      "items": [
+        {
+          "name": "Automation TDP",
+          "itemType": "nav-link",
+          "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime."
+        },
+        {
+          "name": "AIOps: Turn Intelligence into Action",
+          "itemType": "nav-link",
+          "description": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance."
+        },
+        {
+          "name": "Optimize and Modernize IT Ops",
+          "itemType": "nav-link",
+          "description": "This tactic positions Red Hat Ansible Automation Platform as a unified foundation to eliminate tool silos and operational debt, allowing sellers to demonstrate how centralized governance secures immediate operational wins while accelerating strategic initiatives like VM modernization and cloud migration."
+        },
+        {
+          "name": "Automate at Scale",
+          "itemType": "nav-link",
+          "description": "This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation."
+        },
+        {
+          "name": "Network automation",
+          "itemType": "nav-link",
+          "description": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability."
+        }
+      ]
+    },
+    "deployment-options": {
+      "title": "Deployment options",
+      "type": "link-list",
+      "parentSection": "Product Features & Components",
+      "items": [
+        {"name": "Red Hat Ansible Automation Platform on Microsoft Azure"},
+        {"name": "Red Hat Ansible Automation Platform available in AWS Marketplace"},
+        {"name": "Red Hat Ansible Automation Platform available from Google Cloud Marketplace"}
+      ]
+    },
+    "integrations": {
+      "title": "Integrations",
+      "type": "link-list-grouped",
+      "parentSection": "Product Features & Components",
+      "items": [
+        {"name": "Windows", "subSection": "Infrastructure"},
+        {"name": "VMware", "subSection": "Infrastructure"},
+        {"name": "ServiceNow", "subSection": "Infrastructure"},
+        {"name": "Dell Technologies", "subSection": "Infrastructure"},
+        {"name": "HPE", "subSection": "Infrastructure"},
+        {"name": "Pure", "subSection": "Infrastructure"},
+        {"name": "SAP", "subSection": "Infrastructure"},
+        {"name": "NetApp", "subSection": "Infrastructure"},
+        {"name": "Cisco", "subSection": "Networks"},
+        {"name": "Juniper", "subSection": "Networks"},
+        {"name": "F5", "subSection": "Networks"},
+        {"name": "HPE Aruba", "subSection": "Networks"},
+        {"name": "Infoblox", "subSection": "Networks"},
+        {"name": "AWS", "subSection": "Cloud"},
+        {"name": "Microsoft Azure", "subSection": "Cloud"},
+        {"name": "Google Cloud Platform", "subSection": "Cloud"},
+        {"name": "Splunk", "subSection": "DevOps Tools"},
+        {"name": "Dynatrace", "subSection": "DevOps Tools"},
+        {"name": "Palo Alto Networks", "subSection": "Security"},
+        {"name": "Splunk", "subSection": "Security"},
+        {"name": "CyberArk", "subSection": "Security"},
+        {"name": "Cisco", "subSection": "Security"}
+      ]
+    },
+    "aiops": {
+      "title": "AIOps",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "Unlock the full potential of AIOps with automation", "format": "PDF"},
+        {"name": "AIOps Business Value", "format": "PDF"},
+        {"name": "5 AIOps use cases for Red Hat Ansible Automation Platform", "format": "PDF"}
+      ]
+    },
+    "event-driven-ansible": {
+      "title": "Event-Driven Ansible",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "ABU | EDA | 101 - Event-Driven Ansible", "format": "PPTX"},
+        {"name": "ABU | EDA | 201 Event-Driven Ansible", "format": "PPTX"},
+        {"name": "Internal version Event Driven Ansible Content Kit", "format": "PPTX"}
+      ]
+    },
+    "network-automation": {
+      "title": "Network Automation",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "Network automation guide", "format": "PDF"},
+        {"name": "Ansible Network Automation - 201 - Customer Briefing", "format": "PPTX"},
+        {"name": "Ansible Network Automation - 301 - Technical Deck", "format": "PPTX"},
+        {"name": "ABU | ANA | 201 - Ansible Network Automation - customer briefing", "format": "PPTX"},
+        {"name": "201 ABU Competitive Battlecard - Network Automation", "format": "PPTX"}
+      ]
+    },
+    "hybrid-cloud-automation": {
+      "title": "Hybrid Cloud Automation",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "ABU ACA 101 - Ansible Hybrid Cloud Automation - Introduction", "format": "PPTX"},
+        {"name": "ABU | ACA | 201 - Ansible Public Cloud Automation - Customer Briefing", "format": "PPTX"},
+        {"name": "ABU ACA 301 - Ansible Public Cloud Automation - Technical Enablement", "format": "PPTX"},
+        {"name": "ABU | ACA | 201 - Ansible Cloud-native Automation - Customer Briefing", "format": "PPTX"},
+        {"name": "ABU ACA 301 - Ansible Cloud-native Automation - Technical Enablement", "format": "PPTX"},
+        {"name": "ABU | ACA | 201 - Ansible Private Cloud Automation - Customer Briefing", "format": "PPTX"},
+        {"name": "ABU ACA 301 - Ansible Private Cloud Automation - Technical Enablement", "format": "PPTX"}
+      ]
+    },
+    "virtual-infrastructure-automation": {
+      "title": "Virtual Infrastructure Automation",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "ABU | AVA | 101 - Ansible OpenShift Virtualization Automation - Introduction", "format": "PPTX"},
+        {"name": "ABU | AVA | 301 - Ansible OpenShift Virtualization Automation", "format": "PPTX"}
+      ]
+    },
+    "edge-automation": {
+      "title": "Edge Automation",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "Edge Pricing Ansible Automation Platform", "format": "PPTX"},
+        {"name": "ABU | AEA | 301 - Ansible Edge Enterprise Automation - Technical Enablement", "format": "PPTX"}
+      ]
+    },
+    "infrastructure-automation": {
+      "title": "Infrastructure Automation",
+      "type": "doclist-picker",
+      "parentSection": "Domains",
+      "items": [
+        {"name": "Sales Kit - Ansible Automation Platform for RHEL (Cross-sell)", "format": "PPTX"}
+      ]
+    },
+    "security-automation": {
+      "title": "Security Automation",
+      "type": "empty",
+      "parentSection": "Domains",
+      "note": "No files available",
+      "items": []
+    }
+  }
+}
