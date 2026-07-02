@@ -3374,7 +3374,27 @@ export async function scrapeProductPage(
             const filePath = resolve(dlSubPath, file)
             const lower = file.toLowerCase()
             let content: string
-            if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
+            if (lower.endsWith('.pptx') || lower.endsWith('.docx')) {
+              // Extract text from Office files via Python zipfile (#968)
+              try {
+                const { execSync } = await import('child_process')
+                const pyScript = lower.endsWith('.pptx')
+                  ? `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);slides=[n for n in z.namelist() if n.startswith('ppt/slides/slide') and n.endswith('.xml')];slides.sort();text=[];
+[text.append(re.sub(r'<[^>]+>',' ',z.read(s).decode('utf-8',errors='ignore'))) for s in slides];print(re.sub(r'\\s+',' ','\\n'.join(text)).strip())`
+                  : `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);text=re.sub(r'<[^>]+>',' ',z.read('word/document.xml').decode('utf-8',errors='ignore'));print(re.sub(r'\\s+',' ',text).strip())`
+                const extracted = execSync(`python3 -c "${pyScript}" "${filePath}"`, { maxBuffer: 50_000_000, timeout: 30_000 }).toString('utf-8').trim()
+                if (extracted.length > 100) {
+                  content = extracted
+                  console.log(`[product-scraper] PPTX/DOCX text extracted: ${file.slice(0, 50)} (${extracted.length} chars)`)
+                } else {
+                  content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+                  console.warn(`[product-scraper] PPTX/DOCX extraction too short (${extracted.length}), falling back to base64`)
+                }
+              } catch (e: any) {
+                console.warn(`[product-scraper] PPTX/DOCX extraction failed: ${(e.message ?? '').slice(0, 60)}, falling back to base64`)
+                content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+              }
+            } else if (lower.endsWith('.pdf')) {
               content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
             } else {
               content = readFileSync(filePath, 'utf-8')
