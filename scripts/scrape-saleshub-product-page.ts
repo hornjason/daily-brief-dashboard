@@ -1334,7 +1334,7 @@ export async function expandDomainDocListPickers(
       const heading = item.locator(
         '.seismic-page-divider-view-text, .seismic-page-accordion-viewer-new-header-title'
       ).first()
-      const rawText = await heading.textContent({ timeout: 3_000 }).catch(() => '')
+      const rawText = await heading.textContent({ timeout: 10_000 }).catch(() => '')
       const domainName = (rawText || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
       if (!domainName || domainName.length < 3) continue
 
@@ -1343,10 +1343,10 @@ export async function expandDomainDocListPickers(
       const hasPicker = await picker.count().catch(() => 0)
       if (!hasPicker) continue
 
-      // Click to trigger CDS API call
-      await picker.scrollIntoViewIfNeeded({ timeout: 3_000 })
-      await picker.click({ timeout: 3_000 })
-      await page.waitForTimeout(2_500)
+      // Click to trigger CDS API call — 15s timeout for Seismic dynamic content (#967)
+      await picker.scrollIntoViewIfNeeded({ timeout: 10_000 })
+      await picker.click({ timeout: 15_000 })
+      await page.waitForTimeout(4_000)
       activated++
 
       // Extract document names AND hrefs from rendered content (#939)
@@ -2248,7 +2248,11 @@ async function downloadProductDocuments(
         }
         continue
       }
-    } catch { viewerSkipped++; continue }
+    } catch (outerErr: any) {
+      console.warn(`[product-scraper] Phase 3a outer error for "${item.name?.slice(0, 40)}": ${(outerErr?.message ?? '').slice(0, 80)}`)
+      viewerSkipped++
+      continue
+    }
 
     // Check if already extracted (cached)
     const sectionSlugE = slugify(sectionTitle)
