@@ -82,13 +82,15 @@ Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not ca
 
 ## 7. 2026 Automation TDP & Sales Tactics (table)
 
+These are navigation links to TDP sub-pages, not documents. Each has inline description text on the page that should be captured.
+
 | # | TDP Name | Status | Notes |
 |---|----------|--------|-------|
-| 1 | Automation TDP | ✅ | |
-| 2 | AIOps: Turn Intelligence into Action | 📥 | In product.json, not extracted |
-| 3 | Optimize and Modernize IT Ops | ✅ | |
-| 4 | Automate at Scale | ✅ | |
-| 5 | Network automation | 📥 | In product.json, not extracted |
+| 1 | Automation TDP | 🔗 | Nav link to sub-page. Inline text: "positions AAP as the mission-critical foundation for modernizing IT..." |
+| 2 | AIOps: Turn Intelligence into Action | 🔗 | Nav link to sub-page. Inline text: "transforms monitoring insights into automated remediation..." |
+| 3 | Optimize and Modernize IT Ops | 🔗 | Nav link to sub-page. Inline text: "unified foundation to eliminate tool silos and operational debt..." |
+| 4 | Automate at Scale | 🔗 | Nav link to sub-page. Inline text: "helps sellers migrate DIY users and scale existing customers..." |
+| 5 | Network automation | 🔗 | Nav link to sub-page. Inline text: "position Red Hat Network Automation as the solution for modern network complexity..." |
 
 ## 8. Deployment Options
 
@@ -135,10 +137,12 @@ Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not ca
 | 2 | Dynatrace | ✅ |
 
 ### Security
-| # | Partner | Status |
-|---|---------|--------|
-| 1 | Palo Alto Networks | ✅ |
-| 2 | CyberArk | ✅ |
+| # | Partner | Status | Notes |
+|---|---------|--------|-------|
+| 1 | Palo Alto Networks | ✅ | |
+| 2 | Splunk | ✅ | Also appears under DevOps Tools |
+| 3 | CyberArk | ✅ | |
+| 4 | Cisco | ❌ | Also appears under Networks — scraper missed this duplicate |
 
 ## 10. Domains
 
