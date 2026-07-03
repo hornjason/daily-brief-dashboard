@@ -191,7 +191,7 @@ export async function downloadProductsFromDrive(): Promise<DownloadResult> {
     const foldersRes = await withQuotaRetry(
       () => drive.files.list({
         q: `'${productsFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id, name)',
+        fields: 'files(id, name, modifiedTime)',
         pageSize: 100,
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
@@ -199,10 +199,52 @@ export async function downloadProductsFromDrive(): Promise<DownloadResult> {
       '[saleshub-product-drive-sync] list product folders',
     )
 
-    const productFolders = foldersRes.data.files ?? []
-    if (productFolders.length === 0) {
+    const allFolders = foldersRes.data.files ?? []
+    if (allFolders.length === 0) {
       console.log('[saleshub-product-drive-sync] No product subfolders found — skipping')
       return { downloaded: 0, products: [] }
+    }
+
+    // Deduplicate folders that map to the same slug (old slugified name vs new display name)
+    const bySlug = new Map<string, typeof allFolders>()
+    for (const f of allFolders) {
+      if (!f.id || !f.name) continue
+      const s = slugify(f.name)
+      const arr = bySlug.get(s) ?? []
+      arr.push(f)
+      bySlug.set(s, arr)
+    }
+
+    const productFolders: typeof allFolders = []
+    for (const [slug, group] of bySlug) {
+      if (group.length === 1) {
+        productFolders.push(group[0])
+        continue
+      }
+      // Multiple folders map to the same slug — find newest file modifiedTime in each
+      let best = group[0]
+      let bestTime = ''
+      for (const folder of group) {
+        const filesRes = await withQuotaRetry(
+          () => drive.files.list({
+            q: `'${folder.id}' in parents and trashed = false`,
+            fields: 'files(modifiedTime)',
+            orderBy: 'modifiedTime desc',
+            pageSize: 1,
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          }),
+          `[saleshub-product-drive-sync] check newest file in "${folder.name}"`,
+        )
+        const newest = filesRes.data.files?.[0]?.modifiedTime ?? ''
+        if (newest > bestTime) {
+          bestTime = newest
+          best = folder
+        }
+      }
+      const skipped = group.filter(f => f.id !== best.id).map(f => f.name).join(', ')
+      console.warn(`[saleshub-product-drive-sync] Duplicate Drive folders for ${slug}: keeping ${best.name}, skipping ${skipped}`)
+      productFolders.push(best)
     }
 
     const templatesDir = getProductsTemplateDir()
@@ -292,6 +334,20 @@ export async function uploadProductToDrive(
 
     // Find or create product subfolder (use the display name from _product.json if available)
     const productName = (productJson as any).name ?? productSlug
+
+    // Remove stale slugified-name folder if display name differs from slug
+    const slugifiedName = slugify(productName)
+    if (slugifiedName !== productName) {
+      const staleFolderId = await findFolder(drive, productsFolderId, slugifiedName)
+      if (staleFolderId) {
+        await withQuotaRetry(
+          () => drive.files.delete({ fileId: staleFolderId, supportsAllDrives: true }),
+          `[saleshub-product-drive-sync] delete stale folder "${slugifiedName}"`,
+        )
+        console.log(`[saleshub-product-drive-sync] Deleted stale slugified folder "${slugifiedName}"`)
+      }
+    }
+
     const productFolderId = await findOrCreateFolder(drive, productsFolderId, productName)
 
     // Upload _product.json
