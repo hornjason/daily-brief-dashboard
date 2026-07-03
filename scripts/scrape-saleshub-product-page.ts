@@ -74,6 +74,7 @@ process.on('unhandledRejection', (reason: any) => {
 })
 
 const skipDownloads = process.argv.includes('--skip-downloads')
+const skipApiMerge = process.argv.includes('--page-only')
 
 // ── Exported pure helpers (tested in saleshub-product-download.test.ts) ─────
 
@@ -3042,7 +3043,9 @@ export async function scrapeProductPage(
     console.log(`[product-scraper] Manifest Gate 0: ${manifest.documents.length} DOM items registered`)
 
     // Query Seismic API for document list by product name (using auth captured in Step 1)
-    if (authCtx) {
+    if (skipApiMerge) {
+      console.log('[product-scraper] Step 4: Skipping API merge (--page-only mode)')
+    } else if (authCtx) {
       console.log('[product-scraper] Step 4: Querying Seismic API for product documents...')
       try {
         const apiDocs = await queryDocumentsByProduct(page, authCtx, header.name)
