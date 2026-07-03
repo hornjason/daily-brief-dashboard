@@ -1789,12 +1789,14 @@ async function captureCarouselViewerUrls(
       }
     }
 
-    // Fallback: look for DocListPicker Viewer sections with thumbnail images
-    if (info.length === 0) {
+    // Also check DocListPicker Viewer sections — always, not just as fallback (#973)
+    {
+      const existingTitles = new Set(info.map(i => i.sectionTitle))
       const viewerSections = document.querySelectorAll('[class*="docListPicker-Viewer"]')
       for (const section of viewerSections) {
         const heading = section.querySelector('h1, [class*="title"]')
         const title = (heading?.textContent || '').trim()
+        if (existingTitles.has(title)) continue  // skip if already found by carousel selectors
         // Look for clickable thumbnail items
         const items = section.querySelectorAll('[class*="item"], [class*="card"], a[href], [role="button"]')
         if (items.length === 0) continue
