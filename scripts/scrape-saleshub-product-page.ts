@@ -1066,14 +1066,16 @@ async function extractRedHeaderSections(
       textContent = textContent ? `${textContent}\n\n${tableText}` : tableText
     }
 
+    sections[sectionKey] = {
+      title,
+      textContent: textContent || undefined,
+      type,
+      items,
+    }
     if (items.length > 0) {
-      sections[sectionKey] = {
-        title,
-        textContent: textContent || undefined,
-        type,
-        items,
-      }
       console.log(`[product-scraper] Section "${title}" (${type}): ${items.length} items`)
+    } else {
+      console.log(`[product-scraper] Section "${title}" (${type}): 0 items (carousel/DocListPicker content pending)`)
     }
   }
 
@@ -1303,8 +1305,63 @@ async function buildProductSourceInventory(
   page: Page,
   productName: string,
 ): Promise<ProductSourceInventory> {
-  console.log('[product-scraper] Phase 1: Building product source inventory from DOM...')
+  console.log('[product-scraper] Phase 1: Building product source inventory from sidebar TOC + DOM...')
 
+  // Step 1: Read the sidebar Table of Contents — authoritative section list.
+  // The sidebar TOC always lists every section on the page regardless of
+  // content type (carousels, DocListPickers, accordions).
+  const sidebarTocEntries = await page.evaluate(() => {
+    const entries: Array<{ title: string }> = []
+    const seen = new Set<string>()
+
+    const sidebar = document.querySelector('.articleSdk-theme-page-doubleColumn-sidebar')
+      || document.querySelector('[class*="rightColumn"]')
+      || document.querySelector('[class*="toc"]')
+
+    if (!sidebar) {
+      // Position-based fallback: find elements anchored to the right side
+      const allEls = document.querySelectorAll('nav, [class*="sidebar"], [class*="navigation"]')
+      for (const el of allEls) {
+        const rect = el.getBoundingClientRect()
+        if (rect.x > 800 && rect.width > 50 && rect.width < 400) {
+          const links = el.querySelectorAll('a, [role="link"]')
+          for (const link of links) {
+            const text = (link.textContent || '').trim().replace(/\s+/g, ' ')
+            if (!text || text.length < 3 || text.length > 100) continue
+            if (text.includes('@') || text.startsWith('#')) continue
+            if (/^(Page\s+RHSH|All\s+Sales\s+Content|Content\s+Details|Contact\s+us|Ask\s+on\s+Slack|Home|Back|Previous|Next|Search)$/i.test(text)) continue
+            const key = text.toLowerCase()
+            if (seen.has(key)) continue
+            seen.add(key)
+            entries.push({ title: text })
+          }
+          if (entries.length > 0) break
+        }
+      }
+      return entries
+    }
+
+    const links = sidebar.querySelectorAll('a, [role="link"], [role="button"]')
+    for (const link of links) {
+      const text = (link.textContent || '').trim().replace(/\s+/g, ' ')
+      if (!text || text.length < 3 || text.length > 100) continue
+      if (text.includes('@') || text.startsWith('#')) continue
+      if (/^(Page\s+RHSH|All\s+Sales\s+Content|Content\s+Details|Contact\s+us|Ask\s+on\s+Slack|Home|Back|Previous|Next|Search)$/i.test(text)) continue
+      const key = text.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      entries.push({ title: text })
+    }
+
+    return entries
+  })
+
+  console.log(`[product-scraper] Phase 1: Sidebar TOC found ${sidebarTocEntries.length} sections`)
+  for (const entry of sidebarTocEntries) {
+    console.log(`  TOC: "${entry.title}"`)
+  }
+
+  // Step 2: Walk DOM widgets to extract items per section (existing logic)
   const domSections = await page.evaluate(() => {
     const results: Record<string, {
       title: string
@@ -1474,22 +1531,45 @@ async function buildProductSourceInventory(
     return results
   })
 
+  // Step 3: Merge sidebar TOC (authoritative) with DOM-extracted items
   const productSlug = slugify(productName)
+  const mergedSections: Record<string, ProductSourceSection> = {}
+
+  // Add all DOM-extracted sections first
+  for (const [key, section] of Object.entries(domSections)) {
+    mergedSections[key] = section as ProductSourceSection
+  }
+
+  // For each sidebar TOC entry, ensure a section exists
+  let tocOnly = 0
+  for (const tocEntry of sidebarTocEntries) {
+    const tocKey = tocEntry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+    if (!mergedSections[tocKey]) {
+      mergedSections[tocKey] = {
+        title: tocEntry.title,
+        type: 'link-list',
+        items: [],
+      }
+      tocOnly++
+      console.log(`[product-scraper] Phase 1: Section "${tocEntry.title}" from sidebar TOC (not in DOM widgets)`)
+    }
+  }
+
   let totalItems = 0
-  for (const section of Object.values(domSections)) {
+  for (const section of Object.values(mergedSections)) {
     totalItems += section.items.length
   }
 
   const inventory: ProductSourceInventory = {
     name: productName,
     slug: productSlug,
-    source: 'screenshots',
+    source: 'sidebar-toc',
     sourceFiles: [],
     createdAt: new Date().toISOString(),
-    sections: domSections as Record<string, ProductSourceSection>,
+    sections: mergedSections,
   }
 
-  console.log(`[product-scraper] Phase 1: Inventory built — ${Object.keys(domSections).length} sections, ${totalItems} items`)
+  console.log(`[product-scraper] Phase 1: Inventory built — ${Object.keys(mergedSections).length} sections (${tocOnly} from sidebar TOC only), ${totalItems} items`)
   return inventory
 }
 
@@ -1650,8 +1730,8 @@ export async function expandDomainDocListPickers(
 
 async function captureCarouselViewerUrls(
   page: import('playwright').Page
-): Promise<Map<string, string>> {
-  const results = new Map<string, string>()
+): Promise<Map<string, { url: string; sectionTitle: string }>> {
+  const results = new Map<string, { url: string; sectionTitle: string }>()
   const productPageUrl = page.url()
 
   console.log('[product-scraper] (#940) Discovering carousel DOM structure...')
@@ -1824,7 +1904,7 @@ async function captureCarouselViewerUrls(
 
             const viewerUrl = page.url()
             if (viewerUrl !== productPageUrl && viewerUrl.includes('/doccenter/')) {
-              results.set(card.name, viewerUrl)
+              results.set(card.name, { url: viewerUrl, sectionTitle: section.sectionTitle })
               console.log(`[product-scraper] (#940)   "${card.name.slice(0, 60)}" -> ${viewerUrl.slice(0, 120)}`)
             }
 
@@ -1880,7 +1960,7 @@ async function captureCarouselViewerUrls(
 
           const viewerUrl = page.url()
           if (viewerUrl !== productPageUrl && viewerUrl.includes('/doccenter/')) {
-            results.set(cardName, viewerUrl)
+            results.set(cardName, { url: viewerUrl, sectionTitle: section.sectionTitle })
             console.log(`[product-scraper] (#940)   "${cardName.slice(0, 60)}" -> ${viewerUrl.slice(0, 120)}`)
           } else {
             console.log(`[product-scraper] (#940)   "${cardName.slice(0, 60)}" — no viewer URL (stayed on page or unexpected URL)`)
@@ -3571,23 +3651,34 @@ export async function scrapeProductPage(
     const carouselUrls = await captureCarouselViewerUrls(page)
     if (carouselUrls.size > 0) {
       let matched = 0
-      for (const [name, viewerUrl] of carouselUrls) {
+      let added = 0
+      for (const [name, { url: viewerUrl, sectionTitle }] of carouselUrls) {
+        let found = false
         for (const sectionKey of Object.keys(sections)) {
           const section = sections[sectionKey]
           if (!section) continue
-          // Case-insensitive partial match — card text may not exactly match item.name
           const item = section.items.find(i =>
             i.name.toLowerCase().includes(name.toLowerCase().slice(0, 50))
             || name.toLowerCase().includes(i.name.toLowerCase().slice(0, 50))
           )
-          if (item && !item.url) {
-            item.url = viewerUrl
+          if (item) {
+            if (!item.url) item.url = viewerUrl
             matched++
-            break // matched in one section, skip others
+            found = true
+            break
           }
         }
+        if (!found) {
+          // No existing item matched — add to the section this card came from
+          const targetKey = slugify(sectionTitle)
+          if (!sections[targetKey]) {
+            sections[targetKey] = { title: sectionTitle, type: 'cards', items: [] }
+          }
+          sections[targetKey].items.push({ name, url: viewerUrl })
+          added++
+        }
       }
-      console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched}/${carouselUrls.size} matched to section items`)
+      console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched} matched, ${added} added as new items`)
     }
 
     // ── Dedup across all sections (#873) ──────────────────────────────────
