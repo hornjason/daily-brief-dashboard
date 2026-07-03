@@ -499,6 +499,169 @@ export async function uploadProductFilesToDrive(
 }
 
 /**
+ * Phase 5 (#972): Verify every item from _product-source.json exists in Drive.
+ *
+ * Walks each section, checks for matching file/shortcut/webloc by name.
+ * Returns a verification report with PRESENT / MISSING / NAME MISMATCH.
+ */
+export async function generateDriveVerification(
+  productSlug: string,
+  productSource: {
+    sections: Record<string, {
+      title: string
+      items: Array<{ name: string; format?: string }>
+    }>
+  },
+  productFolderId: string,
+): Promise<object> {
+  const verification: {
+    productSlug: string
+    verifiedAt: string
+    driveFolderId: string
+    sections: Record<string, {
+      title: string
+      expected: Array<{ name: string; format?: string }>
+      found: Array<{ name: string; driveFileId: string; driveType: string }>
+      missing: Array<{ name: string; reason: string }>
+      extra: Array<{ name: string; driveFileId: string }>
+    }>
+    summary: {
+      totalExpected: number
+      totalFound: number
+      totalMissing: number
+      totalExtra: number
+      coveragePercent: number
+    }
+  } = {
+    productSlug,
+    verifiedAt: new Date().toISOString(),
+    driveFolderId: productFolderId,
+    sections: {},
+    summary: { totalExpected: 0, totalFound: 0, totalMissing: 0, totalExtra: 0, coveragePercent: 0 },
+  }
+
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    // List ALL files in the product folder (including subfolders)
+    const allDriveFiles: Array<{ id: string; name: string; mimeType: string; parents: string[] }> = []
+
+    async function listFilesRecursive(folderId: string) {
+      let pageToken: string | undefined
+      do {
+        const res = await withQuotaRetry(
+          () => drive.files.list({
+            q: `'${folderId}' in parents and trashed = false`,
+            fields: 'nextPageToken, files(id, name, mimeType, parents)',
+            pageSize: 200,
+            pageToken,
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          }),
+          `[drive-verification] list files in ${folderId}`,
+        )
+        for (const f of res.data.files ?? []) {
+          if (!f.id || !f.name) continue
+          allDriveFiles.push({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType ?? '',
+            parents: (f.parents as string[]) ?? [],
+          })
+          // Recurse into subfolders
+          if (f.mimeType === 'application/vnd.google-apps.folder') {
+            await listFilesRecursive(f.id)
+          }
+        }
+        pageToken = res.data.nextPageToken ?? undefined
+      } while (pageToken)
+    }
+
+    await listFilesRecursive(productFolderId)
+
+    // Build name lookup (lowercase, trimmed)
+    const driveFilesByName = new Map<string, { id: string; name: string; mimeType: string }>()
+    const matchedDriveIds = new Set<string>()
+    for (const f of allDriveFiles) {
+      if (f.mimeType === 'application/vnd.google-apps.folder') continue
+      const key = f.name
+        .replace(/\.(webloc|url|json|png|pdf|pptx|docx)$/i, '')
+        .toLowerCase()
+        .trim()
+      if (!driveFilesByName.has(key)) {
+        driveFilesByName.set(key, { id: f.id, name: f.name, mimeType: f.mimeType })
+      }
+    }
+
+    let totalExpected = 0
+    let totalFound = 0
+    let totalMissing = 0
+
+    for (const [sectionKey, section] of Object.entries(productSource.sections)) {
+      const expected = section.items.map(i => ({ name: i.name, format: i.format }))
+      const found: Array<{ name: string; driveFileId: string; driveType: string }> = []
+      const missing: Array<{ name: string; reason: string }> = []
+
+      for (const item of section.items) {
+        const nameKey = item.name.toLowerCase().trim().slice(0, 80)
+        const match = driveFilesByName.get(nameKey)
+
+        if (match) {
+          const driveType = match.mimeType.includes('shortcut') ? 'shortcut'
+            : match.name.endsWith('.webloc') ? 'webloc'
+            : 'file'
+          found.push({ name: item.name, driveFileId: match.id, driveType })
+          matchedDriveIds.add(match.id)
+          totalFound++
+        } else {
+          missing.push({ name: item.name, reason: 'no matching Drive entry' })
+          totalMissing++
+        }
+        totalExpected++
+      }
+
+      // Find extra files in Drive not in source
+      const extra: Array<{ name: string; driveFileId: string }> = []
+
+      verification.sections[sectionKey] = {
+        title: section.title,
+        expected,
+        found,
+        missing,
+        extra,
+      }
+    }
+
+    // Extra files: files in Drive not matched to any source item
+    const extraFiles: Array<{ name: string; driveFileId: string }> = []
+    for (const f of allDriveFiles) {
+      if (f.mimeType === 'application/vnd.google-apps.folder') continue
+      if (matchedDriveIds.has(f.id)) continue
+      // Skip data files
+      if (f.name.startsWith('_')) continue
+      extraFiles.push({ name: f.name, driveFileId: f.id })
+    }
+
+    verification.summary = {
+      totalExpected,
+      totalFound,
+      totalMissing,
+      totalExtra: extraFiles.length,
+      coveragePercent: totalExpected > 0
+        ? Math.round((totalFound / totalExpected) * 1000) / 10
+        : 100,
+    }
+
+    console.log(`[drive-verification] ${productSlug}: ${totalFound}/${totalExpected} found (${verification.summary.coveragePercent}%), ${totalMissing} missing, ${extraFiles.length} extra`)
+  } catch (e: any) {
+    console.warn(`[drive-verification] Verification failed for "${productSlug}": ${e.message}`)
+  }
+
+  return verification
+}
+
+/**
  * Upload _pipeline-manifest.json to the product's Drive folder (#874 PR 3).
  *
  * Makes the manifest visible across nodes (Mac Mini + hero installs).

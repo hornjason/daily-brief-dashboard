@@ -1272,6 +1272,227 @@ async function queryDocumentsByProduct(
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+// ── Product Source Inventory (Phase 1 — #972) ──────────────────────────────
+
+interface ProductSourceItem {
+  name: string
+  format?: string
+  group?: string
+  subSection?: string
+  description?: string
+  itemType?: string
+}
+
+interface ProductSourceSection {
+  title: string
+  type: 'link-list' | 'carousel' | 'doclist-picker'
+  parentSection?: string
+  items: ProductSourceItem[]
+}
+
+interface ProductSourceInventory {
+  name: string
+  slug: string
+  source: string
+  sourceFiles: string[]
+  createdAt: string
+  sections: Record<string, ProductSourceSection>
+}
+
+async function buildProductSourceInventory(
+  page: Page,
+  productName: string,
+): Promise<ProductSourceInventory> {
+  console.log('[product-scraper] Phase 1: Building product source inventory from DOM...')
+
+  const domSections = await page.evaluate(() => {
+    const results: Record<string, {
+      title: string
+      type: string
+      parentSection?: string
+      items: Array<{
+        name: string
+        format?: string
+        group?: string
+        subSection?: string
+        description?: string
+        itemType?: string
+      }>
+    }> = {}
+
+    const mainColumn = document.querySelector('.articleSdk-theme-page-doubleColumn-main')
+    if (!mainColumn) return results
+
+    const widgets = Array.from(mainColumn.children) as HTMLElement[]
+    let currentTitle = ''
+    let currentKey = ''
+
+    function toSlug(s: string): string {
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+    }
+
+    function extractItemsFromWidget(widget: HTMLElement): Array<{
+      name: string
+      format?: string
+      group?: string
+      description?: string
+      itemType?: string
+    }> {
+      const items: Array<{
+        name: string
+        format?: string
+        group?: string
+        description?: string
+        itemType?: string
+      }> = []
+      const seen = new Set<string>()
+
+      // Carousel cards
+      const cards = widget.querySelectorAll('[class*="card"], [class*="Card"]')
+      if (cards.length > 0) {
+        for (const card of cards) {
+          const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+          const name = (titleEl?.textContent || '').trim()
+          if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+          seen.add(name.toLowerCase())
+          const formatEl = card.querySelector('[class*="format"], [class*="Format"], [class*="type"]')
+          const format = (formatEl?.textContent || '').trim().toUpperCase() || undefined
+          items.push({ name, format, itemType: 'carousel-card' })
+        }
+        return items
+      }
+
+      // Table rows (DocListPicker)
+      const tableRows = widget.querySelectorAll('table tr')
+      if (tableRows.length > 0) {
+        for (const row of tableRows) {
+          const cells = row.querySelectorAll('td')
+          if (cells.length === 0) continue
+          const nameEl = cells[0].querySelector('a, span') || cells[0]
+          const name = (nameEl?.textContent || '').trim()
+          if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+          seen.add(name.toLowerCase())
+          const formatEl = cells.length > 1 ? cells[cells.length - 1] : null
+          const formatText = (formatEl?.textContent || '').trim().toUpperCase()
+          const format = formatText && formatText.length <= 10 ? formatText : undefined
+          items.push({ name, format, itemType: 'table-row' })
+        }
+        return items
+      }
+
+      // Links (link-list sections)
+      const links = widget.querySelectorAll('a[href]')
+      for (const link of links) {
+        const name = (link.textContent || '').trim()
+        if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+        seen.add(name.toLowerCase())
+        items.push({ name, itemType: 'link' })
+      }
+
+      return items
+    }
+
+    for (const widget of widgets) {
+      const cls = widget.className || ''
+      const isDivider = cls.includes('seismic-page-widget-divider')
+      const isCover = cls.includes('seismic-page-widget-cover')
+      const isAccordionWidget = cls.includes('seismic-page-widget-accordion')
+
+      if (isDivider) {
+        const dividerText = (widget.textContent || '').trim()
+        if (dividerText.length > 2) {
+          currentTitle = dividerText
+          currentKey = toSlug(currentTitle)
+        }
+        continue
+      }
+
+      if (isCover) continue
+
+      if (isAccordionWidget) {
+        const accTitle = widget.querySelector('.seismic-page-divider-view')
+        const accTitleText = accTitle ? (accTitle.textContent || '').trim() : currentTitle
+        const accKey = toSlug(accTitleText)
+
+        const panels = widget.querySelectorAll('.seismic-page-accordion-viewer')
+        for (const panel of panels) {
+          const headingEl = panel.querySelector(
+            '.seismic-page-divider-view-text, .seismic-page-accordion-viewer-new-header-title'
+          )
+          const panelTitle = (headingEl?.textContent || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
+          if (!panelTitle || panelTitle.length < 3) continue
+
+          const panelKey = toSlug(panelTitle)
+          const panelItems = extractItemsFromWidget(panel as HTMLElement)
+          for (const item of panelItems) {
+            item.subSection = panelTitle
+          }
+
+          if (!results[panelKey]) {
+            results[panelKey] = {
+              title: panelTitle,
+              type: 'doclist-picker',
+              parentSection: accTitleText !== panelTitle ? accTitleText : undefined,
+              items: [],
+            }
+          }
+          const existingNames = new Set(results[panelKey].items.map(i => i.name.toLowerCase()))
+          for (const item of panelItems) {
+            if (!existingNames.has(item.name.toLowerCase())) {
+              results[panelKey].items.push(item)
+              existingNames.add(item.name.toLowerCase())
+            }
+          }
+        }
+        continue
+      }
+
+      // Regular content widget — extract items into current section
+      if (currentTitle && currentKey) {
+        const items = extractItemsFromWidget(widget)
+        if (items.length > 0) {
+          const sectionType = widget.querySelector('[class*="card"], [class*="Card"]')
+            ? 'carousel'
+            : widget.querySelector('table')
+              ? 'doclist-picker'
+              : 'link-list'
+
+          if (!results[currentKey]) {
+            results[currentKey] = { title: currentTitle, type: sectionType as any, items: [] }
+          }
+          const existingNames = new Set(results[currentKey].items.map(i => i.name.toLowerCase()))
+          for (const item of items) {
+            if (!existingNames.has(item.name.toLowerCase())) {
+              results[currentKey].items.push(item)
+              existingNames.add(item.name.toLowerCase())
+            }
+          }
+        }
+      }
+    }
+
+    return results
+  })
+
+  const productSlug = slugify(productName)
+  let totalItems = 0
+  for (const section of Object.values(domSections)) {
+    totalItems += section.items.length
+  }
+
+  const inventory: ProductSourceInventory = {
+    name: productName,
+    slug: productSlug,
+    source: 'screenshots',
+    sourceFiles: [],
+    createdAt: new Date().toISOString(),
+    sections: domSections as Record<string, ProductSourceSection>,
+  }
+
+  console.log(`[product-scraper] Phase 1: Inventory built — ${Object.keys(domSections).length} sections, ${totalItems} items`)
+  return inventory
+}
+
 // ── Accordion expansion (#874) ──────────────────────────────────────────────
 
 /**
@@ -2796,11 +3017,29 @@ function generateCompletenessReport(
   }
 }
 
+// Auth-gated URL patterns — documents requiring OAuth/SSO/paywall
+const AUTH_GATED_PATTERNS = [
+  { pattern: /docs\.google\.com/, reason: 'Google Docs requiring OAuth' },
+  { pattern: /forrester\.com/, reason: 'Forrester paywall' },
+  { pattern: /content\.redhat\.com/, reason: 'Red Hat SSO required' },
+  { pattern: /gartner\.com/, reason: 'Gartner paywall' },
+  { pattern: /idc\.com/, reason: 'IDC paywall' },
+]
+
+function isAuthGated(url?: string): { gated: boolean; reason?: string } {
+  if (!url) return { gated: false }
+  for (const { pattern, reason } of AUTH_GATED_PATTERNS) {
+    if (pattern.test(url)) return { gated: true, reason }
+  }
+  return { gated: false }
+}
+
 function generateCompletenessManifest(
   sections: Record<string, ProductSection>,
   enrichedPath: string,
   productSlug: string,
-): object {
+  productSourcePath?: string,
+): object & { coverage?: number } {
   let enrichedNames: Set<string> | null = null
   if (existsSync(enrichedPath)) {
     try {
@@ -2811,6 +3050,115 @@ function generateCompletenessManifest(
     } catch { /* enriched file unreadable — treat as no enrichment */ }
   }
 
+  // Build a lookup of all captured items from _product.json (scraper output)
+  const capturedItemNames = new Set<string>()
+  const capturedItemUrls = new Map<string, string>()
+  for (const section of Object.values(sections)) {
+    for (const item of section.items) {
+      capturedItemNames.add(item.name.toLowerCase().slice(0, 80))
+      if (item.url) capturedItemUrls.set(item.name.toLowerCase().slice(0, 80), item.url)
+    }
+    if (section.subsections) {
+      for (const sub of section.subsections) {
+        for (const item of sub.items) {
+          capturedItemNames.add(item.name.toLowerCase().slice(0, 80))
+          if (item.url) capturedItemUrls.set(item.name.toLowerCase().slice(0, 80), item.url)
+        }
+      }
+    }
+  }
+
+  // Phase 3 comparison: if _product-source.json exists, compare against it
+  let productSource: ProductSourceInventory | null = null
+  if (productSourcePath && existsSync(productSourcePath)) {
+    try {
+      productSource = JSON.parse(readFileSync(productSourcePath, 'utf-8'))
+    } catch { /* source file unreadable */ }
+  }
+
+  if (productSource) {
+    const comparisonSections: Array<{
+      sectionName: string
+      sectionKey: string
+      sourceItemCount: number
+      items: Array<{
+        name: string
+        status: 'CAPTURED' | 'AUTH-GATED' | 'MISSING'
+        reason?: string
+        enriched: boolean
+      }>
+    }> = []
+
+    let totalCaptured = 0
+    let totalAuthGated = 0
+    let totalMissing = 0
+    let totalEnriched = 0
+    let missingSections: string[] = []
+
+    // Check for sections in source that are missing from scraper output
+    const scraperSectionKeys = new Set(Object.keys(sections).map(k => k.toLowerCase()))
+
+    for (const [sourceKey, sourceSection] of Object.entries(productSource.sections)) {
+      const items: typeof comparisonSections[0]['items'] = []
+
+      for (const sourceItem of sourceSection.items) {
+        const nameKey = sourceItem.name.toLowerCase().slice(0, 80)
+        const enriched = enrichedNames ? enrichedNames.has(nameKey) : false
+
+        if (capturedItemNames.has(nameKey)) {
+          items.push({ name: sourceItem.name, status: 'CAPTURED', enriched })
+          totalCaptured++
+          if (enriched) totalEnriched++
+        } else {
+          // Check if the item's URL in the scraper output suggests auth-gating
+          const matchedUrl = capturedItemUrls.get(nameKey)
+          const authCheck = isAuthGated(matchedUrl)
+          if (authCheck.gated) {
+            items.push({ name: sourceItem.name, status: 'AUTH-GATED', reason: authCheck.reason, enriched: false })
+            totalAuthGated++
+          } else {
+            items.push({ name: sourceItem.name, status: 'MISSING', enriched: false })
+            totalMissing++
+          }
+        }
+      }
+
+      if (!scraperSectionKeys.has(sourceKey.toLowerCase())) {
+        missingSections.push(sourceSection.title)
+      }
+
+      comparisonSections.push({
+        sectionName: sourceSection.title,
+        sectionKey: sourceKey,
+        sourceItemCount: sourceSection.items.length,
+        items,
+      })
+    }
+
+    const coverage = totalCaptured + totalMissing > 0
+      ? totalCaptured / (totalCaptured + totalMissing)
+      : 1
+
+    return {
+      product: productSlug,
+      generatedAt: new Date().toISOString(),
+      comparedAgainst: '_product-source.json',
+      sections: comparisonSections,
+      missingSections,
+      totals: {
+        sourceItems: totalCaptured + totalAuthGated + totalMissing,
+        captured: totalCaptured,
+        authGated: totalAuthGated,
+        missing: totalMissing,
+        enriched: totalEnriched,
+      },
+      coverage,
+      coveragePercent: Math.round(coverage * 1000) / 10,
+      coverageGatePassed: coverage >= 0.8,
+    }
+  }
+
+  // Fallback: original behavior when no _product-source.json exists
   const sectionResults: Array<{
     sectionName: string
     sectionKey: string
@@ -2837,7 +3185,6 @@ function generateCompletenessManifest(
       const enriched = enrichedNames
         ? enrichedNames.has(item.name.toLowerCase())
         : false
-      // API-merged items have seismicContentType set; DOM items do not (#928)
       const isApiOnly = !!(item as any).seismicContentType && !(item as any)._domSource
       items.push({ name: item.name, captured: true, enriched, isApiOnly })
     }
@@ -3025,6 +3372,16 @@ export async function scrapeProductPage(
     mkdirSync(earlyConfigOutputDir, { recursive: true })
     await page.screenshot({ fullPage: true, path: resolve(earlyConfigOutputDir, '_page-screenshot.png') })
     console.log('[product-scraper] Saved page screenshot as audit artifact')
+
+    // Phase 1 (#972): Build product source inventory from DOM BEFORE extraction
+    const productSourceInventory = await buildProductSourceInventory(page, header.name)
+    const screenshotName = '_page-screenshot.png'
+    productSourceInventory.sourceFiles = [screenshotName]
+    writeJsonAtomic(resolve(earlyConfigOutputDir, '_product-source.json'), productSourceInventory)
+    const earlyCacheOutputDir = resolve(CACHE_DIR, 'saleshub', 'products', earlyProductSlug)
+    mkdirSync(earlyCacheOutputDir, { recursive: true })
+    writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
+    console.log(`[product-scraper] Phase 1: Wrote _product-source.json (${Object.keys(productSourceInventory.sections).length} sections)`)
 
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
@@ -3359,116 +3716,139 @@ export async function scrapeProductPage(
     writeManifest(manifest, cacheOutputDir)
     console.log(`[product-scraper] Pipeline manifest: Gate 0=${manifest.gates.gate0_domItemCount} DOM + ${manifest.gates.gate0_apiItemCount} API-only (${manifest.documents.length} total), Gate 1=${manifest.gates.gate1_scrapedCount} scraped (${(manifest.gates.gate1_passRate * 100).toFixed(0)}% pass), Gate 2=${manifest.gates.gate2_downloadedCount} downloaded`)
 
+    // Phase 3 coverage gate (#972): check coverage BEFORE enrichment
+    const productSourcePath = resolve(configOutputDir, '_product-source.json')
+    let coverageGatePassed = true
+    if (existsSync(productSourcePath)) {
+      const preEnrichManifest = generateCompletenessManifest(sections, resolve(configOutputDir, '_enriched.json'), productSlug, productSourcePath) as any
+      const coverage = preEnrichManifest.coverage ?? 1
+      coverageGatePassed = coverage >= 0.8
+      if (!coverageGatePassed) {
+        console.warn(`[product-scraper] Coverage ${(coverage * 100).toFixed(1)}% below 80% gate — skipping enrichment`)
+      } else {
+        console.log(`[product-scraper] Phase 3 coverage gate: ${(coverage * 100).toFixed(1)}% (passed)`)
+      }
+    }
+
     // ── Step 6: Inline enrichment — runs in the SAME process as the scraper ──
     // This ensures scrape → extract → enrich → manifest update all happen on one machine.
     // Enrichment reads extracted/ HTML files, runs Gemini DocumentIntelligence extraction,
     // and updates the manifest with Gate 2/3 data.
-    console.log('[product-scraper] Step 6: Running inline enrichment...')
-    try {
-      const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
+    if (!coverageGatePassed) {
+      console.log('[product-scraper] Step 6: Skipping inline enrichment (coverage gate failed)')
+    } else {
+      console.log('[product-scraper] Step 6: Running inline enrichment...')
+      try {
+        const { enrichProductDocuments } = await import('../src/lib/saleshub-product-enrichment.ts')
 
-      // Collect documents from extracted/ directory (same logic as enrich endpoint)
-      const enrichDocs: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
-      const extractedDir = resolve(configOutputDir, 'extracted')
-      if (existsSync(extractedDir)) {
-        const eSubs = readdirSync(extractedDir, { withFileTypes: true }).filter(d => d.isDirectory())
-        for (const eSub of eSubs) {
-          const eSubPath = resolve(extractedDir, eSub.name)
-          const eFiles = readdirSync(eSubPath).filter(f =>
-            f.endsWith('.html') || f.endsWith('.txt') || f.endsWith('.md')
-          )
-          for (const file of eFiles) {
-            const content = readFileSync(resolve(eSubPath, file), 'utf-8')
-            enrichDocs.push({
-              name: file.replace(/\.(html|txt|md)$/, ''),
-              content,
-              type: 'content-kit',
-            })
-          }
-        }
-      }
-
-      // Also collect from downloads/ if any files were downloaded
-      const dlDir = resolve(configOutputDir, 'downloads')
-      if (existsSync(dlDir)) {
-        const dlSubs = readdirSync(dlDir, { withFileTypes: true }).filter(d => d.isDirectory())
-        for (const dlSub of dlSubs) {
-          const dlSubPath = resolve(dlDir, dlSub.name)
-          const dlFiles = readdirSync(dlSubPath).filter(f => {
-            const lower = f.toLowerCase()
-            return lower.endsWith('.html') || lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')
-          })
-          for (const file of dlFiles) {
-            const filePath = resolve(dlSubPath, file)
-            const lower = file.toLowerCase()
-            let content: string
-            if (lower.endsWith('.pptx') || lower.endsWith('.docx')) {
-              // Extract text from Office files via Python zipfile (#968)
-              try {
-                const { execSync } = await import('child_process')
-                const pyScript = lower.endsWith('.pptx')
-                  ? `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);slides=[n for n in z.namelist() if n.startswith('ppt/slides/slide') and n.endswith('.xml')];slides.sort();text=[];
-[text.append(re.sub(r'<[^>]+>',' ',z.read(s).decode('utf-8',errors='ignore'))) for s in slides];print(re.sub(r'\\s+',' ','\\n'.join(text)).strip())`
-                  : `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);text=re.sub(r'<[^>]+>',' ',z.read('word/document.xml').decode('utf-8',errors='ignore'));print(re.sub(r'\\s+',' ',text).strip())`
-                const extracted = execSync(`python3 -c "${pyScript}" "${filePath}"`, { maxBuffer: 50_000_000, timeout: 30_000 }).toString('utf-8').trim()
-                if (extracted.length > 100) {
-                  content = extracted
-                  console.log(`[product-scraper] PPTX/DOCX text extracted: ${file.slice(0, 50)} (${extracted.length} chars)`)
-                } else {
-                  content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
-                  console.warn(`[product-scraper] PPTX/DOCX extraction too short (${extracted.length}), falling back to base64`)
-                }
-              } catch (e: any) {
-                console.warn(`[product-scraper] PPTX/DOCX extraction failed: ${(e.message ?? '').slice(0, 60)}, falling back to base64`)
-                content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
-              }
-            } else if (lower.endsWith('.pdf')) {
-              content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
-            } else {
-              content = readFileSync(filePath, 'utf-8')
+        // Collect documents from extracted/ directory (same logic as enrich endpoint)
+        const enrichDocs: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
+        const extractedDir = resolve(configOutputDir, 'extracted')
+        if (existsSync(extractedDir)) {
+          const eSubs = readdirSync(extractedDir, { withFileTypes: true }).filter(d => d.isDirectory())
+          for (const eSub of eSubs) {
+            const eSubPath = resolve(extractedDir, eSub.name)
+            const eFiles = readdirSync(eSubPath).filter(f =>
+              f.endsWith('.html') || f.endsWith('.txt') || f.endsWith('.md')
+            )
+            for (const file of eFiles) {
+              const content = readFileSync(resolve(eSubPath, file), 'utf-8')
+              enrichDocs.push({
+                name: file.replace(/\.(html|txt|md)$/, ''),
+                content,
+                type: 'content-kit',
+              })
             }
-            enrichDocs.push({
-              name: file.replace(/\.(html|pdf|docx|pptx)$/i, ''),
-              content,
-              type: 'content-kit',
+          }
+        }
+
+        // Also collect from downloads/ if any files were downloaded
+        const dlDir = resolve(configOutputDir, 'downloads')
+        if (existsSync(dlDir)) {
+          const dlSubs = readdirSync(dlDir, { withFileTypes: true }).filter(d => d.isDirectory())
+          for (const dlSub of dlSubs) {
+            const dlSubPath = resolve(dlDir, dlSub.name)
+            const dlFiles = readdirSync(dlSubPath).filter(f => {
+              const lower = f.toLowerCase()
+              return lower.endsWith('.html') || lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')
             })
+            for (const file of dlFiles) {
+              const filePath = resolve(dlSubPath, file)
+              const lower = file.toLowerCase()
+              let content: string
+              if (lower.endsWith('.pptx') || lower.endsWith('.docx')) {
+                // Extract text from Office files via Python zipfile (#968)
+                try {
+                  const { execSync } = await import('child_process')
+                  const pyScript = lower.endsWith('.pptx')
+                    ? `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);slides=[n for n in z.namelist() if n.startswith('ppt/slides/slide') and n.endswith('.xml')];slides.sort();text=[];
+[text.append(re.sub(r'<[^>]+>',' ',z.read(s).decode('utf-8',errors='ignore'))) for s in slides];print(re.sub(r'\\s+',' ','\\n'.join(text)).strip())`
+                    : `import zipfile,re,sys;z=zipfile.ZipFile(sys.argv[1]);text=re.sub(r'<[^>]+>',' ',z.read('word/document.xml').decode('utf-8',errors='ignore'));print(re.sub(r'\\s+',' ',text).strip())`
+                  const extracted = execSync(`python3 -c "${pyScript}" "${filePath}"`, { maxBuffer: 50_000_000, timeout: 30_000 }).toString('utf-8').trim()
+                  if (extracted.length > 100) {
+                    content = extracted
+                    console.log(`[product-scraper] PPTX/DOCX text extracted: ${file.slice(0, 50)} (${extracted.length} chars)`)
+                  } else {
+                    content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+                    console.warn(`[product-scraper] PPTX/DOCX extraction too short (${extracted.length}), falling back to base64`)
+                  }
+                } catch (e: any) {
+                  console.warn(`[product-scraper] PPTX/DOCX extraction failed: ${(e.message ?? '').slice(0, 60)}, falling back to base64`)
+                  content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+                }
+              } else if (lower.endsWith('.pdf')) {
+                content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
+              } else {
+                content = readFileSync(filePath, 'utf-8')
+              }
+              enrichDocs.push({
+                name: file.replace(/\.(html|pdf|docx|pptx)$/i, ''),
+                content,
+                type: 'content-kit',
+              })
+            }
           }
         }
-      }
 
-      if (enrichDocs.length > 0) {
-        console.log(`[product-scraper] Enriching ${enrichDocs.length} documents inline...`)
-        const enrichment = await enrichProductDocuments(productSlug, enrichDocs, undefined, configOutputDir)
-        if (enrichment) {
-          writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
-          writeJsonAtomic(resolve(cacheOutputDir, '_enriched.json'), enrichment)
-          console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
+        if (enrichDocs.length > 0) {
+          console.log(`[product-scraper] Enriching ${enrichDocs.length} documents inline...`)
+          const enrichment = await enrichProductDocuments(productSlug, enrichDocs, undefined, configOutputDir)
+          if (enrichment) {
+            writeJsonAtomic(resolve(configOutputDir, '_enriched.json'), enrichment)
+            writeJsonAtomic(resolve(cacheOutputDir, '_enriched.json'), enrichment)
+            console.log(`[product-scraper] Enrichment complete: ${enrichment.documents?.length ?? 0} documents enriched`)
 
-          // Re-read manifest from disk (enrichment already wrote Gate 3 data)
-          const updatedManifest = readManifest(configOutputDir)
-          if (updatedManifest) {
-            manifest = updatedManifest
+            // Re-read manifest from disk (enrichment already wrote Gate 3 data)
+            const updatedManifest = readManifest(configOutputDir)
+            if (updatedManifest) {
+              manifest = updatedManifest
+            }
           }
+        } else {
+          console.log('[product-scraper] No documents to enrich')
         }
-      } else {
-        console.log('[product-scraper] No documents to enrich')
+      } catch (e: any) {
+        console.warn(`[product-scraper] Inline enrichment failed (non-blocking): ${e.message}`)
       }
-    } catch (e: any) {
-      console.warn(`[product-scraper] Inline enrichment failed (non-blocking): ${e.message}`)
     }
 
-    // Generate completeness manifest (#924) — after enrichment, before Drive upload
-    const completenessManifest = generateCompletenessManifest(sections, resolve(configOutputDir, '_enriched.json'), productSlug) as { totals: { pageVisible: number; enriched: number; gapSections: number } }
+    // Generate completeness manifest (#924, #972 Phase 3) — after enrichment, before Drive upload
+    const completenessManifest = generateCompletenessManifest(sections, resolve(configOutputDir, '_enriched.json'), productSlug, productSourcePath) as any
     writeJsonAtomic(resolve(configOutputDir, '_completeness-manifest.json'), completenessManifest)
     writeJsonAtomic(resolve(cacheOutputDir, '_completeness-manifest.json'), completenessManifest)
-    console.log(`[product-scraper] Completeness manifest: ${completenessManifest.totals.pageVisible} visible, ${completenessManifest.totals.enriched} enriched, ${completenessManifest.totals.gapSections} gaps`)
+    if (completenessManifest.comparedAgainst) {
+      console.log(`[product-scraper] Completeness manifest (Phase 3): ${completenessManifest.totals.captured} captured, ${completenessManifest.totals.authGated} auth-gated, ${completenessManifest.totals.missing} missing — coverage ${completenessManifest.coveragePercent}%`)
+    } else {
+      console.log(`[product-scraper] Completeness manifest: ${completenessManifest.totals.pageVisible} visible, ${completenessManifest.totals.enriched} enriched, ${completenessManifest.totals.gapSections} gaps`)
+    }
 
     // Upload all product data to Drive for cross-node visibility (#874 PR 3)
+    let driveProductFolderId: string | null = null
     try {
-      const { uploadProductToDrive, uploadManifestToDrive, uploadProductFilesToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+      const { uploadProductToDrive, uploadManifestToDrive, uploadProductFilesToDrive, generateDriveVerification } = await import('../src/lib/saleshub-product-drive-sync.ts')
       const enrichedPath = resolve(configOutputDir, '_enriched.json')
       const enrichedJson = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
-      await uploadProductToDrive(productSlug, productPage, enrichedJson)
+      driveProductFolderId = await uploadProductToDrive(productSlug, productPage, enrichedJson)
       await uploadManifestToDrive(productSlug, manifest)
 
       // Upload downloaded document files (PPTX/PDF) to Drive (#969)
@@ -3477,6 +3857,15 @@ export async function scrapeProductPage(
       if (existsSync(downloadsDir)) {
         const uploadResult = await uploadProductFilesToDrive(productPage.name || productSlug, downloadsDir)
         console.log(`[product-scraper] Document files uploaded to Drive: ${uploadResult.uploaded} files (${uploadResult.errors} errors)`)
+      }
+
+      // Phase 5 (#972): Drive verification — after all uploads complete
+      if (driveProductFolderId && existsSync(resolve(configOutputDir, '_product-source.json'))) {
+        const sourceData = JSON.parse(readFileSync(resolve(configOutputDir, '_product-source.json'), 'utf-8'))
+        const driveVerification = await generateDriveVerification(productSlug, sourceData, driveProductFolderId)
+        writeJsonAtomic(resolve(configOutputDir, '_drive-verification.json'), driveVerification)
+        writeJsonAtomic(resolve(cacheOutputDir, '_drive-verification.json'), driveVerification)
+        console.log(`[product-scraper] Phase 5: Drive verification written`)
       }
     } catch (e: any) {
       console.warn(`[product-scraper] Drive upload failed (non-blocking): ${e.message}`)
