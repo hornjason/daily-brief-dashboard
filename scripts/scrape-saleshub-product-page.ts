@@ -3472,9 +3472,10 @@ export async function scrapeProductPage(
       await uploadManifestToDrive(productSlug, manifest)
 
       // Upload downloaded document files (PPTX/PDF) to Drive (#969)
+      // Use display name (not slug) to match the folder created by uploadProductToDrive
       const downloadsDir = resolve(configOutputDir, 'downloads')
       if (existsSync(downloadsDir)) {
-        const uploadResult = await uploadProductFilesToDrive(productSlug, downloadsDir)
+        const uploadResult = await uploadProductFilesToDrive(productPage.name || productSlug, downloadsDir)
         console.log(`[product-scraper] Document files uploaded to Drive: ${uploadResult.uploaded} files (${uploadResult.errors} errors)`)
       }
     } catch (e: any) {
