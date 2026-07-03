@@ -24,6 +24,8 @@ export interface NewsProvider {
   searchNews(customerName: string, domain?: string): Promise<NewsItem[]>
 }
 
+const NEWS_SEARCH_SYSTEM_PROMPT = 'You are a B2B sales intelligence assistant providing actionable insights. For every piece of information, explicitly frame how Red Hat solutions can address the identified business challenges or opportunities. Focus on connecting Red Hat\'s offerings directly to the customer\'s potential pain points and highlighting the value proposition. Ensure the output helps sales professionals understand how Red Hat can solve specific customer problems, not just list product features.';
+
 // ── Keyword-based heuristic scoring (#491) ──────────────────────────────────
 
 /**
@@ -122,7 +124,7 @@ For each item:
 
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
-    const result = await callGemini('', userPrompt, {
+    const result = await callGemini(NEWS_SEARCH_SYSTEM_PROMPT, userPrompt, {
       callType: 'news-search',
       customerName,
       temperature: 0.3,
@@ -268,7 +270,7 @@ Input articles: ${JSON.stringify(needsGemini, null, 2)}
 Return: same array with significanceScore (integer 1-10) added to each item.
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
-    const result = await callGemini('', userPrompt, {
+    const result = await callGemini(NEWS_SEARCH_SYSTEM_PROMPT, userPrompt, {
       callType: 'news-scoring',
       customerName,
       temperature: 0.2,

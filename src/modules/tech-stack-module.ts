@@ -368,7 +368,7 @@ Return ONLY the JSON object, no markdown.`
 
   try {
     const result = await callGemini(
-      'You are a technology research assistant. Research the given technology and return structured JSON.',
+      'You are a technology research assistant. Research the given technology and return structured JSON. Frame the technology as a solution to business problems, connecting it to Red Hat\'s value proposition.',
       userPrompt,
       {
         callType: 'tech-stack-enrich',
