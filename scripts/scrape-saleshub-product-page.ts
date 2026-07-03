@@ -1730,7 +1730,7 @@ export async function expandDomainDocListPickers(
 
 async function captureCarouselViewerUrls(
   page: import('playwright').Page
-): Promise<Map<string, { url: string; sectionTitle: string }>> {
+): Promise<{ urls: Map<string, { url: string; sectionTitle: string }>; discoveredCards: Array<{ sectionTitle: string; cards: Array<{ name: string }> }> }> {
   const results = new Map<string, { url: string; sectionTitle: string }>()
   const productPageUrl = page.url()
 
@@ -1819,7 +1819,7 @@ async function captureCarouselViewerUrls(
 
   if (carouselInfo.length === 0) {
     console.log('[product-scraper] (#940) No carousel/card sections found on page')
-    return results
+    return { urls: results, discoveredCards: [] }
   }
 
   console.log(`[product-scraper] (#940) Found ${carouselInfo.length} carousel sections:`)
@@ -1840,9 +1840,11 @@ async function captureCarouselViewerUrls(
       || title.includes('business presentation') || title.includes('technical presentation')
   })
 
+  const discoveredCards = carouselInfo.map(s => ({ sectionTitle: s.sectionTitle, cards: s.cards.map(c => ({ name: c.name })) }))
+
   if (targetSections.length === 0) {
     console.log('[product-scraper] (#940) No Business/Technical deck carousel sections found — skipping click-through')
-    return results
+    return { urls: results, discoveredCards }
   }
 
   console.log(`[product-scraper] (#940) Will click through ${targetSections.reduce((sum, s) => sum + s.cards.length, 0)} cards across ${targetSections.length} sections`)
@@ -2027,7 +2029,7 @@ async function captureCarouselViewerUrls(
   }
 
   console.log(`[product-scraper] (#940) Captured ${results.size} viewer URLs from carousel thumbnails`)
-  return results
+  return { urls: results, discoveredCards }
 }
 
 // ── Per-product document download (SC-2) ────────────────────────────────────
@@ -3650,7 +3652,31 @@ export async function scrapeProductPage(
     // ── Carousel thumbnail click-through for viewer URLs (#940) ──────────
     // Business decks and Technical decks items have contentId/versionId from API
     // but no viewer URLs. Click each thumbnail to discover the viewer URL.
-    const carouselUrls = await captureCarouselViewerUrls(page)
+    const { urls: carouselUrls, discoveredCards } = await captureCarouselViewerUrls(page)
+
+    // First: add discovered card names as items to sections that are empty (#973)
+    let cardsAdded = 0
+    for (const { sectionTitle, cards } of discoveredCards) {
+      const sectionKey = slugify(sectionTitle)
+      if (!sections[sectionKey]) {
+        sections[sectionKey] = { title: sectionTitle, type: 'cards', items: [] }
+      }
+      const section = sections[sectionKey]
+      const existingNames = new Set(section.items.map(i => i.name.toLowerCase().slice(0, 50)))
+      for (const card of cards) {
+        if (!card.name || card.name.length < 4) continue
+        const cleanName = card.name.split('\n')[0]?.trim() || card.name
+        if (existingNames.has(cleanName.toLowerCase().slice(0, 50))) continue
+        section.items.push({ name: cleanName })
+        existingNames.add(cleanName.toLowerCase().slice(0, 50))
+        cardsAdded++
+      }
+    }
+    if (cardsAdded > 0) {
+      console.log(`[product-scraper] (#940) Added ${cardsAdded} carousel card names as section items`)
+    }
+
+    // Then: assign URLs from click-through to matching items
     if (carouselUrls.size > 0) {
       let matched = 0
       let added = 0
@@ -3671,7 +3697,6 @@ export async function scrapeProductPage(
           }
         }
         if (!found) {
-          // No existing item matched — add to the section this card came from
           const targetKey = slugify(sectionTitle)
           if (!sections[targetKey]) {
             sections[targetKey] = { title: sectionTitle, type: 'cards', items: [] }
