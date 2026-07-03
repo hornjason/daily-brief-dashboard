@@ -3708,6 +3708,77 @@ export async function scrapeProductPage(
       console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched} matched, ${added} added as new items`)
     }
 
+    // ── CDS document merge into sections (#973) ────────────────────────────
+    // In --page-only mode the Seismic API is skipped, but CDS network interception
+    // still captures all DocListPicker documents with name/contentId/versionId/originUrl.
+    // Merge them into section items so sections aren't left empty.
+    if (cdsDocuments.length > 0) {
+      let cdsMerged = 0
+      let cdsEnriched = 0
+      for (const doc of cdsDocuments) {
+        if (!doc.name) continue
+        const docNameKey = doc.name.toLowerCase().slice(0, 50)
+
+        // 1) Try domain lookup first — if this doc belongs to a known domain section
+        const domain = domainDocLookup.get(docNameKey)
+        if (domain) {
+          const domainKey = slugify(domain)
+          if (sections[domainKey]) {
+            const existing = sections[domainKey].items.find(
+              i => i.name.toLowerCase().slice(0, 50) === docNameKey
+            )
+            if (existing) {
+              if (!existing.url && doc.originUrl) { existing.url = doc.originUrl; cdsEnriched++ }
+              if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
+              if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
+              if (!existing.format && doc.format) (existing as any).format = doc.format
+              continue
+            }
+          }
+        }
+
+        // 2) Try fuzzy name match against all section items
+        let matched = false
+        for (const section of Object.values(sections)) {
+          const existing = section.items.find(i => {
+            const iKey = i.name.toLowerCase().slice(0, 50)
+            return iKey === docNameKey
+              || (docNameKey.length >= 20 && iKey.includes(docNameKey.slice(0, 40)))
+              || (iKey.length >= 20 && docNameKey.includes(iKey.slice(0, 40)))
+          })
+          if (existing) {
+            if (!existing.url && doc.originUrl) { existing.url = doc.originUrl; cdsEnriched++ }
+            if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
+            if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
+            if (!existing.format && doc.format) (existing as any).format = doc.format
+            matched = true
+            cdsMerged++
+            break
+          }
+        }
+
+        // 3) Unmatched CDS docs: add to domain section if domain is known, otherwise skip
+        if (!matched && domain) {
+          const domainKey = slugify(domain)
+          if (!sections[domainKey]) {
+            sections[domainKey] = { title: domain, type: 'cards', items: [] }
+          }
+          sections[domainKey].items.push({
+            name: doc.name,
+            url: doc.originUrl || undefined,
+            contentId: doc.contentId || undefined,
+            versionId: doc.versionId || undefined,
+            format: doc.format || undefined,
+            domain,
+          })
+          cdsMerged++
+        }
+      }
+      if (cdsMerged > 0 || cdsEnriched > 0) {
+        console.log(`[product-scraper] (#973) CDS merge: ${cdsMerged} matched, ${cdsEnriched} enriched with URLs`)
+      }
+    }
+
     // ── Dedup across all sections (#873) ──────────────────────────────────
     console.log('[product-scraper] Deduplicating items across sections...')
     const dedupResult = deduplicateAcrossSections(sections)
