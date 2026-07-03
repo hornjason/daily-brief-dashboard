@@ -109,7 +109,7 @@ export function stripMarkdownFences(text: string): string {
 
 // ── Enrichment timeout ───────────────────────────────────────────────────────
 
-const ENRICHMENT_TIMEOUT_MS = 60_000
+const ENRICHMENT_TIMEOUT_MS = 120_000
 
 // ── Shared extraction ceremony ─────────────────────────────────────────────
 

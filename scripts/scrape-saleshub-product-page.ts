@@ -2165,7 +2165,7 @@ async function downloadProductDocuments(
         continue
       }
 
-      // Google Docs/Slides — use browser context (has Google SSO cookies) (#966)
+      // Google Docs/Slides — export via Drive API (#969)
       if (isGoogleDocs) {
         const sectionSlugE = slugify(sectionTitle)
         const extractDir = resolve(productDir, 'extracted', sectionSlugE)
@@ -2178,26 +2178,51 @@ async function downloadProductDocuments(
         }
 
         try {
-          const gPage = await context.newPage()
-          try {
-            await gPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-            await gPage.waitForTimeout(5_000)
-            const gText = await gPage.innerText('body').catch(() => '')
-            if (gText.length > 200) {
+          // Extract document ID from Google URL
+          const docIdMatch = item.url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+          if (!docIdMatch) {
+            console.warn(`[product-scraper] Google Docs: no document ID found in URL for "${item.name.slice(0, 40)}"`)
+            viewerSkipped++
+            continue
+          }
+          const docId = docIdMatch[1]
+
+          // Load Google OAuth credentials
+          const { makeAuth } = await import('../src/google.ts')
+          const auth = makeAuth('google-token.json')
+          const { token: accessToken } = await auth.getAccessToken()
+          if (!accessToken) {
+            console.warn(`[product-scraper] Google Docs: no OAuth token available for "${item.name.slice(0, 40)}"`)
+            viewerSkipped++
+            continue
+          }
+
+          // Export as plain text via Drive API
+          const exportUrl = `https://www.googleapis.com/drive/v3/files/${docId}/export?mimeType=text/plain`
+          const resp = await fetch(exportUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(30_000),
+          })
+
+          if (resp.ok) {
+            const gText = (await resp.text()).trim()
+            if (gText.length > 100) {
               mkdirSync(extractDir, { recursive: true })
               writeFileSync(extractPath, gText, 'utf-8')
               viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
               viewerExtracted++
-              console.log(`[product-scraper] Google Docs extracted: ${item.name.slice(0, 50)} (${gText.length} chars)`)
+              console.log(`[product-scraper] Google Drive export: ${item.name.slice(0, 50)} (${gText.length} chars)`)
             } else {
               viewerSkipped++
-              console.log(`[product-scraper] Google Docs too short: ${item.name.slice(0, 50)} (${gText.length} chars)`)
+              console.log(`[product-scraper] Google Drive export too short: ${item.name.slice(0, 50)} (${gText.length} chars)`)
             }
-          } finally {
-            await gPage.close()
+          } else {
+            const errBody = await resp.text().catch(() => '')
+            console.warn(`[product-scraper] Google Drive export ${resp.status} for "${item.name.slice(0, 40)}": ${errBody.slice(0, 100)}`)
+            viewerSkipped++
           }
         } catch (e: any) {
-          console.warn(`[product-scraper] Google Docs extraction failed for ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+          console.warn(`[product-scraper] Google Drive export failed for "${item.name.slice(0, 40)}": ${(e.message ?? '').slice(0, 80)}`)
           viewerSkipped++
         }
         continue
