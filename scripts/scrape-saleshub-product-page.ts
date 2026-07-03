@@ -3465,11 +3465,18 @@ export async function scrapeProductPage(
 
     // Upload all product data to Drive for cross-node visibility (#874 PR 3)
     try {
-      const { uploadProductToDrive, uploadManifestToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
+      const { uploadProductToDrive, uploadManifestToDrive, uploadProductFilesToDrive } = await import('../src/lib/saleshub-product-drive-sync.ts')
       const enrichedPath = resolve(configOutputDir, '_enriched.json')
       const enrichedJson = existsSync(enrichedPath) ? JSON.parse(readFileSync(enrichedPath, 'utf-8')) : undefined
       await uploadProductToDrive(productSlug, productPage, enrichedJson)
       await uploadManifestToDrive(productSlug, manifest)
+
+      // Upload downloaded document files (PPTX/PDF) to Drive (#969)
+      const downloadsDir = resolve(configOutputDir, 'downloads')
+      if (existsSync(downloadsDir)) {
+        const uploadResult = await uploadProductFilesToDrive(productSlug, downloadsDir)
+        console.log(`[product-scraper] Document files uploaded to Drive: ${uploadResult.uploaded} files (${uploadResult.errors} errors)`)
+      }
     } catch (e: any) {
       console.warn(`[product-scraper] Drive upload failed (non-blocking): ${e.message}`)
     }
