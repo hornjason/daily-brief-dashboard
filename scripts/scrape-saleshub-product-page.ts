@@ -3712,14 +3712,49 @@ export async function scrapeProductPage(
     // DOM walking (extractRedHeaderSections) only finds <a href> links.
     // DocListPicker carousel sections (Business decks, Technical decks, etc.)
     // render thumbnail cards with NO <a href> — invisible to DOM extraction.
-    // The page's innerText captures every document name under every section
-    // header. Parse it and cross-reference with CDS-intercepted documents
-    // to populate sections with contentIds.
+    // Extract text from each DocListPicker panel individually and cross-reference
+    // with CDS-intercepted documents to populate sections with contentIds.
     {
-      const pageText = await page.evaluate(() => document.body.textContent || '')
-      // Debug: save the raw text dump for comparison
-      writeFileSync('/tmp/scraper-page-text-dump.txt', pageText)
-      console.log(`[text-dump-debug] Saved ${pageText.length} chars to /tmp/scraper-page-text-dump.txt`)
+      // Step 1: Extract per-section text from DocListPicker-Viewer elements
+      const perSectionText = await page.evaluate(() => {
+        const results: Array<{ title: string; text: string; itemTexts: string[] }> = []
+        // Find ALL DocListPicker and carousel containers
+        const containers = document.querySelectorAll(
+          '[class*="docListPicker-Viewer"], [class*="carousel"], [class*="widget"]'
+        )
+        for (const container of containers) {
+          const heading = container.querySelector('h1, h2, h3, [class*="title"], [class*="Title"]')
+          const title = (heading?.textContent || '').trim()
+          if (!title || title.length < 3) continue
+
+          // Get individual item texts from cards/items within this container
+          const itemEls = container.querySelectorAll(
+            '[class*="card"], [class*="Card"], [class*="item"], [class*="tile"], [role="listitem"], [role="button"]'
+          )
+          const itemTexts: string[] = []
+          for (const el of itemEls) {
+            // Try to get just the title text, not description
+            const titleEl = el.querySelector('h2, h3, h4, h5, [class*="title"], [class*="Title"], [class*="name"], [class*="Name"]')
+            const text = (titleEl?.textContent || el.textContent || '').trim().split('\n')[0]?.trim() || ''
+            if (text.length > 3 && text.length < 200) {
+              itemTexts.push(text)
+            }
+          }
+
+          results.push({ title, text: container.textContent || '', itemTexts })
+        }
+        return results
+      })
+
+      console.log(`[text-dump-debug] Per-section extraction found ${perSectionText.length} containers`)
+      for (const sec of perSectionText) {
+        if (sec.itemTexts.length > 0) {
+          console.log(`[text-dump-debug]   "${sec.title}": ${sec.itemTexts.length} items → ${sec.itemTexts.slice(0, 2).join(', ')}${sec.itemTexts.length > 2 ? '...' : ''}`)
+        }
+      }
+
+      // Use perSectionText items as the pageText source for parsing
+      const pageText = perSectionText.map(s => `${s.title}\n${s.itemTexts.join('\n')}`).join('\n')
 
       // Build the union set of section headers: sidebar TOC + widget sections
       const sectionHeaders: string[] = []
