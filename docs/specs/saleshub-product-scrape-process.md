@@ -85,10 +85,12 @@ Using the same expanded page from Phase 1, extract URLs, content, and files.
 Single page load — Phase 1 builds the inventory, Phase 2 extracts from the same DOM without reloading. No second navigation.
 
 **Steps:**
-1. Walk DOM sections using red header bar discovery
-2. Extract items with URLs, descriptions, metadata
-3. Download files: PPTX/PDF via viewer→Download button→blob URL
-4. Extract text: Google Docs/Slides via HTML export, external URLs via HTTP fetch
+1. Walk DOM sections using red header bar discovery for section structure
+2. CDS interception captures page-visible document names + contentIds passively during scroll
+3. Name search: for each CDS document, query Seismic API by exact name (`SearchTerm: doc.name`) to get download URLs + content types
+4. ContentId viewer extraction: items with contentId but no URL navigate to `/Link/Content/{contentId}` and extract via `extractSinglePage`
+5. Extract text: Google Docs/Slides via HTML export, external URLs via HTTP fetch
+6. Download files: PPTX/PDF via API download URL or viewer→Download button→blob URL
 
 **Output:**
 - `_product.json` — all discovered sections and items with URLs

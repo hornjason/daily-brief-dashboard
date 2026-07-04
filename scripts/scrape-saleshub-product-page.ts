@@ -2451,7 +2451,40 @@ async function downloadProductDocuments(
   let viewerSkipped = 0
 
   for (const { item, sectionKey, sectionTitle } of downloadQueue) {
-    if (!item.url) continue
+    if (!item.url) {
+      // Items with contentId but no URL — use Seismic viewer URL (#973)
+      if (item.contentId) {
+        const viewerUrl = `https://saleshub.redhat.com/Link/Content/${item.contentId}`
+        const sectionSlugV = slugify(sectionTitle)
+        const extractDirV = resolve(productDir, 'extracted', sectionSlugV)
+        const extractFilenameV = `${sanitizeFilename(item.name)}.html`
+        const extractPathV = resolve(extractDirV, extractFilenameV)
+        if (existsSync(extractPathV)) {
+          viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+          viewerExtracted++
+          continue
+        }
+        try {
+          const result = await extractSinglePage(context, viewerUrl)
+          if (result.content) {
+            mkdirSync(extractDirV, { recursive: true })
+            writeFileSync(extractPathV, result.content, 'utf-8')
+            viewerExtractedNames.add(sanitizeFilename(item.name).slice(0, 60))
+            viewerExtracted++
+            console.log(`[product-scraper] ContentId viewer extracted: ${item.name.slice(0, 50)} (${result.contentLength} chars)`)
+          } else {
+            viewerSkipped++
+            console.log(`[product-scraper] ContentId viewer skipped: ${item.name.slice(0, 50)} — ${result.reason}`)
+          }
+        } catch (e: any) {
+          console.warn(`[product-scraper] ContentId viewer failed: ${item.name.slice(0, 40)}: ${(e.message ?? '').slice(0, 60)}`)
+          viewerSkipped++
+        }
+      } else {
+        viewerSkipped++
+      }
+      continue
+    }
 
     const urlLower = (item.url ?? '').toLowerCase()
     if (urlLower.includes('youtube.com') || urlLower.includes('youtu.be')) continue
