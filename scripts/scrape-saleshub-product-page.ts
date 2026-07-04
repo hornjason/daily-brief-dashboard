@@ -3010,7 +3010,7 @@ function setupCdsInterception(page: import('@playwright/test').Page): CdsDocumen
         documents.push({
           name: doc.Name ?? '',
           format: doc.Format ?? '',
-          contentId: doc.ContentId ?? '',
+          contentId: doc.Id ?? doc.ContentId ?? '',
           versionId: doc.VersionId ?? '',
           originUrl: doc.OriginUrl ?? '',
         })
