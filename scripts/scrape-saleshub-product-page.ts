@@ -3903,6 +3903,10 @@ export async function scrapeProductPage(
       }
 
       console.log(`[product-scraper] Text-dump inventory: ${textDumpAdded} items added to ${textDumpSections} sections`)
+      // Debug: show what was parsed and what was filtered
+      for (const [sec, docs] of Object.entries(textSections)) {
+        if (docs.length > 0) console.log(`[text-dump-debug]   "${sec}": ${docs.length} docs found → ${docs.slice(0, 3).join(', ')}${docs.length > 3 ? '...' : ''}`)
+      }
     }
 
     // ── CDS document merge into sections (#973) ────────────────────────────
