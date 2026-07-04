@@ -3708,239 +3708,93 @@ export async function scrapeProductPage(
       console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched} matched, ${added} added as new items`)
     }
 
-    // ── Text-dump section population (#973) ────────────────────────────────
-    // DOM walking (extractRedHeaderSections) only finds <a href> links.
-    // DocListPicker carousel sections (Business decks, Technical decks, etc.)
-    // render thumbnail cards with NO <a href> — invisible to DOM extraction.
-    // Extract text from each DocListPicker panel individually and cross-reference
-    // with CDS-intercepted documents to populate sections with contentIds.
+    // ── CDS-driven section population (#973) ─────────────────────────────
+    // DocListPicker panels load documents via CDS API (intercepted passively).
+    // These documents have names, contentIds, versionIds, and sometimes originUrls.
+    // Add CDS documents directly as items to their matching carousel sections.
+    // Section assignment uses carousel discovery: match CDS doc names to the
+    // carousel section that contains a visually-similar card.
     {
-      // Step 1: Extract per-section text from DocListPicker-Viewer elements
-      const perSectionText = await page.evaluate(() => {
-        const results: Array<{ title: string; text: string; itemTexts: string[] }> = []
-        // Find ALL DocListPicker and carousel containers
-        const containers = document.querySelectorAll(
-          '[class*="docListPicker-Viewer"], [class*="carousel"], [class*="widget"]'
-        )
-        for (const container of containers) {
-          const heading = container.querySelector('h1, h2, h3, [class*="title"], [class*="Title"]')
-          const title = (heading?.textContent || '').trim()
-          if (!title || title.length < 3) continue
+      // Build a flat list of CDS document names for matching
+      const cdsNames = new Set(cdsDocuments.map(d => d.name.toLowerCase().trim()))
 
-          // Get individual item texts from cards/items within this container
-          const itemEls = container.querySelectorAll(
-            '[class*="card"], [class*="Card"], [class*="item"], [class*="tile"], [role="listitem"], [role="button"]'
-          )
-          const itemTexts: string[] = []
-          for (const el of itemEls) {
-            // Try to get just the title text, not description
-            const titleEl = el.querySelector('h2, h3, h4, h5, [class*="title"], [class*="Title"], [class*="name"], [class*="Name"]')
-            const text = (titleEl?.textContent || el.textContent || '').trim().split('\n')[0]?.trim() || ''
-            if (text.length > 3 && text.length < 200) {
-              itemTexts.push(text)
-            }
-          }
-
-          results.push({ title, text: container.textContent || '', itemTexts })
-        }
-        return results
-      })
-
-      console.log(`[text-dump-debug] Per-section extraction found ${perSectionText.length} containers`)
-      for (const sec of perSectionText) {
-        if (sec.itemTexts.length > 0) {
-          console.log(`[text-dump-debug]   "${sec.title}": ${sec.itemTexts.length} items → ${sec.itemTexts.slice(0, 2).join(', ')}${sec.itemTexts.length > 2 ? '...' : ''}`)
-        }
-      }
-
-      // Use perSectionText items as the pageText source for parsing
-      const pageText = perSectionText.map(s => `${s.title}\n${s.itemTexts.join('\n')}`).join('\n')
-
-      // Build the union set of section headers: sidebar TOC + widget sections
-      const sectionHeaders: string[] = []
-      const sectionHeadersLower = new Set<string>()
-
-      // From widget sections (already in `sections` object)
-      for (const section of Object.values(sections)) {
-        if (section.title && !sectionHeadersLower.has(section.title.toLowerCase().trim())) {
-          sectionHeaders.push(section.title)
-          sectionHeadersLower.add(section.title.toLowerCase().trim())
-        }
-      }
-
-      // From sidebar TOC (productSourceInventory)
-      for (const psi of Object.values(productSourceInventory.sections)) {
-        if (psi.title && !sectionHeadersLower.has(psi.title.toLowerCase().trim())) {
-          sectionHeaders.push(psi.title)
-          sectionHeadersLower.add(psi.title.toLowerCase().trim())
-        }
-      }
-
-      // Known sub-sections that appear on specific pages (e.g., OCP-V)
-      // Also include parent sections that extractRedHeaderSections might miss
-      const knownSubSections = [
-        'OpenShift Virtualization Engine (OVE)',
-        'Customer References',
-        'External Case Studies',
-        'Virtualization Win Wires Master Index [INTERNAL]',
-        'OpenShift Virtualization on OpenShift cloud services',
-        'OpenShift Virtualization on Azure Red Hat OpenShift (ARO)',
-        'OpenShift Virtualization on Red Hat OpenShift Service on AWS (ROSA)',
-        'OpenShift Virtualization on Google Cloud',
-      ]
-      for (const sub of knownSubSections) {
-        if (!sectionHeadersLower.has(sub.toLowerCase().trim())) {
-          sectionHeaders.push(sub)
-          sectionHeadersLower.add(sub.toLowerCase().trim())
-        }
-      }
-
-      // Noise patterns to skip
-      const skipPatterns = [
-        /^$/,
-        /^0 item\(s\) selected$/i,
-        /^arrow (up|down)$/i,
-        /^Displaying slide \d+ of \d+$/i,
-        /^Rating$/i,
-        /^Add Review$/i,
-        /^Share$/i,
-        /^Content Details$/i,
-        /^Contact us:?$/i,
-        /^Ask on Slack:?$/i,
-        /^Page RHSH/i,
-        /^All Sales Content$/i,
-        /^Home$/i,
-        /^Back$/i,
-        /^Previous$/i,
-        /^Next$/i,
-        /^Search$/i,
-        /^\d+$/,
-        /^star$/i,
-        /^stars$/i,
-        /^sort$/i,
-        /^filter$/i,
-        /^view$/i,
-        /^download$/i,
-        /^copy link$/i,
-        /^subscribe$/i,
-        /^unsubscribe$/i,
-      ]
-
-      // Stop markers — parsing ends here
-      const stopMarkers = [
-        'ask on slack:',
-        'contact us:',
-        'content details',
-      ]
-
-      // Parse page text into sections
-      const lines = pageText.split('\n').map(l => l.trim())
-      const textSections: Record<string, string[]> = {}
-      let currentSection = ''
-      let stopped = false
-
-      for (const line of lines) {
-        if (stopped) break
-
-        // Check stop markers
-        if (stopMarkers.some(m => line.toLowerCase().startsWith(m))) {
-          stopped = true
-          break
-        }
-
-        // Check if this line is a section header
-        const isHeader = sectionHeadersLower.has(line.toLowerCase().trim())
-        if (isHeader) {
-          // Find the canonical header name (preserve original casing)
-          currentSection = sectionHeaders.find(
-            h => h.toLowerCase().trim() === line.toLowerCase().trim()
-          ) || line
-          if (!textSections[currentSection]) {
-            textSections[currentSection] = []
-          }
-          continue
-        }
-
-        // If we have a current section, collect document names
-        if (currentSection) {
-          // Skip noise
-          if (skipPatterns.some(p => p.test(line))) continue
-          // Skip very short lines (< 4 chars)
-          if (line.length < 4) continue
-          // Skip very long lines (likely paragraphs/descriptions, not doc names)
-          if (line.length > 200) continue
-
-          textSections[currentSection].push(line)
-        }
-      }
-
-      // Normalize name for matching: trim, lowercase, collapse whitespace
-      function normalizeName(name: string): string {
-        return name.toLowerCase().trim().replace(/\s+/g, ' ')
-      }
-
-      // Build CDS lookup by normalized name for cross-referencing
-      const cdsLookup = new Map<string, CdsDocument>()
-      for (const doc of cdsDocuments) {
-        if (doc.name) {
-          cdsLookup.set(normalizeName(doc.name), doc)
-        }
-      }
-
-      // Add text-dump-discovered items to sections
-      let textDumpAdded = 0
-      let textDumpSections = 0
-
-      for (const [sectionTitle, docNames] of Object.entries(textSections)) {
-        if (docNames.length === 0) continue
-
+      // For carousel sections with 0 items, add CDS documents that aren't placed elsewhere
+      const placedCdsNames = new Set<string>()
+      // First pass: match CDS documents to sections by name prefix similarity
+      for (const { sectionTitle, cards } of discoveredCards) {
         const sectionKey = slugify(sectionTitle)
         if (!sections[sectionKey]) {
           sections[sectionKey] = { title: sectionTitle, type: 'cards', items: [] }
         }
         const section = sections[sectionKey]
+        const existingNames = new Set(section.items.map(i => i.name.toLowerCase().trim()))
 
-        // Build a set of normalized existing item names for dedup
-        const existingNames = new Set(
-          section.items.map(i => normalizeName(i.name))
-        )
-
-        let sectionAdded = 0
-        for (const docName of docNames) {
-          const normalizedDoc = normalizeName(docName)
-
-          // Skip if already exists in this section
-          if (existingNames.has(normalizedDoc)) continue
-
-          // Note: no cross-section dedup — items can legitimately appear in multiple
-          // sections on the page (e.g., same doc in Key resources AND Top services)
-
-          // Cross-reference with CDS documents
-          const cdsMatch = cdsLookup.get(normalizedDoc)
-
-          const item: SectionItem = {
-            name: docName,
-            url: cdsMatch?.originUrl || undefined,
-            contentId: cdsMatch?.contentId || undefined,
-            versionId: cdsMatch?.versionId || undefined,
-            format: cdsMatch?.format || undefined,
-            itemType: 'text-dump-discovered',
+        // Find CDS docs whose names contain the section title keywords
+        for (const cdsDoc of cdsDocuments) {
+          if (placedCdsNames.has(cdsDoc.name.toLowerCase().trim())) continue
+          if (existingNames.has(cdsDoc.name.toLowerCase().trim())) {
+            placedCdsNames.add(cdsDoc.name.toLowerCase().trim())
+            continue
           }
+          // Skip non-content formats
+          if (['JSON', 'MP4', 'YouTube'].includes(cdsDoc.format)) continue
 
-          section.items.push(item)
-          existingNames.add(normalizedDoc)
-          sectionAdded++
-          textDumpAdded++
+          // Match CDS doc to section if the doc name contains section-relevant keywords
+          const sectionWords = sectionTitle.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+          const docNameLower = cdsDoc.name.toLowerCase()
+          const matchScore = sectionWords.filter(w => docNameLower.includes(w)).length / Math.max(sectionWords.length, 1)
+
+          if (matchScore >= 0.5) {
+            section.items.push({
+              name: cdsDoc.name,
+              url: cdsDoc.originUrl || undefined,
+              contentId: cdsDoc.contentId || undefined,
+              versionId: cdsDoc.versionId || undefined,
+              format: cdsDoc.format || undefined,
+              itemType: 'cds-discovered',
+            })
+            existingNames.add(cdsDoc.name.toLowerCase().trim())
+            placedCdsNames.add(cdsDoc.name.toLowerCase().trim())
+          }
         }
-
-        if (sectionAdded > 0) textDumpSections++
       }
 
-      console.log(`[product-scraper] Text-dump inventory: ${textDumpAdded} items added to ${textDumpSections} sections`)
-      // Debug: show what was parsed and what was filtered
-      for (const [sec, docs] of Object.entries(textSections)) {
-        if (docs.length > 0) console.log(`[text-dump-debug]   "${sec}": ${docs.length} docs found → ${docs.slice(0, 3).join(', ')}${docs.length > 3 ? '...' : ''}`)
+      // Second pass: add remaining unplaced CDS documents to a catch-all section
+      const unplacedDocs = cdsDocuments.filter(d =>
+        !placedCdsNames.has(d.name.toLowerCase().trim())
+        && !['JSON', 'MP4', 'YouTube'].includes(d.format)
+        && d.name.length > 3
+      )
+      if (unplacedDocs.length > 0) {
+        const catchallKey = 'page-documents'
+        if (!sections[catchallKey]) {
+          sections[catchallKey] = { title: 'Page Documents', type: 'cards', items: [] }
+        }
+        const existingNames = new Set(sections[catchallKey].items.map(i => i.name.toLowerCase().trim()))
+        // Also check ALL sections for already-placed items
+        const allPlacedNames = new Set<string>()
+        for (const sec of Object.values(sections)) {
+          for (const item of sec.items) {
+            allPlacedNames.add(item.name.toLowerCase().trim())
+          }
+        }
+        for (const doc of unplacedDocs) {
+          if (allPlacedNames.has(doc.name.toLowerCase().trim())) continue
+          sections[catchallKey].items.push({
+            name: doc.name,
+            url: doc.originUrl || undefined,
+            contentId: doc.contentId || undefined,
+            versionId: doc.versionId || undefined,
+            format: doc.format || undefined,
+            itemType: 'cds-discovered',
+          })
+        }
+        console.log(`[product-scraper] CDS catch-all: ${sections[catchallKey].items.length} unmatched documents`)
       }
+
+      const totalCdsAdded = cdsDocuments.filter(d => placedCdsNames.has(d.name.toLowerCase().trim())).length
+      console.log(`[product-scraper] CDS-driven population: ${totalCdsAdded} matched to sections, ${unplacedDocs.length} in catch-all`)
+
     }
 
     // ── CDS document merge into sections (#973) ────────────────────────────
