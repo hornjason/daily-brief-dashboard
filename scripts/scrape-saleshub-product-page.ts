@@ -3632,11 +3632,6 @@ export async function scrapeProductPage(
         }
 
         console.log(`[product-scraper] After API merge: ${Object.keys(sections).length} total sections`)
-      } catch (e: any) {
-        console.warn(`[product-scraper] Seismic API query failed — DOM-only results: ${e.message}`)
-      }
-    } else {
-      console.warn('[product-scraper] Could not capture Seismic auth — using DOM-only results')
     }
 
     // (#858 Fix 2) Final pass: tag any remaining untagged items with their domain.
