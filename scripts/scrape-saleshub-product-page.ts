@@ -3509,13 +3509,24 @@ export async function scrapeProductPage(
     console.log(`[product-scraper] Manifest Gate 0: ${manifest.documents.length} DOM items registered`)
 
     // Query Seismic API for document list by product name (using auth captured in Step 1)
-    if (skipApiMerge) {
-      console.log('[product-scraper] Step 4: Skipping API merge (--page-only mode)')
-    } else if (authCtx) {
-      console.log('[product-scraper] Step 4: Querying Seismic API for product documents...')
+    // Always query to build a versionId lookup for CDS enrichment; only MERGE into sections if not --page-only
+    let apiDocsByVersionId = new Map<string, DocCenterDocument & { contentId?: string; format?: string }>()
+    if (authCtx) {
       try {
         const apiDocs = await queryDocumentsByProduct(page, authCtx, header.name)
-        console.log(`[product-scraper] API returned ${apiDocs.length} documents for "${header.name}"`)
+        console.log(`[product-scraper] Step 4: API returned ${apiDocs.length} documents for "${header.name}"`)
+        for (const doc of apiDocs) {
+          if (doc.versionId) apiDocsByVersionId.set(doc.versionId, doc as any)
+        }
+        console.log(`[product-scraper] Step 4: Built versionId lookup (${apiDocsByVersionId.size} entries)`)
+      } catch (e: any) {
+        console.warn(`[product-scraper] Step 4: API query failed: ${(e.message ?? '').slice(0, 80)}`)
+      }
+    }
+    if (skipApiMerge) {
+      console.log('[product-scraper] Step 4: Skipping API section merge (--page-only mode)')
+    } else if (authCtx && apiDocsByVersionId.size > 0) {
+      const apiDocs = [...apiDocsByVersionId.values()]
 
         // Group documents by content type → create/enhance sections
         const docsByType = new Map<string, DocCenterDocument[]>()
@@ -3797,75 +3808,86 @@ export async function scrapeProductPage(
 
     }
 
-    // ── CDS document merge into sections (#973) ────────────────────────────
-    // In --page-only mode the Seismic API is skipped, but CDS network interception
-    // still captures all DocListPicker documents with name/contentId/versionId/originUrl.
-    // Merge them into section items so sections aren't left empty.
+    // ── CDS → API cross-reference by versionId (#973) ───────────────────
+    // CDS interception captured page-visible documents. The API query has
+    // downloadUrls + contentTypes. Cross-reference by versionId (UUID match)
+    // to enrich CDS documents and assign them to the correct sections.
     if (cdsDocuments.length > 0) {
-      let cdsMerged = 0
-      let cdsEnriched = 0
-      for (const doc of cdsDocuments) {
-        if (!doc.name) continue
-        const docNameKey = doc.name.toLowerCase().slice(0, 50)
+      let cdsMatched = 0
+      let cdsAdded = 0
+      const typeToSection: Record<string, string> = {
+        'Business presentation': 'Business decks',
+        'Cheatsheet': 'Resources',
+        'Competitive review': 'Competitive',
+        'Battlecard': 'Competitive',
+        'Reference architecture': 'Technical resources',
+        'Campaign guide': 'Campaign resources',
+        'Email': 'Email templates',
+        'Template': 'Templates',
+        'Datasheet': 'Resources',
+        'Video': 'Demos & Videos',
+        'E-book': 'Key resources',
+        'Overview': 'Key resources',
+        'Case study': 'Customer References',
+        'Customer go-live report': 'Customer References',
+        'Customer success snapshot': 'Customer References',
+        'Technical presentation': 'Technical decks',
+      }
 
-        // 1) Try domain lookup first — if this doc belongs to a known domain section
-        const domain = domainDocLookup.get(docNameKey)
-        if (domain) {
-          const domainKey = slugify(domain)
-          if (sections[domainKey]) {
-            const existing = sections[domainKey].items.find(
-              i => i.name.toLowerCase().slice(0, 50) === docNameKey
-            )
+      const allExistingNames = new Set<string>()
+      for (const sec of Object.values(sections)) {
+        for (const item of sec.items) {
+          allExistingNames.add(item.name.toLowerCase().trim())
+        }
+      }
+
+      for (const doc of cdsDocuments) {
+        if (!doc.name || doc.name.length < 4) continue
+        if (['JSON'].includes(doc.format)) continue
+        if (allExistingNames.has(doc.name.toLowerCase().trim())) {
+          // Already exists — just enrich with CDS metadata
+          for (const sec of Object.values(sections)) {
+            const existing = sec.items.find(i => i.name.toLowerCase().trim() === doc.name.toLowerCase().trim())
             if (existing) {
-              if (!existing.url && doc.originUrl) { existing.url = doc.originUrl; cdsEnriched++ }
               if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
               if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
-              if (!existing.format && doc.format) (existing as any).format = doc.format
-              continue
+              if (!existing.url && doc.originUrl) existing.url = doc.originUrl
+              break
             }
           }
+          continue
         }
 
-        // 2) Try fuzzy name match against all section items
-        let matched = false
-        for (const section of Object.values(sections)) {
-          const existing = section.items.find(i => {
-            const iKey = i.name.toLowerCase().slice(0, 50)
-            return iKey === docNameKey
-              || (docNameKey.length >= 20 && iKey.includes(docNameKey.slice(0, 40)))
-              || (iKey.length >= 20 && docNameKey.includes(iKey.slice(0, 40)))
-          })
-          if (existing) {
-            if (!existing.url && doc.originUrl) { existing.url = doc.originUrl; cdsEnriched++ }
-            if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
-            if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
-            if (!existing.format && doc.format) (existing as any).format = doc.format
-            matched = true
-            cdsMerged++
-            break
-          }
+        // Cross-reference with API by versionId to get downloadUrl + contentType
+        const apiDoc = doc.versionId ? apiDocsByVersionId.get(doc.versionId) : undefined
+        const downloadUrl = doc.originUrl || apiDoc?.downloadUrl || undefined
+        const contentType = apiDoc?.contentType || ''
+        const sectionName = typeToSection[contentType] || ''
+        const contentId = doc.contentId || (apiDoc as any)?.contentId || undefined
+
+        // Determine target section
+        let targetKey = sectionName ? slugify(sectionName) : ''
+        if (targetKey && !sections[targetKey]) {
+          sections[targetKey] = { title: sectionName, type: 'cards', items: [] }
+        }
+        if (!targetKey) targetKey = 'page-documents'
+        if (!sections[targetKey]) {
+          sections[targetKey] = { title: 'Page Documents', type: 'cards', items: [] }
         }
 
-        // 3) Unmatched CDS docs: add to domain section if domain is known, otherwise skip
-        if (!matched && domain) {
-          const domainKey = slugify(domain)
-          if (!sections[domainKey]) {
-            sections[domainKey] = { title: domain, type: 'cards', items: [] }
-          }
-          sections[domainKey].items.push({
-            name: doc.name,
-            url: doc.originUrl || undefined,
-            contentId: doc.contentId || undefined,
-            versionId: doc.versionId || undefined,
-            format: doc.format || undefined,
-            domain,
-          })
-          cdsMerged++
-        }
+        sections[targetKey].items.push({
+          name: doc.name,
+          url: downloadUrl,
+          contentId,
+          versionId: doc.versionId || undefined,
+          format: doc.format || apiDoc?.contentType || undefined,
+          itemType: 'cds-discovered',
+        } as any)
+        allExistingNames.add(doc.name.toLowerCase().trim())
+        if (apiDoc) cdsMatched++
+        cdsAdded++
       }
-      if (cdsMerged > 0 || cdsEnriched > 0) {
-        console.log(`[product-scraper] (#973) CDS merge: ${cdsMerged} matched, ${cdsEnriched} enriched with URLs`)
-      }
+      console.log(`[product-scraper] (#973) CDS→API cross-ref: ${cdsAdded} added (${cdsMatched} matched by versionId)`)
     }
 
     // ── Dedup across all sections (#873) ──────────────────────────────────
