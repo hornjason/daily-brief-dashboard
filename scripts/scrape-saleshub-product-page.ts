@@ -3803,12 +3803,12 @@ export async function scrapeProductPage(
 
     }
 
-    // ── CDS → API cross-reference by versionId (#973) ───────────────────
-    // CDS interception captured page-visible documents. The API query has
-    // downloadUrls + contentTypes. Cross-reference by versionId (UUID match)
-    // to enrich CDS documents and assign them to the correct sections.
-    if (cdsDocuments.length > 0) {
-      let cdsMatched = 0
+    // ── CDS document search + section assignment (#973) ─────────────────
+    // For each CDS-intercepted document, search the Seismic API by exact name
+    // to get downloadUrl + contentType. Use contentType for section assignment.
+    if (cdsDocuments.length > 0 && authCtx) {
+      let cdsSearched = 0
+      let cdsFound = 0
       let cdsAdded = 0
       const typeToSection: Record<string, string> = {
         'Business presentation': 'Business decks',
@@ -3836,11 +3836,10 @@ export async function scrapeProductPage(
         }
       }
 
+      // Enrich existing items with CDS metadata first
       for (const doc of cdsDocuments) {
-        if (!doc.name || doc.name.length < 4) continue
-        if (['JSON'].includes(doc.format)) continue
+        if (!doc.name) continue
         if (allExistingNames.has(doc.name.toLowerCase().trim())) {
-          // Already exists — just enrich with CDS metadata
           for (const sec of Object.values(sections)) {
             const existing = sec.items.find(i => i.name.toLowerCase().trim() === doc.name.toLowerCase().trim())
             if (existing) {
@@ -3850,39 +3849,101 @@ export async function scrapeProductPage(
               break
             }
           }
-          continue
         }
-
-        // Cross-reference with API by versionId to get downloadUrl + contentType
-        const apiDoc = doc.versionId ? apiDocsByVersionId.get(doc.versionId) : undefined
-        const downloadUrl = doc.originUrl || apiDoc?.downloadUrl || undefined
-        const contentType = apiDoc?.contentType || ''
-        const sectionName = typeToSection[contentType] || ''
-        const contentId = doc.contentId || (apiDoc as any)?.contentId || undefined
-
-        // Determine target section
-        let targetKey = sectionName ? slugify(sectionName) : ''
-        if (targetKey && !sections[targetKey]) {
-          sections[targetKey] = { title: sectionName, type: 'cards', items: [] }
-        }
-        if (!targetKey) targetKey = 'page-documents'
-        if (!sections[targetKey]) {
-          sections[targetKey] = { title: 'Page Documents', type: 'cards', items: [] }
-        }
-
-        sections[targetKey].items.push({
-          name: doc.name,
-          url: downloadUrl,
-          contentId,
-          versionId: doc.versionId || undefined,
-          format: doc.format || apiDoc?.contentType || undefined,
-          itemType: 'cds-discovered',
-        } as any)
-        allExistingNames.add(doc.name.toLowerCase().trim())
-        if (apiDoc) cdsMatched++
-        cdsAdded++
       }
-      console.log(`[product-scraper] (#973) CDS→API cross-ref: ${cdsAdded} added (${cdsMatched} matched by versionId)`)
+
+      // Search API for each NEW CDS document (not already in sections)
+      const newCdsDocs = cdsDocuments.filter(d =>
+        d.name && d.name.length >= 4
+        && !['JSON'].includes(d.format)
+        && !allExistingNames.has(d.name.toLowerCase().trim())
+      )
+
+      console.log(`[product-scraper] (#973) Searching API for ${newCdsDocs.length} CDS documents by name...`)
+
+      for (const doc of newCdsDocs) {
+        cdsSearched++
+        try {
+          const searchResult: any = await page.evaluate(async (args: any) => {
+            const res = await fetch(args.url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: args.auth,
+                profileversionid: args.pvid,
+                teamsiteid: args.tsid ?? '1',
+                'x-seismic-route': args.route ?? '',
+                seismicclientname: args.client ?? '',
+              },
+              body: JSON.stringify(args.body),
+            })
+            if (!res.ok) return null
+            return res.json()
+          }, {
+            url: authCtx.searchUrl,
+            auth: authCtx.auth,
+            pvid: PROFILE_VERSION_ID,
+            tsid: authCtx.headers.teamsiteid,
+            route: authCtx.headers['x-seismic-route'],
+            client: authCtx.headers.seismicclientname,
+            body: {
+              SearchTerm: doc.name,
+              Page: { PageIndex: 0, PageSize: 3 },
+              Sort: 'Standard',
+              Filter: {
+                AppType: 'DocCenter',
+                SeismicProperties: [{ PropName: 'ProfileVersions', Values: [PROFILE_VERSION_ID] }],
+                ExcludedAppTypes: ['ControlCenter', 'NewsCenter', 'WorkSpace'],
+                ExcludeFolder: false,
+                Folder: { FolderPath: 'root', ProfileVersionId: PROFILE_VERSION_ID },
+                IncludeSubFolder: true,
+                CustomProperties: [],
+              },
+              DynamicFilter: { operator: 'and', conditions: [] },
+              IncludeAppTypeFacet: true,
+              SortOrder: 'default',
+              EnableMultiFacetSearch: true,
+              PermissionWorkflow: { WorkflowType: 'view' },
+              Options: { WithAggregation: false, WithDocument: true },
+            },
+          })
+
+          const apiDocs = searchResult?.ServiceResult?.Documents ?? []
+          // Find the best match by name
+          const match = apiDocs.find((d: any) =>
+            (d.Name ?? '').toLowerCase().trim() === doc.name.toLowerCase().trim()
+          ) ?? apiDocs[0]
+
+          if (match) {
+            cdsFound++
+            const contentTypeProp = (match.CustomProperties ?? []).find((p: any) => p.name === 'Content Type')
+            const contentType = contentTypeProp?.values?.[0]?.value ?? match.Format ?? ''
+            const downloadUrl = doc.originUrl || match.OriginUrl || undefined
+            const contentId = doc.contentId || match.ContentId || undefined
+            const sectionName = typeToSection[contentType] || ''
+
+            let targetKey = sectionName ? slugify(sectionName) : 'page-documents'
+            if (!sections[targetKey]) {
+              sections[targetKey] = { title: sectionName || 'Page Documents', type: 'cards', items: [] }
+            }
+
+            sections[targetKey].items.push({
+              name: doc.name,
+              url: downloadUrl,
+              contentId,
+              versionId: doc.versionId || match.VersionId || undefined,
+              format: doc.format || match.Format || undefined,
+              seismicContentType: contentType,
+              itemType: 'cds-discovered',
+            } as any)
+            allExistingNames.add(doc.name.toLowerCase().trim())
+            cdsAdded++
+          }
+        } catch (e: any) {
+          // Non-fatal — continue with next document
+        }
+      }
+      console.log(`[product-scraper] (#973) CDS name search: ${cdsSearched} searched, ${cdsFound} found, ${cdsAdded} added to sections`)
     }
 
     // ── Dedup across all sections (#873) ──────────────────────────────────
