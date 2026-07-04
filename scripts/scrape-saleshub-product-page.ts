@@ -3739,10 +3739,13 @@ export async function scrapeProductPage(
       }
 
       // Known sub-sections that appear on specific pages (e.g., OCP-V)
+      // Also include parent sections that extractRedHeaderSections might miss
       const knownSubSections = [
         'OpenShift Virtualization Engine (OVE)',
+        'Customer References',
         'External Case Studies',
         'Virtualization Win Wires Master Index [INTERNAL]',
+        'OpenShift Virtualization on OpenShift cloud services',
         'OpenShift Virtualization on Azure Red Hat OpenShift (ARO)',
         'OpenShift Virtualization on Red Hat OpenShift Service on AWS (ROSA)',
         'OpenShift Virtualization on Google Cloud',
@@ -3871,15 +3874,8 @@ export async function scrapeProductPage(
           // Skip if already exists in this section
           if (existingNames.has(normalizedDoc)) continue
 
-          // Also check across ALL sections to avoid adding something already captured
-          let existsElsewhere = false
-          for (const otherSection of Object.values(sections)) {
-            if (otherSection.items.some(i => normalizeName(i.name) === normalizedDoc)) {
-              existsElsewhere = true
-              break
-            }
-          }
-          if (existsElsewhere) continue
+          // Note: no cross-section dedup — items can legitimately appear in multiple
+          // sections on the page (e.g., same doc in Key resources AND Top services)
 
           // Cross-reference with CDS documents
           const cdsMatch = cdsLookup.get(normalizedDoc)
