@@ -3717,6 +3717,9 @@ export async function scrapeProductPage(
     // to populate sections with contentIds.
     {
       const pageText = await page.evaluate(() => document.body.innerText)
+      // Debug: save the raw text dump for comparison
+      writeFileSync(resolve(productDir, '_page-text-dump.txt'), pageText)
+      console.log(`[text-dump-debug] Saved ${pageText.length} chars to _page-text-dump.txt`)
 
       // Build the union set of section headers: sidebar TOC + widget sections
       const sectionHeaders: string[] = []
