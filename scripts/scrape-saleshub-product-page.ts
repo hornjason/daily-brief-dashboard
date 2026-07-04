@@ -3708,6 +3708,203 @@ export async function scrapeProductPage(
       console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched} matched, ${added} added as new items`)
     }
 
+    // ── Text-dump section population (#973) ────────────────────────────────
+    // DOM walking (extractRedHeaderSections) only finds <a href> links.
+    // DocListPicker carousel sections (Business decks, Technical decks, etc.)
+    // render thumbnail cards with NO <a href> — invisible to DOM extraction.
+    // The page's innerText captures every document name under every section
+    // header. Parse it and cross-reference with CDS-intercepted documents
+    // to populate sections with contentIds.
+    {
+      const pageText = await page.evaluate(() => document.body.innerText)
+
+      // Build the union set of section headers: sidebar TOC + widget sections
+      const sectionHeaders: string[] = []
+      const sectionHeadersLower = new Set<string>()
+
+      // From widget sections (already in `sections` object)
+      for (const section of Object.values(sections)) {
+        if (section.title && !sectionHeadersLower.has(section.title.toLowerCase().trim())) {
+          sectionHeaders.push(section.title)
+          sectionHeadersLower.add(section.title.toLowerCase().trim())
+        }
+      }
+
+      // From sidebar TOC (productSourceInventory)
+      for (const psi of Object.values(productSourceInventory.sections)) {
+        if (psi.title && !sectionHeadersLower.has(psi.title.toLowerCase().trim())) {
+          sectionHeaders.push(psi.title)
+          sectionHeadersLower.add(psi.title.toLowerCase().trim())
+        }
+      }
+
+      // Known sub-sections that appear on specific pages (e.g., OCP-V)
+      const knownSubSections = [
+        'OpenShift Virtualization Engine (OVE)',
+        'External Case Studies',
+        'Virtualization Win Wires Master Index [INTERNAL]',
+        'OpenShift Virtualization on Azure Red Hat OpenShift (ARO)',
+        'OpenShift Virtualization on Red Hat OpenShift Service on AWS (ROSA)',
+        'OpenShift Virtualization on Google Cloud',
+      ]
+      for (const sub of knownSubSections) {
+        if (!sectionHeadersLower.has(sub.toLowerCase().trim())) {
+          sectionHeaders.push(sub)
+          sectionHeadersLower.add(sub.toLowerCase().trim())
+        }
+      }
+
+      // Noise patterns to skip
+      const skipPatterns = [
+        /^$/,
+        /^0 item\(s\) selected$/i,
+        /^arrow (up|down)$/i,
+        /^Displaying slide \d+ of \d+$/i,
+        /^Rating$/i,
+        /^Add Review$/i,
+        /^Share$/i,
+        /^Content Details$/i,
+        /^Contact us:?$/i,
+        /^Ask on Slack:?$/i,
+        /^Page RHSH/i,
+        /^All Sales Content$/i,
+        /^Home$/i,
+        /^Back$/i,
+        /^Previous$/i,
+        /^Next$/i,
+        /^Search$/i,
+        /^\d+$/,
+        /^star$/i,
+        /^stars$/i,
+        /^sort$/i,
+        /^filter$/i,
+        /^view$/i,
+        /^download$/i,
+        /^copy link$/i,
+        /^subscribe$/i,
+        /^unsubscribe$/i,
+      ]
+
+      // Stop markers — parsing ends here
+      const stopMarkers = [
+        'ask on slack:',
+        'contact us:',
+        'content details',
+      ]
+
+      // Parse page text into sections
+      const lines = pageText.split('\n').map(l => l.trim())
+      const textSections: Record<string, string[]> = {}
+      let currentSection = ''
+      let stopped = false
+
+      for (const line of lines) {
+        if (stopped) break
+
+        // Check stop markers
+        if (stopMarkers.some(m => line.toLowerCase().startsWith(m))) {
+          stopped = true
+          break
+        }
+
+        // Check if this line is a section header
+        const isHeader = sectionHeadersLower.has(line.toLowerCase().trim())
+        if (isHeader) {
+          // Find the canonical header name (preserve original casing)
+          currentSection = sectionHeaders.find(
+            h => h.toLowerCase().trim() === line.toLowerCase().trim()
+          ) || line
+          if (!textSections[currentSection]) {
+            textSections[currentSection] = []
+          }
+          continue
+        }
+
+        // If we have a current section, collect document names
+        if (currentSection) {
+          // Skip noise
+          if (skipPatterns.some(p => p.test(line))) continue
+          // Skip very short lines (< 4 chars)
+          if (line.length < 4) continue
+          // Skip very long lines (likely paragraphs/descriptions, not doc names)
+          if (line.length > 200) continue
+
+          textSections[currentSection].push(line)
+        }
+      }
+
+      // Normalize name for matching: trim, lowercase, collapse whitespace
+      function normalizeName(name: string): string {
+        return name.toLowerCase().trim().replace(/\s+/g, ' ')
+      }
+
+      // Build CDS lookup by normalized name for cross-referencing
+      const cdsLookup = new Map<string, CdsDocument>()
+      for (const doc of cdsDocuments) {
+        if (doc.name) {
+          cdsLookup.set(normalizeName(doc.name), doc)
+        }
+      }
+
+      // Add text-dump-discovered items to sections
+      let textDumpAdded = 0
+      let textDumpSections = 0
+
+      for (const [sectionTitle, docNames] of Object.entries(textSections)) {
+        if (docNames.length === 0) continue
+
+        const sectionKey = slugify(sectionTitle)
+        if (!sections[sectionKey]) {
+          sections[sectionKey] = { title: sectionTitle, type: 'cards', items: [] }
+        }
+        const section = sections[sectionKey]
+
+        // Build a set of normalized existing item names for dedup
+        const existingNames = new Set(
+          section.items.map(i => normalizeName(i.name))
+        )
+
+        let sectionAdded = 0
+        for (const docName of docNames) {
+          const normalizedDoc = normalizeName(docName)
+
+          // Skip if already exists in this section
+          if (existingNames.has(normalizedDoc)) continue
+
+          // Also check across ALL sections to avoid adding something already captured
+          let existsElsewhere = false
+          for (const otherSection of Object.values(sections)) {
+            if (otherSection.items.some(i => normalizeName(i.name) === normalizedDoc)) {
+              existsElsewhere = true
+              break
+            }
+          }
+          if (existsElsewhere) continue
+
+          // Cross-reference with CDS documents
+          const cdsMatch = cdsLookup.get(normalizedDoc)
+
+          const item: SectionItem = {
+            name: docName,
+            url: cdsMatch?.originUrl || undefined,
+            contentId: cdsMatch?.contentId || undefined,
+            versionId: cdsMatch?.versionId || undefined,
+            format: cdsMatch?.format || undefined,
+            itemType: 'text-dump-discovered',
+          }
+
+          section.items.push(item)
+          existingNames.add(normalizedDoc)
+          sectionAdded++
+          textDumpAdded++
+        }
+
+        if (sectionAdded > 0) textDumpSections++
+      }
+
+      console.log(`[product-scraper] Text-dump inventory: ${textDumpAdded} items added to ${textDumpSections} sections`)
+    }
+
     // ── CDS document merge into sections (#973) ────────────────────────────
     // In --page-only mode the Seismic API is skipped, but CDS network interception
     // still captures all DocListPicker documents with name/contentId/versionId/originUrl.
