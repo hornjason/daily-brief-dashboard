@@ -3716,7 +3716,7 @@ export async function scrapeProductPage(
     // header. Parse it and cross-reference with CDS-intercepted documents
     // to populate sections with contentIds.
     {
-      const pageText = await page.evaluate(() => document.body.innerText)
+      const pageText = await page.evaluate(() => document.body.textContent || '')
       // Debug: save the raw text dump for comparison
       writeFileSync('/tmp/scraper-page-text-dump.txt', pageText)
       console.log(`[text-dump-debug] Saved ${pageText.length} chars to /tmp/scraper-page-text-dump.txt`)
