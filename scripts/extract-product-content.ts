@@ -38,7 +38,7 @@ const MIN_CONTENT_LENGTH = 300
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type ExtractionMethod = 'tactic' | 'viewer' | 'webpage' | 'youtube' | 'section-text' | 'no-url'
+type ExtractionMethod = 'tactic' | 'viewer' | 'webpage' | 'youtube' | 'section-text' | 'no-url' | 'drive-api'
 type ExtractionStatus = 'extracted' | 'skipped' | 'failed'
 
 interface ExtractionResult {
@@ -84,9 +84,67 @@ function tagDomain(name: string, sectionTitle: string): string {
   return 'General'
 }
 
+// ── Release notes detection + filtering (#969 AC-3) ─────────────────────────
+
+/**
+ * Detects whether an item is a release notes document based on name or URL.
+ */
+export function isReleaseNotesItem(name: string, url: string): boolean {
+  if (!name && !url) return false
+  if (/release.notes/i.test(name)) return true
+  if (/release_notes/i.test(url)) return true
+  return false
+}
+
+/**
+ * Filters release notes content to keep only 'New features' and 'Deprecated features'
+ * sections, dropping Technology Preview (78K+), Known issues, Bug fixes, etc.
+ * Preserves any title/header before the first ## section.
+ */
+export function filterReleaseNotesContent(content: string): string {
+  const lines = content.split('\n')
+
+  // If no markdown headers, return unchanged
+  const hasHeaders = lines.some(l => /^##\s+/.test(l))
+  if (!hasHeaders) return content
+
+  const KEEP_SECTIONS = new Set(['new features', 'deprecated features'])
+
+  const result: string[] = []
+  let inKeptSection = false
+  let inAnySection = false
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^##\s+(.+)/)
+    if (headerMatch) {
+      const sectionName = headerMatch[1].trim().toLowerCase()
+      inAnySection = true
+      inKeptSection = KEEP_SECTIONS.has(sectionName)
+      if (inKeptSection) {
+        result.push(line)
+      }
+      continue
+    }
+
+    // Lines before any ## section (title, preamble) — keep
+    if (!inAnySection) {
+      result.push(line)
+      continue
+    }
+
+    // Lines inside a kept section — keep
+    if (inKeptSection) {
+      result.push(line)
+    }
+    // Lines inside a dropped section — skip
+  }
+
+  return result.join('\n').trim()
+}
+
 // ── URL classification ───────────────────────────────────────────────────────
 
-function classifyUrl(url: string): { method: ExtractionMethod; needsAuth: boolean } {
+export function classifyUrl(url: string): { method: ExtractionMethod; needsAuth: boolean } {
   if (!url) return { method: 'no-url', needsAuth: false }
 
   try {
@@ -95,7 +153,9 @@ function classifyUrl(url: string): { method: ExtractionMethod; needsAuth: boolea
     if (/youtube\.com|youtu\.be/i.test(hostname)) return { method: 'youtube', needsAuth: false }
     if (hostname === 'training-lms.redhat.com') return { method: 'webpage', needsAuth: true }
     if (hostname === 'reprint.forrester.com') return { method: 'webpage', needsAuth: true }
-    if (/\.redhat\.com$|docs\.google\.com/i.test(hostname)) return { method: 'webpage', needsAuth: false }
+    // Google Docs/Slides — use Drive API export (#969)
+    if (/docs\.google\.com|slides\.google\.com/i.test(hostname)) return { method: 'drive-api', needsAuth: false }
+    if (/\.redhat\.com$/i.test(hostname)) return { method: 'webpage', needsAuth: false }
     // Default: treat any other URL as a webpage
     return { method: 'webpage', needsAuth: false }
   } catch {
@@ -603,12 +663,110 @@ async function main() {
       continue
     }
 
-    // Case 3 + 5: Webpage (redhat.com, docs.google.com, content.redhat.com, catalog.redhat.com,
+    // Case 8: Google Docs/Slides — export via Drive API (#969)
+    if (method === 'drive-api') {
+      console.log(`${progress} Exporting via Drive API: ${item.name}`)
+      try {
+        const docIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+        if (!docIdMatch) {
+          results.push({
+            name: item.name, section: sectionKey, domain,
+            method: 'drive-api', status: 'failed',
+            reason: 'no document ID in Google URL', contentLength: 0, url,
+          })
+          failedCount++
+          console.log(`${progress} FAILED (drive-api): ${item.name} — no document ID in URL`)
+          continue
+        }
+        const docId = docIdMatch[1]
+
+        const { makeAuth } = await import('../src/google.ts')
+        const auth = makeAuth('google-token.json')
+        const { token: accessToken } = await auth.getAccessToken()
+        if (!accessToken) {
+          results.push({
+            name: item.name, section: sectionKey, domain,
+            method: 'drive-api', status: 'failed',
+            reason: 'no OAuth token available', contentLength: 0, url,
+          })
+          failedCount++
+          console.log(`${progress} FAILED (drive-api): ${item.name} — no OAuth token`)
+          continue
+        }
+
+        const exportUrl = `https://www.googleapis.com/drive/v3/files/${docId}/export?mimeType=text/plain`
+        const resp = await fetch(exportUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(30_000),
+        })
+
+        if (resp.ok) {
+          let gText = (await resp.text()).trim()
+
+          // Apply release notes filtering (#969 AC-3)
+          if (isReleaseNotesItem(item.name, url)) {
+            const before = gText.length
+            gText = filterReleaseNotesContent(gText)
+            console.log(`${progress} Release notes filtered: ${before} -> ${gText.length} chars`)
+          }
+
+          if (gText.length > 100) {
+            extractedContents.push({
+              name: item.name, section: sectionKey, content: gText,
+              type: mapItemTypeToEnrichmentType(item.itemType, sectionKey), domain,
+            })
+            results.push({
+              name: item.name, section: sectionKey, domain,
+              method: 'drive-api', status: 'extracted',
+              reason: 'ok (Drive API export)', contentLength: gText.length, url,
+            })
+            extractedCount++
+            console.log(`${progress} EXTRACTED (drive-api): ${item.name} — ${gText.length} chars`)
+          } else {
+            results.push({
+              name: item.name, section: sectionKey, domain,
+              method: 'drive-api', status: 'failed',
+              reason: `content too short (${gText.length} chars)`, contentLength: gText.length, url,
+            })
+            failedCount++
+            console.log(`${progress} FAILED (drive-api): ${item.name} — too short (${gText.length} chars)`)
+          }
+        } else {
+          const errBody = await resp.text().catch(() => '')
+          results.push({
+            name: item.name, section: sectionKey, domain,
+            method: 'drive-api', status: 'failed',
+            reason: `Drive API ${resp.status}: ${errBody.slice(0, 100)}`, contentLength: 0, url,
+          })
+          failedCount++
+          console.log(`${progress} FAILED (drive-api): ${item.name} — ${resp.status}`)
+        }
+      } catch (e: any) {
+        results.push({
+          name: item.name, section: sectionKey, domain,
+          method: 'drive-api', status: 'failed',
+          reason: `Drive API error: ${(e.message ?? '').slice(0, 80)}`, contentLength: 0, url,
+        })
+        failedCount++
+        console.log(`${progress} FAILED (drive-api): ${item.name} — ${(e.message ?? '').slice(0, 60)}`)
+      }
+      await delay(RATE_LIMIT_MS)
+      continue
+    }
+
+    // Case 3 + 5: Webpage (redhat.com, content.redhat.com, catalog.redhat.com,
     //              training-lms.redhat.com, reprint.forrester.com, etc.)
     if (method === 'webpage') {
       console.log(`${progress} Extracting webpage: ${item.name}`)
-      const { content, reason } = await extractWebpage(page, url)
-      if (content) {
+      const { content: rawContent, reason } = await extractWebpage(page, url)
+      if (rawContent) {
+        // Apply release notes filtering (#969 AC-3)
+        let content = rawContent
+        if (isReleaseNotesItem(item.name, url)) {
+          const before = content.length
+          content = filterReleaseNotesContent(content)
+          console.log(`${progress} Release notes filtered: ${before} -> ${content.length} chars`)
+        }
         extractedContents.push({
           name: item.name,
           section: sectionKey,
@@ -752,7 +910,10 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-main().catch(e => {
-  console.error(`[extract] Fatal error: ${e.message}`)
-  process.exit(1)
-})
+// Only run main when executed directly (not when imported for testing)
+if (import.meta.main) {
+  main().catch(e => {
+    console.error(`[extract] Fatal error: ${e.message}`)
+    process.exit(1)
+  })
+}
