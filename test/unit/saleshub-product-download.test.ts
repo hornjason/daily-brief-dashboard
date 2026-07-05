@@ -21,6 +21,7 @@ import {
   buildLocalPath,
   authCanaryCheck,
   deduplicateAcrossSections,
+  reconcileWithSourceInventory,
   type DownloadableItem,
 } from '../../scripts/scrape-saleshub-product-page.ts'
 import type { ProductSection, SectionItem } from '../../src/types/saleshub-product-types.ts'
@@ -348,11 +349,11 @@ describe('deduplicateAcrossSections', () => {
   it('removes duplicate items by normalized name across sections', () => {
     const sections: Record<string, ProductSection> = {
       'resources': makeSection('Resources', [
-        { name: 'Getting Started Guide', url: 'https://example.com' },
+        { name: 'Getting Started Guide', url: 'https://example.com/guide' },
         { name: 'Unique Doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,
       ]),
       'technical-resources': makeSection('Technical resources', [
-        { name: 'getting started guide', versionId: 'v2', contentId: 'c2', format: 'PDF' } as any,
+        { name: 'getting started guide', url: 'https://example.com/guide', versionId: 'v2', contentId: 'c2', format: 'PDF' } as any,
       ]),
     }
     const result = deduplicateAcrossSections(sections)
@@ -366,10 +367,10 @@ describe('deduplicateAcrossSections', () => {
   it('keeps the entry with contentId when deduplicating', () => {
     const sections: Record<string, ProductSection> = {
       'a': makeSection('A', [
-        { name: 'My Doc', url: 'https://example.com' },  // no contentId
+        { name: 'My Doc', url: 'https://example.com/doc' },  // no contentId
       ]),
       'b': makeSection('B', [
-        { name: 'my doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,  // has contentId
+        { name: 'my doc', url: 'https://example.com/doc', versionId: 'v1', contentId: 'c1', format: 'PDF' } as any,  // has contentId
       ]),
     }
     const result = deduplicateAcrossSections(sections)
@@ -404,5 +405,162 @@ describe('deduplicateAcrossSections', () => {
 
     const totalItems = Object.values(sections).reduce((sum, s) => sum + s.items.length, 0)
     expect(totalItems).toBe(1)
+  })
+
+  // #965 regression: items with same name but different URLs must be preserved
+  it('preserves items with same name but different URLs (e.g., Cisco/Networks vs Cisco/Security)', () => {
+    const sections: Record<string, ProductSection> = {
+      'networks': makeSection('Networks', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco-networks' },
+        { name: 'F5', url: 'https://catalog.redhat.com/f5-networks' },
+      ]),
+      'security': makeSection('Security', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco-security' },
+        { name: 'Splunk', url: 'https://catalog.redhat.com/splunk-security' },
+      ]),
+      'devops-tools': makeSection('DevOps Tools', [
+        { name: 'Splunk', url: 'https://catalog.redhat.com/splunk-devops' },
+      ]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    // No items should be removed — all have different URLs
+    expect(result.removed).toHaveLength(0)
+
+    // All 5 items should be preserved
+    const totalItems = Object.values(sections).reduce((sum, s) => sum + s.items.length, 0)
+    expect(totalItems).toBe(5)
+
+    // Verify specific items remain in their sections
+    expect(sections['networks'].items).toHaveLength(2)
+    expect(sections['security'].items).toHaveLength(2)
+    expect(sections['devops-tools'].items).toHaveLength(1)
+  })
+
+  // #965 regression: same name + same URL should still dedup
+  it('deduplicates items with same name AND same URL across sections', () => {
+    const sections: Record<string, ProductSection> = {
+      'a': makeSection('A', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco-networks' },
+      ]),
+      'b': makeSection('B', [
+        { name: 'cisco', url: 'https://catalog.redhat.com/cisco-networks' },
+      ]),
+    }
+    const result = deduplicateAcrossSections(sections)
+    expect(result.removed).toHaveLength(1)
+
+    const totalItems = Object.values(sections).reduce((sum, s) => sum + s.items.length, 0)
+    expect(totalItems).toBe(1)
+  })
+})
+
+// ── reconcileWithSourceInventory (#965) ──────────────────────────────────
+
+describe('reconcileWithSourceInventory', () => {
+  it('adds missing items from source inventory to product sections', () => {
+    const sections: Record<string, ProductSection> = {
+      'networks': makeSection('Networks', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco-networks' },
+      ]),
+    }
+    const sourceInventory = {
+      name: 'Test Product',
+      slug: 'test-product',
+      source: 'sidebar-toc',
+      sourceFiles: [],
+      createdAt: new Date().toISOString(),
+      sections: {
+        'networks': {
+          title: 'Networks',
+          type: 'doclist-picker' as const,
+          parentSection: 'Integrations',
+          items: [
+            { name: 'Cisco', format: 'URL', itemType: 'link' },
+            { name: 'F5', format: 'URL', itemType: 'link' },
+          ],
+        },
+      },
+    }
+    const result = reconcileWithSourceInventory(sections, sourceInventory)
+    expect(result.added).toBe(1)
+
+    // F5 should now be in the networks section
+    const networkNames = sections['networks'].items.map(i => i.name)
+    expect(networkNames).toContain('F5')
+  })
+
+  it('does not duplicate items already present in sections', () => {
+    const sections: Record<string, ProductSection> = {
+      'networks': makeSection('Networks', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco-networks' },
+        { name: 'F5', url: 'https://catalog.redhat.com/f5' },
+      ]),
+    }
+    const sourceInventory = {
+      name: 'Test Product',
+      slug: 'test-product',
+      source: 'sidebar-toc',
+      sourceFiles: [],
+      createdAt: new Date().toISOString(),
+      sections: {
+        'networks': {
+          title: 'Networks',
+          type: 'doclist-picker' as const,
+          items: [
+            { name: 'Cisco', format: 'URL', itemType: 'link' },
+            { name: 'F5', format: 'URL', itemType: 'link' },
+          ],
+        },
+      },
+    }
+    const result = reconcileWithSourceInventory(sections, sourceInventory)
+    expect(result.added).toBe(0)
+    expect(sections['networks'].items).toHaveLength(2)
+  })
+
+  it('creates new sections from source inventory when missing in product', () => {
+    const sections: Record<string, ProductSection> = {
+      'networks': makeSection('Networks', [
+        { name: 'Cisco', url: 'https://catalog.redhat.com/cisco' },
+      ]),
+    }
+    const sourceInventory = {
+      name: 'Test Product',
+      slug: 'test-product',
+      source: 'sidebar-toc',
+      sourceFiles: [],
+      createdAt: new Date().toISOString(),
+      sections: {
+        'networks': {
+          title: 'Networks',
+          type: 'doclist-picker' as const,
+          items: [{ name: 'Cisco', format: 'URL', itemType: 'link' }],
+        },
+        'infrastructure': {
+          title: 'Infrastructure',
+          type: 'doclist-picker' as const,
+          parentSection: 'Integrations',
+          items: [
+            { name: 'SAP', format: 'URL', itemType: 'link' },
+          ],
+        },
+      },
+    }
+    const result = reconcileWithSourceInventory(sections, sourceInventory)
+    expect(result.added).toBe(1)
+    expect(result.sectionsCreated).toBe(1)
+
+    // Infrastructure section should exist with SAP
+    expect(sections['infrastructure']).toBeDefined()
+    expect(sections['infrastructure'].items[0].name).toBe('SAP')
+  })
+
+  it('returns zero added when source inventory is null', () => {
+    const sections: Record<string, ProductSection> = {
+      'a': makeSection('A', [{ name: 'Doc A' }]),
+    }
+    const result = reconcileWithSourceInventory(sections, null)
+    expect(result.added).toBe(0)
+    expect(result.sectionsCreated).toBe(0)
   })
 })
