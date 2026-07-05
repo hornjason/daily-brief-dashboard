@@ -239,6 +239,58 @@ export function deduplicateAcrossSections(
 }
 
 /**
+ * Reconciles _product.json sections against _product-source.json inventory (#965).
+ * Adds items from source inventory that are missing from the extracted sections.
+ * This ensures _product.json captures all items found in the Phase 1 DOM scan,
+ * even if extractRedHeaderSections missed some accordion panels.
+ * Returns { added, sectionsCreated } for logging.
+ */
+export function reconcileWithSourceInventory(
+  sections: Record<string, ProductSection>,
+  sourceInventory: { sections: Record<string, { title: string; type: string; parentSection?: string; items: Array<{ name: string; [k: string]: any }> }> } | null | undefined,
+): { added: number; sectionsCreated: number } {
+  if (!sourceInventory) return { added: 0, sectionsCreated: 0 }
+
+  let added = 0
+  let sectionsCreated = 0
+
+  for (const [sourceKey, sourceSection] of Object.entries(sourceInventory.sections)) {
+    // Build a set of existing item names (case-insensitive) in the target section
+    if (!sections[sourceKey]) {
+      // Section missing entirely from product — create it
+      if (sourceSection.items.length === 0) continue
+      sections[sourceKey] = {
+        title: sourceSection.title,
+        type: 'mixed',
+        items: [],
+      }
+      sectionsCreated++
+    }
+
+    const existingNames = new Set(
+      sections[sourceKey].items.map(i => i.name.toLowerCase().trim())
+    )
+
+    for (const sourceItem of sourceSection.items) {
+      const normalizedName = sourceItem.name.toLowerCase().trim()
+      if (existingNames.has(normalizedName)) continue
+
+      // Add missing item to the section
+      sections[sourceKey].items.push({
+        name: sourceItem.name,
+        description: sourceItem.description,
+        itemType: sourceItem.itemType,
+        domain: sourceSection.parentSection,
+      } as SectionItem)
+      existingNames.add(normalizedName)
+      added++
+    }
+  }
+
+  return { added, sectionsCreated }
+}
+
+/**
  * Auth canary check — validates auth before the full download loop (#874).
  * Picks the first downloadable item, attempts one API download, and checks
  * for 401/403 or login-page redirects. Returns { ok, reason?, skipped? }.
@@ -874,6 +926,7 @@ async function extractRedHeaderSections(
           // with document names. Build a mapping so CDS-intercepted documents can be
           // tagged with their domain.
           const accordionPanels = widget.querySelectorAll(
+            '.seismic-page-accordion-viewer, ' +
             '[class*="accordion"] [class*="panel"], ' +
             '[class*="accordion"] [class*="content"], ' +
             '[class*="Accordion"] [class*="Panel"], ' +
@@ -882,11 +935,13 @@ async function extractRedHeaderSections(
           for (const panel of accordionPanels) {
             // Find the heading for this accordion panel — look for the trigger/header sibling
             const parentItem = panel.closest(
+              '.seismic-page-accordion-viewer, ' +
               '[class*="accordion-item"], [class*="AccordionItem"], ' +
               '[class*="expandable-item"], [class*="pf-v5-c-accordion__expanded-content"]'
             ) || panel.parentElement
             if (!parentItem) continue
             const heading = parentItem.querySelector(
+              '.seismic-page-divider-view-text, .seismic-page-accordion-viewer-new-header-title, ' +
               '[class*="header"], [class*="trigger"], [class*="toggle"], ' +
               '[class*="Header"], button[class*="accordion"]'
             )
@@ -3888,6 +3943,14 @@ export async function scrapeProductPage(
         }
       }
       console.log(`[product-scraper] (#973) CDS name search: ${cdsSearched} searched, ${cdsFound} found, ${cdsAdded} added to sections`)
+    }
+
+    // ── Reconcile with Phase 1 source inventory (#965) ──────────────────
+    // Ensures _product.json captures all items found by buildProductSourceInventory,
+    // even if extractRedHeaderSections missed accordion panels.
+    const reconResult = reconcileWithSourceInventory(sections, productSourceInventory)
+    if (reconResult.added > 0) {
+      console.log(`[product-scraper] Reconciliation: added ${reconResult.added} items from _product-source.json (${reconResult.sectionsCreated} new sections)`)
     }
 
     // ── Dedup across all sections (#873) ──────────────────────────────────
