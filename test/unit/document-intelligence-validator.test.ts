@@ -115,7 +115,136 @@ describe('documentIntelligenceValidator', () => {
     expect(linksCheck?.severity).toBe('recommended')
   })
 
-  test('pass threshold is 65', () => {
-    expect(documentIntelligenceValidator.passThreshold).toBe(65)
+  test('pass threshold is 85', () => {
+    expect(documentIntelligenceValidator.passThreshold).toBe(85)
+  })
+
+  // ── Issue #963: Generic opener quality gate ──────────────────────────────
+
+  test('opener-not-generic fails for "Are you looking to..." pattern', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'content-kit',
+      summary: 'A comprehensive guide to automating network configurations with Ansible.',
+      productsReferenced: [{ name: 'Ansible Automation Platform' }],
+      integrationsReferenced: [{ technology: 'Cisco ACI', category: 'Networking' }],
+      audience: 'customer',
+      keyPoints: ['Automate network config'],
+      links: [{ name: 'Kit', url: 'https://example.com' }],
+      conversationOpener: 'Are you looking to streamline your automation workflows?',
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const openerCheck = result.checks.find(c => c.name === 'opener-not-generic')
+    expect(openerCheck).toBeDefined()
+    expect(openerCheck?.passed).toBe(false)
+    expect(openerCheck?.severity).toBe('recommended')
+  })
+
+  test('opener-not-generic fails for "Is your team..." pattern', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'solution-brief',
+      summary: 'A comprehensive guide to container platform management across hybrid cloud.',
+      productsReferenced: [{ name: 'OpenShift' }],
+      useCases: ['Container management'],
+      audience: 'customer',
+      keyPoints: ['Unified control plane'],
+      links: [{ name: 'Brief', url: 'https://example.com' }],
+      conversationOpener: 'Is your team struggling with container sprawl across multiple clouds?',
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const openerCheck = result.checks.find(c => c.name === 'opener-not-generic')
+    expect(openerCheck?.passed).toBe(false)
+  })
+
+  test('opener-not-generic fails for all banned prefixes', () => {
+    const banned = [
+      'Have you considered migrating to a unified platform?',
+      'Do you currently manage your infrastructure manually?',
+      'Would you like to reduce your operational costs?',
+      'Could you benefit from automated security scanning?',
+      'Can you imagine a world without manual deployments?',
+    ]
+    for (const opener of banned) {
+      const doc = JSON.stringify({
+        documentCategory: 'content-kit',
+        summary: 'A comprehensive guide to Red Hat product capabilities.',
+        productsReferenced: [{ name: 'RHEL' }],
+        useCases: ['Infrastructure'],
+        audience: 'customer',
+        keyPoints: ['Point'],
+        links: [{ name: 'Link', url: 'https://example.com' }],
+        conversationOpener: opener,
+      })
+      const result = documentIntelligenceValidator.validate(doc)
+      const check = result.checks.find(c => c.name === 'opener-not-generic')
+      expect(check?.passed).toBe(false)
+    }
+  })
+
+  test('opener-not-generic passes for observation-based opener', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'content-kit',
+      summary: 'A comprehensive guide to automating network configurations with Ansible.',
+      productsReferenced: [{ name: 'Ansible Automation Platform' }],
+      integrationsReferenced: [{ technology: 'Cisco ACI', category: 'Networking' }],
+      audience: 'customer',
+      keyPoints: ['Automate network config'],
+      links: [{ name: 'Kit', url: 'https://example.com' }],
+      conversationOpener: 'I noticed this joint Ansible-Cisco playbook collection automates 80% of common switch configurations.',
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const openerCheck = result.checks.find(c => c.name === 'opener-not-generic')
+    expect(openerCheck).toBeDefined()
+    expect(openerCheck?.passed).toBe(true)
+  })
+
+  test('opener-not-null fails for null opener on customer-facing docs', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'content-kit',
+      summary: 'A comprehensive guide to container security with ACS.',
+      productsReferenced: [{ name: 'Advanced Cluster Security' }],
+      useCases: ['Container security'],
+      audience: 'customer',
+      keyPoints: ['Shift-left security'],
+      links: [{ name: 'Kit', url: 'https://example.com' }],
+      conversationOpener: null,
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const nullCheck = result.checks.find(c => c.name === 'opener-not-null')
+    expect(nullCheck).toBeDefined()
+    expect(nullCheck?.passed).toBe(false)
+    expect(nullCheck?.severity).toBe('recommended')
+  })
+
+  test('opener-not-null fails for null opener on mixed-audience docs', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'solution-brief',
+      summary: 'A comprehensive guide for partners and customers on RHEL deployment.',
+      productsReferenced: [{ name: 'RHEL' }],
+      useCases: ['OS deployment'],
+      audience: 'mixed',
+      keyPoints: ['Stable platform'],
+      links: [{ name: 'Brief', url: 'https://example.com' }],
+      conversationOpener: null,
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const nullCheck = result.checks.find(c => c.name === 'opener-not-null')
+    expect(nullCheck?.passed).toBe(false)
+  })
+
+  test('opener-not-null passes for null opener on internal docs', () => {
+    const doc = JSON.stringify({
+      documentCategory: 'content-kit',
+      summary: 'Internal training material for sales team enablement.',
+      productsReferenced: [{ name: 'Ansible' }],
+      useCases: ['Enablement'],
+      audience: 'internal',
+      keyPoints: ['Training'],
+      links: [{ name: 'Link', url: 'https://example.com' }],
+      conversationOpener: null,
+    })
+    const result = documentIntelligenceValidator.validate(doc)
+    const nullCheck = result.checks.find(c => c.name === 'opener-not-null')
+    expect(nullCheck).toBeDefined()
+    expect(nullCheck?.passed).toBe(true)
   })
 })

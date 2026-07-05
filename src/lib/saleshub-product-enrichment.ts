@@ -358,7 +358,7 @@ export const DOCUMENT_INTELLIGENCE_SCHEMA = {
     conversationOpener: {
       type: 'string',
       nullable: true,
-      description: 'One sentence an AE can use to introduce this content in a customer conversation. Set null if not customer-facing.',
+      description: 'One observation-based sentence an AE can use to introduce this content. MUST start with a factual statement about a specific document detail — never a question. BANNED openers: "Are you", "Is your", "Have you", "Do you", "Would you", "Could you", "Can you". REQUIRED for customer-facing and mixed-audience docs (set null ONLY for internal/partner-only docs).',
     },
     techStackTriggers: {
       type: 'array',
@@ -387,7 +387,12 @@ Return valid JSON matching the provided schema.
 8. For buyingStage: classify depth — thought leadership/overviews = awareness, pain identification/problem framing = discovery, competitive comparisons/technical deep-dives = evaluation, ROI analyses/customer success stories = justification, cross-sell/upgrade/expansion content = expansion.
 9. For targetPersona: extract from document tone, technical depth, and stated audience — executive summaries target CxO, architecture guides target Platform Engineers, business cases target IT Directors.
 10. For customerProblem: identify the specific business problem this content addresses. Must be at least 20 characters and specific — not generic like "improve efficiency." Example: "Managing heterogeneous VM workloads across on-prem and cloud without a unified control plane."
-11. For conversationOpener: write one observation-based sentence an AE can use to introduce this content naturally. MANDATORY FORMAT: Start with "I noticed..." or "I saw that..." referencing something specific from the document content — a product capability, a use case, a technical scenario. NEVER start with "Are you looking to...", "Is your...", "Have you considered...", or any question format. Bad: "Are you looking to streamline your automation?" Good: "I noticed you're evaluating network automation tools — this joint Ansible-Cisco playbook collection automates 80% of common switch configurations." The opener must reference a SPECIFIC detail from the document, not a generic benefit.
+11. For conversationOpener: write one observation-based sentence an AE can use to introduce this content naturally. THIS IS A HARD CONSTRAINT — openers that violate it will be rejected by the quality gate and retried.
+    MANDATORY FORMAT: Start with a factual observation about a SPECIFIC detail from the document — a named capability, a concrete metric, a particular use case, a specific integration. Use stems like "I noticed...", "I saw that...", "This document covers...", "There's a new...".
+    ABSOLUTELY BANNED (regex-enforced, automatic rejection): Do NOT start with "Are you", "Is your", "Have you", "Do you", "Would you", "Could you", "Can you", or ANY question format. These are generic sales patterns that get ignored. Every opener starting with these words WILL be rejected.
+    BAD (will be rejected): "Are you looking to streamline your automation?" / "Is your team struggling with container sprawl?" / "Have you considered migrating to a unified platform?"
+    GOOD: "I noticed this joint Ansible-Cisco playbook collection automates 80% of common switch configurations." / "This migration guide walks through a 4-phase VMware-to-OpenShift transition with rollback procedures at each stage."
+    REQUIRED for customer-facing and mixed-audience documents — set null ONLY for internal or partner-only documents.
 12. For techStackTriggers: extract customer-side technologies that make this content relevant. Focus on what the CUSTOMER might have in their environment (VMware, Terraform, Jenkins, ServiceNow), not Red Hat product names.`
 
 const DOCUMENT_INTELLIGENCE_USER_PROMPT = (docName: string, content: string) =>

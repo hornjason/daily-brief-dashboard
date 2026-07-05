@@ -207,6 +207,26 @@ function checkDocumentIntelligence(output: string): QualityCheck[] {
       actual: !isCustomerFacing ? 'non-customer-facing — skipped' : `${conversationOpener.length} chars`,
       severity: 'recommended',
     })
+
+    // #963: Reject null openers for customer-facing and mixed-audience docs
+    checks.push({
+      name: 'opener-not-null',
+      passed: !isCustomerFacing || (conversationOpener !== '' && parsed.conversationOpener !== null),
+      expected: 'non-null conversationOpener for customer-facing/mixed docs',
+      actual: !isCustomerFacing ? 'non-customer-facing — skipped' : (parsed.conversationOpener === null ? 'null' : 'present'),
+      severity: 'recommended',
+    })
+
+    // #963: Reject generic question-format openers
+    const GENERIC_OPENER_RE = /^(Are you|Is your|Have you|Do you|Would you|Could you|Can you)/i
+    const openerIsGeneric = conversationOpener.length > 0 && GENERIC_OPENER_RE.test(conversationOpener)
+    checks.push({
+      name: 'opener-not-generic',
+      passed: !openerIsGeneric,
+      expected: 'observation-based opener, not a question starting with Are you/Is your/Have you/Do you/Would you/Could you/Can you',
+      actual: openerIsGeneric ? `starts with banned pattern: "${conversationOpener.slice(0, 40)}..."` : 'observation-based',
+      severity: 'recommended',
+    })
   }
 
   if ('techStackTriggers' in parsed) {
