@@ -3482,13 +3482,10 @@ export async function scrapeProductPage(
     // Activate DocListPicker widgets to trigger CDS API loads (#920)
     const { domainDocs } = await expandDomainDocListPickers(page)
 
-    // Screenshot audit artifact (#874 — Gate 0)
-    // Saved BEFORE extractRedHeaderSections() so the screenshot shows the fully-expanded page
+    // Set up output dirs early (needed by _product-source.json and later screenshot)
     const earlyProductSlug = slugify(header.name)
     const earlyConfigOutputDir = resolve('config-templates', 'saleshub-products', earlyProductSlug)
     mkdirSync(earlyConfigOutputDir, { recursive: true })
-    await page.screenshot({ fullPage: true, path: resolve(earlyConfigOutputDir, '_page-screenshot.png') })
-    console.log('[product-scraper] Saved page screenshot as audit artifact')
 
     // Phase 1 (#972): Build product source inventory from DOM BEFORE extraction
     const productSourceInventory = await buildProductSourceInventory(page, header.name)
@@ -3746,6 +3743,15 @@ export async function scrapeProductPage(
       }
       console.log(`[product-scraper] (#940) Carousel URL assignment: ${matched} matched, ${added} added as new items`)
     }
+
+    // ── Screenshot audit artifact (#964 — moved after all expansion steps) ──
+    // Carousel click-through navigates away from the product page and back,
+    // collapsing accordions/DocListPickers. Re-expand before capturing screenshot
+    // so the image shows the fully-expanded page state.
+    await expandAllAccordions(page)
+    await expandDomainDocListPickers(page)
+    await page.screenshot({ fullPage: true, path: resolve(earlyConfigOutputDir, '_page-screenshot.png') })
+    console.log('[product-scraper] Saved page screenshot as audit artifact (post-carousel)')
 
     // ── CDS document search + section assignment (#973) ─────────────────
     // For each CDS-intercepted document, search the Seismic API by exact name
