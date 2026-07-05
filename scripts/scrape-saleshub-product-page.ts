@@ -41,6 +41,10 @@ import type {
   ProductEnrichment,
   SectionItem,
 } from '../src/types/saleshub-product-types.ts'
+import {
+  isReleaseNotesItem,
+  filterReleaseNotesContent,
+} from './extract-product-content.ts'
 
 // ── Load .env when running standalone (not via container --env-file) ─────────
 // Gemini credentials and Google OAuth paths are needed for inline enrichment
@@ -2543,7 +2547,13 @@ async function downloadProductDocuments(
           })
 
           if (resp.ok) {
-            const gText = (await resp.text()).trim()
+            let gText = (await resp.text()).trim()
+            // Apply release notes filtering (#969 AC-3)
+            if (isReleaseNotesItem(item.name, item.url)) {
+              const before = gText.length
+              gText = filterReleaseNotesContent(gText)
+              console.log(`[product-scraper] Release notes filtered: ${before} -> ${gText.length} chars`)
+            }
             if (gText.length > 100) {
               mkdirSync(extractDir, { recursive: true })
               writeFileSync(extractPath, gText, 'utf-8')
@@ -2592,7 +2602,13 @@ async function downloadProductDocuments(
               viewerSkipped++
               continue
             }
-            const cleaned = sanitizeViewerHtml(html)
+            let cleaned = sanitizeViewerHtml(html)
+            // Apply release notes filtering (#969 AC-3)
+            if (isReleaseNotesItem(item.name, item.url)) {
+              const before = cleaned.length
+              cleaned = filterReleaseNotesContent(cleaned)
+              console.log(`[product-scraper] Release notes filtered: ${before} -> ${cleaned.length} chars`)
+            }
             // Extract meaningful text — skip if too short
             const textOnly = cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
             if (textOnly.length > 300) {
