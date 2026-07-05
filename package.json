@@ -19,6 +19,7 @@
     "@langfuse/otel": "^5.9.1",
     "@langfuse/tracing": "^5.9.1",
     "@opentelemetry/sdk-node": "^0.219.0",
+    "fflate": "^0.8.3",
     "googleapis": "^144.0.0",
     "hono": "^4.7.0",
     "unpdf": "^1.4.0",

@@ -20,6 +20,7 @@ import { downloadProductsFromDrive } from '../lib/saleshub-product-drive-sync.ts
 import type { ProductPage, ProductSection, ProductEnrichment, DocumentIntelligence } from '../types/saleshub-product-types.ts'
 import { resolve } from 'path'
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+import { extractPptxText } from '../lib/pptx-extractor.ts'
 
 // ── In-memory cache ──────────────────────────────────────────────────────────
 
@@ -750,7 +751,11 @@ export function createSaleshubProductsRouter() {
               if (lower.endsWith('.html')) {
                 // HTML files preserve hyperlinks from Google Docs — send as text
                 content = readFileSync(filePath, 'utf-8')
-              } else if (lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.pptx')) {
+              } else if (lower.endsWith('.pptx')) {
+                // PPTX is a ZIP of XML — NOT a PDF. Extract text instead of base64 wrapping.
+                content = extractPptxText(readFileSync(filePath))
+                if (!content) continue // skip if extraction yields nothing
+              } else if (lower.endsWith('.pdf') || lower.endsWith('.docx')) {
                 content = `[PDF:base64:${readFileSync(filePath).toString('base64')}]`
               } else {
                 content = readFileSync(filePath, 'utf-8')
