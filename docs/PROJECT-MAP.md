@@ -73,6 +73,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `PRINCIPLES.md` — Deep module architecture: three-layer design (scoring → templates → thin consumers), pre-flight questions, anti-patterns
 - `docs/adr/ADR-027-universal-signal-scoring-contract.md` — Signal scoring contract: centralized scoring, specificity, boosters, budget caps
 - `docs/ADDING-NEW-AE.md` — AE onboarding runbook (bootstrap, post-triggers, validation)
+- `docs/ADDING-NEW-PRODUCT.md` — SalesHub product scraper runbook (prerequisites, command, flow, verification, troubleshooting)
 - `docs/ENVIRONMENTS.md` — Environment strategy: 4 containers (prod 7777, dev 7778, test 7776, demo 7779), promotion pipeline, tunnel setup
 
 ## ADRs
