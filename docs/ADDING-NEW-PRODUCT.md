@@ -11,6 +11,11 @@ This runbook documents every step to add a new SalesHub product to the scraper p
 
 Canonical spec: `docs/specs/saleshub-product-scrape-process.md`
 
+The process has three phases:
+- **Phase A: VISUAL INVENTORY** — build the ground-truth checklist from what's visible on the page
+- **Phase B: DISCOVERY + EXTRACTION** — run the scraper to capture, extract, and enrich
+- **Phase C: VERIFY + FIX LOOP** — compare scraper output against the visual inventory, fix gaps, iterate until zero unexplained gaps
+
 ---
 
 ## 1. Prerequisites
@@ -27,7 +32,25 @@ Canonical spec: `docs/specs/saleshub-product-scrape-process.md`
 
 ---
 
-## 2. The Command
+## 2. Before Running a New Product
+
+This checklist must be completed BEFORE running the scraper. It builds the visual inventory that serves as the ground truth for verification.
+
+1. Navigate to the product page manually in a browser
+2. Expand EVERYTHING — every accordion, every DocListPicker, every carousel
+3. Screenshot each section individually (not one giant fullPage shot)
+4. List every document name per section: `"Business decks: [doc1, doc2, doc3]"`, `"Technical decks: [doc4, doc5]"`, etc.
+5. Count total items — this is your expected number
+6. Save as a section-by-section checklist
+7. Run the scraper (Section 4)
+8. Compare scraper output count vs your expected number
+9. Investigate any gaps (Phase C)
+
+This visual inventory is the GROUND TRUTH. Not `_product-source.json`. Not the API results. The screenshots and the document names you can see on the page.
+
+---
+
+## 3. The Command
 
 ```bash
 ssh jasonhorn@mini.local
@@ -40,7 +63,33 @@ Always use `--page-only` for new product scrapes.
 
 ---
 
-## 3. What the Scraper Does (Detailed Flow)
+## 4. Phase A: Visual Inventory (Source of Truth)
+
+This phase builds the ground-truth checklist of everything on the product page. It is NOT fully automated — the current code has gaps that require manual verification.
+
+### What the code does
+
+`buildProductSourceInventory(page)` at L1363 reads the sidebar TOC and walks DOM widgets to create `_product-source.json`. This attempts to inventory everything visible, but misses collapsed panels and items that only appear after DocListPicker expansion.
+
+### What you must verify manually
+
+The current code takes a single `page.screenshot({ fullPage: true })` at L3824. This is NOT sufficient for verification because:
+- Collapsed panels may not re-expand after carousel navigation
+- DocListPicker content may not be visible in a single capture
+- Section-by-section screenshots are NOT implemented yet
+
+Until automated section-by-section capture is built, manually verify the visual inventory against screenshots:
+
+1. For each section visible in the sidebar TOC:
+   - Expand the section fully (accordion + DocListPicker)
+   - Screenshot the section
+   - List every document name visible
+2. Save as a checklist: section name → list of document names
+3. This checklist IS the source of truth for Phase C
+
+---
+
+## 5. Phase B: Discovery + Extraction (Automated)
 
 All function names reference `scripts/scrape-saleshub-product-page.ts`.
 
@@ -74,9 +123,7 @@ CRITICAL: This step triggers CDS interception to capture domain-section document
 
 ### Step 7: Build Product Source Inventory
 
-`buildProductSourceInventory(page)` at L1363. Reads the sidebar table of contents (TOC) and walks DOM widgets to create the ground-truth baseline. Writes `_product-source.json` — the inventory of everything visible on the page BEFORE extraction logic runs.
-
-This file IS the source of truth for completeness (see Section 5).
+`buildProductSourceInventory(page)` at L1363. Reads the sidebar table of contents (TOC) and walks DOM widgets to create `_product-source.json`. See Phase A notes — this file is an approximation, not the true ground truth.
 
 ### Step 8: Red Header Section Extraction
 
@@ -94,9 +141,9 @@ KNOWN LIMITATION: Single `fullPage` screenshot may miss collapsed panels if re-e
 
 ### Step 11: CDS Name Search
 
-For each CDS-captured document NOT already in a section, POST to Seismic search API with `SearchTerm: doc.name`. Returns `downloadUrl` and `contentType`. Assigns to section via the `typeToSection` mapping (see Section 6). 100% hit rate on tested products. Code at L3834.
+For each CDS-captured document NOT already in a section, POST to Seismic search API with `SearchTerm: doc.name`. Returns `downloadUrl` and `contentType`. Assigns to section via the `typeToSection` mapping (see Section 8). 100% hit rate on tested products. Code at L3834.
 
-### Step 12: Phase 3a — Inline Viewer Extraction (PRIMARY path)
+### Step 12: Inline Viewer Extraction (PRIMARY path)
 
 For each item in the download queue, extraction path depends on URL type:
 
@@ -110,13 +157,13 @@ For each item in the download queue, extraction path depends on URL type:
 
 All extracted content saved to `extracted/{section-slug}/`. Cache: `existsSync(extractPath)` skips already-extracted items.
 
-### Step 13: Phase 3a2 — Viewer Downloads
+### Step 13: Viewer Downloads
 
 Downloads binary files (PPTX, PDF) from the viewer:
 - **PDF**: Clicks the `aria-label="Download"` button
 - **PPTX/DOCX**: Intercepts `download/formats` POST, calls Seismic download API with captured auth
 
-### Step 14: Phase 3b — File Downloads (FALLBACK)
+### Step 14: File Downloads (FALLBACK)
 
 Three-tier fallback when viewer download fails:
 1. Viewer click (Download button)
@@ -166,7 +213,52 @@ AUTH-GATED items are excluded from the denominator. Gate: coverage < 80% = scrap
 
 ---
 
-## 4. Expected Output
+## 6. Phase C: Verify + Fix Loop (Iterate Until Zero Gaps)
+
+This is the core quality loop. The scrape is NOT done until this loop exits with zero unexplained gaps. There is NO "acceptable gap" bucket — items are either CAPTURED or explicitly AUTH-GATED with a documented reason. "The scraper couldn't find it" is not a valid category; it means the scraper needs fixing.
+
+```
+WHILE gaps > 0:
+  1. Compare scraper output vs visual inventory (section-by-section)
+  2. List EVERY gap: "Section X: document Y is on the page but not in _product.json"
+  3. Diagnose WHY each gap exists:
+     - CDS interception didn't fire? -> DocListPicker expansion failed
+     - Name search returned no match? -> Document name differs between page and API
+     - Extraction failed? -> Viewer returned insufficient content
+     - Download failed? -> Circuit breaker, timeout, auth issue
+  4. FIX the scraper code for each gap (through ship)
+  5. Re-scrape the product
+  6. Re-verify against the SAME visual inventory
+  7. Report: "Gap closed: Y now captured" or "Gap persists: new diagnosis"
+END WHILE
+```
+
+The loop exits when EVERY document in the visual inventory is either:
+- **CAPTURED** — in `_product.json` AND enriched in `_enriched.json`
+- **AUTH-GATED** — documented with specific reason (Google OAuth required, Forrester paywall, etc.)
+
+### Verification artifacts to check at each iteration
+
+1. **Pipeline manifest** — `_pipeline-manifest.json`: check `gate0` (DOM count), `gate1` (scraped count), `gate2` (enriched count). All three should be non-zero.
+2. **Completeness manifest** — `_completeness-manifest.json`: coverage %, list of MISSING items. Compare section-by-section against visual inventory.
+3. **Drive verification** — `_drive-verification.json`: Drive folder audit. Every CAPTURED item should have a matching Drive entry.
+4. **Section count vs visual inventory** — The number of sections in `_product.json` must match the sections in your visual inventory.
+5. **Enrichment spot-check** — Read 3-5 entries in `_enriched.json`. Each should have a non-empty `summary`, `keyPoints`, and `useCases` at minimum.
+
+### Gap diagnosis reference
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Entire section missing from `_product.json` | Accordion or DocListPicker didn't expand | Check `expandAllAccordions` / `expandDomainDocListPickers` selectors |
+| Document visible on page but not in CDS capture | DocListPicker for that section didn't fire CDS API | Verify the widget was clicked; check 4s wait timing |
+| Document in CDS capture but not in any section | `typeToSection` mapping missing for its content type | Add mapping at L3834 |
+| Document name differs between page and API | Seismic name search returns no match | Use `contentId`-based viewer extraction instead |
+| Document extracted but not enriched | Quality gate rejected it (< 85/100) | Check enrichment logs; may need prompt tuning |
+| Document in `_product.json` but not on Drive | Upload failed silently | Check Drive upload logs; re-run upload step |
+
+---
+
+## 7. Expected Output
 
 A successful scrape produces log output like:
 
@@ -183,23 +275,11 @@ A successful scrape produces log output like:
 [product-scraper] Enrichment complete: N documents enriched
 ```
 
-If the coverage gate shows < 80%, the scraper has a bug — do not proceed. Check `_completeness-manifest.json` for which items are MISSING.
+If the coverage gate shows < 80%, the scraper has a bug — do not proceed. Check `_completeness-manifest.json` for which items are MISSING, then enter the Phase C fix loop.
 
 ---
 
-## 5. Verification Checklist
-
-After scrape completes, verify all five:
-
-1. **Pipeline manifest** — `_pipeline-manifest.json`: check `gate0` (DOM count), `gate1` (scraped count), `gate2` (enriched count). All three should be non-zero.
-2. **Completeness manifest** — `_completeness-manifest.json`: coverage %, list of MISSING items. Coverage should be >= 80%.
-3. **Drive verification** — `_drive-verification.json`: Drive folder audit. Every CAPTURED item should have a matching Drive entry.
-4. **Section count vs sidebar TOC** — Visual check: compare the number of sections in `_product.json` against the sidebar TOC in the screenshot. They should match.
-5. **Enrichment spot-check** — Read 3-5 entries in `_enriched.json`. Each should have a non-empty `summary`, `keyPoints`, and `useCases` at minimum.
-
----
-
-## 6. typeToSection Mapping
+## 8. typeToSection Mapping
 
 The mapping from Seismic content type to section name (L3834-L3851):
 
@@ -226,7 +306,7 @@ If a new product has content types not in this map, items fall to the `page-docu
 
 ---
 
-## 7. Approaches That DO NOT Work
+## 9. Approaches That DO NOT Work
 
 These were all tried during the OCP-V sessions (5+ days of debugging) and failed. Do NOT retry them.
 
@@ -246,23 +326,25 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 
 ---
 
-## 8. Known Limitations
+## 10. Known Limitations
 
-1. **Single fullPage screenshot** — May miss collapsed panels if accordion/DocListPicker re-expansion fails silently after carousel navigation.
+1. **Single fullPage screenshot** — May miss collapsed panels if accordion/DocListPicker re-expansion fails silently after carousel navigation. Section-by-section screenshots are not yet automated.
 
-2. **Google Docs export as plain text** — Current export uses `text/plain` MIME type, which loses hyperlinks. Should use `text/html` to preserve `<a href>` tags (see ADR/memory on HTML export).
+2. **`_product-source.json` is an approximation** — `buildProductSourceInventory()` attempts to build the inventory from DOM, but misses collapsed panels and late-rendered content. The visual inventory (screenshots + manual listing) is the true ground truth until this is improved.
 
-3. **No differential enrichment** — Re-enriches ALL documents on every scrape run. No delta detection. Large products (80+ items) take proportionally longer on re-runs.
+3. **Google Docs export as plain text** — Current export uses `text/plain` MIME type, which loses hyperlinks. Should use `text/html` to preserve `<a href>` tags (see ADR/memory on HTML export).
 
-4. **Carousel scroll capped at 10 attempts** — Products with more than ~10 carousel items in a single widget may have incomplete capture.
+4. **No differential enrichment** — Re-enriches ALL documents on every scrape run. No delta detection. Large products (80+ items) take proportionally longer on re-runs.
 
-5. **No cross-product dedup** — The same document appearing on multiple product pages gets scraped, enriched, and uploaded separately for each product.
+5. **Carousel scroll capped at 10 attempts** — Products with more than ~10 carousel items in a single widget may have incomplete capture.
 
-6. **`extract-product-content.ts` is a SEPARATE script** — It has different logic from the main `scrape-saleshub-product-page.ts`. Do not confuse them. The runbook command uses the main scraper only.
+6. **No cross-product dedup** — The same document appearing on multiple product pages gets scraped, enriched, and uploaded separately for each product.
+
+7. **`extract-product-content.ts` is a SEPARATE script** — It has different logic from the main `scrape-saleshub-product-page.ts`. Do not confuse them. The runbook command uses the main scraper only.
 
 ---
 
-## 9. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -275,7 +357,7 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 
 ---
 
-## 10. Currently Scraped Products
+## 12. Currently Scraped Products
 
 | Product | URL | Last Scraped | Sections | Enriched |
 |---|---|---|---|---|
