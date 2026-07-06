@@ -363,3 +363,4 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 |---|---|---|---|---|
 | AAP | `https://saleshub.redhat.com/Link/Content/DC6cbpX7BPhjbGCP6T6WH7B43M9B` | 2026-07-04 | 26 | 85 |
 | OCP-V | `https://saleshub.redhat.com/Link/Content/DCgpj38D4BgP2G4RCTjcVQ483WhP` | 2026-07-04 | 14 | 27 |
+| RHEL | `https://saleshub.redhat.com/apps/doccenter/.../lfe9029f53-bab0-4d06-99da-a067fcf164e9` | pending | — | — |

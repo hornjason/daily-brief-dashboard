@@ -79,6 +79,7 @@ process.on('unhandledRejection', (reason: any) => {
 
 const skipDownloads = process.argv.includes('--skip-downloads')
 const skipApiMerge = process.argv.includes('--page-only')
+const inventoryOnly = process.argv.includes('--inventory-only')
 
 // ── Exported pure helpers (tested in saleshub-product-download.test.ts) ─────
 
@@ -3567,6 +3568,15 @@ export async function scrapeProductPage(
     mkdirSync(earlyCacheOutputDir, { recursive: true })
     writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
     console.log(`[product-scraper] Phase 1: Wrote _product-source.json (${Object.keys(productSourceInventory.sections).length} sections)`)
+
+    // --inventory-only: exit after Phase 1 (#975)
+    if (inventoryOnly) {
+      // Take screenshot before exiting
+      await page.screenshot({ path: resolve(earlyConfigOutputDir, '_page-screenshot.png'), fullPage: true })
+      console.log(`[product-scraper] --inventory-only: Phase 1 complete. Review _product-source.json and screenshots before running full scrape.`)
+      console.log(`[product-scraper] Output: ${earlyConfigOutputDir}`)
+      return { name: header.name, slug: earlyProductSlug, sections: {}, items: 0 }
+    }
 
     // Extract red header sections (DOM — structure + text + accordion links)
     console.log('[product-scraper] Extracting sections by red header bars...')
