@@ -24,6 +24,7 @@ updated: 2026-05-24
 | Back up or restore config for migration | `docs/NEW-MACHINE-SETUP.md §5` + `make backup-config` / `make restore-config` |
 | Validate environment health | `make doctor` |
 | Add a new AE to the dashboard | `docs/ADDING-NEW-AE.md` |
+| Add a new SalesHub product to scrape | `docs/ADDING-NEW-PRODUCT.md` |
 | Check what's open, broken, or in progress | `BACKLOG.md` + [GitHub Issues](https://github.com/hornjason/asaCommandCenter/issues) |
 | Build a new feature using the skill pipeline | `CONTRIBUTING.md §Skill-driven development workflow` |
 | Start a refactor (architecture deepening) | `/improve-codebase-architecture` → `CONTRIBUTING.md §Skill-driven development workflow` |
@@ -57,6 +58,7 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 | `docs/MAC-MINI-DEMO-SETUP.md` | runbook | Mac Mini setup, tunnels, LaunchAgents, CI runner |
 | `docs/NEW-MACHINE-SETUP.md` | runbook | Fresh machine setup, config backup/restore, make doctor |
 | `docs/ADDING-NEW-AE.md` | runbook | Full AE onboarding flow |
+| `docs/ADDING-NEW-PRODUCT.md` | runbook | SalesHub product scrape — three-phase process, failed approaches, verify+fix loop |
 | `docs/ENVIRONMENTS.md` | reference | Port map, test/prod/demo/dev containers |
 | `docs/TESTING-RUNBOOK.md` | reference | Test suite, Playwright, state isolation |
 | `docs/E2E-BOOTSTRAP-FLOW.md` | spec | New-user E2E journey — Drive hierarchy, Mermaid flowchart, gap analysis |

@@ -161,6 +161,9 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 
 **SalesHub scraper runs ONLY on the Mac Mini container** — the laptop has no SalesHub auth (EmployeeIDP SSO). The scraper writes to `data/cache/saleshub/` in the Mac Mini container, then `sync-saleshub-drive.ts` uploads to Google Drive. **GAP:** Hero/laptop containers read `config-templates/saleshub-knowledge.json` baked into the image — there is NO automatic download from Drive. When Mac Mini scrapes new data, it does NOT automatically reach the hero image. This needs an L3 sync mechanism or manual config-templates update + rebuild.
 
+**Product scrape work — read the runbook first (MANDATORY):**
+Before adding a new product, debugging a product scrape, or modifying `scrape-saleshub-product-page.ts` — read `docs/ADDING-NEW-PRODUCT.md` first. It documents the three-phase process (Visual Inventory → Discovery+Extraction → Verify+Fix Loop), 7 failed approaches to avoid, and the iterate-until-zero-gaps rule. The spec at `docs/specs/saleshub-product-scrape-process.md` covers the technical flow. These two docs together replace any memory-based knowledge about the scraper.
+
 **Scrapers are stable — don't touch without explicit instruction.** The scraper layer (rh-scraper.ts, ccsp-scraper.ts, supportable-scraper.ts, sf-scraper.ts, scraper-manager.ts) took significant effort to stabilize. Any change requires reading SCRAPER-RULES.md first and explicit confirmation from Jason before modifying.
 
 **No parallelism in scrapers.** Supportable runs sequentially — APEX cookie collisions make parallel contexts unsafe. This is permanent, not a workaround. Do not design or implement parallel scraping approaches.
