@@ -3817,350 +3817,354 @@ export async function scrapeProductPage(
       }
     }
 
-    // --inventory-only: exit after Phase 1 with full capture (#975, #976)
-    if (inventoryOnly) {
-      // Merge DocListPicker results into inventory (#976 Gaps 1-2)
-      if (domainDocs.size > 0) {
-        for (const [domain, docEntries] of domainDocs) {
-          const domainKey = slugify(domain)
-          if (!productSourceInventory.sections[domainKey]) {
-            productSourceInventory.sections[domainKey] = {
-              title: domain,
-              type: 'doclist-picker',
-              items: [],
-            }
-          }
-          const existingNames = new Set(
-            productSourceInventory.sections[domainKey].items.map(i => i.name.toLowerCase())
-          )
-          for (const entry of docEntries) {
-            if (!existingNames.has(entry.name.toLowerCase())) {
-              productSourceInventory.sections[domainKey].items.push({
-                name: entry.name,
-                itemType: 'doclist-doc',
-                subSection: domain,
-              })
-              existingNames.add(entry.name.toLowerCase())
-            }
+    // ── Deep inventory capture (#976) ─────────────────────────────────────
+    // These steps run in BOTH modes (full scrape and --inventory-only) to ensure
+    // _product-source.json captures the same ~122 items regardless of mode.
+    // Merge DocListPicker results into inventory (#976 Gaps 1-2)
+    if (domainDocs.size > 0) {
+      for (const [domain, docEntries] of domainDocs) {
+        const domainKey = slugify(domain)
+        if (!productSourceInventory.sections[domainKey]) {
+          productSourceInventory.sections[domainKey] = {
+            title: domain,
+            type: 'doclist-picker',
+            items: [],
           }
         }
-        console.log(`[product-scraper] Merged ${domainDocs.size} DocListPicker domains into inventory`)
-      }
-
-      // Re-expand accordions after page restoration (#976)
-      await expandAllAccordions(page)
-      await page.waitForTimeout(2_000)
-
-      // Scroll carousels to load all lazy-rendered cards (#976 Gap 3)
-      const carouselScrollBtns = page.locator(
-        '[class*="seismic-page-widget-carousel"] button[class*="arrow-right"], ' +
-        '[class*="seismic-page-widget-carousel"] [aria-label*="Next"], ' +
-        '[class*="seismic-page-widget-carousel"] [class*="carousel-arrow"][class*="right"]'
-      )
-      const scrollBtnCount = await carouselScrollBtns.count()
-      if (scrollBtnCount > 0) {
-        console.log(`[product-scraper] Scrolling ${scrollBtnCount} carousels to load all cards...`)
-        for (let cb = 0; cb < scrollBtnCount; cb++) {
-          for (let scrollAttempt = 0; scrollAttempt < 8; scrollAttempt++) {
-            try {
-              const btn = carouselScrollBtns.nth(cb)
-              if (!(await btn.isVisible())) break
-              await btn.click({ timeout: 3_000 })
-              await page.waitForTimeout(600)
-            } catch { break }
-          }
-        }
-        await page.waitForTimeout(1_000)
-      }
-
-      // Re-scan DOM for newly loaded content after DocListPicker expansion (#976 Gaps 1-3)
-      const refreshedInventory = await buildProductSourceInventory(page, header.name)
-      for (const [key, section] of Object.entries(refreshedInventory.sections)) {
-        if (!productSourceInventory.sections[key]) {
-          productSourceInventory.sections[key] = section
-        } else {
-          const existingNames = new Set(
-            productSourceInventory.sections[key].items.map(i => i.name.toLowerCase())
-          )
-          for (const item of section.items) {
-            if (!existingNames.has(item.name.toLowerCase())) {
-              productSourceInventory.sections[key].items.push(item)
-              existingNames.add(item.name.toLowerCase())
-            }
-          }
-        }
-      }
-
-      // Individual accordion panel extraction — handles mutex accordion groups (#976 Gap 1)
-      // Some accordion widgets only allow one panel open at a time. buildProductSourceInventory
-      // only sees the last-expanded panel. Fix: toggle each panel individually and extract.
-      const accordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
-      const viewerCount = await accordionViewers.count()
-      if (viewerCount > 0) {
-        console.log(`[product-scraper] Extracting from ${viewerCount} accordion panels individually...`)
-        for (let v = 0; v < viewerCount; v++) {
-          try {
-            const viewer = accordionViewers.nth(v)
-            const header = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
-            if ((await header.count()) === 0) continue
-
-            const titleParts = await header.locator(
-              '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
-            ).first().textContent({ timeout: 5_000 }).catch(() => '')
-            const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
-            if (!cleanTitle || cleanTitle.length < 3) continue
-
-            // Check if panel content is hidden
-            const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
-            const isHidden = (await hiddenPanel.count()) > 0
-            if (isHidden) {
-              await header.scrollIntoViewIfNeeded({ timeout: 5_000 })
-              await header.click({ timeout: 10_000 })
-              await page.waitForTimeout(1_500)
-            }
-
-            // Extract ALL items from this panel
-            const panelItems = await viewer.evaluate((el: Element) => {
-              const results: Array<{ name: string; itemType: string }> = []
-              const seen = new Set<string>()
-              for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
-                const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
-                const name = (titleEl?.textContent || '').trim()
-                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                  seen.add(name.toLowerCase())
-                  results.push({ name, itemType: 'carousel-card' })
-                }
-              }
-              for (const row of el.querySelectorAll('table tr')) {
-                const cells = row.querySelectorAll('td')
-                if (cells.length === 0) continue
-                const nameEl = cells[0].querySelector('a, span') || cells[0]
-                const name = (nameEl?.textContent || '').trim()
-                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                  seen.add(name.toLowerCase())
-                  results.push({ name, itemType: 'table-row' })
-                }
-              }
-              for (const link of el.querySelectorAll('a[href]')) {
-                const name = (link.textContent || '').trim()
-                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                  const href = (link as HTMLAnchorElement).href || ''
-                  if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
-                  seen.add(name.toLowerCase())
-                  results.push({ name, itemType: 'link' })
-                }
-              }
-              return results
+        const existingNames = new Set(
+          productSourceInventory.sections[domainKey].items.map(i => i.name.toLowerCase())
+        )
+        for (const entry of docEntries) {
+          if (!existingNames.has(entry.name.toLowerCase())) {
+            productSourceInventory.sections[domainKey].items.push({
+              name: entry.name,
+              itemType: 'doclist-doc',
+              subSection: domain,
             })
-
-            if (panelItems.length > 0) {
-              const sectionKey = slugify(cleanTitle)
-              if (!productSourceInventory.sections[sectionKey]) {
-                productSourceInventory.sections[sectionKey] = {
-                  title: cleanTitle,
-                  type: 'doclist-picker' as const,
-                  items: [],
-                }
-              }
-              const existingNames = new Set(
-                productSourceInventory.sections[sectionKey].items.map(i => i.name.toLowerCase())
-              )
-              let addedCount = 0
-              for (const item of panelItems) {
-                if (!existingNames.has(item.name.toLowerCase())) {
-                  productSourceInventory.sections[sectionKey].items.push(item)
-                  existingNames.add(item.name.toLowerCase())
-                  addedCount++
-                }
-              }
-              if (addedCount > 0) {
-                console.log(`[product-scraper] Accordion panel "${cleanTitle}": added ${addedCount} new items (total: ${productSourceInventory.sections[sectionKey].items.length})`)
-              }
-            }
-          } catch (e: any) {
-            console.warn(`[product-scraper] Accordion panel ${v} extraction failed: ${(e.message ?? '').slice(0, 80)}`)
+            existingNames.add(entry.name.toLowerCase())
           }
         }
       }
+      console.log(`[product-scraper] Merged ${domainDocs.size} DocListPicker domains into inventory`)
+    }
 
-      // Remove empty sections that are fuzzy duplicates of populated ones (#976 Gap 4)
-      const normSlugDedup = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
-      const allSectionKeys = Object.keys(productSourceInventory.sections)
-      for (const key of allSectionKeys) {
-        if (!productSourceInventory.sections[key]) continue
-        if (productSourceInventory.sections[key].items.length > 0) continue
-        const normalizedKey = normSlugDedup(key)
-        const match = allSectionKeys.find(ek => {
-          if (ek === key || !productSourceInventory.sections[ek]) return false
-          if (productSourceInventory.sections[ek].items.length === 0) return false
-          if (ek.includes(key) || key.includes(ek)) return true
-          const normalizedEk = normSlugDedup(ek)
-          return normalizedEk === normalizedKey || normalizedEk.includes(normalizedKey) || normalizedKey.includes(normalizedEk)
-        })
-        if (match) {
-          console.log(`[product-scraper] Removing empty duplicate section "${key}" (matched by "${match}")`)
-          delete productSourceInventory.sections[key]
-        }
-      }
+    // Re-expand accordions after page restoration (#976)
+    await expandAllAccordions(page)
+    await page.waitForTimeout(2_000)
 
-      // ── Sub-page detection and inventory (#976) ──────────────────────────
-      // After main page inventory, check for TOC sections with 0 items that link to
-      // a different DocCenter URL. Navigate to each, inventory it, merge results back.
-      const mainPageUrl = page.url().split('?')[0]
-      const subPageCandidates: Array<{ key: string; title: string; href: string }> = []
-      for (const [key, section] of Object.entries(productSourceInventory.sections)) {
-        if (section.items.length === 0 && section.href) {
-          const sectionUrl = new URL(section.href).pathname
-          const mainPath = new URL(mainPageUrl).pathname
-          if (sectionUrl !== mainPath) {
-            subPageCandidates.push({ key, title: section.title, href: section.href })
-          }
-        }
-      }
-
-      if (subPageCandidates.length > 0) {
-        const maxSubPages = 10
-        console.log(`[product-scraper] Sub-page candidates: ${subPageCandidates.length} (max ${maxSubPages})`)
-        let subPageCount = 0
-
-        for (const candidate of subPageCandidates.slice(0, maxSubPages)) {
-          subPageCount++
-          console.log(`[product-scraper] Sub-page ${subPageCount}/${Math.min(subPageCandidates.length, maxSubPages)}: "${candidate.title}" → ${candidate.href.slice(0, 80)}`)
-
+    // Scroll carousels to load all lazy-rendered cards (#976 Gap 3)
+    const carouselScrollBtns = page.locator(
+      '[class*="seismic-page-widget-carousel"] button[class*="arrow-right"], ' +
+      '[class*="seismic-page-widget-carousel"] [aria-label*="Next"], ' +
+      '[class*="seismic-page-widget-carousel"] [class*="carousel-arrow"][class*="right"]'
+    )
+    const scrollBtnCount = await carouselScrollBtns.count()
+    if (scrollBtnCount > 0) {
+      console.log(`[product-scraper] Scrolling ${scrollBtnCount} carousels to load all cards...`)
+      for (let cb = 0; cb < scrollBtnCount; cb++) {
+        for (let scrollAttempt = 0; scrollAttempt < 8; scrollAttempt++) {
           try {
-            // Navigate to sub-page
-            await page.goto(candidate.href, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-            await page.waitForTimeout(5_000)
+            const btn = carouselScrollBtns.nth(cb)
+            if (!(await btn.isVisible())) break
+            await btn.click({ timeout: 3_000 })
+            await page.waitForTimeout(600)
+          } catch { break }
+        }
+      }
+      await page.waitForTimeout(1_000)
+    }
 
-            // Multi-pass scroll to load lazy content
-            for (let pass = 0; pass < 4; pass++) {
-              const beforeHeight = await page.evaluate(() => document.body.scrollHeight)
-              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-              await page.waitForTimeout(1_500)
-              const afterHeight = await page.evaluate(() => document.body.scrollHeight)
-              if (afterHeight === beforeHeight) break
+    // Re-scan DOM for newly loaded content after DocListPicker expansion (#976 Gaps 1-3)
+    const refreshedInventory = await buildProductSourceInventory(page, header.name)
+    for (const [key, section] of Object.entries(refreshedInventory.sections)) {
+      if (!productSourceInventory.sections[key]) {
+        productSourceInventory.sections[key] = section
+      } else {
+        const existingNames = new Set(
+          productSourceInventory.sections[key].items.map(i => i.name.toLowerCase())
+        )
+        for (const item of section.items) {
+          if (!existingNames.has(item.name.toLowerCase())) {
+            productSourceInventory.sections[key].items.push(item)
+            existingNames.add(item.name.toLowerCase())
+          }
+        }
+      }
+    }
+
+    // Individual accordion panel extraction — handles mutex accordion groups (#976 Gap 1)
+    // Some accordion widgets only allow one panel open at a time. buildProductSourceInventory
+    // only sees the last-expanded panel. Fix: toggle each panel individually and extract.
+    const accordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
+    const viewerCount = await accordionViewers.count()
+    if (viewerCount > 0) {
+      console.log(`[product-scraper] Extracting from ${viewerCount} accordion panels individually...`)
+      for (let v = 0; v < viewerCount; v++) {
+        try {
+          const viewer = accordionViewers.nth(v)
+          const accPanelHeader = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
+          if ((await accPanelHeader.count()) === 0) continue
+
+          const titleParts = await accPanelHeader.locator(
+            '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
+          ).first().textContent({ timeout: 5_000 }).catch(() => '')
+          const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
+          if (!cleanTitle || cleanTitle.length < 3) continue
+
+          // Check if panel content is hidden
+          const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
+          const isHidden = (await hiddenPanel.count()) > 0
+          if (isHidden) {
+            await accPanelHeader.scrollIntoViewIfNeeded({ timeout: 5_000 })
+            await accPanelHeader.click({ timeout: 10_000 })
+            await page.waitForTimeout(1_500)
+          }
+
+          // Extract ALL items from this panel
+          const panelItems = await viewer.evaluate((el: Element) => {
+            const results: Array<{ name: string; itemType: string }> = []
+            const seen = new Set<string>()
+            for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
+              const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+              const name = (titleEl?.textContent || '').trim()
+              if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase())
+                results.push({ name, itemType: 'carousel-card' })
+              }
             }
-            await page.evaluate(() => window.scrollTo(0, 0))
-            await page.waitForTimeout(1_000)
+            for (const row of el.querySelectorAll('table tr')) {
+              const cells = row.querySelectorAll('td')
+              if (cells.length === 0) continue
+              const nameEl = cells[0].querySelector('a, span') || cells[0]
+              const name = (nameEl?.textContent || '').trim()
+              if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase())
+                results.push({ name, itemType: 'table-row' })
+              }
+            }
+            for (const link of el.querySelectorAll('a[href]')) {
+              const name = (link.textContent || '').trim()
+              if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                const href = (link as HTMLAnchorElement).href || ''
+                if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                seen.add(name.toLowerCase())
+                results.push({ name, itemType: 'link' })
+              }
+            }
+            return results
+          })
 
-            // Expand accordions on sub-page
-            await expandAllAccordions(page)
-            await page.waitForTimeout(1_000)
+          if (panelItems.length > 0) {
+            const sectionKey = slugify(cleanTitle)
+            if (!productSourceInventory.sections[sectionKey]) {
+              productSourceInventory.sections[sectionKey] = {
+                title: cleanTitle,
+                type: 'doclist-picker' as const,
+                items: [],
+              }
+            }
+            const existingNames = new Set(
+              productSourceInventory.sections[sectionKey].items.map(i => i.name.toLowerCase())
+            )
+            let addedCount = 0
+            for (const item of panelItems) {
+              if (!existingNames.has(item.name.toLowerCase())) {
+                productSourceInventory.sections[sectionKey].items.push(item)
+                existingNames.add(item.name.toLowerCase())
+                addedCount++
+              }
+            }
+            if (addedCount > 0) {
+              console.log(`[product-scraper] Accordion panel "${cleanTitle}": added ${addedCount} new items (total: ${productSourceInventory.sections[sectionKey].items.length})`)
+            }
+          }
+        } catch (e: any) {
+          console.warn(`[product-scraper] Accordion panel ${v} extraction failed: ${(e.message ?? '').slice(0, 80)}`)
+        }
+      }
+    }
 
-            // Build sub-page inventory
-            const subInventory = await buildProductSourceInventory(page, header.name)
+    // Remove empty sections that are fuzzy duplicates of populated ones (#976 Gap 4)
+    const normSlugDedup = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const allSectionKeys = Object.keys(productSourceInventory.sections)
+    for (const key of allSectionKeys) {
+      if (!productSourceInventory.sections[key]) continue
+      if (productSourceInventory.sections[key].items.length > 0) continue
+      const normalizedKey = normSlugDedup(key)
+      const match = allSectionKeys.find(ek => {
+        if (ek === key || !productSourceInventory.sections[ek]) return false
+        if (productSourceInventory.sections[ek].items.length === 0) return false
+        if (ek.includes(key) || key.includes(ek)) return true
+        const normalizedEk = normSlugDedup(ek)
+        return normalizedEk === normalizedKey || normalizedEk.includes(normalizedKey) || normalizedKey.includes(normalizedEk)
+      })
+      if (match) {
+        console.log(`[product-scraper] Removing empty duplicate section "${key}" (matched by "${match}")`)
+        delete productSourceInventory.sections[key]
+      }
+    }
 
-            // Extract items from accordion panels individually (same logic as main page)
-            const subAccordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
-            const subViewerCount = await subAccordionViewers.count()
-            if (subViewerCount > 0) {
-              console.log(`[product-scraper] Sub-page "${candidate.title}": extracting from ${subViewerCount} accordion panels...`)
-              for (let v = 0; v < subViewerCount; v++) {
-                try {
-                  const viewer = subAccordionViewers.nth(v)
-                  const accHeader = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
-                  if ((await accHeader.count()) === 0) continue
+    // ── Sub-page detection and inventory (#976) ──────────────────────────
+    // After main page inventory, check for TOC sections with 0 items that link to
+    // a different DocCenter URL. Navigate to each, inventory it, merge results back.
+    const mainPageUrl = page.url().split('?')[0]
+    const subPageCandidates: Array<{ key: string; title: string; href: string }> = []
+    for (const [key, section] of Object.entries(productSourceInventory.sections)) {
+      if (section.items.length === 0 && section.href) {
+        const sectionUrl = new URL(section.href).pathname
+        const mainPath = new URL(mainPageUrl).pathname
+        if (sectionUrl !== mainPath) {
+          subPageCandidates.push({ key, title: section.title, href: section.href })
+        }
+      }
+    }
 
-                  const titleParts = await accHeader.locator(
-                    '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
-                  ).first().textContent({ timeout: 5_000 }).catch(() => '')
-                  const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
-                  if (!cleanTitle || cleanTitle.length < 3) continue
+    if (subPageCandidates.length > 0) {
+      const maxSubPages = 10
+      console.log(`[product-scraper] Sub-page candidates: ${subPageCandidates.length} (max ${maxSubPages})`)
+      let subPageCount = 0
 
-                  // Click hidden panels open
-                  const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
-                  const isHidden = (await hiddenPanel.count()) > 0
-                  if (isHidden) {
-                    await accHeader.scrollIntoViewIfNeeded({ timeout: 5_000 })
-                    await accHeader.click({ timeout: 10_000 })
-                    await page.waitForTimeout(1_500)
-                  }
+      for (const candidate of subPageCandidates.slice(0, maxSubPages)) {
+        subPageCount++
+        console.log(`[product-scraper] Sub-page ${subPageCount}/${Math.min(subPageCandidates.length, maxSubPages)}: "${candidate.title}" → ${candidate.href.slice(0, 80)}`)
 
-                  // Extract items from this panel
-                  const panelItems = await viewer.evaluate((el: Element) => {
-                    const results: Array<{ name: string; itemType: string }> = []
-                    const seen = new Set<string>()
-                    for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
-                      const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
-                      const name = (titleEl?.textContent || '').trim()
-                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                        seen.add(name.toLowerCase())
-                        results.push({ name, itemType: 'carousel-card' })
-                      }
-                    }
-                    for (const row of el.querySelectorAll('table tr')) {
-                      const cells = row.querySelectorAll('td')
-                      if (cells.length === 0) continue
-                      const nameEl = cells[0].querySelector('a, span') || cells[0]
-                      const name = (nameEl?.textContent || '').trim()
-                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                        seen.add(name.toLowerCase())
-                        results.push({ name, itemType: 'table-row' })
-                      }
-                    }
-                    for (const link of el.querySelectorAll('a[href]')) {
-                      const name = (link.textContent || '').trim()
-                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
-                        const href = (link as HTMLAnchorElement).href || ''
-                        if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
-                        seen.add(name.toLowerCase())
-                        results.push({ name, itemType: 'link' })
-                      }
-                    }
-                    return results
-                  })
+        try {
+          // Navigate to sub-page
+          await page.goto(candidate.href, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+          await page.waitForTimeout(5_000)
 
-                  if (panelItems.length > 0) {
-                    const panelKey = slugify(cleanTitle)
-                    const subPageKey = `${slugify(candidate.title)}/${panelKey}`
-                    if (!subInventory.sections[panelKey]) {
-                      subInventory.sections[panelKey] = {
-                        title: cleanTitle,
-                        type: 'doclist-picker' as const,
-                        items: [],
-                      }
-                    }
-                    const existingNames = new Set(
-                      subInventory.sections[panelKey].items.map(i => i.name.toLowerCase())
-                    )
-                    let addedCount = 0
-                    for (const item of panelItems) {
-                      if (!existingNames.has(item.name.toLowerCase())) {
-                        subInventory.sections[panelKey].items.push(item)
-                        existingNames.add(item.name.toLowerCase())
-                        addedCount++
-                      }
-                    }
-                    if (addedCount > 0) {
-                      console.log(`[product-scraper] Sub-page accordion "${cleanTitle}": added ${addedCount} items`)
-                    }
-                  }
-                } catch (e: any) {
-                  console.warn(`[product-scraper] Sub-page accordion panel ${v} failed: ${(e.message ?? '').slice(0, 80)}`)
+          // Multi-pass scroll to load lazy content
+          for (let pass = 0; pass < 4; pass++) {
+            const beforeHeight = await page.evaluate(() => document.body.scrollHeight)
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+            await page.waitForTimeout(1_500)
+            const afterHeight = await page.evaluate(() => document.body.scrollHeight)
+            if (afterHeight === beforeHeight) break
+          }
+          await page.evaluate(() => window.scrollTo(0, 0))
+          await page.waitForTimeout(1_000)
+
+          // Expand accordions on sub-page
+          await expandAllAccordions(page)
+          await page.waitForTimeout(1_000)
+
+          // Build sub-page inventory
+          const subInventory = await buildProductSourceInventory(page, header.name)
+
+          // Extract items from accordion panels individually (same logic as main page)
+          const subAccordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
+          const subViewerCount = await subAccordionViewers.count()
+          if (subViewerCount > 0) {
+            console.log(`[product-scraper] Sub-page "${candidate.title}": extracting from ${subViewerCount} accordion panels...`)
+            for (let v = 0; v < subViewerCount; v++) {
+              try {
+                const viewer = subAccordionViewers.nth(v)
+                const accHeader = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
+                if ((await accHeader.count()) === 0) continue
+
+                const titleParts = await accHeader.locator(
+                  '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
+                ).first().textContent({ timeout: 5_000 }).catch(() => '')
+                const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
+                if (!cleanTitle || cleanTitle.length < 3) continue
+
+                // Click hidden panels open
+                const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
+                const isHidden = (await hiddenPanel.count()) > 0
+                if (isHidden) {
+                  await accHeader.scrollIntoViewIfNeeded({ timeout: 5_000 })
+                  await accHeader.click({ timeout: 10_000 })
+                  await page.waitForTimeout(1_500)
                 }
+
+                // Extract items from this panel
+                const panelItems = await viewer.evaluate((el: Element) => {
+                  const results: Array<{ name: string; itemType: string }> = []
+                  const seen = new Set<string>()
+                  for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
+                    const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+                    const name = (titleEl?.textContent || '').trim()
+                    if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                      seen.add(name.toLowerCase())
+                      results.push({ name, itemType: 'carousel-card' })
+                    }
+                  }
+                  for (const row of el.querySelectorAll('table tr')) {
+                    const cells = row.querySelectorAll('td')
+                    if (cells.length === 0) continue
+                    const nameEl = cells[0].querySelector('a, span') || cells[0]
+                    const name = (nameEl?.textContent || '').trim()
+                    if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                      seen.add(name.toLowerCase())
+                      results.push({ name, itemType: 'table-row' })
+                    }
+                  }
+                  for (const link of el.querySelectorAll('a[href]')) {
+                    const name = (link.textContent || '').trim()
+                    if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                      const href = (link as HTMLAnchorElement).href || ''
+                      if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                      seen.add(name.toLowerCase())
+                      results.push({ name, itemType: 'link' })
+                    }
+                  }
+                  return results
+                })
+
+                if (panelItems.length > 0) {
+                  const panelKey = slugify(cleanTitle)
+                  const subPageKey = `${slugify(candidate.title)}/${panelKey}`
+                  if (!subInventory.sections[panelKey]) {
+                    subInventory.sections[panelKey] = {
+                      title: cleanTitle,
+                      type: 'doclist-picker' as const,
+                      items: [],
+                    }
+                  }
+                  const existingNames = new Set(
+                    subInventory.sections[panelKey].items.map(i => i.name.toLowerCase())
+                  )
+                  let addedCount = 0
+                  for (const item of panelItems) {
+                    if (!existingNames.has(item.name.toLowerCase())) {
+                      subInventory.sections[panelKey].items.push(item)
+                      existingNames.add(item.name.toLowerCase())
+                      addedCount++
+                    }
+                  }
+                  if (addedCount > 0) {
+                    console.log(`[product-scraper] Sub-page accordion "${cleanTitle}": added ${addedCount} items`)
+                  }
+                }
+              } catch (e: any) {
+                console.warn(`[product-scraper] Sub-page accordion panel ${v} failed: ${(e.message ?? '').slice(0, 80)}`)
               }
             }
+          }
 
-            // Merge sub-page sections into main inventory with parent prefix
-            let subPageItems = 0
-            for (const [subKey, subSection] of Object.entries(subInventory.sections)) {
-              if (subSection.items.length === 0) continue
-              const mergedKey = `${slugify(candidate.title)}/${subKey}`
-              productSourceInventory.sections[mergedKey] = {
-                title: subSection.title,
-                type: subSection.type,
-                parentSection: candidate.title,
-                items: subSection.items,
-              }
-              subPageItems += subSection.items.length
+          // Merge sub-page sections into main inventory with parent prefix
+          let subPageItems = 0
+          for (const [subKey, subSection] of Object.entries(subInventory.sections)) {
+            if (subSection.items.length === 0) continue
+            const mergedKey = `${slugify(candidate.title)}/${subKey}`
+            productSourceInventory.sections[mergedKey] = {
+              title: subSection.title,
+              type: subSection.type,
+              parentSection: candidate.title,
+              items: subSection.items,
             }
+            subPageItems += subSection.items.length
+          }
 
-            // Remove the original empty section since it's now expanded into sub-sections
-            if (subPageItems > 0 && productSourceInventory.sections[candidate.key]?.items.length === 0) {
-              delete productSourceInventory.sections[candidate.key]
-            }
+          // Remove the original empty section since it's now expanded into sub-sections
+          if (subPageItems > 0 && productSourceInventory.sections[candidate.key]?.items.length === 0) {
+            delete productSourceInventory.sections[candidate.key]
+          }
 
-            // Take sub-page screenshots
+          console.log(`[product-scraper] Sub-page "${candidate.title}": ${subPageItems} items merged into ${Object.keys(subInventory.sections).filter(k => subInventory.sections[k].items.length > 0).length} sections`)
+
+          // Sub-page screenshots (inventory-only)
+          if (inventoryOnly) {
             const subScreenshotDir = resolve(earlyConfigOutputDir, 'screenshots')
             mkdirSync(subScreenshotDir, { recursive: true })
             const subPageSlug = slugify(candidate.title)
@@ -4168,9 +4172,6 @@ export async function scrapeProductPage(
               path: resolve(subScreenshotDir, `subpage-${subPageSlug}-full.png`),
               fullPage: true,
             })
-            console.log(`[product-scraper] Sub-page "${candidate.title}": ${subPageItems} items merged into ${Object.keys(subInventory.sections).filter(k => subInventory.sections[k].items.length > 0).length} sections`)
-
-            // Per-section screenshots on sub-page
             const subMainCol = page.locator('.articleSdk-theme-page-doubleColumn-main')
             if ((await subMainCol.count()) > 0) {
               const subAccWidgets = subMainCol.locator('[class*="widget-accordion"]')
@@ -4189,18 +4190,32 @@ export async function scrapeProductPage(
                 } catch { /* non-critical */ }
               }
             }
-
-          } catch (e: any) {
-            console.warn(`[product-scraper] Sub-page "${candidate.title}" failed: ${(e.message ?? '').slice(0, 120)}`)
           }
-        }
 
-        // Navigate back to main page
-        console.log(`[product-scraper] Navigating back to main product page...`)
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-        await page.waitForTimeout(5_000)
+        } catch (e: any) {
+          console.warn(`[product-scraper] Sub-page "${candidate.title}" failed: ${(e.message ?? '').slice(0, 120)}`)
+        }
       }
 
+      // Navigate back to main page
+      console.log(`[product-scraper] Navigating back to main product page...`)
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await page.waitForTimeout(5_000)
+    }
+
+    // Rewrite _product-source.json with deep inventory results (#976)
+    writeJsonAtomic(resolve(earlyConfigOutputDir, '_product-source.json'), productSourceInventory)
+    writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
+    {
+      let deepInventoryTotal = 0
+      for (const section of Object.values(productSourceInventory.sections)) {
+        deepInventoryTotal += section.items.length
+      }
+      console.log(`[product-scraper] Deep inventory: ${Object.keys(productSourceInventory.sections).length} sections, ${deepInventoryTotal} items`)
+    }
+
+    // --inventory-only: exit after Phase 1 with screenshots (#975, #976)
+    if (inventoryOnly) {
       // Take fullPage screenshot
       await page.screenshot({ path: resolve(earlyConfigOutputDir, '_page-screenshot.png'), fullPage: true })
 
