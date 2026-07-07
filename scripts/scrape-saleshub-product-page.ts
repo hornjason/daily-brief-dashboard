@@ -1362,6 +1362,7 @@ interface ProductSourceSection {
   title: string
   type: 'link-list' | 'carousel' | 'doclist-picker'
   parentSection?: string
+  href?: string
   items: ProductSourceItem[]
 }
 
@@ -1384,7 +1385,7 @@ async function buildProductSourceInventory(
   // The sidebar TOC always lists every section on the page regardless of
   // content type (carousels, DocListPickers, accordions).
   const sidebarTocEntries = await page.evaluate(() => {
-    const entries: Array<{ title: string }> = []
+    const entries: Array<{ title: string; href?: string }> = []
     const seen = new Set<string>()
 
     const sidebar = document.querySelector('.articleSdk-theme-page-doubleColumn-sidebar')
@@ -1405,7 +1406,8 @@ async function buildProductSourceInventory(
           const key = text.toLowerCase()
           if (seen.has(key)) continue
           seen.add(key)
-          entries.push({ title: text })
+          const href = (link as HTMLAnchorElement).href || ''
+          entries.push({ title: text, href: href.startsWith('http') ? href : undefined })
         }
         if (entries.length > 0) return entries
       }
@@ -1424,7 +1426,8 @@ async function buildProductSourceInventory(
             const key = text.toLowerCase()
             if (seen.has(key)) continue
             seen.add(key)
-            entries.push({ title: text })
+            const href = (link as HTMLAnchorElement).href || ''
+            entries.push({ title: text, href: href.startsWith('http') ? href : undefined })
           }
           if (entries.length > 0) break
         }
@@ -1441,7 +1444,8 @@ async function buildProductSourceInventory(
       const key = text.toLowerCase()
       if (seen.has(key)) continue
       seen.add(key)
-      entries.push({ title: text })
+      const href = (link as HTMLAnchorElement).href || ''
+      entries.push({ title: text, href: href.startsWith('http') ? href : undefined })
     }
 
     return entries
@@ -1449,7 +1453,63 @@ async function buildProductSourceInventory(
 
   console.log(`[product-scraper] Phase 1: Sidebar TOC found ${sidebarTocEntries.length} sections`)
   for (const entry of sidebarTocEntries) {
-    console.log(`  TOC: "${entry.title}"`)
+    console.log(`  TOC: "${entry.title}"${entry.href ? ` → ${entry.href.slice(0, 80)}` : ''}`)
+  }
+
+  // Step 1b: Scan horizontal navigation picker for sub-page links (#976)
+  // The sidebar TOC has anchor links (same-page scrolling). The horizontal navigation
+  // picker may have pills that link to entirely different DocCenter URLs (sub-pages).
+  const navPickerResult = await page.evaluate(() => {
+    const links: Array<{ title: string; href: string }> = []
+    const debug: string[] = []
+    const navPicker = document.querySelector('.seismic-page-navigationPicker-Buttons')
+      || document.querySelector('[class*="seismic-page-widget-navigation"]')
+      || document.querySelector('[class*="navigationPicker"]')
+    if (!navPicker) {
+      for (const el of document.querySelectorAll('a[href]')) {
+        const text = (el.textContent || '').trim()
+        const href = (el as HTMLAnchorElement).href || ''
+        if (text.length >= 3 && text.length <= 100 && href.startsWith('http') && href.includes('/doccenter/')) {
+          links.push({ title: text, href })
+        }
+      }
+      return { links, debug, found: false }
+    }
+    for (const el of navPicker.querySelectorAll('a[href], [role="link"], [role="button"]')) {
+      const text = (el.textContent || '').trim().replace(/\s+/g, ' ')
+      if (!text || text.length < 3 || text.length > 100) continue
+      const href = (el as HTMLAnchorElement).href || ''
+      if (href.startsWith('http')) {
+        links.push({ title: text, href })
+      }
+    }
+    return { links, debug, found: true }
+  })
+  if (!navPickerResult.found) {
+    console.log(`[product-scraper] Phase 1: No nav picker element found; scanned ${navPickerResult.links.length} page links`)
+  }
+  if (navPickerResult.links.length > 0) {
+    const currentPath = new URL(page.url().split('?')[0]).pathname
+    let subPageLinksFound = 0
+    for (const navLink of navPickerResult.links) {
+      try {
+        const linkPath = new URL(navLink.href).pathname
+        if (linkPath === currentPath) continue
+      } catch { continue }
+      const matchingEntry = sidebarTocEntries.find(
+        e => e.title.toLowerCase() === navLink.title.toLowerCase() && !e.href
+      )
+      if (matchingEntry) {
+        matchingEntry.href = navLink.href
+        subPageLinksFound++
+        console.log(`[product-scraper] Phase 1: Nav sub-page link "${navLink.title}" -> ${navLink.href.slice(0, 80)}`)
+      }
+    }
+    if (subPageLinksFound === 0) {
+      console.log(`[product-scraper] Phase 1: Nav picker found ${navPickerResult.links.length} links but none matched empty TOC sections`)
+    }
+  } else {
+    console.log(`[product-scraper] Phase 1: No navigation picker links found on page`)
   }
 
   // Step 2: Walk DOM widgets to extract items per section (existing logic)
@@ -1633,7 +1693,12 @@ async function buildProductSourceInventory(
   for (const tocEntry of sidebarTocEntries) {
     const tocKey = tocEntry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
     // Check exact match first
-    if (mergedSections[tocKey]) continue
+    if (mergedSections[tocKey]) {
+      if (tocEntry.href && !mergedSections[tocKey].href) {
+        mergedSections[tocKey].href = tocEntry.href
+      }
+      continue
+    }
     // Fuzzy match: normalize slugs by removing filler words, then check containment (#976 Gap 4)
     const normSlug = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
     const normalizedTocKey = normSlug(tocKey)
@@ -1644,16 +1709,20 @@ async function buildProductSourceInventory(
       return normalizedEk === normalizedTocKey || normalizedEk.includes(normalizedTocKey) || normalizedTocKey.includes(normalizedEk)
     })
     if (fuzzyMatch) {
+      if (tocEntry.href && !mergedSections[fuzzyMatch].href) {
+        mergedSections[fuzzyMatch].href = tocEntry.href
+      }
       console.log(`[product-scraper] Phase 1: TOC "${tocEntry.title}" (${tocKey}) fuzzy-matched to existing "${fuzzyMatch}" — skipping duplicate`)
       continue
     }
     mergedSections[tocKey] = {
       title: tocEntry.title,
       type: 'link-list',
+      href: tocEntry.href,
       items: [],
     }
     tocOnly++
-    console.log(`[product-scraper] Phase 1: Section "${tocEntry.title}" from sidebar TOC (not in DOM widgets)`)
+    console.log(`[product-scraper] Phase 1: Section "${tocEntry.title}" from sidebar TOC (not in DOM widgets)${tocEntry.href ? ` [sub-page: ${tocEntry.href.slice(0, 60)}]` : ''}`)
   }
 
   let totalItems = 0
@@ -3932,6 +4001,204 @@ export async function scrapeProductPage(
           console.log(`[product-scraper] Removing empty duplicate section "${key}" (matched by "${match}")`)
           delete productSourceInventory.sections[key]
         }
+      }
+
+      // ── Sub-page detection and inventory (#976) ──────────────────────────
+      // After main page inventory, check for TOC sections with 0 items that link to
+      // a different DocCenter URL. Navigate to each, inventory it, merge results back.
+      const mainPageUrl = page.url().split('?')[0]
+      const subPageCandidates: Array<{ key: string; title: string; href: string }> = []
+      for (const [key, section] of Object.entries(productSourceInventory.sections)) {
+        if (section.items.length === 0 && section.href) {
+          const sectionUrl = new URL(section.href).pathname
+          const mainPath = new URL(mainPageUrl).pathname
+          if (sectionUrl !== mainPath) {
+            subPageCandidates.push({ key, title: section.title, href: section.href })
+          }
+        }
+      }
+
+      if (subPageCandidates.length > 0) {
+        const maxSubPages = 10
+        console.log(`[product-scraper] Sub-page candidates: ${subPageCandidates.length} (max ${maxSubPages})`)
+        let subPageCount = 0
+
+        for (const candidate of subPageCandidates.slice(0, maxSubPages)) {
+          subPageCount++
+          console.log(`[product-scraper] Sub-page ${subPageCount}/${Math.min(subPageCandidates.length, maxSubPages)}: "${candidate.title}" → ${candidate.href.slice(0, 80)}`)
+
+          try {
+            // Navigate to sub-page
+            await page.goto(candidate.href, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+            await page.waitForTimeout(5_000)
+
+            // Multi-pass scroll to load lazy content
+            for (let pass = 0; pass < 4; pass++) {
+              const beforeHeight = await page.evaluate(() => document.body.scrollHeight)
+              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+              await page.waitForTimeout(1_500)
+              const afterHeight = await page.evaluate(() => document.body.scrollHeight)
+              if (afterHeight === beforeHeight) break
+            }
+            await page.evaluate(() => window.scrollTo(0, 0))
+            await page.waitForTimeout(1_000)
+
+            // Expand accordions on sub-page
+            await expandAllAccordions(page)
+            await page.waitForTimeout(1_000)
+
+            // Build sub-page inventory
+            const subInventory = await buildProductSourceInventory(page, header.name)
+
+            // Extract items from accordion panels individually (same logic as main page)
+            const subAccordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
+            const subViewerCount = await subAccordionViewers.count()
+            if (subViewerCount > 0) {
+              console.log(`[product-scraper] Sub-page "${candidate.title}": extracting from ${subViewerCount} accordion panels...`)
+              for (let v = 0; v < subViewerCount; v++) {
+                try {
+                  const viewer = subAccordionViewers.nth(v)
+                  const accHeader = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
+                  if ((await accHeader.count()) === 0) continue
+
+                  const titleParts = await accHeader.locator(
+                    '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
+                  ).first().textContent({ timeout: 5_000 }).catch(() => '')
+                  const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
+                  if (!cleanTitle || cleanTitle.length < 3) continue
+
+                  // Click hidden panels open
+                  const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
+                  const isHidden = (await hiddenPanel.count()) > 0
+                  if (isHidden) {
+                    await accHeader.scrollIntoViewIfNeeded({ timeout: 5_000 })
+                    await accHeader.click({ timeout: 10_000 })
+                    await page.waitForTimeout(1_500)
+                  }
+
+                  // Extract items from this panel
+                  const panelItems = await viewer.evaluate((el: Element) => {
+                    const results: Array<{ name: string; itemType: string }> = []
+                    const seen = new Set<string>()
+                    for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
+                      const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+                      const name = (titleEl?.textContent || '').trim()
+                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                        seen.add(name.toLowerCase())
+                        results.push({ name, itemType: 'carousel-card' })
+                      }
+                    }
+                    for (const row of el.querySelectorAll('table tr')) {
+                      const cells = row.querySelectorAll('td')
+                      if (cells.length === 0) continue
+                      const nameEl = cells[0].querySelector('a, span') || cells[0]
+                      const name = (nameEl?.textContent || '').trim()
+                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                        seen.add(name.toLowerCase())
+                        results.push({ name, itemType: 'table-row' })
+                      }
+                    }
+                    for (const link of el.querySelectorAll('a[href]')) {
+                      const name = (link.textContent || '').trim()
+                      if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                        const href = (link as HTMLAnchorElement).href || ''
+                        if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                        seen.add(name.toLowerCase())
+                        results.push({ name, itemType: 'link' })
+                      }
+                    }
+                    return results
+                  })
+
+                  if (panelItems.length > 0) {
+                    const panelKey = slugify(cleanTitle)
+                    const subPageKey = `${slugify(candidate.title)}/${panelKey}`
+                    if (!subInventory.sections[panelKey]) {
+                      subInventory.sections[panelKey] = {
+                        title: cleanTitle,
+                        type: 'doclist-picker' as const,
+                        items: [],
+                      }
+                    }
+                    const existingNames = new Set(
+                      subInventory.sections[panelKey].items.map(i => i.name.toLowerCase())
+                    )
+                    let addedCount = 0
+                    for (const item of panelItems) {
+                      if (!existingNames.has(item.name.toLowerCase())) {
+                        subInventory.sections[panelKey].items.push(item)
+                        existingNames.add(item.name.toLowerCase())
+                        addedCount++
+                      }
+                    }
+                    if (addedCount > 0) {
+                      console.log(`[product-scraper] Sub-page accordion "${cleanTitle}": added ${addedCount} items`)
+                    }
+                  }
+                } catch (e: any) {
+                  console.warn(`[product-scraper] Sub-page accordion panel ${v} failed: ${(e.message ?? '').slice(0, 80)}`)
+                }
+              }
+            }
+
+            // Merge sub-page sections into main inventory with parent prefix
+            let subPageItems = 0
+            for (const [subKey, subSection] of Object.entries(subInventory.sections)) {
+              if (subSection.items.length === 0) continue
+              const mergedKey = `${slugify(candidate.title)}/${subKey}`
+              productSourceInventory.sections[mergedKey] = {
+                title: subSection.title,
+                type: subSection.type,
+                parentSection: candidate.title,
+                items: subSection.items,
+              }
+              subPageItems += subSection.items.length
+            }
+
+            // Remove the original empty section since it's now expanded into sub-sections
+            if (subPageItems > 0 && productSourceInventory.sections[candidate.key]?.items.length === 0) {
+              delete productSourceInventory.sections[candidate.key]
+            }
+
+            // Take sub-page screenshots
+            const subScreenshotDir = resolve(earlyConfigOutputDir, 'screenshots')
+            mkdirSync(subScreenshotDir, { recursive: true })
+            const subPageSlug = slugify(candidate.title)
+            await page.screenshot({
+              path: resolve(subScreenshotDir, `subpage-${subPageSlug}-full.png`),
+              fullPage: true,
+            })
+            console.log(`[product-scraper] Sub-page "${candidate.title}": ${subPageItems} items merged into ${Object.keys(subInventory.sections).filter(k => subInventory.sections[k].items.length > 0).length} sections`)
+
+            // Per-section screenshots on sub-page
+            const subMainCol = page.locator('.articleSdk-theme-page-doubleColumn-main')
+            if ((await subMainCol.count()) > 0) {
+              const subAccWidgets = subMainCol.locator('[class*="widget-accordion"]')
+              const subAccCount = await subAccWidgets.count()
+              for (let sa = 0; sa < subAccCount; sa++) {
+                try {
+                  const widget = subAccWidgets.nth(sa)
+                  const widgetText = (await widget.textContent({ timeout: 5_000 }).catch(() => '') || '')
+                    .replace(/[\u200e\u200f]+/g, '').trim().slice(0, 50)
+                  const accSlug = widgetText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'accordion'
+                  await widget.scrollIntoViewIfNeeded({ timeout: 5_000 })
+                  await page.waitForTimeout(300)
+                  await widget.screenshot({
+                    path: resolve(subScreenshotDir, `subpage-${subPageSlug}-${String(sa + 1).padStart(2, '0')}-${accSlug}.png`),
+                  })
+                } catch { /* non-critical */ }
+              }
+            }
+
+          } catch (e: any) {
+            console.warn(`[product-scraper] Sub-page "${candidate.title}" failed: ${(e.message ?? '').slice(0, 120)}`)
+          }
+        }
+
+        // Navigate back to main page
+        console.log(`[product-scraper] Navigating back to main product page...`)
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await page.waitForTimeout(5_000)
       }
 
       // Take fullPage screenshot
