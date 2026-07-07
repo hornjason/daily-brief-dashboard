@@ -624,6 +624,41 @@ export async function generateAndSaveAccountPlan(
 
 // ── #978: CY27 Midyear Update generation ────────────────────────────────────
 
+function formatInitiativesSection(raw: string): string {
+  if (!raw) return ''
+  try {
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return raw
+    return arr.map((item: any) => {
+      const name = item.initiativeName ?? item.name ?? 'Untitled Initiative'
+      const desc = item.description ?? ''
+      const lines = [`### Initiative: ${name}`, desc]
+      if (item.successMetrics) lines.push(`- **Success Metrics:** ${item.successMetrics}`)
+      if (item.targetValue) lines.push(`- **Target Value:** ${item.targetValue}`)
+      if (item.timeline) lines.push(`- **Timeline:** ${item.timeline}`)
+      if (item.relevantSolution) lines.push(`- **Red Hat Solution:** ${item.relevantSolution}`)
+      return lines.join('\n')
+    }).join('\n\n')
+  } catch {
+    return raw
+  }
+}
+
+function formatEconomicBuyerSection(raw: string): string {
+  if (!raw) return ''
+  try {
+    const obj = JSON.parse(raw)
+    if (typeof obj !== 'object' || obj === null || !obj.name) return raw
+    const lines = [`**${obj.name}**${obj.title ? `, ${obj.title}` : ''}`]
+    if (obj.pnlAuthority) lines.push(`- **P&L Authority:** ${obj.pnlAuthority}`)
+    if (obj.vetoPower) lines.push(`- **Veto Power:** ${obj.vetoPower}`)
+    if (obj.strategicFocus) lines.push(`- **Strategic Focus:** ${obj.strategicFocus}`)
+    return lines.join('\n')
+  } catch {
+    return raw
+  }
+}
+
 export async function generateMidyearUpdate(
   customer: Customer,
   cacheDir: string,
@@ -698,8 +733,8 @@ Generate a CY27 Midyear Update for ${customerDisplayName} with the 5 required se
   try {
     const parsed = JSON.parse(rawResponse)
     sections = {
-      initiatives: parsed.initiatives ?? '',
-      economicBuyer: parsed.economicBuyer ?? '',
+      initiatives: formatInitiativesSection(parsed.initiatives ?? ''),
+      economicBuyer: formatEconomicBuyerSection(parsed.economicBuyer ?? ''),
       ecosystemStrategy: parsed.ecosystemStrategy ?? '',
       securitySovereignty: parsed.securitySovereignty ?? '',
       timeframeGuidance: parsed.timeframeGuidance ?? '',
