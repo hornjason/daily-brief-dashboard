@@ -1497,42 +1497,39 @@ async function buildProductSourceInventory(
 
       // Carousel cards
       const cards = widget.querySelectorAll('[class*="card"], [class*="Card"]')
-      if (cards.length > 0) {
-        for (const card of cards) {
-          const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
-          const name = (titleEl?.textContent || '').trim()
-          if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
-          seen.add(name.toLowerCase())
-          const formatEl = card.querySelector('[class*="format"], [class*="Format"], [class*="type"]')
-          const format = (formatEl?.textContent || '').trim().toUpperCase() || undefined
-          items.push({ name, format, itemType: 'carousel-card' })
-        }
-        return items
+      for (const card of cards) {
+        const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+        const name = (titleEl?.textContent || '').trim()
+        if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+        seen.add(name.toLowerCase())
+        const formatEl = card.querySelector('[class*="format"], [class*="Format"], [class*="type"]')
+        const format = (formatEl?.textContent || '').trim().toUpperCase() || undefined
+        items.push({ name, format, itemType: 'carousel-card' })
       }
 
       // Table rows (DocListPicker)
       const tableRows = widget.querySelectorAll('table tr')
-      if (tableRows.length > 0) {
-        for (const row of tableRows) {
-          const cells = row.querySelectorAll('td')
-          if (cells.length === 0) continue
-          const nameEl = cells[0].querySelector('a, span') || cells[0]
-          const name = (nameEl?.textContent || '').trim()
-          if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
-          seen.add(name.toLowerCase())
-          const formatEl = cells.length > 1 ? cells[cells.length - 1] : null
-          const formatText = (formatEl?.textContent || '').trim().toUpperCase()
-          const format = formatText && formatText.length <= 10 ? formatText : undefined
-          items.push({ name, format, itemType: 'table-row' })
-        }
-        return items
+      for (const row of tableRows) {
+        const cells = row.querySelectorAll('td')
+        if (cells.length === 0) continue
+        const nameEl = cells[0].querySelector('a, span') || cells[0]
+        const name = (nameEl?.textContent || '').trim()
+        if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+        seen.add(name.toLowerCase())
+        const formatEl = cells.length > 1 ? cells[cells.length - 1] : null
+        const formatText = (formatEl?.textContent || '').trim().toUpperCase()
+        const format = formatText && formatText.length <= 10 ? formatText : undefined
+        items.push({ name, format, itemType: 'table-row' })
       }
 
-      // Links (link-list sections)
+      // Links — also scan inside accordion panels and nested containers (#976)
       const links = widget.querySelectorAll('a[href]')
       for (const link of links) {
         const name = (link.textContent || '').trim()
         if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
+        // Skip navigation/utility links
+        const href = (link as HTMLAnchorElement).href || ''
+        if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
         seen.add(name.toLowerCase())
         items.push({ name, itemType: 'link' })
       }
@@ -1631,19 +1628,32 @@ async function buildProductSourceInventory(
     mergedSections[key] = section as ProductSourceSection
   }
 
-  // For each sidebar TOC entry, ensure a section exists
+  // For each sidebar TOC entry, ensure a section exists (with fuzzy slug matching #976)
   let tocOnly = 0
   for (const tocEntry of sidebarTocEntries) {
     const tocKey = tocEntry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
-    if (!mergedSections[tocKey]) {
-      mergedSections[tocKey] = {
-        title: tocEntry.title,
-        type: 'link-list',
-        items: [],
-      }
-      tocOnly++
-      console.log(`[product-scraper] Phase 1: Section "${tocEntry.title}" from sidebar TOC (not in DOM widgets)`)
+    // Check exact match first
+    if (mergedSections[tocKey]) continue
+    // Fuzzy match: normalize slugs by removing filler words, then check containment (#976 Gap 4)
+    const normSlug = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const normalizedTocKey = normSlug(tocKey)
+    const existingKeys = Object.keys(mergedSections)
+    const fuzzyMatch = existingKeys.find(ek => {
+      if (ek.includes(tocKey) || tocKey.includes(ek)) return true
+      const normalizedEk = normSlug(ek)
+      return normalizedEk === normalizedTocKey || normalizedEk.includes(normalizedTocKey) || normalizedTocKey.includes(normalizedEk)
+    })
+    if (fuzzyMatch) {
+      console.log(`[product-scraper] Phase 1: TOC "${tocEntry.title}" (${tocKey}) fuzzy-matched to existing "${fuzzyMatch}" — skipping duplicate`)
+      continue
     }
+    mergedSections[tocKey] = {
+      title: tocEntry.title,
+      type: 'link-list',
+      items: [],
+    }
+    tocOnly++
+    console.log(`[product-scraper] Phase 1: Section "${tocEntry.title}" from sidebar TOC (not in DOM widgets)`)
   }
 
   let totalItems = 0
@@ -3721,11 +3731,11 @@ export async function scrapeProductPage(
     writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
     console.log(`[product-scraper] Phase 1: Wrote _product-source.json (${Object.keys(productSourceInventory.sections).length} sections)`)
 
-    // Activate DocListPicker widgets to trigger CDS API loads (#920)
-    // Runs AFTER inventory to avoid page corruption from tile-mode clicks.
-    // Skipped in inventory-only mode — not needed for section discovery.
+    // Activate DocListPicker widgets to trigger CDS API loads (#920, #976)
+    // Runs AFTER initial inventory to avoid page corruption from tile-mode clicks.
+    // Now runs in inventory-only mode too — needed for complete item capture (#976 Gaps 1-2).
     let domainDocs = new Map<string, Array<{ name: string; url: string }>>()
-    if (!inventoryOnly) {
+    {
       const productPageUrl = page.url().split('?')[0]
       const result = await expandDomainDocListPickers(page)
       domainDocs = result.domainDocs
@@ -3738,12 +3748,335 @@ export async function scrapeProductPage(
       }
     }
 
-    // --inventory-only: exit after Phase 1 (#975)
+    // --inventory-only: exit after Phase 1 with full capture (#975, #976)
     if (inventoryOnly) {
-      // Take screenshot before exiting
+      // Merge DocListPicker results into inventory (#976 Gaps 1-2)
+      if (domainDocs.size > 0) {
+        for (const [domain, docEntries] of domainDocs) {
+          const domainKey = slugify(domain)
+          if (!productSourceInventory.sections[domainKey]) {
+            productSourceInventory.sections[domainKey] = {
+              title: domain,
+              type: 'doclist-picker',
+              items: [],
+            }
+          }
+          const existingNames = new Set(
+            productSourceInventory.sections[domainKey].items.map(i => i.name.toLowerCase())
+          )
+          for (const entry of docEntries) {
+            if (!existingNames.has(entry.name.toLowerCase())) {
+              productSourceInventory.sections[domainKey].items.push({
+                name: entry.name,
+                itemType: 'doclist-doc',
+                subSection: domain,
+              })
+              existingNames.add(entry.name.toLowerCase())
+            }
+          }
+        }
+        console.log(`[product-scraper] Merged ${domainDocs.size} DocListPicker domains into inventory`)
+      }
+
+      // Re-expand accordions after page restoration (#976)
+      await expandAllAccordions(page)
+      await page.waitForTimeout(2_000)
+
+      // Scroll carousels to load all lazy-rendered cards (#976 Gap 3)
+      const carouselScrollBtns = page.locator(
+        '[class*="seismic-page-widget-carousel"] button[class*="arrow-right"], ' +
+        '[class*="seismic-page-widget-carousel"] [aria-label*="Next"], ' +
+        '[class*="seismic-page-widget-carousel"] [class*="carousel-arrow"][class*="right"]'
+      )
+      const scrollBtnCount = await carouselScrollBtns.count()
+      if (scrollBtnCount > 0) {
+        console.log(`[product-scraper] Scrolling ${scrollBtnCount} carousels to load all cards...`)
+        for (let cb = 0; cb < scrollBtnCount; cb++) {
+          for (let scrollAttempt = 0; scrollAttempt < 8; scrollAttempt++) {
+            try {
+              const btn = carouselScrollBtns.nth(cb)
+              if (!(await btn.isVisible())) break
+              await btn.click({ timeout: 3_000 })
+              await page.waitForTimeout(600)
+            } catch { break }
+          }
+        }
+        await page.waitForTimeout(1_000)
+      }
+
+      // Re-scan DOM for newly loaded content after DocListPicker expansion (#976 Gaps 1-3)
+      const refreshedInventory = await buildProductSourceInventory(page, header.name)
+      for (const [key, section] of Object.entries(refreshedInventory.sections)) {
+        if (!productSourceInventory.sections[key]) {
+          productSourceInventory.sections[key] = section
+        } else {
+          const existingNames = new Set(
+            productSourceInventory.sections[key].items.map(i => i.name.toLowerCase())
+          )
+          for (const item of section.items) {
+            if (!existingNames.has(item.name.toLowerCase())) {
+              productSourceInventory.sections[key].items.push(item)
+              existingNames.add(item.name.toLowerCase())
+            }
+          }
+        }
+      }
+
+      // Individual accordion panel extraction — handles mutex accordion groups (#976 Gap 1)
+      // Some accordion widgets only allow one panel open at a time. buildProductSourceInventory
+      // only sees the last-expanded panel. Fix: toggle each panel individually and extract.
+      const accordionViewers = page.locator('[class*="widget-accordion"] .seismic-page-accordion-viewer')
+      const viewerCount = await accordionViewers.count()
+      if (viewerCount > 0) {
+        console.log(`[product-scraper] Extracting from ${viewerCount} accordion panels individually...`)
+        for (let v = 0; v < viewerCount; v++) {
+          try {
+            const viewer = accordionViewers.nth(v)
+            const header = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
+            if ((await header.count()) === 0) continue
+
+            const titleParts = await header.locator(
+              '.seismic-page-accordion-viewer-new-header-title, .seismic-page-divider-view-text'
+            ).first().textContent({ timeout: 5_000 }).catch(() => '')
+            const cleanTitle = (titleParts || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
+            if (!cleanTitle || cleanTitle.length < 3) continue
+
+            // Check if panel content is hidden
+            const hiddenPanel = viewer.locator('.seismic-page-accordion-viewer-hidden-panel')
+            const isHidden = (await hiddenPanel.count()) > 0
+            if (isHidden) {
+              await header.scrollIntoViewIfNeeded({ timeout: 5_000 })
+              await header.click({ timeout: 10_000 })
+              await page.waitForTimeout(1_500)
+            }
+
+            // Extract ALL items from this panel
+            const panelItems = await viewer.evaluate((el: Element) => {
+              const results: Array<{ name: string; itemType: string }> = []
+              const seen = new Set<string>()
+              for (const card of el.querySelectorAll('[class*="card"], [class*="Card"]')) {
+                const titleEl = card.querySelector('[class*="title"], [class*="Title"], h3, h4, span')
+                const name = (titleEl?.textContent || '').trim()
+                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                  seen.add(name.toLowerCase())
+                  results.push({ name, itemType: 'carousel-card' })
+                }
+              }
+              for (const row of el.querySelectorAll('table tr')) {
+                const cells = row.querySelectorAll('td')
+                if (cells.length === 0) continue
+                const nameEl = cells[0].querySelector('a, span') || cells[0]
+                const name = (nameEl?.textContent || '').trim()
+                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                  seen.add(name.toLowerCase())
+                  results.push({ name, itemType: 'table-row' })
+                }
+              }
+              for (const link of el.querySelectorAll('a[href]')) {
+                const name = (link.textContent || '').trim()
+                if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                  const href = (link as HTMLAnchorElement).href || ''
+                  if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                  seen.add(name.toLowerCase())
+                  results.push({ name, itemType: 'link' })
+                }
+              }
+              return results
+            })
+
+            if (panelItems.length > 0) {
+              const sectionKey = slugify(cleanTitle)
+              if (!productSourceInventory.sections[sectionKey]) {
+                productSourceInventory.sections[sectionKey] = {
+                  title: cleanTitle,
+                  type: 'doclist-picker' as const,
+                  items: [],
+                }
+              }
+              const existingNames = new Set(
+                productSourceInventory.sections[sectionKey].items.map(i => i.name.toLowerCase())
+              )
+              let addedCount = 0
+              for (const item of panelItems) {
+                if (!existingNames.has(item.name.toLowerCase())) {
+                  productSourceInventory.sections[sectionKey].items.push(item)
+                  existingNames.add(item.name.toLowerCase())
+                  addedCount++
+                }
+              }
+              if (addedCount > 0) {
+                console.log(`[product-scraper] Accordion panel "${cleanTitle}": added ${addedCount} new items (total: ${productSourceInventory.sections[sectionKey].items.length})`)
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[product-scraper] Accordion panel ${v} extraction failed: ${(e.message ?? '').slice(0, 80)}`)
+          }
+        }
+      }
+
+      // Remove empty sections that are fuzzy duplicates of populated ones (#976 Gap 4)
+      const normSlugDedup = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+      const allSectionKeys = Object.keys(productSourceInventory.sections)
+      for (const key of allSectionKeys) {
+        if (!productSourceInventory.sections[key]) continue
+        if (productSourceInventory.sections[key].items.length > 0) continue
+        const normalizedKey = normSlugDedup(key)
+        const match = allSectionKeys.find(ek => {
+          if (ek === key || !productSourceInventory.sections[ek]) return false
+          if (productSourceInventory.sections[ek].items.length === 0) return false
+          if (ek.includes(key) || key.includes(ek)) return true
+          const normalizedEk = normSlugDedup(ek)
+          return normalizedEk === normalizedKey || normalizedEk.includes(normalizedKey) || normalizedKey.includes(normalizedEk)
+        })
+        if (match) {
+          console.log(`[product-scraper] Removing empty duplicate section "${key}" (matched by "${match}")`)
+          delete productSourceInventory.sections[key]
+        }
+      }
+
+      // Take fullPage screenshot
       await page.screenshot({ path: resolve(earlyConfigOutputDir, '_page-screenshot.png'), fullPage: true })
-      console.log(`[product-scraper] --inventory-only: Phase 1 complete. Review _product-source.json and screenshots before running full scrape.`)
+
+      // Per-section screenshots (#976 Gap 5)
+      const screenshotDir = resolve(earlyConfigOutputDir, 'screenshots')
+      mkdirSync(screenshotDir, { recursive: true })
+      const screenshotPaths: string[] = []
+      console.log(`[product-scraper] Taking per-section screenshots...`)
+
+      // Scroll page to bottom and back to ensure all content is rendered for screenshots
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+      await page.waitForTimeout(1_000)
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await page.waitForTimeout(1_000)
+
+      // Collect section elements from the DOM for element-based screenshots
+      const mainCol = page.locator('.articleSdk-theme-page-doubleColumn-main')
+      if ((await mainCol.count()) > 0) {
+        const widgets = mainCol.locator('> *')
+        const widgetCount = await widgets.count()
+        let sectionIdx = 0
+        let currentTitle = ''
+        let currentKey = ''
+        let sectionStartIdx = -1
+
+        for (let w = 0; w <= widgetCount; w++) {
+          const isEnd = w === widgetCount
+          let isDivider = false
+          let isAccordion = false
+          let widgetText = ''
+
+          if (!isEnd) {
+            const widget = widgets.nth(w)
+            const cls = await widget.getAttribute('class').catch(() => '') || ''
+            isDivider = cls.includes('seismic-page-widget-divider')
+            isAccordion = cls.includes('seismic-page-widget-accordion')
+            if (isDivider || isAccordion) {
+              widgetText = (await widget.textContent({ timeout: 5_000 }).catch(() => '') || '')
+                .replace(/[\u200e\u200f]+/g, '').trim()
+            }
+          }
+
+          // Flush current section on new divider/accordion/end
+          if ((isDivider || isAccordion || isEnd) && currentTitle && sectionStartIdx >= 0) {
+            sectionIdx++
+            const paddedIdx = String(sectionIdx).padStart(2, '0')
+            const filename = `section-${paddedIdx}-${currentKey}.png`
+            try {
+              // Create a locator spanning from sectionStartIdx to w-1
+              const endIdx = w - 1
+              if (endIdx >= sectionStartIdx) {
+                const firstEl = widgets.nth(sectionStartIdx)
+                await firstEl.scrollIntoViewIfNeeded({ timeout: 5_000 })
+                await page.waitForTimeout(300)
+                // Take a fullPage screenshot and clip to section bounds
+                const startBox = await firstEl.boundingBox()
+                const lastEl = widgets.nth(endIdx)
+                const endBox = await lastEl.boundingBox()
+                if (startBox && endBox) {
+                  const pageScrollY = await page.evaluate(() => window.scrollY)
+                  const clipY = startBox.y + pageScrollY - 10
+                  const clipHeight = (endBox.y + endBox.height) - startBox.y + 20
+                  if (clipHeight > 0) {
+                    await page.screenshot({
+                      path: resolve(screenshotDir, filename),
+                      fullPage: true,
+                      clip: {
+                        x: Math.max(0, startBox.x - 10),
+                        y: Math.max(0, clipY),
+                        width: Math.min(startBox.width + 20, 1400),
+                        height: Math.min(clipHeight, 4000),
+                      },
+                    })
+                    screenshotPaths.push(filename)
+                    console.log(`[product-scraper] Screenshot: ${filename} (${currentTitle})`)
+                  }
+                }
+              }
+            } catch (e: any) {
+              console.warn(`[product-scraper] Screenshot failed for "${currentTitle}": ${(e.message ?? '').slice(0, 80)}`)
+            }
+          }
+
+          if (isEnd) break
+
+          if (isAccordion) {
+            // Accordion is self-contained — screenshot the whole widget
+            sectionIdx++
+            const accKey = widgetText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'accordion'
+            const paddedIdx = String(sectionIdx).padStart(2, '0')
+            const filename = `section-${paddedIdx}-${accKey}.png`
+            try {
+              const widget = widgets.nth(w)
+              await widget.scrollIntoViewIfNeeded({ timeout: 5_000 })
+              await page.waitForTimeout(300)
+              await widget.screenshot({ path: resolve(screenshotDir, filename) })
+              screenshotPaths.push(filename)
+              console.log(`[product-scraper] Screenshot: ${filename} (${widgetText || 'accordion'})`)
+            } catch (e: any) {
+              console.warn(`[product-scraper] Screenshot failed for accordion "${widgetText}": ${(e.message ?? '').slice(0, 80)}`)
+            }
+            currentTitle = ''
+            sectionStartIdx = -1
+            continue
+          }
+
+          if (isDivider) {
+            if (widgetText.length > 2) {
+              currentTitle = widgetText
+              currentKey = widgetText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+              sectionStartIdx = w
+            }
+            continue
+          }
+
+          // Regular content widget — part of current section
+          if (currentTitle && sectionStartIdx < 0) sectionStartIdx = w
+        }
+      }
+
+      // Update sourceFiles and rewrite inventory
+      productSourceInventory.sourceFiles = [
+        '_page-screenshot.png',
+        ...screenshotPaths.map(p => `screenshots/${p}`),
+      ]
+      writeJsonAtomic(resolve(earlyConfigOutputDir, '_product-source.json'), productSourceInventory)
+      writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
+
+      // Log summary
+      let totalItems = 0
+      for (const section of Object.values(productSourceInventory.sections)) {
+        totalItems += section.items.length
+      }
+      console.log(`[product-scraper] --inventory-only: Phase 1 complete.`)
+      console.log(`[product-scraper] Sections: ${Object.keys(productSourceInventory.sections).length}, Items: ${totalItems}`)
+      console.log(`[product-scraper] Screenshots: ${screenshotPaths.length} section + 1 fullPage`)
       console.log(`[product-scraper] Output: ${earlyConfigOutputDir}`)
+      for (const [key, section] of Object.entries(productSourceInventory.sections)) {
+        console.log(`  ${key}: ${section.items.length} items`)
+        for (const item of section.items) {
+          console.log(`    - ${item.name}`)
+        }
+      }
       return { name: header.name, slug: earlyProductSlug, sections: {}, items: 0 }
     }
 
