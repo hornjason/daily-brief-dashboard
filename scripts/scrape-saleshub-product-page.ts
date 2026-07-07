@@ -1241,9 +1241,22 @@ async function extractProductHeader(page: Page): Promise<{ name: string; descrip
   for (const sel of headerSelectors) {
     const el = page.locator(sel).first()
     if ((await el.count()) > 0) {
-      name = (await el.innerText().catch(() => '')).trim()
-      if (name) break
+      const text = (await el.innerText().catch(() => '')).trim()
+      // Skip section divider h1 elements (they contain section titles, not product names)
+      const isDivider = await el.evaluate((e: Element) =>
+        e.classList.contains('seismic-page-divider-view') ||
+        !!e.closest('[class*="widget-divider"]')
+      ).catch(() => false)
+      if (text && !isDivider) {
+        name = text
+        break
+      }
     }
+  }
+
+  // Fallback: use document.title (reliable for DocCenter v2 pages)
+  if (!name) {
+    name = await page.title().catch(() => '')
   }
 
   // Get description — first substantial text block before the first red divider
@@ -1378,7 +1391,25 @@ async function buildProductSourceInventory(
       || document.querySelector('[class*="rightColumn"]')
       || document.querySelector('[class*="toc"]')
 
+    // Fallback: horizontal navigation picker buttons (DocCenter v2 layout)
     if (!sidebar) {
+      const navPicker = document.querySelector('.seismic-page-navigationPicker-Buttons')
+        || document.querySelector('[class*="seismic-page-widget-navigation"]')
+      if (navPicker) {
+        const links = navPicker.querySelectorAll('a, [role="link"], [role="button"]')
+        for (const link of links) {
+          const text = (link.textContent || '').trim().replace(/\s+/g, ' ')
+          if (!text || text.length < 3 || text.length > 100) continue
+          if (text.includes('@') || text.startsWith('#')) continue
+          if (/^(Page\s+RHSH|All\s+Sales\s+Content|Content\s+Details|Contact\s+us|Ask\s+on\s+Slack|Home|Back|Previous|Next|Search)$/i.test(text)) continue
+          const key = text.toLowerCase()
+          if (seen.has(key)) continue
+          seen.add(key)
+          entries.push({ title: text })
+        }
+        if (entries.length > 0) return entries
+      }
+
       // Position-based fallback: find elements anchored to the right side
       const allEls = document.querySelectorAll('nav, [class*="sidebar"], [class*="navigation"]')
       for (const el of allEls) {
@@ -1648,7 +1679,7 @@ export async function expandAllAccordions(page: Page): Promise<number> {
     '[class*="accordion"][class*="collapsed"], ' +
     '[class*="expandable"]:not([class*="expanded"])'
   )
-  const accordionCount = await collapsedAccordions.count()
+  let accordionCount = await collapsedAccordions.count()
   console.log(`[product-scraper] Found ${accordionCount} collapsed accordion sections`)
   for (let a = 0; a < accordionCount; a++) {
     try {
@@ -1659,6 +1690,31 @@ export async function expandAllAccordions(page: Page): Promise<number> {
       console.warn(`[product-scraper] Could not expand accordion ${a}: ${(e.message ?? '').slice(0, 60)}`)
     }
   }
+
+  // Fallback: click accordion headers that have hidden panels (#976)
+  if (accordionCount === 0) {
+    const hiddenPanels = page.locator('.seismic-page-accordion-viewer-hidden-panel')
+    const hiddenCount = await hiddenPanels.count()
+    if (hiddenCount > 0) {
+      console.log(`[product-scraper] Found ${hiddenCount} accordion hidden panels — clicking headers to expand`)
+      for (let h = 0; h < hiddenCount; h++) {
+        try {
+          const panel = hiddenPanels.nth(h)
+          const viewer = panel.locator('..')
+          const header = viewer.locator('.seismic-page-accordion-viewer-new-header').first()
+          if ((await header.count()) > 0) {
+            await header.scrollIntoViewIfNeeded({ timeout: 5_000 })
+            await header.click({ timeout: 10_000 })
+            await page.waitForTimeout(800)
+            accordionCount++
+          }
+        } catch (e: any) {
+          console.warn(`[product-scraper] Could not expand hidden accordion ${h}: ${(e.message ?? '').slice(0, 60)}`)
+        }
+      }
+    }
+  }
+
   await page.waitForTimeout(1_500)
   return accordionCount
 }
@@ -1773,8 +1829,67 @@ export async function expandDomainDocListPickers(
     }
   }
 
+  // Also activate standalone DocListPicker widgets outside accordions (#976)
+  const standaloneDocLists = page.locator('.seismic-page-widget-docList')
+  const standaloneCount = await standaloneDocLists.count()
+  if (standaloneCount > 0) {
+    console.log(`[product-scraper] Found ${standaloneCount} standalone DocListPicker widgets outside accordions`)
+    for (let s = 0; s < standaloneCount; s++) {
+      try {
+        const widget = standaloneDocLists.nth(s)
+        const picker = widget.locator('[class*="docListPicker"]').first()
+        if ((await picker.count()) > 0) {
+          const heading = widget.locator(
+            '.seismic-page-docListPicker-Viewer-header, [class*="docListPicker-header"], [class*="docListPicker-Viewer-header"]'
+          ).first()
+          const titleText = await heading.textContent({ timeout: 5_000 }).catch(() => '')
+          const cleanTitle = (titleText || '').trim().replace(/\s+/g, ' ').replace(/\d+ item\(s\) selected/i, '').trim()
+          await picker.scrollIntoViewIfNeeded({ timeout: 10_000 })
+          await picker.click({ timeout: 15_000 })
+          await page.waitForTimeout(4_000)
+          activated++
+
+          const docEntries = await widget.evaluate((el: Element) => {
+            const entries: Array<{ name: string; url: string }> = []
+            const seen = new Set<string>()
+            function findHref(node: Element): string {
+              if (node.tagName === 'A' && (node as HTMLAnchorElement).href) return (node as HTMLAnchorElement).href
+              const anchor = node.querySelector('a[href]')
+              if (anchor) return (anchor as HTMLAnchorElement).href || ''
+              const row = node.closest('tr') || node.closest('[class*="row"]')
+              if (row) {
+                const rowAnchor = row.querySelector('a[href]')
+                if (rowAnchor) return (rowAnchor as HTMLAnchorElement).href || ''
+              }
+              return ''
+            }
+            const selectors = ['table tr td:first-child', 'table td a', 'table td span', 'td:first-child']
+            for (const sel of selectors) {
+              for (const node of el.querySelectorAll(sel)) {
+                const text = (node.textContent || '').trim().slice(0, 200)
+                if (text.length >= 2 && !seen.has(text)) {
+                  seen.add(text)
+                  entries.push({ name: text, url: findHref(node as Element) })
+                }
+              }
+              if (entries.length > 0) break
+            }
+            return entries
+          })
+
+          if (docEntries.length > 0) {
+            domainDocs.set(cleanTitle || `standalone-${s}`, docEntries)
+            console.log(`[product-scraper] Standalone DocList "${cleanTitle}": ${docEntries.length} docs`)
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[product-scraper] Standalone DocList ${s}: ${(e.message ?? '').slice(0, 60)}`)
+      }
+    }
+  }
+
   await page.waitForTimeout(2_000)
-  console.log(`[product-scraper] Activated ${activated}/${itemCount} domain DocListPickers`)
+  console.log(`[product-scraper] Activated ${activated}/${itemCount + standaloneCount} DocListPickers (accordion: ${itemCount}, standalone: ${standaloneCount})`)
   if (domainDocs.size > 0) {
     const totalDocs = [...domainDocs.values()].reduce((sum, entries) => sum + entries.length, 0)
     const withUrls = [...domainDocs.values()].reduce((sum, entries) => sum + entries.filter(e => e.url).length, 0)
@@ -3517,30 +3632,68 @@ export async function scrapeProductPage(
     }
 
     // Scroll down to trigger lazy loading — multi-pass for SPA lazy-loaded content (#942)
+    // DocCenter v2 pages render content inside an inner scrollable container,
+    // not the document body. Detect and scroll the correct element.
     console.log('[product-scraper] Scrolling page to trigger lazy loading...')
     await page.evaluate(async () => {
       const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+      // Find the scroll target: inner container if body doesn't scroll (#976)
+      let scrollTarget: Element | null = null
+      if (document.body.scrollHeight < 500) {
+        const all = document.querySelectorAll('*')
+        for (const el of all) {
+          const style = window.getComputedStyle(el)
+          if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > 1000) {
+            scrollTarget = el
+            break
+          }
+        }
+      }
+
       let prevHeight = 0
       let passes = 0
       const MAX_PASSES = 8
       while (passes < MAX_PASSES) {
-        const scrollHeight = document.body.scrollHeight
-        if (scrollHeight === prevHeight && passes > 0) break // height stabilized
+        const scrollHeight = scrollTarget ? scrollTarget.scrollHeight : document.body.scrollHeight
+        if (scrollHeight === prevHeight && passes > 0) break
         prevHeight = scrollHeight
-        const step = window.innerHeight
+        const step = scrollTarget ? (scrollTarget as HTMLElement).clientHeight : window.innerHeight
         for (let y = 0; y < scrollHeight; y += step) {
-          window.scrollTo(0, y)
+          if (scrollTarget) {
+            scrollTarget.scrollTop = y
+          } else {
+            window.scrollTo(0, y)
+          }
           await delay(200)
         }
-        // Stay at bottom for lazy load to trigger
-        window.scrollTo(0, document.body.scrollHeight)
+        if (scrollTarget) {
+          scrollTarget.scrollTop = scrollTarget.scrollHeight
+        } else {
+          window.scrollTo(0, document.body.scrollHeight)
+        }
         await delay(2000)
         passes++
       }
-      window.scrollTo(0, 0)
+      if (scrollTarget) {
+        scrollTarget.scrollTop = 0
+      } else {
+        window.scrollTo(0, 0)
+      }
     })
     await page.waitForTimeout(3_000)
-    const finalHeight = await page.evaluate(() => document.body.scrollHeight)
+    const finalHeight = await page.evaluate(() => {
+      if (document.body.scrollHeight < 500) {
+        const all = document.querySelectorAll('*')
+        for (const el of all) {
+          const style = window.getComputedStyle(el)
+          if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > 1000) {
+            return el.scrollHeight
+          }
+        }
+      }
+      return document.body.scrollHeight
+    })
     console.log(`[product-scraper] Lazy load scroll complete — final page height: ${finalHeight}px`)
 
     // Extract product header
@@ -3551,15 +3704,14 @@ export async function scrapeProductPage(
     // Content inside collapsed accordions is invisible to extractRedHeaderSections()
     await expandAllAccordions(page)
 
-    // Activate DocListPicker widgets to trigger CDS API loads (#920)
-    const { domainDocs } = await expandDomainDocListPickers(page)
-
     // Set up output dirs early (needed by _product-source.json and later screenshot)
     const earlyProductSlug = slugify(header.name)
     const earlyConfigOutputDir = resolve('config-templates', 'saleshub-products', earlyProductSlug)
     mkdirSync(earlyConfigOutputDir, { recursive: true })
 
-    // Phase 1 (#972): Build product source inventory from DOM BEFORE extraction
+    // Phase 1 (#972): Build product source inventory from DOM BEFORE DocListPicker
+    // activation. DocListPicker clicks can navigate the page (tiles mode), corrupting
+    // the DOM. The inventory only needs the TOC + widget structure, not loaded tables.
     const productSourceInventory = await buildProductSourceInventory(page, header.name)
     const screenshotName = '_page-screenshot.png'
     productSourceInventory.sourceFiles = [screenshotName]
@@ -3568,6 +3720,23 @@ export async function scrapeProductPage(
     mkdirSync(earlyCacheOutputDir, { recursive: true })
     writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
     console.log(`[product-scraper] Phase 1: Wrote _product-source.json (${Object.keys(productSourceInventory.sections).length} sections)`)
+
+    // Activate DocListPicker widgets to trigger CDS API loads (#920)
+    // Runs AFTER inventory to avoid page corruption from tile-mode clicks.
+    // Skipped in inventory-only mode — not needed for section discovery.
+    let domainDocs = new Map<string, Array<{ name: string; url: string }>>()
+    if (!inventoryOnly) {
+      const productPageUrl = page.url().split('?')[0]
+      const result = await expandDomainDocListPickers(page)
+      domainDocs = result.domainDocs
+      // Restore page if DocListPicker click navigated away
+      const currentUrl = page.url().split('?')[0]
+      if (currentUrl !== productPageUrl) {
+        console.log('[product-scraper] Page navigated during DocListPicker activation — restoring')
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await page.waitForTimeout(5_000)
+      }
+    }
 
     // --inventory-only: exit after Phase 1 (#975)
     if (inventoryOnly) {
