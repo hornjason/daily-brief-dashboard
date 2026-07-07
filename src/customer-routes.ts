@@ -22,7 +22,7 @@ import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
-import { readAccountPlan, generateAndSaveAccountPlan } from './account-plan.ts'
+import { readAccountPlan, generateAndSaveAccountPlan, generateMidyearUpdate, readMidyearUpdate } from './account-plan.ts'
 import { readCachedPositioning, generateValuePositioning } from './value-positioning.ts'
 import { getAiConfig } from './ai-config.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
@@ -822,6 +822,46 @@ export function createCustomerRouter(): Hono {
     const plan = readAccountPlan(slug, CACHE_DIR)
     if (!plan) return c.json({ notGenerated: true })
     return c.json({ markdown: plan.markdown, generatedAt: plan.generatedAt, driveUrl: plan.driveUrl })
+  })
+
+  // ── #978: CY27 Midyear Update ───────────────────────────────────────────────
+
+  const _midyearUpdateInFlight = new Set<string>()
+
+  router.post('/api/customers/:id/account-plan/midyear-update', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    if (_midyearUpdateInFlight.has(slug)) {
+      return c.json({ error: 'Midyear update generation already in progress for this customer' }, 409)
+    }
+
+    _midyearUpdateInFlight.add(slug)
+    try {
+      const configDir = process.env.CONFIG_DIR ?? ''
+      const result = await generateMidyearUpdate(customer, CACHE_DIR, configDir)
+      return c.json({ sections: result.sections, generatedAt: result.generatedAt })
+    } catch (e: any) {
+      console.error(`[midyear] Generation failed for ${customer.name}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    } finally {
+      _midyearUpdateInFlight.delete(slug)
+    }
+  })
+
+  router.get('/api/customers/:id/account-plan/midyear-update', (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const cached = readMidyearUpdate(slug, CACHE_DIR)
+    if (!cached) return c.json({ notGenerated: true })
+    return c.json({ sections: cached.sections, generatedAt: cached.generatedAt })
   })
 
   // ── #264: Value Positioning — proactive value proposition briefs ────────────

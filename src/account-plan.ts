@@ -329,6 +329,67 @@ export interface AccountPlanResult {
   driveUrl: string
 }
 
+// ── #978: CY27 Midyear Update — focused 5-section output ───────────────────
+
+export interface MidyearUpdateResult {
+  sections: {
+    initiatives: string
+    economicBuyer: string
+    ecosystemStrategy: string
+    securitySovereignty: string
+    timeframeGuidance: string
+  }
+  generatedAt: string
+}
+
+const MIDYEAR_UPDATE_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    initiatives: {
+      type: 'STRING',
+      description: '2 detailed customer initiatives for 2027 — new topics or extension of existing. Written in the customer\'s terms with success metrics, target value, and timeline. Format as initiative cards ready to paste into RHSC.',
+    },
+    economicBuyer: {
+      type: 'STRING',
+      description: 'Identify the Economic Buyer from stakeholder/intelligence data. Include: name (if in data), title, P&L authority, veto power, strategic focus. Format as account map entry ready for RHSC.',
+    },
+    ecosystemStrategy: {
+      type: 'STRING',
+      description: 'Answer to new scorecard Q#4: "How do you plan to leverage Services Partners, VARs, and Distributors to drive growth in this account?" Based on partner/channel data.',
+    },
+    securitySovereignty: {
+      type: 'STRING',
+      description: 'Answer to updated scorecard Q#16: Security, Compliance, Sovereignty & Accessibility insights in relation to Red Hat\'s value. Based on technical landscape data.',
+    },
+    timeframeGuidance: {
+      type: 'STRING',
+      description: 'Recommendation on whether to create a Follow-up plan (clone) or extend current plan timeframe to 2027. Based on whether existing plan exists and its status.',
+    },
+  },
+  required: ['initiatives', 'economicBuyer', 'ecosystemStrategy', 'securitySovereignty', 'timeframeGuidance'],
+}
+
+const MIDYEAR_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect assistant. Your job is to produce a CY27 Midyear Update — 5 paste-ready sections for the RHSC (Red Hat Sales Center) account plan scorecard.
+
+## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
+1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
+2. If the context does not contain a specific data point, say so explicitly rather than fabricating.
+3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
+4. Pipeline dollar figures MUST match the amounts in the provided data.
+
+## OUTPUT REQUIREMENTS
+Produce ONLY these 5 sections — no preamble, no executive summary, no extra commentary:
+
+1. **2027 Initiatives** — 2 detailed customer initiatives for 2027. Each should include: initiative name, description in customer terms, success metrics, target value, timeline, and relevant Red Hat solution. Format as initiative cards ready to paste into RHSC.
+
+2. **Economic Buyer** — Identify from stakeholder data: name (if available), title, P&L authority, veto power, strategic focus. If no clear Economic Buyer is identifiable from the data, state that explicitly with a recommendation. Format as an account map entry.
+
+3. **Ecosystem Strategy** — Answer scorecard Q#4: "How do you plan to leverage Services Partners, VARs, and Distributors to drive growth in this account?" Ground in partner/channel data from the intelligence.
+
+4. **Security & Sovereignty** — Answer updated scorecard Q#16: Security, Compliance, Sovereignty & Accessibility insights. Connect to Red Hat's Sovereignty and Lightwell motions where relevant.
+
+5. **Timeframe Guidance** — Recommend whether to create a Follow-up plan (clone) or extend the current plan timeframe to 2027. Base on existing plan status and customer fiscal cycle.`
+
 /**
  * Generate a full account plan for a customer.
  *
@@ -559,4 +620,146 @@ export async function generateAndSaveAccountPlan(
   const slug = toSlug(customer.name)
   savePlanMeta(cacheDir, slug, result.driveUrl, result.generatedAt)
   return result
+}
+
+// ── #978: CY27 Midyear Update generation ────────────────────────────────────
+
+export async function generateMidyearUpdate(
+  customer: Customer,
+  cacheDir: string,
+  configDir: string,
+): Promise<MidyearUpdateResult> {
+  const slug = toSlug(customer.name)
+  console.log(`[midyear] Generating CY27 midyear update for ${customer.name} (${slug})`)
+
+  const operatorProfile = getOperatorProfile()
+  const operatorName = operatorProfile?.name ?? 'the Account Solution Architect'
+  const operatorTitle = operatorProfile?.title ?? 'Account Solution Architect'
+
+  const playbookPath = resolve(APP_CONFIG_DIR, 'playbook.md')
+  const playbook = readFileSync(playbookPath, 'utf-8').substring(0, 8000)
+
+  const intelPath = resolve(cacheDir, 'intelligence', `${slug}.json`)
+  let companyIntel = ''
+  let productIntel = ''
+  let customerDisplayName = customer.name
+  try {
+    const intel = JSON.parse(readFileSync(intelPath, 'utf-8'))
+    companyIntel = intel.company ?? ''
+    productIntel = intel.products ? JSON.stringify(intel.products, null, 2) : ''
+    customerDisplayName = intel.customerName ?? customer.name
+  } catch {
+    console.warn(`[midyear] No intelligence cache for ${slug} — generating with limited data`)
+  }
+
+  const aeName = customer.ae ?? 'Account Executive'
+
+  let signalContext = ''
+  try {
+    const teamMembers = getAccountTeam(customer)
+    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
+    const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
+    signalContext = templateResult.deterministic || ''
+  } catch (e: any) {
+    console.warn(`[midyear] templateAll enrichment failed (non-fatal): ${e.message}`)
+  }
+
+  const existingPlan = readAccountPlan(slug, cacheDir)
+  const existingPlanSection = existingPlan
+    ? `\n\n### Existing Account Plan (generated ${existingPlan.generatedAt})\nA full account plan already exists. Consider whether to clone or extend.\n`
+    : '\n\n### Existing Account Plan\nNo existing account plan found for this customer.\n'
+
+  const signalSection = signalContext ? `\n\n### Signal Context\n${signalContext}` : ''
+  const userPrompt = `## Customer: ${customerDisplayName}
+## Account Team
+- Account Executive (AE): ${aeName}
+- ${operatorTitle} (ASA): ${operatorName}
+
+### Company Intelligence
+${companyIntel.substring(0, 8000)}
+
+### Product Intelligence
+${productIntel.substring(0, 5000)}${signalSection}${existingPlanSection}
+## CY27 Account Planning Playbook
+${playbook}
+
+---
+Generate a CY27 Midyear Update for ${customerDisplayName} with the 5 required sections. Use the playbook guidance for CY27 requirements.`
+
+  const rawResponse = await callGeminiForAccountPlan({
+    systemPrompt: MIDYEAR_SYSTEM_PROMPT,
+    userPrompt,
+    temperature: 0.3,
+    customerName: customer.name,
+    responseSchema: MIDYEAR_UPDATE_RESPONSE_SCHEMA,
+  })
+
+  let sections: MidyearUpdateResult['sections']
+  try {
+    const parsed = JSON.parse(rawResponse)
+    sections = {
+      initiatives: parsed.initiatives ?? '',
+      economicBuyer: parsed.economicBuyer ?? '',
+      ecosystemStrategy: parsed.ecosystemStrategy ?? '',
+      securitySovereignty: parsed.securitySovereignty ?? '',
+      timeframeGuidance: parsed.timeframeGuidance ?? '',
+    }
+  } catch {
+    sections = {
+      initiatives: rawResponse,
+      economicBuyer: '',
+      ecosystemStrategy: '',
+      securitySovereignty: '',
+      timeframeGuidance: '',
+    }
+  }
+
+  const generatedAt = new Date().toISOString()
+
+  const intelDir = resolve(cacheDir, 'intelligence')
+  mkdirSync(intelDir, { recursive: true })
+
+  const mdContent = `<!-- Generated: ${generatedAt} -->\n\n# CY27 Midyear Update — ${customerDisplayName}\n\n## 2027 Initiatives\n${sections.initiatives}\n\n## Economic Buyer\n${sections.economicBuyer}\n\n## Ecosystem Strategy\n${sections.ecosystemStrategy}\n\n## Security & Sovereignty\n${sections.securitySovereignty}\n\n## Timeframe Guidance\n${sections.timeframeGuidance}`
+  const outputPath = resolve(intelDir, `${slug}-midyear-update.md`)
+  writeFileSync(outputPath, mdContent, { mode: 0o600 })
+  console.log(`[midyear] Written to ${outputPath}`)
+
+  const metaPath = resolve(intelDir, `${slug}-midyear-update-meta.json`)
+  writeJsonAtomic(metaPath, { customerName: customer.name, generatedAt })
+
+  return { sections, generatedAt }
+}
+
+export function readMidyearUpdate(
+  customerSlug: string,
+  cacheDir: string,
+): MidyearUpdateResult | null {
+  const filePath = resolve(cacheDir, 'intelligence', `${customerSlug}-midyear-update.md`)
+  try {
+    if (!existsSync(filePath)) return null
+    const content = readFileSync(filePath, 'utf-8')
+    if (!content || content.length < 50) return null
+
+    const timestampMatch = content.match(/<!-- Generated: (.+?) -->/)
+    const generatedAt = timestampMatch?.[1] ?? statSync(filePath).mtime.toISOString()
+
+    const extractSection = (heading: string): string => {
+      const re = new RegExp(`## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`)
+      const m = content.match(re)
+      return m?.[1]?.trim() ?? ''
+    }
+
+    return {
+      sections: {
+        initiatives: extractSection('2027 Initiatives'),
+        economicBuyer: extractSection('Economic Buyer'),
+        ecosystemStrategy: extractSection('Ecosystem Strategy'),
+        securitySovereignty: extractSection('Security & Sovereignty'),
+        timeframeGuidance: extractSection('Timeframe Guidance'),
+      },
+      generatedAt,
+    }
+  } catch {
+    return null
+  }
 }
