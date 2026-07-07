@@ -142,6 +142,36 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
+  // 9. Economic Buyer — CY27 requirement
+  const hasEconomicBuyer = /economic\s+buyer/i.test(output)
+  checks.push({
+    name: 'economic-buyer',
+    passed: hasEconomicBuyer,
+    expected: 'Economic Buyer identified (CY27 requirement)',
+    actual: hasEconomicBuyer ? 'economic buyer mentioned' : 'economic buyer not found',
+    severity: 'required',
+  })
+
+  // 10. Partner Growth Strategy — CY27 requirement
+  const hasPartnerGrowth = /partner.{0,20}growth|value.added.reseller|\bVAR\b|\bdistributor/i.test(output)
+  checks.push({
+    name: 'partner-growth-strategy',
+    passed: hasPartnerGrowth,
+    expected: 'Partner growth strategy content (VARs/distributors) present (CY27 requirement)',
+    actual: hasPartnerGrowth ? 'partner growth strategy found' : 'partner growth strategy not found',
+    severity: 'required',
+  })
+
+  // 11. Security & Sovereignty — CY27 requirement
+  const hasSecuritySovereignty = /sovereignty|compliance|lightwell/i.test(output)
+  checks.push({
+    name: 'security-sovereignty',
+    passed: hasSecuritySovereignty,
+    expected: 'Security/Compliance/Sovereignty content present (CY27 requirement)',
+    actual: hasSecuritySovereignty ? 'security/sovereignty content found' : 'security/sovereignty content not found',
+    severity: 'required',
+  })
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 

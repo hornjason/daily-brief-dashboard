@@ -42,7 +42,7 @@ const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
     executiveSummary: {
       type: 'STRING',
       nullable: true,
-      description: 'Scorecard overview summarizing account health, ACV, growth trajectory, and strategic priorities. Use ONLY data from the provided context. If a metric is not in the context, omit it rather than fabricating.',
+      description: 'Scorecard overview summarizing account health, ACV, growth trajectory, and strategic priorities. Use ONLY data from the provided context. If a metric is not in the context, omit it rather than fabricating. Include customer fiscal year month if known from context, and note continuous planning cadence (CY27 CAPI requirement).',
     },
     teamMembers: {
       type: 'STRING',
@@ -67,17 +67,17 @@ const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
     customerEcosystem: {
       type: 'STRING',
       nullable: true,
-      description: 'Partners, technologies, integrations from the provided tech stack and ecosystem data. Only cite partners and technologies present in the context.',
+      description: 'Partners, technologies, integrations from the provided tech stack and ecosystem data. Only cite partners and technologies present in the context. Must include partner growth strategy — how Services Partners, VARs, and Distributors are leveraged to drive growth (CY27 requirement).',
     },
     keyStakeholders: {
       type: 'STRING',
       nullable: true,
-      description: 'Names, titles, engagement status from the provided stakeholder data. Never fabricate stakeholder names or titles.',
+      description: 'Names, titles, engagement status from the provided stakeholder data. Never fabricate stakeholder names or titles. Must identify the Economic Buyer if stakeholder data exists — distinct from Champion. Include their P&L authority, decision influence, and relationship to the deal (CY27 requirement).',
     },
     technicalLandscape: {
       type: 'STRING',
       nullable: true,
-      description: 'Current tech stack and initiatives from the provided technical data. Only reference technologies confirmed in the context.',
+      description: 'Current tech stack and initiatives from the provided technical data. Only reference technologies confirmed in the context. Must address Security, Compliance, Sovereignty & Accessibility considerations including connection to Sovereignty and Lightwell motions (CY27 requirement).',
     },
     customerSuccess: {
       type: 'STRING',
@@ -132,7 +132,7 @@ const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
       items: {
         type: 'OBJECT',
         properties: {
-          action: { type: 'STRING', description: 'Specific action item.' },
+          action: { type: 'STRING', description: 'Specific action item. Include quarterly review milestones and continuous planning cadence items per CY27 CAPI.' },
           owner: { type: 'STRING', description: 'Owner — use AE or ASA name from the provided account team data.' },
           targetDate: { type: 'STRING', nullable: true, description: 'Target date if known. Set to null if not determinable from context.' },
           status: { type: 'STRING', description: 'Current status (e.g., Not Started, In Progress).' },
@@ -187,9 +187,9 @@ REQUIRED SECTIONS — every plan MUST include all of these:
 3. Scorecard (with % scores per category)
 4. Customer View (all numbered questions: ACV ambition, ACV goal, growth %, why Red Hat, etc.)
 5. Account Intelligence (company strategy, financial signals, industry pressures)
-6. Customer Ecosystem (partners, technologies, integrations)
-7. Key Stakeholders (names, titles, engagement status)
-8. Technical Landscape (current tech stack, initiatives)
+6. Customer Ecosystem (partners, technologies, integrations, partner growth strategy for VARs/distributors)
+7. Key Stakeholders (names, titles, engagement status, Economic Buyer identification)
+8. Technical Landscape (current tech stack, initiatives, Security/Compliance/Sovereignty)
 9. Customer Success (health, open cases, risk)
 10. Whitespace Map — REQUIRED: a markdown table mapping customer Business Units/Functions (rows) against Red Hat products (columns: RHEL, Ansible Automation, OpenShift, OpenShift Virt, RHEL AI / OpenShift AI) with opportunity level (🟢 High / 🟡 Medium / ⚪ Low) and Opportunity Status
 11. Initiatives — REQUIRED: 3-5 customer-centric initiatives, each with: Customer Objective Addressed, Red Hat Solution, Estimated Deal Size, Timeline, Next Steps, Tagged Potential Opportunity
