@@ -536,6 +536,22 @@ const GARBAGE_PATTERNS = [
   /^next$/i,
 ]
 
+const SALESHUB_NAV_NAMES = new Set([
+  'Skip to Main Content', 'Home', 'DocCenter', 'Engagements',
+  'Insights', 'Learning', 'Skills', 'WorkSpace', 'HomePage',
+  'All Sales Content', 'Page RHSH',
+])
+
+function isSaleshubNavUrl(href: string): boolean {
+  if (!href) return false
+  if (href.includes('javascript:')) return true
+  if (href.startsWith('<')) return true
+  const navPaths = ['/apps/home', '/apps/engagementcenter', '/apps/insights',
+    '/apps/learning', '/apps/skills', '/apps/workspace', '/apps/search',
+    '#reach-skip-nav']
+  return navPaths.some(p => href.includes(p))
+}
+
 function isGarbage(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length < 2) return true
@@ -568,6 +584,8 @@ async function extractLinkList(container: Locator): Promise<SectionItem[]> {
     const href = (await link.getAttribute('href')) ?? ''
 
     if (!name || isGarbage(name)) continue
+    if (SALESHUB_NAV_NAMES.has(name)) continue
+    if (isSaleshubNavUrl(href)) continue
 
     const url = href.startsWith('http') ? href : href ? `https://saleshub.redhat.com${href}` : undefined
 
