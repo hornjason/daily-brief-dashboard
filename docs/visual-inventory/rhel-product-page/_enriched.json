@@ -1,0 +1,3718 @@
+{
+  "productSlug": "red-hat-enterprise-linux",
+  "enrichedAt": "2026-07-08T19:15:08.874Z",
+  "documents": [
+    {
+      "documentName": "Competition",
+      "documentCategory": "competitive-review",
+      "summary": "This document serves as a comprehensive competitive resource for Red Hat Enterprise Linux (RHEL) sales teams and partners. It provides content to educate sellers on RHEL's competitive landscape and offers customer-facing materials to overcome objections in RHEL deals. The document covers key messaging, positioning, and value assets for RHEL, along with specific sections dedicated to competing against various Linux distributions and related offerings, including Amazon Linux, Oracle Linux, Rocky Linux & CIQ, SUSE SLES, Ubuntu, AlmaLinux, and CentOS Linux. It also highlights resources for CentOS migration and competitive intelligence.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "RHEL",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "Amazon Linux",
+          "context": "comparison"
+        },
+        {
+          "name": "Oracle Linux",
+          "context": "comparison"
+        },
+        {
+          "name": "Rocky Linux",
+          "context": "comparison"
+        },
+        {
+          "name": "CIQ",
+          "context": "comparison"
+        },
+        {
+          "name": "SUSE SLES",
+          "context": "comparison"
+        },
+        {
+          "name": "Ubuntu",
+          "context": "comparison"
+        },
+        {
+          "name": "AlmaLinux",
+          "context": "comparison"
+        },
+        {
+          "name": "CentOS Linux",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Competitive selling against alternative Linux distributions",
+        "Migration from CentOS to RHEL"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": [
+        "Amazon"
+      ],
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Server and Cloud Computing"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "Sales Executive",
+        "Sales Engineer",
+        "Partner Sales Representative"
+      ],
+      "customerProblem": "Overcoming competitive objections and differentiating Red Hat Enterprise Linux against various alternative Linux distributions and support offerings in sales engagements.",
+      "conversationOpener": "This document provides competitive battlecards and customer decks specifically for Amazon Linux, Oracle Linux, Rocky Linux, SUSE SLES, Ubuntu, and AlmaLinux, alongside resources for CentOS migration.",
+      "techStackTriggers": [
+        "Linux",
+        "Amazon Linux",
+        "Oracle Linux",
+        "Rocky Linux",
+        "SUSE SLES",
+        "Ubuntu",
+        "AlmaLinux",
+        "CentOS Linux"
+      ],
+      "keyPoints": [
+        "Educate sellers and partners on RHEL competition.",
+        "Provide customer-facing content to overcome competitive objections in RHEL deals.",
+        "Highlight key messaging, positioning, and value assets for RHEL.",
+        "Offer competitive battlecards and customer decks for various Linux distributions.",
+        "Provide resources for CentOS migration."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux offers superior value and positioning compared to Amazon Linux, Oracle Linux, Rocky Linux, SUSE SLES, Ubuntu, and AlmaLinux.",
+        "We have specific strategies and materials to help customers migrate from CentOS to RHEL.",
+        "Leverage IDC reports to demonstrate the business value of standardizing on RHEL and its advantages over unpaid alternatives.",
+        "Red Hat provides resources like Lightspeed to save administrators time and improve operational efficiency."
+      ],
+      "links": [],
+      "actionableSteps": [
+        {
+          "step": "Join the #forum-redhat-compete slack for competitive help"
+        },
+        {
+          "step": "Contact Hervé Lemaitre for competitive help"
+        },
+        {
+          "step": "See how we win against the competition on the WinWire page"
+        },
+        {
+          "step": "Ask questions to NotebookLM for specific competitive sections"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:13:51.056Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Press release",
+      "documentCategory": "other",
+      "summary": "This press release announces the upcoming general availability of Red Hat Enterprise Linux 10.2 and 9.8, focusing on enhanced security, AI-powered automation, and streamlined operations across hybrid cloud environments. The new versions address modern security threats, accelerate AI innovation, and minimize operational drift by incorporating features like post-quantum cryptography, confidential computing, and AI-guided automation for upgrades. The target audience includes IT operations teams, security professionals, and developers looking to leverage AI and secure their infrastructure against emerging threats, ensuring innovation without compromising security or sovereignty.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 10.2",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 9.8",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Certificate System 11.0",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite 6.19",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Lightspeed",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "National Institute of Standards and Technology (NIST)",
+          "category": "Other"
+        },
+        {
+          "technology": "CrowdStrike",
+          "category": "Security"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "traditional system reliability",
+          "context": "comparison"
+        },
+        {
+          "name": "manual maintenance",
+          "context": "displacement"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Securing AI workloads",
+        "Post-quantum cryptography implementation",
+        "Automated OS upgrades",
+        "Consistent image-based deployments",
+        "Malware detection and prevention",
+        "AI-assisted Linux management",
+        "Sovereign control in air-gapped environments"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Automation",
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Security",
+        "Container Management"
+      ],
+      "buyingStage": "awareness",
+      "targetPersona": [
+        "IT Directors",
+        "Security Professionals",
+        "Platform Engineers",
+        "CIOs"
+      ],
+      "customerProblem": "Organizations are struggling to balance the rapid pace of AI innovation with the stringent demands of enterprise security, while also facing challenges in managing complex IT upgrades and maintaining system consistency across hybrid cloud environments.",
+      "conversationOpener": "This press release highlights the upcoming general availability of Red Hat Enterprise Linux 10.2 and 9.8, which focus on post-quantum readiness and AI-powered automation.",
+      "techStackTriggers": [
+        "NIST standards",
+        "CrowdStrike",
+        "container technologies"
+      ],
+      "keyPoints": [
+        "Red Hat Enterprise Linux 10.2 and 9.8 provide a unified foundation for the hybrid cloud, addressing emerging security challenges and featuring advanced AI assistance, quantum-resistant cryptography, a",
+        "The new versions enhance confidential computing capabilities in the OS foundation, providing a trusted environment for AI workloads and protecting sensitive data during processing.",
+        "Post-quantum cryptography and sealed images (a new technology preview) strengthen the trusted foundation for critical production workloads.",
+        "AI-guided automation simplifies complex upgrades and image mode enhancements boost workflow innovation.",
+        "Red Hat helps prepare systems against emerging quantum computing threats by integrating National Institute of Standards and Technology (NIST) standards for post-quantum cryptography.",
+        "AI-assisted automation and upgrades, including Red Hat Ansible Certified Content and the Red Hat Enterprise Linux upgrade system role, reduce downtime and human error.",
+        "Image mode enhancements drive consistency in building, deploying, and managing Red Hat Enterprise Linux using container technologies, controlling system drift and maintenance schedules.",
+        "Model Context Protocol (MCP) servers for Red Hat Satellite and Red Hat Lightspeed offer AI-ready Linux management, enabling administrators to use natural language and automated workflows.",
+        "Red Hat Satellite 6.19 strengthens sovereign control with local vulnerability triage for air-gapped environments and AI-assisted troubleshooting."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux 10.2 and 9.8 offer a strategic OS platform that unifies IT operations across the hybrid cloud, with a strong focus on security.",
+        "The new RHEL versions enhance confidential computing, providing a secure environment for AI workloads and protecting sensitive data in memory and CPU.",
+        "Red Hat is addressing future security threats with post-quantum cryptography, aligning with NIST standards to protect against 'harvest now, decrypt later' attacks.",
+        "AI-guided automation, including Red Hat Ansible Certified Content and the RHEL upgrade system role, streamlines complex in-place upgrades, reducing downtime and human error.",
+        "Image mode enhancements facilitate consistent building, deploying, and managing of RHEL using container technologies, helping to prevent system drift and control maintenance schedules.",
+        "Red Hat Satellite 6.19 provides sovereign control with local vulnerability triage for air-gapped environments and AI-assisted troubleshooting via MCP servers.",
+        "Customers can gain greater choice and control over hardware-rooted security with sealed images, ensuring only verified, trusted container images are started."
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat",
+          "url": "https://red.ht/IOS5vm"
+        },
+        {
+          "name": "Red Hat newsroom",
+          "url": "https://red.ht/1qeXuma"
+        },
+        {
+          "name": "Red Hat blog",
+          "url": "https://red.ht/1zzgkXp"
+        },
+        {
+          "name": "Red Hat on Twitter",
+          "url": "https://bit.ly/2FVq6ik"
+        },
+        {
+          "name": "Red Hat on Facebook",
+          "url": "https://on.fb.me/JVGXMi"
+        },
+        {
+          "name": "Red Hat videos on YouTube",
+          "url": "https://bit.ly/JEkzvc"
+        },
+        {
+          "name": "Red Hat on LinkedIn",
+          "url": "https://linkd.in/1AlOAXq"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        }
+      ],
+      "actionableSteps": null,
+      "enrichedAt": "2026-07-08T19:14:22.165Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Deep Dive blog",
+      "documentCategory": "other",
+      "summary": "This blog post announces the release of Red Hat Enterprise Linux (RHEL) 10.2 and 9.8, highlighting its evolution from a foundational operating system to a high-performance engine for critical applications, security, and innovation. It details enhancements in AI assistance for command-line users, refreshed developer toolsets for various programming languages and databases, and streamlined operations through 'image mode' and automation features. The document also emphasizes advanced security measures, including post-quantum cryptography, and improved upgrade and migration paths, positioning RHEL as a strategic advantage for hybrid cloud environments.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Certificate System 11.0",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Podman",
+          "category": "Other"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "manual renewal",
+          "context": "displacement"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Accelerating application development",
+        "Streamlining OS deployment and management",
+        "Automating system upgrades",
+        "Enhancing command-line productivity with AI",
+        "Securing systems against quantum threats",
+        "Ensuring cryptographic integrity for immutable systems",
+        "Efficient container storage and management",
+        "Simplifying VM provisioning for testing"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Accelerating development and reducing friction in the development cycle with enhanced AI assistance and updated toolsets.",
+          "industry": null
+        },
+        {
+          "scenario": "Streamlining OS deployment, management, and updates across diverse system configurations using image mode and automation.",
+          "industry": null
+        },
+        {
+          "scenario": "Addressing current and future cyber threats, including quantum computing risks, through advanced security features and automated certificate management.",
+          "industry": null
+        },
+        {
+          "scenario": "Ensuring dependable upgrades and migrations with reduced downtime and lower operational costs.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "mixed",
+      "tdpAlignment": [
+        "AI Platform",
+        "Server and Cloud Computing",
+        "Application Development",
+        "Automation",
+        "Security",
+        "Management",
+        "Container Management"
+      ],
+      "buyingStage": "awareness",
+      "targetPersona": [
+        "IT Leaders",
+        "Developers",
+        "Administrators",
+        "Platform Engineers",
+        "Security Architects"
+      ],
+      "customerProblem": "Organizations are struggling to accelerate time-to-market, simplify hybrid cloud management, and proactively defend against advanced threats while maintaining consistent operations and efficient upgrades.",
+      "conversationOpener": "I noticed this blog post highlights the release of Red Hat Enterprise Linux 10.2 and 9.8, emphasizing its role in accelerating development, streamlining operations, and preparing for emerging threats like quantum computing.",
+      "techStackTriggers": [
+        "Go",
+        "LLVM",
+        "Rust",
+        "Python",
+        "Ruby",
+        "Git",
+        "PHP",
+        "OpenJDK",
+        "PostgreSQL",
+        "MariaDB",
+        "bootc"
+      ],
+      "keyPoints": [
+        "RHEL 10.2 and 9.8 enhance AI assistance for command-line users, offering faster problem resolution and increased productivity.",
+        "New developer toolsets (Go 1.26, LLVM 21, Rust 1.92, Python 3.14, Ruby 4.0, Git 2.51, PHP 8.4, OpenJDK 25, PostgreSQL 18, MariaDB 11.8) provide fresh capabilities, enhanced performance, and modern lan",
+        "Image mode for RHEL (based on bootc) streamlines OS deployment, management, and updates, offering consistency and resilience.",
+        "Advanced security features include customer-controlled security for immutable systems (sealed images) and post-quantum cryptography to address future threats.",
+        "Automated management and upgrade tools, including an enhanced RHEL image builder CLI and the Red Hat Enterprise Linux upgrade system role, simplify operations and reduce downtime.",
+        "Leapp is enhanced to allow single-step conversion and upgrade to newer RHEL versions, reducing complexity.",
+        "AI-guided RHEL upgrades powered by Ansible Automation Platform provide tested, automated procedures for in-place upgrades."
+      ],
+      "talkTracks": [
+        "RHEL 10.2 and 9.8 provide enhanced AI assistance for command-line users, leading to faster problem resolution and increased productivity for administrators and developers.",
+        "The latest RHEL releases include updated developer toolsets for Go, LLVM, Rust, Python, Ruby, Git, PHP, OpenJDK, PostgreSQL, and MariaDB, offering improved performance, modern features, and streamline",
+        "RHEL's new 'image mode' (based on bootc) revolutionizes OS deployment and management by treating the OS as an immutable container image, ensuring consistency, resilience, and reduced disk space/networ",
+        "RHEL 10.2 introduces customer-controlled security for immutable systems with 'sealed images' (technology preview), allowing organizations to cryptographically verify every OS component for enhanced in",
+        "Red Hat Certificate System 11.0, available with RHEL, addresses the quantum threat with post-quantum cryptography and automates certificate issuance, significantly reducing manual effort and improving",
+        "Enhanced Leapp and Ansible Certified Content for RHEL upgrades enable single-step conversions and AI-guided automated in-place upgrades, minimizing downtime and operational costs."
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&extIdCarryOver=true&intcmp=7013a000003Sl59AAC&sc_cid=RHCTG0250000454096&percmp=RHCTG0250000466729&_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Developer blog",
+          "url": "https://developers.redhat.com/blog"
+        },
+        {
+          "name": "Red Hat Partner Connect blog",
+          "url": "https://connect.redhat.com/en/blog"
+        },
+        {
+          "name": "Green Tea garbage collector",
+          "url": "https://go.dev/blog/greenteagc"
+        },
+        {
+          "name": "ZJIT",
+          "url": "https://docs.ruby-lang.org/en/master/jit/zjit_md.html"
+        },
+        {
+          "name": "Leapp",
+          "url": "https://www.redhat.com/en/resources/leapp-explained-detail"
+        },
+        {
+          "name": "Upgrade today",
+          "url": "https://access.redhat.com/downloads/content/479"
+        },
+        {
+          "name": "RHEL 10.2 product download",
+          "url": "https://access.redhat.com/downloads/content/479"
+        },
+        {
+          "name": "RHEL 10.2 release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/10.2_release_notes/index"
+        },
+        {
+          "name": "RHEL 10.2 documentation",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10"
+        },
+        {
+          "name": "RHEL 9.8 product download",
+          "url": "https://access.redhat.com/downloads/content/479"
+        },
+        {
+          "name": "RHEL 9.8 release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/9.8_release_notes/index"
+        },
+        {
+          "name": "RHEL 9.8 documentation",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Upgrade to RHEL 10.2 or 9.8",
+          "url": "https://access.redhat.com/downloads/content/479"
+        },
+        {
+          "step": "Try Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Start a trial of Red Hat Learning Subscription"
+        },
+        {
+          "step": "Start a no-cost product trial"
+        },
+        {
+          "step": "Subscribe to Red Hat TV",
+          "url": "https://tv.redhat.com/?intcmp=7013a000003Sq0iAAC"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:14:14.178Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Download",
+      "documentCategory": "other",
+      "summary": "This document is a login page for Red Hat accounts, designed to facilitate access to Red Hat products, services, and resources. It provides options for logging in with a Red Hat account or company single sign-on, and includes links for registration, password reset, and forgotten login. The page also highlights the benefits of creating a Red Hat account, such as product trials, learning resources, world-class support, and simplified event registration, targeting users who need to access Red Hat's ecosystem.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Cloud services",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Accessing product trials",
+        "Utilizing learning resources",
+        "Receiving customer support",
+        "Registering for Red Hat events"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "tdpAlignment": null,
+      "buyingStage": "awareness",
+      "targetPersona": [
+        "IT Professionals",
+        "Developers",
+        "System Administrators",
+        "Decision Makers"
+      ],
+      "customerProblem": "Customers need a centralized and secure way to access Red Hat products, services, and support, as well as educational content and event registrations.",
+      "conversationOpener": "This document outlines the benefits of creating a Red Hat account, such as gaining access to product trials and learning resources.",
+      "techStackTriggers": null,
+      "keyPoints": [
+        "Access to Red Hat products and services requires a Red Hat account.",
+        "Users can log in with a Red Hat account or company single sign-on.",
+        "Benefits of a Red Hat account include product trials, learning resources, world-class support, and simplified event registration.",
+        "Options are available for account registration, password reset, and forgotten login."
+      ],
+      "talkTracks": [
+        "A Red Hat account provides a single point of access to trials, training, support, and events, streamlining engagement with our ecosystem.",
+        "We offer flexible login options, including company single sign-on, to integrate seamlessly with your existing identity management.",
+        "Beyond product access, a Red Hat account unlocks valuable learning tools and world-class support to help you maximize your investment."
+      ],
+      "links": [
+        {
+          "name": "Red Hat logo",
+          "url": "https://redhat.com"
+        },
+        {
+          "name": "Forgot your login?",
+          "url": "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/auth?client_id=forgot-login&amp;response_type=code"
+        },
+        {
+          "name": "Red Hat logo",
+          "url": "https://redhat.com/en"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/redhatinc"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "url": "https://redhat.com/en/technologies/linux-platforms/enterprise-linux"
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "url": "https://redhat.com/en/technologies/cloud-computing/openshift"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "url": "https://redhat.com/en/technologies/management/ansible"
+        },
+        {
+          "name": "Cloud services",
+          "url": "https://redhat.com/en/technologies/cloud-computing/openshift/cloud-services"
+        },
+        {
+          "name": "See all products",
+          "url": "https://redhat.com/en/technologies/all-products"
+        },
+        {
+          "name": "My account",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://redhat.com/en/services/training-and-certification"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Learning community",
+          "url": "https://learn.redhat.com/"
+        },
+        {
+          "name": "Partner resources",
+          "url": "https://connect.redhat.com/"
+        },
+        {
+          "name": "Resource library",
+          "url": "https://redhat.com/en/resources"
+        },
+        {
+          "name": "Product trial center",
+          "url": "https://redhat.com/en/products/trials"
+        },
+        {
+          "name": "Red Hat Marketplace",
+          "url": "https://marketplace.redhat.com"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "http://redhat.force.com/finder/"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Console",
+          "url": "https://cloud.redhat.com/"
+        },
+        {
+          "name": "Contact consulting",
+          "url": "https://redhat.com/en/services/consulting-overview#contact-us"
+        },
+        {
+          "name": "Contact sales",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Contact training",
+          "url": "https://redhat.com/en/services/training-and-certification/contact-us"
+        },
+        {
+          "name": "Social",
+          "url": "https://redhat.com/en/about/social"
+        },
+        {
+          "name": "About Red Hat",
+          "url": "https://redhat.com/en/about/company"
+        },
+        {
+          "name": "Jobs",
+          "url": "https://redhat.com/en/jobs"
+        },
+        {
+          "name": "Events",
+          "url": "https://redhat.com/en/events"
+        },
+        {
+          "name": "Locations",
+          "url": "https://redhat.com/en/about/office-locations"
+        },
+        {
+          "name": "Contact Red Hat",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://redhat.com/en/blog"
+        },
+        {
+          "name": "Inclusion at Red Hat",
+          "url": "https://www.redhat.com/en/about/our-culture/inclusion"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Privacy statement",
+          "url": "https://redhat.com/en/about/privacy-policy"
+        },
+        {
+          "name": "Terms of use",
+          "url": "https://redhat.com/en/about/terms-use"
+        },
+        {
+          "name": "All policies and guidelines",
+          "url": "https://redhat.com/en/about/all-policies-guidelines"
+        },
+        {
+          "name": "Digital accessibility",
+          "url": "https://redhat.com/en/about/digital-accessibility"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Log in to your Red Hat account"
+        },
+        {
+          "step": "Register for a Red Hat account"
+        },
+        {
+          "step": "Reset your password"
+        },
+        {
+          "step": "Recover your login",
+          "url": "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/auth?client_id=forgot-login&amp;response_type=code"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:14:06.704Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "release notes",
+      "documentCategory": "other",
+      "summary": "This document provides the release notes for Red Hat Enterprise Linux 10.2, detailing improvements, additions, known issues, fixed issues, Technology Previews, and deprecated or removed functionalities. It covers various aspects of the operating system including security, infrastructure services, kernel, programming languages, development tools, desktop, and virtualization. The document also includes information on in-place upgrades from RHEL 8 and 9 to RHEL 10, and resources like the Red Hat Customer Portal Labs. It is a comprehensive reference for users and administrators looking to understand the changes and features in this specific RHEL release.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "RHEL Lightspeed",
+          "slug": null
+        },
+        {
+          "name": "RHEL for Edge",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux System Roles",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": null,
+      "partnerSolutions": null,
+      "useCases": [
+        "Operating system upgrades and migrations",
+        "System administration and maintenance",
+        "Application development and deployment on RHEL",
+        "Security hardening and compliance",
+        "Virtualization management"
+      ],
+      "customerScenarios": null,
+      "cloudProviders": null,
+      "audience": "customer",
+      "tdpAlignment": [
+        "Server and Cloud Computing",
+        "Security",
+        "Application Development",
+        "Virtualization",
+        "Management"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "System Administrators",
+        "IT Operations",
+        "Developers",
+        "Security Engineers",
+        "Architects"
+      ],
+      "customerProblem": "Keeping up-to-date with changes, new features, and potential issues in Red Hat Enterprise Linux releases, and understanding upgrade paths between major versions.",
+      "conversationOpener": "This document provides detailed release notes for Red Hat Enterprise Linux 10.2, covering new features, enhancements, and known issues across various components.",
+      "techStackTriggers": null,
+      "keyPoints": [
+        "Overview of major changes in RHEL 10.2 across various components like security, kernel, and development tools.",
+        "Details on in-place upgrade paths from RHEL 8 and RHEL 9 to RHEL 10.",
+        "Comprehensive listing of new features and enhancements in areas such as installer, image creation, security, networking, and containers.",
+        "Information on Technology Preview and Developer Preview features, offering insights into upcoming functionalities.",
+        "Documentation of removed and deprecated features, helping users plan for compatibility and future changes.",
+        "Identification of known issues and fixed issues to assist with troubleshooting and system stability."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux 10.2 offers significant improvements in security, infrastructure services, and development tools, enhancing the overall stability and performance of your systems.",
+        "Customers can confidently plan their migration to RHEL 10 with clear in-place upgrade paths from RHEL 8 and RHEL 9, minimizing disruption and ensuring a smooth transition.",
+        "The inclusion of Technology Preview and Developer Preview features in RHEL 10.2 allows organizations to explore cutting-edge capabilities and prepare for future innovations.",
+        "Detailed documentation of removed and deprecated features helps users proactively manage their environments and avoid compatibility issues during upgrades."
+      ],
+      "links": [
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Console",
+          "url": "https://console.redhat.com/"
+        },
+        {
+          "name": "Developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Subscription management",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Support Cases",
+          "url": "https://access.redhat.com/support/cases"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Partner support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Contact Sales",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://www.redhat.com/en/services/training-and-certification"
+        },
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        },
+        {
+          "name": "Learning community",
+          "url": "https://learn.redhat.com/"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://www.redhat.com/en/tv"
+        },
+        {
+          "name": "Architecture Center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Global advocacy",
+          "url": "https://access.redhat.com/accelerators"
+        },
+        {
+          "name": "How we contribute",
+          "url": "https://www.redhat.com/en/about/our-community-contributions"
+        },
+        {
+          "name": "Contact",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Github",
+          "url": "https://github.com/redhat-documentation"
+        },
+        {
+          "name": "Youtube",
+          "url": "https://www.youtube.com/@redhat"
+        },
+        {
+          "name": "Twitter",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/learn"
+        },
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://www.redhat.com/services/training-and-certification"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Product trial center",
+          "url": "https://redhat.com/en/products/trials"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/about/japan-buy"
+        },
+        {
+          "name": "Customer Portal Community",
+          "url": "https://access.redhat.com/community"
+        },
+        {
+          "name": "Events",
+          "url": "https://www.redhat.com/events"
+        },
+        {
+          "name": "How we contribute",
+          "url": "https://www.redhat.com/en/about/our-community-contributions"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://www.redhat.com/en/blog/making-open-source-more-inclusive-eradicating-problematic-language"
+        },
+        {
+          "name": "Explore our recent updates",
+          "url": "https://www.redhat.com/en/blog/whats-new-docsredhatcom"
+        },
+        {
+          "name": "About Red Hat",
+          "url": "https://redhat.com/en/about/company"
+        },
+        {
+          "name": "Jobs",
+          "url": "https://redhat.com/en/jobs"
+        },
+        {
+          "name": "Events",
+          "url": "https://redhat.com/en/events"
+        },
+        {
+          "name": "Locations",
+          "url": "https://redhat.com/en/about/office-locations"
+        },
+        {
+          "name": "Contact Red Hat",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://redhat.com/en/blog"
+        },
+        {
+          "name": "Inclusion at Red Hat",
+          "url": "https://redhat.com/en/about/our-culture/diversity-equity-inclusion"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Privacy statement",
+          "url": "https://redhat.com/en/about/privacy-policy"
+        },
+        {
+          "name": "Terms of use",
+          "url": "https://redhat.com/en/about/terms-use"
+        },
+        {
+          "name": "All policies and guidelines",
+          "url": "https://redhat.com/en/about/all-policies-guidelines"
+        },
+        {
+          "name": "Digital accessibility",
+          "url": "https://redhat.com/en/about/digital-accessibility"
+        }
+      ],
+      "actionableSteps": null,
+      "enrichedAt": "2026-07-08T19:13:51.056Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "documentation",
+      "documentCategory": "other",
+      "summary": "This document serves as the central hub for Red Hat Enterprise Linux 10 documentation, providing a comprehensive overview of its features, installation procedures, administration tasks, and integration capabilities. It covers various aspects from release notes and planning guides to system administration, security, networking, identity management, storage, clustering, container and virtual machine management, cloud deployments, and application development. The content is designed to assist users in adopting, deploying, managing, and optimizing RHEL 10 across diverse environments, including on-premise, cloud, and edge. It also highlights the integration with Red Hat Lightspeed for RHEL and support for SAP Solutions.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux 10",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 9",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 8",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 7",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 6",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 5",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux 4",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Insights for RHEL",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Lightspeed for RHEL",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for SAP Solutions",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Anaconda",
+          "category": "Other"
+        },
+        {
+          "technology": "GNOME desktop environment",
+          "category": "Other"
+        },
+        {
+          "technology": "DNF tool",
+          "category": "Other"
+        },
+        {
+          "technology": "CUPS printing server",
+          "category": "Other"
+        },
+        {
+          "technology": "SELinux",
+          "category": "Security"
+        },
+        {
+          "technology": "firewalld",
+          "category": "Security"
+        },
+        {
+          "technology": "nftables",
+          "category": "Security"
+        },
+        {
+          "technology": "XDP packet filtering",
+          "category": "Networking"
+        },
+        {
+          "technology": "Active Directory",
+          "category": "Other"
+        },
+        {
+          "technology": "SSSD",
+          "category": "Other"
+        },
+        {
+          "technology": "authselect",
+          "category": "Other"
+        },
+        {
+          "technology": "sssctl",
+          "category": "Other"
+        },
+        {
+          "technology": "LDAP",
+          "category": "Other"
+        },
+        {
+          "technology": "DNS",
+          "category": "Networking"
+        },
+        {
+          "technology": "LVM",
+          "category": "Storage"
+        },
+        {
+          "technology": "Device Mapper Multipath",
+          "category": "Storage"
+        },
+        {
+          "technology": "VDO",
+          "category": "Storage"
+        },
+        {
+          "technology": "Pacemaker",
+          "category": "Other"
+        },
+        {
+          "technology": "Podman",
+          "category": "Container Management"
+        },
+        {
+          "technology": "Buildah",
+          "category": "Container Management"
+        },
+        {
+          "technology": "Skopeo",
+          "category": "Container Management"
+        },
+        {
+          "technology": "cloud-init",
+          "category": "Cloud"
+        },
+        {
+          "technology": "C/C++",
+          "category": "Application Development"
+        },
+        {
+          "technology": "Python",
+          "category": "Application Development"
+        },
+        {
+          "technology": "PHP",
+          "category": "Application Development"
+        },
+        {
+          "technology": "OpenJDK",
+          "category": "Application Development"
+        },
+        {
+          "technology": ".NET",
+          "category": "Application Development"
+        },
+        {
+          "technology": "RPM package management system",
+          "category": "Other"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "Windows Active Directory",
+          "context": "coexistence"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Operating system installation and deployment",
+        "System upgrade and migration",
+        "Custom image creation and management",
+        "Edge system deployment",
+        "Automated system administration",
+        "AI-driven system configuration and troubleshooting",
+        "Security hardening and network security",
+        "Identity and access management",
+        "Disaster recovery planning for identity management",
+        "Storage management and optimization",
+        "High availability clustering",
+        "Container orchestration and management",
+        "Virtual machine management (Linux and Windows guests)",
+        "Cloud deployment and management (AWS, Google Cloud, Azure)",
+        "Application development (C, C++, Python, PHP, Java, .NET)",
+        "Software packaging and distribution",
+        "SAP solution deployment"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Planning the adoption of RHEL 10 and understanding key differences from previous versions.",
+          "industry": null
+        },
+        {
+          "scenario": "Installing RHEL 10 on local systems, over the network, or automatically with predefined configurations.",
+          "industry": null
+        },
+        {
+          "scenario": "Upgrading existing RHEL 9 environments to RHEL 10.",
+          "industry": null
+        },
+        {
+          "scenario": "Composing customized RHEL system images for various deployment scenarios, including Edge.",
+          "industry": null
+        },
+        {
+          "scenario": "Automating system administration tasks and leveraging AI-driven assistance for configuration and troubleshooting.",
+          "industry": null
+        },
+        {
+          "scenario": "Implementing security hardening measures, securing networks, and managing firewalls.",
+          "industry": null
+        },
+        {
+          "scenario": "Managing identity and access control, including integration with Windows Active Directory and disaster recovery planning for Identity Management.",
+          "industry": null
+        },
+        {
+          "scenario": "Configuring and managing storage, file systems, and high availability clusters.",
+          "industry": null
+        },
+        {
+          "scenario": "Building, running, and managing containers and virtual machines on RHEL 10.",
+          "industry": null
+        },
+        {
+          "scenario": "Deploying and managing RHEL instances on major public cloud platforms (AWS, Google Cloud, Azure).",
+          "industry": null
+        },
+        {
+          "scenario": "Developing applications in various programming languages (C, C++, Python, PHP, Java, .NET) on RHEL 10.",
+          "industry": null
+        },
+        {
+          "scenario": "Utilizing Red Hat Lightspeed for RHEL to dynamically create digital roadmaps and enhance system management.",
+          "industry": null
+        },
+        {
+          "scenario": "Deploying RHEL for SAP Solutions.",
+          "industry": "Enterprise Software"
+        }
+      ],
+      "cloudProviders": [
+        "Amazon Web Services",
+        "Google Cloud",
+        "Microsoft Azure"
+      ],
+      "audience": "customer",
+      "tdpAlignment": [
+        "Automation",
+        "Container Management",
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Application Development",
+        "Virtualization",
+        "Management",
+        "Security"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "System Administrator",
+        "IT Director",
+        "Platform Engineer",
+        "Cloud Architect",
+        "Security Engineer",
+        "Developer"
+      ],
+      "customerProblem": "Organizations need detailed and centralized documentation to effectively plan, deploy, manage, secure, and optimize their Red Hat Enterprise Linux 10 environments across various infrastructure types, including on-premise, cloud, and edge, while also integrating with existing systems and applications.",
+      "conversationOpener": "This documentation hub provides comprehensive guides for Red Hat Enterprise Linux 10, covering everything from installation and upgrades to advanced system administration and cloud deployments.",
+      "techStackTriggers": [
+        "Linux",
+        "Windows Server (Active Directory)",
+        "Databases (SQL, NoSQL)",
+        "Web Servers (Apache, Nginx)",
+        "Mail Servers",
+        "Containers (Docker, Kubernetes)",
+        "Virtualization (VMware, KVM)",
+        "Public Cloud (AWS, Google Cloud, Azure)",
+        "C/C++ Development",
+        "Python Development",
+        "PHP Development",
+        "Java Development",
+        ".NET Development",
+        "SAP Solutions"
+      ],
+      "keyPoints": [
+        "Comprehensive documentation for Red Hat Enterprise Linux 10, covering installation, administration, and advanced features.",
+        "Guidance for planning RHEL 10 adoption, including key differences from RHEL 9 and package manifests.",
+        "Detailed instructions for installing RHEL 10 interactively, over the network, and automatically.",
+        "Support for upgrading from RHEL 9 to RHEL 10 and composing custom RHEL images using image builder.",
+        "Extensive documentation on system administration, security hardening, networking, and identity management.",
+        "Information on managing containers, virtual machines, and deploying RHEL on major cloud providers.",
+        "Resources for developing applications in C, C++, Python, PHP, Java (OpenJDK), and .NET on RHEL 10.",
+        "Integration with Red Hat Lightspeed for RHEL for AI-driven assistance and digital roadmap creation.",
+        "Specific documentation for RHEL for SAP Solutions."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux 10 offers comprehensive documentation to streamline every stage of its lifecycle, from initial planning and installation to advanced system administration and cloud deployment",
+        "With RHEL 10, customers can easily upgrade from RHEL 9 and leverage image builder for creating customized system images, including those optimized for edge environments.",
+        "RHEL 10 enhances system administration through automation with RHEL system roles and Red Hat Ansible Automation Platform, providing consistent and repeatable configurations across diverse hosts.",
+        "The integration of Red Hat Lightspeed for RHEL introduces an AI-driven command-line assistant and dynamic digital roadmaps, empowering administrators to configure, manage, and troubleshoot RHEL system",
+        "RHEL 10 provides robust security features, including SELinux, firewalls, and packet filters, ensuring enhanced protection for enterprise systems and networks.",
+        "Customers can confidently deploy and manage RHEL 10 across major cloud providers like AWS, Google Cloud, and Microsoft Azure, with dedicated documentation for each platform.",
+        "RHEL 10 supports a wide range of application development, including C, C++, Python, PHP, Java (OpenJDK), and .NET, making it a versatile platform for developers."
+      ],
+      "links": [
+        {
+          "name": "RH Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Console",
+          "url": "https://console.redhat.com/"
+        },
+        {
+          "name": "Developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "All Red Hat",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Subscription management",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Support Cases",
+          "url": "https://access.redhat.com/support/cases"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Partner support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Contact Sales",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://www.redhat.com/en/services/training-and-certification"
+        },
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        },
+        {
+          "name": "Learning community",
+          "url": "https://learn.redhat.com/"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://www.redhat.com/en/tv"
+        },
+        {
+          "name": "Architecture Center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Global advocacy",
+          "url": "https://access.redhat.com/accelerators"
+        },
+        {
+          "name": "How we contribute",
+          "url": "https://www.redhat.com/en/about/our-community-contributions"
+        },
+        {
+          "name": "Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Console",
+          "url": "https://console.redhat.com/"
+        },
+        {
+          "name": "Developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Start a trial",
+          "url": "https://www.redhat.com/en/products/trials"
+        },
+        {
+          "name": "Contact",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Dynamically creating a digital roadmap to manage RHEL systems",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_lightspeed/1-latest/html/dynamically_creating_a_digital_roadmap_to_manage_rhel_systems"
+        },
+        {
+          "name": "Developing .NET applications in RHEL 10",
+          "url": "https://docs.redhat.com/en/documentation/net/"
+        },
+        {
+          "name": "Get Started with Red Hat Lightspeed",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_lightspeed/1-latest/html/getting_started_with_red_hat_lightspeed/index"
+        },
+        {
+          "name": "Product Documentation for Red Hat Lightspeed",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_lightspeed/1-latest"
+        },
+        {
+          "name": "Product Documentation for RHEL for SAP Solutions 10",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_for_sap_solutions/10"
+        },
+        {
+          "name": "Github",
+          "url": "https://github.com/redhat-documentation"
+        },
+        {
+          "name": "Youtube",
+          "url": "https://www.youtube.com/@redhat"
+        },
+        {
+          "name": "Twitter",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/learn"
+        },
+        {
+          "name": "Interactive labs",
+          "url": "https://www.redhat.com/en/interactive-labs"
+        },
+        {
+          "name": "Training and certification",
+          "url": "https://www.redhat.com/services/training-and-certification"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Product trial center",
+          "url": "https://redhat.com/en/products/trials"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/about/japan-buy"
+        },
+        {
+          "name": "Customer Portal Community",
+          "url": "https://access.redhat.com/community"
+        },
+        {
+          "name": "Events",
+          "url": "https://www.redhat.com/events"
+        },
+        {
+          "name": "How we contribute",
+          "url": "https://www.redhat.com/about/our-community-contributions"
+        },
+        {
+          "name": "Explore our recent updates",
+          "url": "https://www.redhat.com/en/blog/whats-new-docsredhatcom"
+        },
+        {
+          "name": "About Red Hat",
+          "url": "https://redhat.com/en/about/company"
+        },
+        {
+          "name": "Jobs",
+          "url": "https://redhat.com/en/jobs"
+        },
+        {
+          "name": "Events",
+          "url": "https://redhat.com/en/events"
+        },
+        {
+          "name": "Locations",
+          "url": "https://redhat.com/en/about/office-locations"
+        },
+        {
+          "name": "Contact Red Hat",
+          "url": "https://redhat.com/en/contact"
+        },
+        {
+          "name": "Red Hat Blog",
+          "url": "https://redhat.com/en/blog"
+        },
+        {
+          "name": "Inclusion at Red Hat",
+          "url": "https://redhat.com/en/about/our-culture/diversity-equity-inclusion"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        },
+        {
+          "name": "Privacy statement",
+          "url": "https://redhat.com/en/about/privacy-policy"
+        },
+        {
+          "name": "Terms of use",
+          "url": "https://redhat.com/en/about/terms-use"
+        },
+        {
+          "name": "All policies and guidelines",
+          "url": "https://redhat.com/en/about/all-policies-guidelines"
+        },
+        {
+          "name": "Digital accessibility",
+          "url": "https://redhat.com/en/about/digital-accessibility"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Review RHEL 10 release notes for new features and changes."
+        },
+        {
+          "step": "Plan RHEL 10 adoption by understanding key differences from RHEL 9."
+        },
+        {
+          "step": "Install RHEL 10 interactively from installation media."
+        },
+        {
+          "step": "Upgrade RHEL 9 systems to RHEL 10."
+        },
+        {
+          "step": "Automate system administration tasks using RHEL system roles with Ansible."
+        },
+        {
+          "step": "Leverage the AI-driven command-line assistant for RHEL configuration and troubleshooting."
+        },
+        {
+          "step": "Harden RHEL 10 system security."
+        },
+        {
+          "step": "Manage containers and virtual machines on RHEL 10."
+        },
+        {
+          "step": "Deploy and manage RHEL on Amazon Web Services."
+        },
+        {
+          "step": "Get started with Red Hat Lightspeed for RHEL.",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_lightspeed/1-latest/html/getting_started_with_red_hat_lightspeed/index"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:14:22.183Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "redhat.com_rhel",
+      "documentCategory": "solution-brief",
+      "summary": "This document introduces Red Hat Enterprise Linux (RHEL) as a stable, high-performance Linux platform with built-in security and management features, designed to run critical workloads anywhere in the hybrid cloud. It highlights the newest major release, RHEL 10, emphasizing its AI readiness, advanced capabilities to address the Linux skills gap, container drift containment, and post-quantum security. The content targets a broad audience, from developers to IT decision-makers, and covers various use cases such as AI workloads, hybrid cloud deployments, application development, edge computing, high-performance computing, and SQL Server deployments. It also provides information on product variants, supported architectures, features, and learning resources.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat AI Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat AI Inference",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift AI",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Lightwell",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization Engine",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Desktop",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Server",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Workstations",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Lightspeed",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "NVIDIA",
+          "category": "Other"
+        },
+        {
+          "technology": "Microsoft SQL Server",
+          "category": "Database"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "CentOS Linux 7",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "AI workloads",
+        "Hybrid cloud deployments",
+        "Application development",
+        "Edge computing",
+        "High-performance computing (HPC)",
+        "SQL Server deployments",
+        "Linux standardization",
+        "Container drift containment",
+        "Post-quantum security"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Building and scaling AI workloads on a trusted foundation, both on-premise and across the hybrid cloud.",
+          "industry": null
+        },
+        {
+          "scenario": "Deploying and running applications consistently across physical, virtual, and cloud environments in a hybrid cloud setup.",
+          "industry": null
+        },
+        {
+          "scenario": "Developing and deploying applications in the cloud with access to a vast ecosystem and no-cost developer subscriptions.",
+          "industry": null
+        },
+        {
+          "scenario": "Extending hybrid cloud infrastructure to the edge with optimized OS images and efficient updates.",
+          "industry": null
+        },
+        {
+          "scenario": "Scaling high-performance computing (HPC) workloads with a flexible and reliable platform.",
+          "industry": null
+        },
+        {
+          "scenario": "Delivering Microsoft SQL Server on Linux with a performance-driven, cost-effective platform.",
+          "industry": null
+        },
+        {
+          "scenario": "Migrating from CentOS Linux 7 to a fully supported, production-grade operating system.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": [
+        "AWS",
+        "Microsoft Azure",
+        "Google Cloud",
+        "IBM Cloud",
+        "Oracle Cloud Infrastructure"
+      ],
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Application Development",
+        "Automation",
+        "Security",
+        "Management"
+      ],
+      "buyingStage": "awareness",
+      "targetPersona": [
+        "IT Director",
+        "Platform Engineer",
+        "Developer",
+        "System Administrator",
+        "DevOps Engineer",
+        "CIO",
+        "Security Architect"
+      ],
+      "customerProblem": "Organizations struggle with the Linux skills gap, managing container drift, implementing post-quantum security, and deploying consistent operating environments across diverse infrastructure, including hybrid cloud and edge.",
+      "conversationOpener": "This document highlights the newest major release of Red Hat Enterprise Linux, RHEL 10, and its focus on AI readiness and advanced capabilities for IT challenges.",
+      "techStackTriggers": [
+        "Linux",
+        "Containers",
+        "Hybrid Cloud",
+        "Edge Computing",
+        "High Performance Computing",
+        "Microsoft SQL Server",
+        "CentOS Linux"
+      ],
+      "keyPoints": [
+        "Red Hat Enterprise Linux 10 introduces AI readiness, addresses Linux skills gaps, contains drift with container technologies, and offers post-quantum security.",
+        "RHEL provides a stable foundation for innovation, enabling modernization with confidence across cloud, containers, and AI.",
+        "RHEL simplifies operations with intelligent features and trusted expertise, suitable for all experience levels.",
+        "RHEL enhances security with proactive measures like live kernel patching, security profiles, and certifications.",
+        "Red Hat is a trusted partner with 30 years of open source leadership.",
+        "RHEL supports AI workloads by co-engineering with hardware leaders like NVIDIA and offering confidential computing tools.",
+        "RHEL serves as a consistent operating foundation for hybrid cloud deployments, from physical to virtual environments and public clouds.",
+        "RHEL facilitates application development with access to the Red Hat Developer program and no-cost subscriptions for business developers.",
+        "RHEL extends hybrid cloud infrastructure to the edge, providing optimized OS images, efficient updates, and automatic health checks.",
+        "RHEL offers a flexible and reliable platform for scaling high-performance computing (HPC) workloads.",
+        "RHEL provides a performance-driven, cost-effective platform for Microsoft SQL Server deployments across various environments.",
+        "RHEL offers predictable product phases (full support, maintenance, extended life phase) for consistent lifecycle management.",
+        "RHEL is available on leading cloud providers like AWS, Microsoft Azure, Google Cloud, IBM Cloud, and Oracle Cloud Infrastructure.",
+        "RHEL offers a direct migration path for CentOS Linux 7 users."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux 10 is designed to address modern IT challenges, including AI readiness, the Linux skills gap, and post-quantum security, offering a forward-looking foundation for your operati",
+        "RHEL provides a consistent operating environment across hybrid cloud, edge, and on-premise deployments, ensuring predictability and reducing operational drift for critical workloads.",
+        "With built-in security features like live kernel patching and security certifications, RHEL helps organizations proactively mitigate risks and maintain a trusted software supply chain.",
+        "RHEL simplifies IT operations through intelligent features and Red Hat's expertise, making it easier to develop, deploy, and manage applications regardless of your team's experience level.",
+        "For organizations migrating from CentOS Linux 7, RHEL offers a direct, fully supported, and production-grade migration path, ensuring business continuity and enhanced support.",
+        "RHEL is optimized for various use cases, including AI workloads, high-performance computing, and running Microsoft SQL Server, providing a versatile platform for diverse enterprise needs.",
+        "Red Hat's extensive partner ecosystem and support for leading cloud providers (AWS, Azure, Google Cloud, IBM Cloud, Oracle Cloud Infrastructure) ensure flexibility and broad compatibility for RHEL dep",
+        "RHEL offers comprehensive training and certification programs, along with learning subscriptions, to help your teams build essential Linux skills and maximize their investment in Red Hat technologies."
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Red Hat Enterprise Linux 10.2 and 9.8",
+          "url": "http://www.redhat.com/en/about/press-releases/red-hat-delivers-post-quantum-readiness-and-ai-powered-automation-latest-versions-red-hat-enterprise-linux"
+        },
+        {
+          "name": "Red Hat Developer program",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Business Developers",
+          "url": "https://developers.redhat.com/products/rhel/business"
+        },
+        {
+          "name": "partner ecosystem",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "ARM",
+          "url": "https://www.redhat.com/en/topics/linux/what-is-arm-processor"
+        },
+        {
+          "name": "Explore deployments",
+          "url": "https://www.redhat.com/architect/portfolio/?products=RHEL"
+        },
+        {
+          "name": "Read documentation",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "X",
+          "url": "https://twitter.com/RedHat"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Explore the latest release of Red Hat Enterprise Linux 10"
+        },
+        {
+          "step": "Try Red Hat Enterprise Linux for 60 days"
+        },
+        {
+          "step": "Find out how to buy Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Start learning about Red Hat Enterprise Linux"
+        },
+        {
+          "step": "View AI workloads with Red Hat Enterprise Linux"
+        },
+        {
+          "step": "See how Red Hat Enterprise Linux simplifies hybrid cloud environments"
+        },
+        {
+          "step": "Get the e-book on managing infrastructure at cloud scale"
+        },
+        {
+          "step": "Learn more about the developer experience on Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Learn why to run Red Hat Enterprise Linux at the edge"
+        },
+        {
+          "step": "Keep reading about HPC for Red Hat Enterprise Linux"
+        },
+        {
+          "step": "View SQL Server on Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Explore customer success stories"
+        },
+        {
+          "step": "Explore Red Hat Enterprise Linux Server"
+        },
+        {
+          "step": "Explore Red Hat Enterprise Linux for Workstations"
+        },
+        {
+          "step": "Explore deployments with Red Hat Enterprise Linux",
+          "url": "https://www.redhat.com/architect/portfolio/?products=RHEL"
+        },
+        {
+          "step": "Explore automation and management features of Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Keep reading about Red Hat Enterprise Linux security"
+        },
+        {
+          "step": "Learn more about Red Hat Enterprise Linux lifecycle"
+        },
+        {
+          "step": "Explore all features and benefits of Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Discover Red Hat Enterprise Linux in the cloud"
+        },
+        {
+          "step": "Migrate from CentOS Linux 7 to Red Hat Enterprise Linux"
+        },
+        {
+          "step": "Learn about Linux training"
+        },
+        {
+          "step": "See all certifications"
+        },
+        {
+          "step": "Learn for free with Red Hat Learning Subscription trial"
+        },
+        {
+          "step": "Maximize your investment with Red Hat Enterprise Linux current subscribers resources"
+        },
+        {
+          "step": "See what's new with Red Hat Enterprise Linux updates"
+        },
+        {
+          "step": "Visit the Red Hat Blog for Red Hat Enterprise Linux updates"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:15:08.864Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Subscription guide",
+      "documentCategory": "other",
+      "summary": "This Red Hat Enterprise Linux subscription guide helps purchasing managers and procurement functions select, manage, and renew subscriptions for Red Hat Enterprise Linux. It details the value derived from a subscription, including access to enterprise software, emerging open source technologies, integrated analytics, lifecycle support, and proactive security resources. The guide also outlines different subscription models for physical, virtual, and cloud environments, including specific scenarios for production, development, HPC, and disaster recovery. It provides practical worksheets for calculating subscription needs and clarifies subscription terms and conditions.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Lightspeed",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat OpenStack Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Virtual Datacenters",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for HPC Head",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for HPC Compute",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Developer Support Professional",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Developer Support Enterprise",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Developer Program",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Workstations",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Subscription Management",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Business Developers",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Developer Subscription for Individuals",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Developer Subscription for Teams",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Server",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Third Party Linux Migration",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for Server Entry Level",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for ARM",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for IBM Power Little Endian",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for IBM Z and LinuxONE with Comprehensive Add-Ons",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux High Availability Add-On",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Extended Update Support (EUS) Add-On",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux for SAP Solutions",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Disaster Recovery",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Resilient Storage Add-On",
+          "slug": null
+        },
+        {
+          "name": "Enhanced Extended Update Support Add-On",
+          "slug": null
+        },
+        {
+          "name": "Extended Life Cycle Support (ELS)",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Security Select Add-On",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite Server",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite Capsule Server",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "SAP",
+          "category": "Other"
+        },
+        {
+          "technology": "Microsoft SQL Server",
+          "category": "Database"
+        },
+        {
+          "technology": "KVM",
+          "category": "Virtualization"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "Microsoft Hyper-V",
+          "context": "coexistence"
+        },
+        {
+          "name": "VMware",
+          "context": "coexistence"
+        },
+        {
+          "name": "Nutanix",
+          "context": "coexistence"
+        },
+        {
+          "name": "IBM Z",
+          "context": "coexistence"
+        },
+        {
+          "name": "LinuxONE",
+          "context": "coexistence"
+        },
+        {
+          "name": "SAP HANA",
+          "context": "coexistence"
+        },
+        {
+          "name": "SAP S/4HANA",
+          "context": "coexistence"
+        },
+        {
+          "name": "other rpm-based Linux distributions",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": [],
+      "useCases": [
+        "Subscription management and renewal",
+        "Deployment on physical servers",
+        "Deployment in virtual environments",
+        "Deployment in public cloud environments",
+        "High-availability deployments",
+        "High-performance computing (HPC)",
+        "Disaster recovery planning",
+        "Application development and testing",
+        "Workstation deployments for graphics and scientific activities",
+        "Linux standardization and migration",
+        "Infrastructure management and patching",
+        "Security vulnerability management",
+        "Compliance management"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Selecting subscriptions for physical server deployments with varying socket configurations.",
+          "industry": null
+        },
+        {
+          "scenario": "Calculating subscriptions for virtual environments with different guest densities.",
+          "industry": null
+        },
+        {
+          "scenario": "Determining subscription needs for critical production environments requiring high availability.",
+          "industry": null
+        },
+        {
+          "scenario": "Managing subscriptions in an open hybrid cloud environment combining physical, virtual, private, and public cloud components.",
+          "industry": null
+        },
+        {
+          "scenario": "Provisioning subscriptions for high-performance computing (HPC) environments.",
+          "industry": null
+        },
+        {
+          "scenario": "Planning subscriptions for disaster recovery scenarios (hot, warm, and cold DR).",
+          "industry": null
+        },
+        {
+          "scenario": "Supporting development teams with appropriate Red Hat Enterprise Linux subscriptions and support levels.",
+          "industry": null
+        },
+        {
+          "scenario": "Deploying Red Hat Enterprise Linux for Workstations for graphics-intensive or GPU-intensive workloads.",
+          "industry": null
+        },
+        {
+          "scenario": "Migrating from other rpm-based Linux distributions to Red Hat Enterprise Linux.",
+          "industry": null
+        },
+        {
+          "scenario": "Deploying Red Hat Enterprise Linux on IBM Power systems for scale-out data and cloud deployments.",
+          "industry": null
+        },
+        {
+          "scenario": "Operating SAP HANA underneath S/4HANA deployments with Red Hat Enterprise Linux for SAP Solutions.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": [
+        "Amazon Web Services",
+        "Microsoft Azure",
+        "Google Cloud"
+      ],
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Server and Cloud Computing",
+        "Management",
+        "Security",
+        "Virtualization",
+        "Automation",
+        "Application Development",
+        "AI Platform"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "Purchasing Manager",
+        "Procurement Function",
+        "IT Director",
+        "System Administrator",
+        "Developer",
+        "Solution Architect"
+      ],
+      "customerProblem": "Organizations struggle to understand and optimize their Red Hat Enterprise Linux subscription usage across diverse physical, virtual, and cloud environments, leading to potential over-provisioning or compliance issues.",
+      "conversationOpener": "This Red Hat Enterprise Linux subscription guide details how to select, manage, and renew subscriptions, providing specific worksheets for calculating needs in physical, virtual, and cloud environments.",
+      "techStackTriggers": [
+        "IBM Z",
+        "LinuxONE",
+        "SAP HANA",
+        "SAP S/4HANA",
+        "VMware",
+        "Microsoft Hyper-V",
+        "Nutanix",
+        "KVM",
+        "IBM Power",
+        "x86 architecture",
+        "ARM architecture",
+        "GPU-intensive workloads",
+        "Hypervisors"
+      ],
+      "keyPoints": [
+        "Red Hat Enterprise Linux subscriptions provide access to enterprise software, continuous delivery of patches and upgrades, and flexibility across public cloud environments.",
+        "Subscriptions include access to emerging open source technologies and Red Hat's expertise as a leading contributor to open source communities.",
+        "Integrated analytics with Red Hat Lightspeed (formerly Red Hat Insights) offer AI-powered management and advanced security capabilities for proactive identification and remediation of issues.",
+        "Red Hat Enterprise Linux subscriptions offer 10 years of lifecycle support for each major release, with additional options for extended support on minor releases.",
+        "Customers gain access to award-winning support, including phone and online incident support, knowledge-centered resources, and collaborative discussions with Red Hat experts.",
+        "Proactive security resources include a dedicated team monitoring risks, kpatch for live kernel patching, a CVE database with Red Hat-specific guidance, and certification/compliance engineering.",
+        "Subscriptions enable visibility and influence over the Red Hat Enterprise Linux roadmap and foster community leadership in open source projects like Fedora and CentOS Stream.",
+        "Partnerships with hardware, software, and cloud providers ensure integration and certified platforms for Red Hat Enterprise Linux deployments.",
+        "Red Hat Enterprise Linux subscriptions support various deployment models: physical (socket-pair based), virtual (instance-pair based), and unlimited guests for high-density virtual environments.",
+        "Subscription portability allows transferring entitlements between physical and virtual deployments without contacting Red Hat.",
+        "Different support levels (Self-support, Standard, Premium, Developer Professional, Developer Enterprise) are available to match technical and business requirements.",
+        "Red Hat Satellite and Red Hat Subscription Management provide tools for managing subscriptions, patch management, provisioning, and configuration management.",
+        "Red Hat Enterprise Linux for SAP Solutions provides a highly available foundation for critical SAP systems with features like High Availability, Lightspeed, Satellite, and EUS.",
+        "Red Hat Enterprise Linux for IBM Z and LinuxONE offers 'subcapacity' entitlement, requiring subscriptions only for cores used by RHEL instances."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux subscriptions offer more than just software; they provide a comprehensive ecosystem of support, security, and innovation, ensuring your business benefits from the latest open ",
+        "With Red Hat Lightspeed and Red Hat Satellite, your Red Hat Enterprise Linux environment can proactively identify and remediate security threats, performance bottlenecks, and misconfigurations, minimi",
+        "Red Hat Enterprise Linux subscriptions provide unparalleled flexibility, allowing you to deploy across physical, virtual, and cloud environments, and even transfer entitlements between them without ha",
+        "Red Hat's commitment to open source communities means your subscription influences the future of Red Hat Enterprise Linux, ensuring the platform evolves to meet your specific requirements.",
+        "For critical workloads, Red Hat offers various support levels, including Premium, with rapid response times and access to experts who develop and test the software, ensuring maximum uptime and stabili",
+        "Red Hat Enterprise Linux for SAP Solutions provides a highly available and security-focused foundation for SAP HANA and S/4HANA, helping customers achieve near-zero downtime and modernize their SAP de",
+        "Red Hat's subscription model for IBM Z and LinuxONE offers 'subcapacity' entitlement, optimizing costs by only requiring subscriptions for the cores actively used by Red Hat Enterprise Linux instances"
+      ],
+      "links": [
+        {
+          "name": "Technical blog",
+          "url": "https://developers.redhat.com/blog?field_tax_product_target_id%5B37288%5D=37288&amp;extIdCarryOver=true&amp;intcmp=7013a000003Sl59AAC&amp;sc_cid=RHCTG0250000454096&amp;percmp=RHCTG0250000466729&amp;_gl=1*1b38smp*_gcl_au*Njk2NTkzODc0LjE3NzI0NjI2Njg"
+        },
+        {
+          "name": "Learning hub",
+          "url": "https://docs.redhat.com/en/learn/ai"
+        },
+        {
+          "name": "AI partners",
+          "url": "https://catalog.redhat.com/categories/ai#ai-partners"
+        },
+        {
+          "name": "Buy online",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Partner training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Hybrid cloud learning hub",
+          "url": "https://docs.redhat.com/en/learn/learning-paths"
+        },
+        {
+          "name": "Red Hat TV",
+          "url": "https://tv.redhat.com/"
+        },
+        {
+          "name": "For developers",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Partner Connect",
+          "url": "https://connect.redhat.com"
+        },
+        {
+          "name": "Become a partner",
+          "url": "https://connect.redhat.com/en/benefits-of-being-a-partner"
+        },
+        {
+          "name": "Training",
+          "url": "https://connect.redhat.com/en/training"
+        },
+        {
+          "name": "Support",
+          "url": "https://connect.redhat.com/en/support"
+        },
+        {
+          "name": "Access the partner portal",
+          "url": "https://connect.redhat.com/partner-admin/dashboard"
+        },
+        {
+          "name": "Build solutions powered by trusted partners",
+          "url": "https://catalog.redhat.com/en/solutions"
+        },
+        {
+          "name": "Docs",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Support",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Manage subscriptions",
+          "url": "https://access.redhat.com/management"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Architecture center",
+          "url": "https://www.redhat.com/architect/portfolio/"
+        },
+        {
+          "name": "Security updates",
+          "url": "https://access.redhat.com/security/security-updates/cve"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com/support"
+        },
+        {
+          "name": "Log in or register",
+          "url": "https://sso.redhat.com"
+        },
+        {
+          "name": "Contact us",
+          "url": "https://www.redhat.com/en/contact"
+        },
+        {
+          "name": "Customer Portal",
+          "url": "https://access.redhat.com/?extIdCarryOver=true&sc_cid=701f2000000txokAAA"
+        },
+        {
+          "name": "production support",
+          "url": "https://access.redhat.com/support/offerings/production/"
+        },
+        {
+          "name": "Standard and Premium",
+          "url": "https://access.redhat.com/support/offerings/production/sla"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "As a customer how does Red Hat support me when I use third-party components",
+          "url": "https://access.redhat.com/third-party-software-support"
+        },
+        {
+          "name": "production support terms of service",
+          "url": "https://access.redhat.com/support/offerings/production/sla"
+        },
+        {
+          "name": "Web",
+          "url": "https://access.redhat.com/support/cases/new"
+        },
+        {
+          "name": "Standard or Premium",
+          "url": "https://access.redhat.com/support/offerings/production/sla?extIdCarryOver=true&sc_cid=701f2000000txokAAA"
+        },
+        {
+          "name": "Virtualization limits for Red Hat Enterprise Linux with KVM",
+          "url": "https://access.redhat.com/articles/rhel-kvm-limits"
+        },
+        {
+          "name": "Which hypervisors are certified to run Red Hat Enterprise Linux",
+          "url": "https://access.redhat.com/certified-hypervisors"
+        },
+        {
+          "name": "What is hybrid cloud?",
+          "url": "https://www.redhat.com/en/topics/cloud-computing/what-is-hybrid-cloud"
+        },
+        {
+          "name": "Red Hat Customer Portal",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "name": "Red Hat product documentation",
+          "url": "https://access.redhat.com/documentation"
+        },
+        {
+          "name": "Red Hat product downloads",
+          "url": "https://access.redhat.com/downloads"
+        },
+        {
+          "name": "Red Hat Developer program",
+          "url": "https://developers.redhat.com/products/rhel/business"
+        },
+        {
+          "name": "Red Hat Developer program",
+          "url": "http://developers.redhat.com"
+        },
+        {
+          "name": "extended and enhanced update support page",
+          "url": "https://www.redhat.com/en/resources/eus-datasheet"
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "www.redhat.com",
+          "url": "https://www.redhat.com/"
+        },
+        {
+          "name": "@red-hat",
+          "url": "https://www.inkedin.com/company/redhat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.x.com/RedHat"
+        },
+        {
+          "name": "@redhat",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "@red_hat",
+          "url": "https://www.instagram.com/red_hat"
+        },
+        {
+          "name": "LinkedIn",
+          "url": "https://www.linkedin.com/company/red-hat"
+        },
+        {
+          "name": "YouTube",
+          "url": "https://www.youtube.com/user/RedHatVideos"
+        },
+        {
+          "name": "Facebook",
+          "url": "https://www.facebook.com/RedHat/"
+        },
+        {
+          "name": "Instagram",
+          "url": "https://www.instagram.com/red_hat/"
+        },
+        {
+          "name": "My account",
+          "url": "https://www.redhat.com/wapps/ugc/protected/personalInfo.html"
+        },
+        {
+          "name": "Customer support",
+          "url": "https://access.redhat.com"
+        },
+        {
+          "name": "Developer resources",
+          "url": "https://developers.redhat.com/"
+        },
+        {
+          "name": "Find a partner",
+          "url": "https://catalog.redhat.com/partners"
+        },
+        {
+          "name": "Red Hat Ecosystem Catalog",
+          "url": "https://catalog.redhat.com/"
+        },
+        {
+          "name": "Documentation",
+          "url": "https://docs.redhat.com/en"
+        },
+        {
+          "name": "Red Hat Store",
+          "url": "https://www.redhat.com/en/store"
+        },
+        {
+          "name": "Buy online (Japan)",
+          "url": "https://www.redhat.com/en/about/japan-buy"
+        },
+        {
+          "name": "award-winning",
+          "url": "https://access.redhat.com/recognition"
+        },
+        {
+          "name": "Cool Stuff Store",
+          "url": "https://coolstuff.redhat.com/"
+        },
+        {
+          "name": "Red Hat Summit",
+          "url": "https://www.redhat.com/en/summit"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Register on the Red Hat Customer Portal.",
+          "url": "https://access.redhat.com/"
+        },
+        {
+          "step": "Activate your subscriptions."
+        },
+        {
+          "step": "Attach your subscriptions.",
+          "url": "https://access.redhat.com/documentation"
+        },
+        {
+          "step": "Download your software.",
+          "url": "https://access.redhat.com/downloads"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:14:50.535Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Modernize Infrastructure",
+      "documentCategory": "messaging-guide",
+      "summary": "This document outlines the 'Modernize Infrastructure' sales play, serving as a guide for positioning Red Hat as a trusted, open hybrid platform for organizations to standardize, secure, and modernize their legacy infrastructure. It aims to help sales teams identify customer pain points, find champions, and quantify impact before pitching solutions. The guide covers customer priorities, desired outcomes, business impact, and provides real-world examples from companies like CAE, Ford, Emirates NBD, and Suncorp. It also details key personas (CIO/Head of IT Strategy, VP Infrastructure/IT Operations, CTO/Head of Platform Engineering), their challenges, and what wins them over, emphasizing Red Hat's value drivers in cost, complexity, and choice.",
+      "productsReferenced": [
+        {
+          "name": "OpenShift",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "Legacy Infrastructure Vendors",
+          "context": "displacement"
+        },
+        {
+          "name": "Proprietary Virtualization Vendors",
+          "context": "migration-from"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Infrastructure modernization",
+        "Cost optimization",
+        "Security and compliance improvement",
+        "Workload portability",
+        "VM migration",
+        "Hybrid cloud management",
+        "Application delivery acceleration"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Standardizing development across hybrid multicloud environments and accelerating innovation with self-service and built-in security.",
+          "industry": "Aerospace/Defense"
+        },
+        {
+          "scenario": "Improving stability and reliability for production workloads through predictable release cycles and continuous security updates.",
+          "industry": "Automotive"
+        },
+        {
+          "scenario": "Migrating 9,000+ VMs to reduce virtualization costs and unify VM and container workloads.",
+          "industry": "Banking"
+        },
+        {
+          "scenario": "Improving platform security and regulatory compliance with a resilient multicloud platform.",
+          "industry": "Financial Services"
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "internal",
+      "tdpAlignment": [
+        "Automation",
+        "Container Management",
+        "Server and Cloud Computing",
+        "Virtualization",
+        "Management"
+      ],
+      "buyingStage": "discovery",
+      "targetPersona": [
+        "CIO / Head of IT Strategy",
+        "VP Infrastructure / IT Operations",
+        "CTO / Head of Platform Engineering"
+      ],
+      "customerProblem": "Organizations struggle with costly legacy infrastructure, rising virtualization and cloud expenses, security and compliance risks, and vendor lock-in, which collectively hinder innovation and increase operational complexity.",
+      "conversationOpener": null,
+      "techStackTriggers": [
+        "VMware",
+        "Legacy Systems",
+        "Cloud Infrastructure"
+      ],
+      "keyPoints": [
+        "Red Hat provides a trusted, open hybrid platform to standardize, secure, and modernize legacy infrastructure.",
+        "Red Hat solutions reduce operational complexity and cost, building a secured, scalable foundation for future innovation across hybrid environments.",
+        "Key customer pains include costly legacy infrastructure, rising virtualization/cloud costs, security/compliance risks, and vendor lock-in.",
+        "Desired outcomes include standardized infrastructure, cost optimization through automation, improved security/compliance, and increased flexibility across datacenter, cloud, and edge.",
+        "Red Hat helps accelerate application delivery, lower total cost of ownership, reduce risk, and provide greater flexibility.",
+        "Red Hat offers a multi/hybrid cloud platform to manage VMs, containers, and serverless apps with consistent experience.",
+        "Red Hat ensures unparalleled scalability and high availability for resilient IT workloads.",
+        "Red Hat provides flexibility and minimizes vendor lock-in through open-source technology and workload portability."
+      ],
+      "talkTracks": [
+        "Red Hat provides a unified, open hybrid cloud platform that helps organizations standardize, secure, and modernize their legacy infrastructure, leading to reduced operational complexity and cost.",
+        "We address common pains like rising virtualization and cloud costs, security risks, and vendor lock-in by offering a flexible and scalable foundation for future innovation.",
+        "Our solutions enable faster innovation, lower total cost of ownership, reduced risk, and greater flexibility to run workloads consistently across datacenter, cloud, and edge environments.",
+        "Red Hat's multi/hybrid cloud platform allows you to run and manage VMs, containers, and serverless apps with a consistent experience, ensuring future-proof investments and multi-cluster management wit",
+        "We help prevent vendor lock-in and ensure workload portability by leveraging open-source technology, providing choice and consistency across any infrastructure.",
+        "For CIOs, we offer a step-by-step modernization path that reduces technical debt and provides cost containment through a secure, unified hybrid cloud platform.",
+        "For VPs of Infrastructure, we provide proven VM migration and modernization pathways, along with assessment and migration services to reduce risk and unify management for VMs and containers.",
+        "For CTOs, we deliver cloud architecture strategies that reduce resource consumption, a consistent platform across datacenter, cloud, and edge, and services/consulting to accelerate adoption."
+      ],
+      "links": [],
+      "actionableSteps": [],
+      "enrichedAt": "2026-07-08T19:14:37.257Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "RHEL Conversation Starters",
+      "documentCategory": "messaging-guide",
+      "summary": "This document, titled \"RHEL Conversation Starters,\" provides sales professionals with provocative hooks and talking points to initiate conversations around Red Hat Enterprise Linux (RHEL) security, post-quantum cryptography (PQC), and AI infrastructure. It highlights RHEL's built-in security features, its readiness for PQC standards, and its role as a stable foundation for AI workloads. The document also outlines actionable steps for sellers, including training, account targeting, procurement strategies, and service attachments, emphasizing the urgency of addressing evolving security threats like zero-day vulnerabilities and the quantum threat. It aims to help sellers expand RHEL subscriptions, upsell Satellite, and attach Ansible Automation Platform by tapping into C-suite security budgets.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite",
+          "slug": null
+        },
+        {
+          "name": "Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "OpenShift",
+          "slug": null
+        },
+        {
+          "name": "OpenShift Container Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "AL2",
+          "context": "displacement"
+        },
+        {
+          "name": "Oracle Linux",
+          "context": "displacement"
+        },
+        {
+          "name": "Ubuntu",
+          "context": "displacement"
+        },
+        {
+          "name": "Community tools",
+          "context": "displacement"
+        },
+        {
+          "name": "Commercial Vendors",
+          "context": "comparison"
+        },
+        {
+          "name": "Public Repos",
+          "context": "comparison"
+        }
+      ],
+      "partnerSolutions": [
+        {
+          "partnerName": "IBM",
+          "solutionArea": "Security"
+        },
+        {
+          "partnerName": "NVIDIA",
+          "solutionArea": "Other"
+        }
+      ],
+      "useCases": [
+        "Minimizing CVEs and ensuring continuous compliance",
+        "Implementing Zero Trust Architecture",
+        "Securing the open source supply chain",
+        "Automating vulnerability remediation and patch management",
+        "Migrating to post-quantum cryptography",
+        "Securing AI infrastructure and workloads",
+        "Managing heterogeneous Linux environments",
+        "Reducing CVE fatigue with hardened images and trusted libraries"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Securing open source software supply chains against zero-day vulnerabilities and advanced threats.",
+          "industry": null
+        },
+        {
+          "scenario": "Migrating to post-quantum cryptography standards to protect long-lifespan sensitive data from future quantum attacks.",
+          "industry": "government, financial, healthcare"
+        },
+        {
+          "scenario": "Establishing a stable, secure, and manageable foundation for AI workloads to ensure successful deployment and scaling.",
+          "industry": null
+        },
+        {
+          "scenario": "Automating vulnerability remediation and patch management across a fleet of Linux systems.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Security",
+        "Automation",
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Management"
+      ],
+      "buyingStage": "discovery",
+      "targetPersona": [
+        "C-suite",
+        "IT Director",
+        "Security Architect",
+        "Platform Engineer",
+        "AI/ML Engineer"
+      ],
+      "customerProblem": "Organizations are struggling to keep up with the massive volume of zero-day vulnerabilities discovered by AI models, facing an increasing mean time to exploit (MTTE) and the looming threat of quantum decryption, while also grappling with the orchestration burden and security risks of managing AI infrastructure with unverified tools.",
+      "conversationOpener": "I noticed this document provides three provocative hooks to open conversations around RHEL security, post-quantum cryptography, and AI infrastructure, emphasizing the urgency of addressing zero-day vulnerabilities and the quantum threat.",
+      "techStackTriggers": [
+        "Linux",
+        "Python",
+        "Java",
+        "npm",
+        "GPUs",
+        "Kubernetes"
+      ],
+      "keyPoints": [
+        "RHEL includes built-in security that minimizes risk, maximizes uptime, and simplifies compliance, featuring continuous compliance, CVE minimization, Zero Trust Architecture, platform integrity, harden",
+        "The closed-loop remediation pipeline integrates Lightspeed for vulnerability identification, Satellite for patch staging, and Ansible Automation Platform for fleet-wide application with audit trails.",
+        "Red Hat and IBM are collaborating on Project Lightwell to secure the open source supply chain, focusing on hardened images, Universal Base Images (UBI), and trusted libraries (PyPI, Java, npm).",
+        "AI models are discovering massive volumes of zero-day vulnerabilities, making standard patching lifecycles insufficient and creating an urgent need for advanced security solutions.",
+        "Security unlocks immediate funding from C-suite budgets, providing a fast path to expand RHEL subscriptions, upsell Satellite, and attach Ansible Automation Platform.",
+        "RHEL is PQC-Ready, offering centralized policy control, proactive risk discovery, and NIST-standardized algorithms (ML-KEM, ML-DSA) to protect against \"Harvest Now, Decrypt Later\" quantum attacks.",
+        "RHEL 10.1 is the first enterprise Linux with post-quantum cryptography enabled by default, enforcing quantum-resistant configurations system-wide via crypto-policies.",
+        "Most AI projects fail to reach production due to infrastructure not co-engineered for the workload, creating an orchestration burden, skills gap, and operational risk.",
+        "RHEL provides stability for AI workloads through enterprise-grade trust with Model Context Protocol (MCP) integration, co-engineered GPU support, confidential computing, unified management (Satellite ",
+        "Red Hat offers Hardened Images and Trusted Libraries (RHTL) to reduce CVE toil, providing SLSA Level 3 verified, secure open-source components built from source with proactive security responses.",
+        "The mean time to exploit (MTTE) vulnerabilities has decreased significantly, highlighting the increasing urgency of rapid remediation."
+      ],
+      "talkTracks": [
+        "RHEL's built-in security features, including continuous compliance and Zero Trust Architecture, minimize risk and simplify compliance.",
+        "Our integrated remediation pipeline, leveraging Lightspeed, Satellite, and Ansible Automation Platform, provides a closed-loop system for vulnerability management and policy-driven audit trails.",
+        "Project Lightwell, a joint initiative with IBM, is actively securing the open source supply chain through hardened images and trusted libraries, addressing the growing threat of zero-day vulnerabiliti",
+        "The rapid discovery of zero-day vulnerabilities by AI models like Anthropic's Mythos makes traditional patching cycles obsolete, creating an urgent need for Red Hat's advanced security solutions.",
+        "Investing in security with Red Hat unlocks C-suite funding, providing a direct path to expand RHEL subscriptions, upsell Satellite, and attach Ansible Automation Platform.",
+        "RHEL is PQC-Ready, offering centralized policy control and NIST-standardized algorithms to proactively protect against \"Harvest Now, Decrypt Later\" quantum threats, especially critical for long-lifesp",
+        "RHEL provides the stable, secure foundation required for AI workloads, addressing the 80% failure rate of AI projects due to inadequate infrastructure and mitigating the orchestration burden with ente",
+        "Red Hat's Hardened Images and Trusted Libraries offer SLSA Level 3 verified, secure open-source components, significantly reducing CVE fatigue and providing a trusted software supply chain.",
+        "The decreasing mean time to exploit vulnerabilities highlights the critical need for rapid remediation and proactive security measures that Red Hat's portfolio delivers."
+      ],
+      "links": [
+        {
+          "name": "https://www.cve.org/about/Metrics",
+          "url": "https://www.cve.org/about/Metrics"
+        },
+        {
+          "name": "https://info.edgescan.com/",
+          "url": "https://info.edgescan.com/"
+        },
+        {
+          "name": "https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026",
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Complete the new training course: \"RHEL Security Conversation Starters: Opening the Door\", available by 6/16/2026"
+        },
+        {
+          "step": "Start with your upcoming H2 Renewal list. Use Account Plan TDP maps for third-party Linux takeout opportunities (AL2, Oracle Linux, Ubuntu, etc). Prioritize regulated industries."
+        },
+        {
+          "step": "Leverage simplified procurement pathways with buying options. Position ESP, ESP Lite, HCS, or Private Offers to eliminate cost-competitive Linux erosion."
+        },
+        {
+          "step": "Lead with the Secured SOE for RHEL Service. Position CELA to assess the environment. Leverage Partners for deployment, while Services establishes architectural trust."
+        },
+        {
+          "step": "As you discover and create new RHEL opportunities in Red Hat Sales Cloud (RHSC), tag the opportunity with the Secure and Manager RHEL tactic"
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:14:22.183Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "Seller FAQ",
+      "documentCategory": "other",
+      "summary": "This document is a Sales FAQ addressing common questions and concerns related to CVEs (Common Vulnerabilities and Exposures) and how Red Hat products, particularly Red Hat Enterprise Linux (RHEL), Red Hat Lightspeed, Red Hat Satellite, and Ansible Automation Platform, help customers manage and remediate them. It clarifies Red Hat's approach to patching, differentiates RHEL from self-supported Linux distributions, explains the roles of various Red Hat tools in CVE remediation, and addresses specific customer demands like \"Zero CVEs\" and handling disconnected environments. The FAQ aims to equip sales teams with responses to customer inquiries regarding Red Hat's security posture and vulnerability management capabilities.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Lightspeed",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite",
+          "slug": null
+        },
+        {
+          "name": "Ansible Automation Platform",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Enterprise Linux Security Select Add-on",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Hardened Images",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": null,
+      "competitorsReferenced": [
+        {
+          "name": "(insert competitor)",
+          "context": "comparison"
+        },
+        {
+          "name": "unpaid or self-supported Linux",
+          "context": "comparison"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Vulnerability management and remediation",
+        "Security patching in disconnected environments",
+        "Compliance management for CVEs",
+        "Automated security remediation",
+        "Hardening container images",
+        "Reducing attack surface"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Managing CVE remediation in disconnected or air-gapped environments.",
+          "industry": null
+        },
+        {
+          "scenario": "Meeting strict compliance timelines for Moderate and Low CVE fixes.",
+          "industry": null
+        },
+        {
+          "scenario": "Reducing the attack surface and managing security in containerized environments.",
+          "industry": null
+        },
+        {
+          "scenario": "Differentiating between commercial and self-supported Linux distributions for security and operational burden.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": null,
+      "audience": "internal",
+      "tdpAlignment": [
+        "Security",
+        "Automation",
+        "Management",
+        "Server and Cloud Computing",
+        "Container Management"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "Sales Executive",
+        "Security Architect",
+        "IT Director",
+        "System Administrator",
+        "DevOps Engineer"
+      ],
+      "customerProblem": "Customers struggle with efficiently identifying, prioritizing, and remediating CVEs across their Linux environments, especially in air-gapped or highly regulated settings, while maintaining system stability and compliance.",
+      "conversationOpener": null,
+      "techStackTriggers": [
+        "Linux",
+        "Containerization",
+        "Security Information and Event Management (SIEM)",
+        "Patch Management Systems",
+        "Configuration Management Tools"
+      ],
+      "keyPoints": [
+        "Red Hat prioritizes long-term stability, system compatibility, and risk reduction in its CVE patching process through backporting, security analysis, QE validation, and risk-based prioritization.",
+        "Open source benefits from community collaboration for faster vulnerability identification and remediation.",
+        "RHEL differentiates from unpaid Linux distributions by assuming the operational burden of vulnerability monitoring, risk assessment, compliance, and testing, leading to significant time savings for cu",
+        "Red Hat Lightspeed identifies impacted hosts and known exploits, Red Hat Satellite stages patches in connected or disconnected environments, and Ansible Automation Platform automates remediation.",
+        "RHEL's built-in capabilities like fapolicyd, SELinux, and Image Mode proactively mitigate CVE impact by shrinking the attack surface and providing deep process isolation.",
+        "The Red Hat Enterprise Linux Security Select Add-on accelerates fixes for Moderate and Low CVEs with a dedicated SLA.",
+        "Red Hat Hardened Images provide minimal, pre-hardened container images to reduce scanner noise and focus on application-level vulnerabilities."
+      ],
+      "talkTracks": [
+        "Red Hat's patching strategy prioritizes long-term stability and compatibility, reducing overall risk, unlike competitors who may rush updates.",
+        "RHEL significantly reduces the operational burden of CVE management compared to self-supported Linux, saving customers 79% hands-on time.",
+        "Red Hat provides a comprehensive suite of tools (Lightspeed, Satellite, AAP) for end-to-end CVE identification, staging, and automated remediation across hybrid and air-gapped environments.",
+        "RHEL's built-in security features like SELinux and Image Mode proactively shrink the attack surface and can downgrade CVE severity, enhancing security from the ground up.",
+        "For highly regulated customers, the RHEL Security Select Add-on offers accelerated fixes for Moderate and Low CVEs with a dedicated SLA.",
+        "Red Hat Hardened Images address the 'Zero CVEs' demand by providing minimal, pre-vetted container images, reducing scanner noise and allowing security teams to focus on application code."
+      ],
+      "links": [],
+      "actionableSteps": null,
+      "enrichedAt": "2026-07-08T19:15:08.869Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    },
+    {
+      "documentName": "What's New (Technical Presentation)",
+      "documentCategory": "other",
+      "summary": "This technical presentation, \"What's New,\" focuses on the latest features in Red Hat Enterprise Linux (RHEL) 10.2 and 9.8, alongside updates to Red Hat Certificate System and Red Hat Satellite. It highlights enhancements in efficiency, security, and lifecycle management, including features like pre-download updates for bootc images, improved storage architecture, a container-friendly RHEL Image Builder CLI, and streamlined bootc testing with BCVK. The document also introduces advanced security features such as Customer-Controlled Signing, Targeted Trust, and an enterprise PKI solution with post-quantum cryptography. Furthermore, it details significant improvements in RHEL lifecycle management, including single-step conversion and upgrade for RHEL clones, AI-assisted upgrades with Ansible Automation, and the new RHEL Extended Life Cycle, Premium offering for mission-critical workloads. The presentation targets a mixed audience, likely including technical decision-makers and IT professionals, aiming to showcase how these new capabilities simplify operations, enhance security, and provide long-term stability for enterprise environments.",
+      "productsReferenced": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Certificate System 11.0",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Satellite 6.19",
+          "slug": null
+        },
+        {
+          "name": "Red Hat Openshift Virtualization",
+          "slug": null
+        },
+        {
+          "name": "Ansible Automation platform",
+          "slug": null
+        },
+        {
+          "name": "Lightspeed",
+          "slug": null
+        },
+        {
+          "name": "Fedora Hummingbird Linux",
+          "slug": null
+        },
+        {
+          "name": "OpenShift Container Platform",
+          "slug": null
+        }
+      ],
+      "integrationsReferenced": [
+        {
+          "technology": "Leapp",
+          "category": "Other"
+        },
+        {
+          "technology": "Podman",
+          "category": "Other"
+        },
+        {
+          "technology": "Claude Code",
+          "category": "Other"
+        },
+        {
+          "technology": "Cursor",
+          "category": "Other"
+        }
+      ],
+      "competitorsReferenced": [
+        {
+          "name": "CentOS Stream",
+          "context": "migration-from"
+        },
+        {
+          "name": "Oracle Linux",
+          "context": "migration-from"
+        },
+        {
+          "name": "Alma Linux",
+          "context": "migration-from"
+        },
+        {
+          "name": "Rocky Linux",
+          "context": "migration-from"
+        },
+        {
+          "name": "manual certificate approvals",
+          "context": "displacement"
+        },
+        {
+          "name": "manual approaches",
+          "context": "displacement"
+        },
+        {
+          "name": "forced, frequent OS upgrades",
+          "context": "displacement"
+        }
+      ],
+      "partnerSolutions": null,
+      "useCases": [
+        "Simplified operating system platform management across diverse environments",
+        "Efficient planned maintenance windows with scheduled updates",
+        "Reduced disk footprint for bootable container images",
+        "Streamlined RHEL image creation and testing",
+        "Automated pre-upgrade issue remediation and reporting",
+        "Enhanced container image security with customer-controlled signing and trust",
+        "End-to-end cryptographic integrity protection for deployments",
+        "Continuous runtime verification of OS components",
+        "Enterprise PKI with post-quantum cryptography signatures",
+        "Zero-touch certificate approvals",
+        "Single-step conversion and upgrade of RHEL clone distributions",
+        "AI-assisted automated RHEL fleet upgrades",
+        "AI-ready management for Linux reporting and troubleshooting",
+        "Local vulnerability triage and customizable security workflows for RHEL",
+        "Consistent content delivery across hybrid infrastructure",
+        "Provisioning virtualized environments on OpenShift Virtualization",
+        "Extended update support for RHEL",
+        "Long-term stability for mission-critical, change-averse workloads",
+        "Architectural control and reduced operational risk for long-lifecycle systems",
+        "OS-level attestation with image mode and sealed images",
+        "Hardened, verifiable container image delivery",
+        "Rapid AI development with minimal, secure Linux",
+        "Flexible RHEL consumption options on Oracle Cloud Infrastructure",
+        "Automated infrastructure management with AI agents",
+        "AI-driven lifecycle intelligence for inventory management"
+      ],
+      "customerScenarios": [
+        {
+          "scenario": "Organizations running mission-critical, change-averse workloads requiring long-term stability and predictability.",
+          "industry": null
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Financial Services"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Telecommunications"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Government & Defense"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Healthcare"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Transportation"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Manufacturing"
+        },
+        {
+          "scenario": "Highly regulated sectors needing stable environments with strict change control or specific release versions.",
+          "industry": "Energy"
+        },
+        {
+          "scenario": "Converting RHEL clone distributions (CentOS Stream, Oracle, Alma, Rocky Linux) to Red Hat Enterprise Linux.",
+          "industry": null
+        },
+        {
+          "scenario": "Automating complex in-place upgrades across a fleet of RHEL systems.",
+          "industry": null
+        },
+        {
+          "scenario": "Provisioning virtualized environments on Red Hat Openshift Virtualization.",
+          "industry": null
+        },
+        {
+          "scenario": "Developing AI applications and requiring a fast, minimal OS for containerized and virtualized environments.",
+          "industry": null
+        }
+      ],
+      "cloudProviders": [
+        "Oracle Cloud"
+      ],
+      "audience": "mixed",
+      "tdpAlignment": [
+        "Automation",
+        "Container Management",
+        "Server and Cloud Computing",
+        "AI Platform",
+        "Application Development",
+        "Virtualization",
+        "Management",
+        "Security"
+      ],
+      "buyingStage": "evaluation",
+      "targetPersona": [
+        "IT Director",
+        "Platform Engineer",
+        "Security Architect",
+        "DevOps Engineer",
+        "System Administrator",
+        "CxO"
+      ],
+      "customerProblem": "Managing heterogeneous Linux environments, ensuring long-term stability for mission-critical systems, simplifying OS upgrades, and enhancing security against evolving threats, including post-quantum cryptography.",
+      "conversationOpener": "I noticed this document highlights new features in RHEL 10.2 and 9.8, including pre-download updates for bootc images and a new storage architecture to reduce disk footprint.",
+      "techStackTriggers": [
+        "CentOS Stream",
+        "Oracle Linux",
+        "Alma Linux",
+        "Rocky Linux",
+        "VMware",
+        "Kubernetes",
+        "Jenkins",
+        "Git",
+        "PostgreSQL",
+        "MariaDB",
+        "Python",
+        "PHP",
+        "Ruby",
+        "Java (OpenJDK)"
+      ],
+      "keyPoints": [
+        "Enhance efficiency and provide a consistent operating system platform across all deployment environments with RHEL 10.2 and 9.8.",
+        "Simplify planned maintenance windows with pre-download updates for bootc images, allowing administrators to schedule application.",
+        "Reduce disk footprint for bootc images with a new storage architecture that isolates a dedicated copy of the OS.",
+        "Streamline RHEL image creation with a container-friendly CLI that doesn't require a continuously running background service.",
+        "Simplify bootc testing by spinning up ephemeral VMs directly from local Podman builds using the Bootable Containers and Virtualization Kit (BCVK).",
+        "Make RHEL upgrades easier with certified Ansible content that automatically fixes pre-upgrade issues identified by Leapp and generates reports.",
+        "Enhance security with Customer-Controlled Signing for container images and Targeted Trust for internally certified images.",
+        "Provide end-to-end cryptographic integrity protection across the entire deployment lifecycle with a Complete Chain of Trust.",
+        "Ensure continuous runtime verification by cryptographically verifying every OS component before execution and continuously enforcing checks.",
+        "Strengthen security with Red Hat Certificate System 11.0, featuring NIST-standardized (ML-DSA) post-quantum cryptography signatures.",
+        "Replace manual certificate approvals with secure, immediately expiring one-time passwords (OTPs) for Zero-Touch PKI.",
+        "Simplify system lifecycle management with RHEL 10.2 and 9.8 capabilities.",
+        "Convert RHEL clones (CentOS Stream, Oracle, Alma, Rocky Linux) into RHEL and perform major version upgrades in a single command with Leapp.",
+        "Automate RHEL fleet upgrades with AI-assisted workflows using Ansible Certified Content and Lightspeed.",
+        "Accelerate Linux reporting and troubleshooting with AI-powered querying of system health and complex workflow execution in Red Hat Satellite 6.19.",
+        "Strengthen security posture with local vulnerability triage and customizable workflows for RHEL.",
+        "Deliver consistent content across hybrid infrastructure by bridging transient host changes and persistent builds with image mode for RHEL.",
+        "Reduce operational overhead and simplify host management with new support for provisioning virtualized environments on Red Hat Openshift Virtualization.",
+        "Extend stability beyond the standard product lifecycle with Red Hat Satellite 6.19's optional 12-month Extended Update Support (EUS) add-on.",
+        "Offer continuous security patches and critical bug fixes for specific RHEL versions with no predetermined end date through the RHEL Extended Life Cycle.",
+        "Provide ultimate architectural control, allowing organizations to maintain a trusted, validated foundation for as long as required (10, 20, or 30+ years) with RHEL Extended Life Cycle.",
+        "Reduce operational risk and friction by eliminating the need for forced, frequent OS upgrades.",
+        "Address critical, change-averse workloads in highly regulated sectors (Financial Services, Telecommunications, Government & Defense, Healthcare, Transportation, Manufacturing, Energy) with RHEL Extend",
+        "Offer up to a 14-year lifecycle for a major RHEL version and 6 years for minor releases with RHEL Extended Life Cycle, Premium.",
+        "Provide enterprise-grade security and premium 24x7 technical support with unlimited incidents for RHEL Extended Life Cycle, Premium.",
+        "Enable AI Agents to interact with RHEL through the Red Hat Enterprise Linux MCP Server.",
+        "Automate in-place upgrades with the Red Hat Enterprise Linux upgrade system role.",
+        "Provide OS-level attestation with Image Mode and Sealed images (Tech preview).",
+        "Deliver modern software as hardened, verifiable container images built on a minimal, hardened Linux userspace, available at no cost with support included in RHEL & OpenShift Container Platform.",
+        "Introduce Fedora Hummingbird Linux for fast, simple, secure Linux for rapid AI development, focused on container and VM builders.",
+        "Offer more flexible consumption options for Red Hat Enterprise Linux for Oracle Cloud Infrastructure (OCI), including committed spend drawdowns and OCI-specific configurations.",
+        "Provide quantum-resistant signatures for future-proof security in Red Hat Certificate System 11.0, meeting NIST standards.",
+        "Automate infrastructure management with 'goose', an open-source agent connecting multiple MCP servers into a single command-line assistant.",
+        "Bridge admin skills gaps with AI-guided upgrades using Red Hat Ansible certified content and the RHEL upgrade system role.",
+        "Provide proactive lifecycle intelligence with automated notifications, enhanced data accuracy, and future Satellite integration.",
+        "Introduce new developer features and enhancements including Go Toolset 1.26, PHP 8.4, LLVM Toolset 21, Rust Toolset 1.92, Ruby 3.0, OpenJDK 25, Git 2.51, PostgreSQL 18, MariaDB 11.8, and Python 3.14."
+      ],
+      "talkTracks": [
+        "Red Hat Enterprise Linux 10.2 and 9.8 significantly simplify operations by enabling pre-download updates for bootc images and introducing a new storage architecture, reducing maintenance windows and d",
+        "Our new RHEL Image Builder CLI and Bootable Containers and Virtualization Kit (BCVK) streamline the creation and testing of RHEL images, accelerating development and deployment cycles.",
+        "Red Hat is enhancing security with Customer-Controlled Signing and Targeted Trust for container images, providing a complete chain of trust and continuous runtime verification to safeguard against thr",
+        "Red Hat Certificate System 11.0 now includes NIST-standardized post-quantum cryptography, future-proofing your security posture against emerging threats and enabling Zero-Touch PKI by replacing manual",
+        "We're making RHEL upgrades easier and more efficient with Leapp's single-step conversion for RHEL clones and AI-assisted upgrades powered by Ansible Automation and Lightspeed, automating complex workf",
+        "Red Hat Satellite 6.19 offers AI-ready management capabilities, including AI-powered system health queries and local vulnerability triage, to accelerate reporting, troubleshooting, and strengthen your",
+        "The new RHEL Extended Life Cycle, Premium offering provides unparalleled long-term stability for mission-critical, change-averse workloads, extending RHEL major versions up to 14 years with premium su",
+        "Red Hat is committed to providing hardened, verifiable container images and a fast, secure Linux for AI development with Fedora Hummingbird, ensuring a trusted supply chain and rapid innovation.",
+        "Our new Model Context Protocol (MCP) servers bridge AI clients directly to Red Hat products like RHEL, Satellite, and Lightspeed, enabling AI agents to interact with lifecycle data and automate infras",
+        "Red Hat Enterprise Linux for Oracle Cloud Infrastructure (OCI) offers flexible consumption options and OCI-specific configurations to enhance performance, integration, and observability for your cloud"
+      ],
+      "links": [
+        {
+          "name": "lifecycle customer portal page",
+          "url": "https://access.redhat.com/support/policy/updates/errata"
+        },
+        {
+          "name": "https://docs.google.com/presentation/d/113Zaaaj-nBsJ6ovCtMsJWExb0ue5eMBs1ucHfd-y9Us/edit?slide=id.p1#slide=id.p1",
+          "url": "https://docs.google.com/presentation/d/113Zaaaj-nBsJ6ovCtMsJWExb0ue5eMBs1ucHfd-y9Us/edit?slide=id.p1#slide=id.p1"
+        },
+        {
+          "name": "https://access.redhat.com/support/policy/updates/errata",
+          "url": "https://access.redhat.com/support/policy/updates/errata"
+        },
+        {
+          "name": "https://access.redhat.com/support/policy/updates/errata",
+          "url": "https://access.redhat.com/support/policy/updates/errata"
+        }
+      ],
+      "actionableSteps": [
+        {
+          "step": "Confirm Account: Ensure the customer has a Red Hat account."
+        },
+        {
+          "step": "SFDC Request: Navigate to Opportunity → \"New Sales Assistance\" → \"Trial Request\"."
+        },
+        {
+          "step": "Define Success: Work with SAs to set criteria that lead to \"Closed Won\"."
+        }
+      ],
+      "enrichedAt": "2026-07-08T19:15:08.869Z",
+      "sourceProductSlug": "red-hat-enterprise-linux",
+      "workshops": null,
+      "demos": null
+    }
+  ]
+}

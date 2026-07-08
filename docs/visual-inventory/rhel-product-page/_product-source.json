@@ -1,0 +1,603 @@
+{
+  "name": "Red Hat Enterprise Linux",
+  "slug": "red-hat-enterprise-linux",
+  "source": "sidebar-toc",
+  "sourceFiles": [
+    "_page-screenshot.png",
+    "screenshots/section-01-product-news.png",
+    "screenshots/section-02-product-news.png",
+    "screenshots/section-03-product-news.png",
+    "screenshots/section-04-product-features-and-components.png",
+    "screenshots/section-05-customer-facing-decks.png",
+    "screenshots/section-06-key-resources.png",
+    "screenshots/section-07-top-training-resourcesarrow-uptraining-resourcestr.png",
+    "screenshots/section-08-top-services-resourcesarrow-upservices-resourcesse.png"
+  ],
+  "createdAt": "2026-07-08T19:26:08.860Z",
+  "sections": {
+    "product-news": {
+      "title": "Product news",
+      "type": "link-list",
+      "items": [
+        {
+          "name": "RHEL Conversation Starters",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL Conversation Starters (CVE focus)",
+          "itemType": "link"
+        },
+        {
+          "name": "Seller FAQ",
+          "itemType": "link"
+        },
+        {
+          "name": "Understanding the Mythos Moment Market Opportunity",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL Security Conversation Starters: Opening the Door",
+          "itemType": "link"
+        },
+        {
+          "name": "Press release",
+          "itemType": "link"
+        },
+        {
+          "name": "Deep Dive blog",
+          "itemType": "link"
+        },
+        {
+          "name": "What's New (Technical Presentation)",
+          "itemType": "link"
+        },
+        {
+          "name": "Download",
+          "itemType": "link"
+        },
+        {
+          "name": "release notes",
+          "itemType": "link"
+        },
+        {
+          "name": "documentation",
+          "itemType": "link"
+        },
+        {
+          "name": "User Guide",
+          "itemType": "link"
+        },
+        {
+          "name": "ELVA Enablement Deck",
+          "itemType": "link"
+        }
+      ]
+    },
+    "product-features-and-components": {
+      "title": "Product features and components",
+      "type": "link-list",
+      "items": [
+        {
+          "name": "The Value of Red Hat Enterprise Linux",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL 10",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL in the cloud",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL management",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL security and compliance",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL upgrades",
+          "itemType": "link"
+        },
+        {
+          "name": "No cost developer subscriptions",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL lifecycle",
+          "itemType": "link"
+        },
+        {
+          "name": "CentOS Linux opportunities",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL for Workstations",
+          "itemType": "link"
+        },
+        {
+          "name": "SQL Server on RHEL",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL for SAP",
+          "itemType": "link"
+        }
+      ]
+    },
+    "customer-facing-decks": {
+      "title": "Customer facing decks",
+      "type": "carousel",
+      "items": [
+        {
+          "name": "What's new in RHEL 10.1/9.7 business customer-facing presentation",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL 10 customer facing deck",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Value of RHEL Business Deck",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL BY NUMBERS",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL 10.1/9.7 New Features and Road Map",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL 10 and 9.6: New Features and Roadmap",
+          "itemType": "carousel-card"
+        }
+      ]
+    },
+    "key-resources": {
+      "title": "Key resources",
+      "type": "carousel",
+      "items": [
+        {
+          "name": "Solve business and IT challenges with Red Hat Enterprise Linux 10",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "The power of Red Hat Enterprise Linux",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Automate Red Hat Enterprise Linux",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Improve IT efficiency with a standardized OS",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL Peer Papers - video",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "What’s new with RHEL at Red Hat Summit 2025 [FINAL]",
+          "itemType": "link"
+        },
+        {
+          "name": "1H-26 Linux to RHEL Sales Program Kit",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL WinWires",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL Sales Assisted Trial slides",
+          "itemType": "link"
+        },
+        {
+          "name": "Sales Assisted Trials - Red Hat Enterprise Linux",
+          "itemType": "link"
+        },
+        {
+          "name": "Committed Spend Program",
+          "itemType": "link"
+        },
+        {
+          "name": "Enterprise Subscription Program",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL ESP Lite: more RHEL revenue and new cross-sell opportunities within your accounts",
+          "itemType": "link"
+        },
+        {
+          "name": "CY24 RHEL ESP Lite: internal presentation",
+          "itemType": "link"
+        },
+        {
+          "name": "Interactive labs for Red Hat Enterprise Linux",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL-related announcements at Summit 2026 (business presentation)",
+          "itemType": "link"
+        },
+        {
+          "name": "redhat.com/rhel",
+          "itemType": "link"
+        },
+        {
+          "name": "youtube.com/RedHatEnterpriseLinux",
+          "itemType": "link"
+        },
+        {
+          "name": "Subscription guide",
+          "itemType": "link"
+        },
+        {
+          "name": "Copy email address olmorale@redhat.com",
+          "itemType": "carousel-card"
+        }
+      ]
+    },
+    "top-training-resources": {
+      "title": "Top training resources",
+      "type": "doclist-picker",
+      "items": [
+        {
+          "name": "All Training Courses and Exams",
+          "itemType": "carousel-card",
+          "subSection": "Top training resources"
+        },
+        {
+          "name": "Learning Path |Red Hat Enterprise Linux: Technical Seller",
+          "itemType": "carousel-card",
+          "subSection": "Top training resources"
+        },
+        {
+          "name": "Red Hat Learning Portal - RHEL",
+          "itemType": "carousel-card",
+          "subSection": "Top training resources"
+        },
+        {
+          "name": "RHEL BU Power Hours",
+          "itemType": "carousel-card",
+          "subSection": "Top training resources"
+        }
+      ]
+    },
+    "top-services-resources": {
+      "title": "Top services resources",
+      "type": "doclist-picker",
+      "items": [
+        {
+          "name": "Accelerate outcomes: Do more with Red Hat Services",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Red Hat Consulting: Comprehensive Enterprise Linux Assessment",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "RHEL Technical Overview",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Red Hat Learning Subscription",
+          "itemType": "carousel-card"
+        }
+      ]
+    },
+    "competition/why-choose-rhel": {
+      "title": "Why choose RHEL?",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "Red Hat Enterprise Linux by the numbers - partner version",
+          "itemType": "carousel-card",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "Insights Main Deck (all platforms and services)",
+          "itemType": "carousel-card",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "full whitepaper",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "exec summary",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "infographics",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "infographic",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "report",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        },
+        {
+          "name": "science behind",
+          "itemType": "link",
+          "subSection": "Why choose RHEL?"
+        }
+      ]
+    },
+    "competition/latest-news": {
+      "title": "Latest news",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "Competitive Newstracker v1",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Competitive Newstracker v2",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Competitive session on Oracle Linux offerings May 2023 RHEL Week - updated in June 2025",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Competitive session on AWSLinux offerings May 2023 RHEL Week - updated June 2025",
+          "itemType": "carousel-card"
+        }
+      ]
+    },
+    "competition/amazon-linux": {
+      "title": "Amazon Linux",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "Amazon Linux"
+        },
+        {
+          "name": "101 RHEL competitive Battlecard - Amazon Linux",
+          "itemType": "link",
+          "subSection": "Amazon Linux"
+        },
+        {
+          "name": "Amazon Linux Battlecard",
+          "itemType": "link",
+          "subSection": "Amazon Linux"
+        },
+        {
+          "name": "Why choose Red Hat Enterprise Linux over Amazon Linux",
+          "itemType": "link",
+          "subSection": "Amazon Linux"
+        }
+      ]
+    },
+    "competition/oracle-linux-support-for-rhel": {
+      "title": "Oracle Linux & Support for RHEL",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "Oracle Linux & Support for RHEL"
+        },
+        {
+          "name": "101 RHEL competitive battlecard - Oracle Linux",
+          "itemType": "link"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - Oracle Support for RHEL",
+          "itemType": "link"
+        },
+        {
+          "name": "Oracle Linux Battlecard",
+          "itemType": "link"
+        }
+      ]
+    },
+    "competition/rocky-linux-ciq": {
+      "title": "Rocky Linux & CIQ",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - Rocky Linux CIQ",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        },
+        {
+          "name": "RHEL vs Rocky Linux Battlecard",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        },
+        {
+          "name": "The RHEL Advantage over Rocky Linux",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        },
+        {
+          "name": "The RHEL Advantage over Rocky Linux (for PARTNERS)",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        },
+        {
+          "name": "Why choose RHEL over Rocky Linux",
+          "itemType": "link",
+          "subSection": "Rocky Linux & CIQ"
+        }
+      ]
+    },
+    "competition/suse-sles-support-for-rhel-multi-linux-support": {
+      "title": "SUSE SLES & Support for RHEL (Multi-Linux Support)",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "SUSE SLES & Support for RHEL (Multi-Linux Support)"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - SUSE SLES",
+          "itemType": "link"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - SUSE Multi-Linux Support",
+          "itemType": "link"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - SUSE SLES for SAP",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL Competitive Battlecard against SUSE SLES and Multi-Linux Support",
+          "itemType": "link"
+        },
+        {
+          "name": "RHEL Competitive Battlecard - SUSE SLES for SAP",
+          "itemType": "link"
+        }
+      ]
+    },
+    "competition/ubuntu": {
+      "title": "Ubuntu",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        },
+        {
+          "name": "101 RHEL Competitive Battlecard - Ubuntu",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        },
+        {
+          "name": "RHEL vs Ubuntu Battlecard",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        },
+        {
+          "name": "Ubuntu Offerings Cheatsheet",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        },
+        {
+          "name": "The RHEL Advantage over Ubuntu",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        },
+        {
+          "name": "The RHEL Advantage over Ubuntu (for PARTNERS)",
+          "itemType": "link",
+          "subSection": "Ubuntu"
+        }
+      ]
+    },
+    "competition/almalinux": {
+      "title": "AlmaLinux",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "NotebookLM",
+          "itemType": "link",
+          "subSection": "AlmaLinux"
+        },
+        {
+          "name": "AlmaLinux 101 Battlecard",
+          "itemType": "link"
+        },
+        {
+          "name": "AlmaLinux Battlecard",
+          "itemType": "link"
+        },
+        {
+          "name": "The RHEL Advantage over AlmaLinux",
+          "itemType": "link"
+        },
+        {
+          "name": "The RHEL Advantage over AlmaLinux (for partners)",
+          "itemType": "link"
+        }
+      ]
+    },
+    "competition/centos-linux": {
+      "title": "CentOS Linux",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "CentOS migration resource center (The Source)",
+          "itemType": "link",
+          "subSection": "CentOS Linux"
+        }
+      ]
+    },
+    "competition/centos-transition-in-the-cloud": {
+      "title": "CentOS transition in the cloud",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "CentOS Linux to Red Hat Enterprise Linux on Microsoft Azure",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Migrate from CentOS Linux to Red Hat on Google Cloud",
+          "itemType": "carousel-card"
+        },
+        {
+          "name": "Summit 2023 : Save time and money when migrating from CentOS Linux to RHEL",
+          "itemType": "carousel-card"
+        }
+      ]
+    },
+    "competition/source-delivery-discussion-guidance": {
+      "title": "Source Delivery discussion guidance",
+      "type": "doclist-picker",
+      "parentSection": "Competition",
+      "items": [
+        {
+          "name": "RHEL source code delivery change from CentOS Linux to CentOS Stream",
+          "itemType": "carousel-card",
+          "subSection": "Source Delivery discussion guidance"
+        },
+        {
+          "name": "RHEL source code delivery change from CentOS Linux to CentOS Stream (partner version -pptx)",
+          "itemType": "carousel-card",
+          "subSection": "Source Delivery discussion guidance"
+        },
+        {
+          "name": "FAQ (public) for RHEL source code delivery change",
+          "itemType": "carousel-card",
+          "subSection": "Source Delivery discussion guidance"
+        }
+      ]
+    }
+  }
+}
