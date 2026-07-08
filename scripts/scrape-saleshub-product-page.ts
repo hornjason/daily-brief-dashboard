@@ -875,6 +875,7 @@ async function extractRedHeaderSections(
 
   const widgetSections = await page.evaluate(() => {
     const mainColumn = document.querySelector('.articleSdk-theme-page-doubleColumn-main')
+      || document.querySelector('.articleSdk-theme-page-singleColumn-main')
     if (!mainColumn) return []
 
     const widgets = Array.from(mainColumn.children) as HTMLElement[]
@@ -908,8 +909,8 @@ async function extractRedHeaderSections(
         if (currentTitle && currentTitle !== '__pending__' && (currentLinks.length > 0 || currentTableRows.length > 0 || currentText)) {
           result.push({ title: currentTitle, widgetClass: cls, links: currentLinks, tableRows: currentTableRows, textContent: currentText, isAccordion, domainDocMap: currentDomainDocMap })
         }
-        // Start new section from divider text
-        const dividerText = (widget.textContent || '').trim()
+        // Start new section from divider text (strip Unicode LTR marks #976)
+        const dividerText = (widget.textContent || '').replace(/[\u200e\u200f]+/g, '').trim()
         if (dividerText.length > 2) {
           currentTitle = dividerText
         } else {
@@ -1547,6 +1548,7 @@ async function buildProductSourceInventory(
     }> = {}
 
     const mainColumn = document.querySelector('.articleSdk-theme-page-doubleColumn-main')
+      || document.querySelector('.articleSdk-theme-page-singleColumn-main')
     if (!mainColumn) return results
 
     const widgets = Array.from(mainColumn.children) as HTMLElement[]
@@ -1622,7 +1624,7 @@ async function buildProductSourceInventory(
       const isAccordionWidget = cls.includes('seismic-page-widget-accordion')
 
       if (isDivider) {
-        const dividerText = (widget.textContent || '').trim()
+        const dividerText = (widget.textContent || '').replace(/[\u200e\u200f]+/g, '').trim()
         if (dividerText.length > 2) {
           currentTitle = dividerText
           currentKey = toSlug(currentTitle)
@@ -4190,7 +4192,7 @@ export async function scrapeProductPage(
               path: resolve(subScreenshotDir, `subpage-${subPageSlug}-full.png`),
               fullPage: true,
             })
-            const subMainCol = page.locator('.articleSdk-theme-page-doubleColumn-main')
+            const subMainCol = page.locator('.articleSdk-theme-page-doubleColumn-main, .articleSdk-theme-page-singleColumn-main')
             if ((await subMainCol.count()) > 0) {
               const subAccWidgets = subMainCol.locator('[class*="widget-accordion"]')
               const subAccCount = await subAccWidgets.count()
@@ -4221,6 +4223,70 @@ export async function scrapeProductPage(
       await page.waitForTimeout(5_000)
     }
 
+    // ── Red-header section merge into inventory (#976 Bug 1) ──────────────
+    // extractRedHeaderSections discovers items in flat red-header-bar sections
+    // (Product News, Customer Facing Decks, Key Resources, Product Features)
+    // that buildProductSourceInventory's widget walk misses. Merge items from
+    // red-header extraction into inventory sections that have 0 items.
+    {
+      // Ensure page is on main URL and content is loaded
+      const currentMainUrl = page.url().split('?')[0]
+      const expectedMainUrl = new URL(url).pathname
+      if (!currentMainUrl.includes(expectedMainUrl.slice(0, 40))) {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await page.waitForTimeout(5_000)
+      }
+      await expandAllAccordions(page)
+      await page.waitForTimeout(1_000)
+
+      const { sections: redHeaderSections } = await extractRedHeaderSections(page)
+      let redHeaderMerged = 0
+      for (const [rhKey, rhSection] of Object.entries(redHeaderSections)) {
+        if (rhSection.items.length === 0) continue
+
+        // Find matching inventory section (exact or fuzzy slug match)
+        const normSlugRH = (s: string) => s.replace(/\b(facing|and|the|for|of|with|amp)\b/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+        let targetKey: string | null = null
+        if (productSourceInventory.sections[rhKey]) {
+          targetKey = rhKey
+        } else {
+          const normalizedRH = normSlugRH(rhKey)
+          for (const invKey of Object.keys(productSourceInventory.sections)) {
+            if (invKey.includes(rhKey) || rhKey.includes(invKey)) { targetKey = invKey; break }
+            const normalizedInv = normSlugRH(invKey)
+            if (normalizedInv === normalizedRH || normalizedInv.includes(normalizedRH) || normalizedRH.includes(normalizedInv)) {
+              targetKey = invKey; break
+            }
+          }
+        }
+
+        // Only merge into sections with 0 items (avoid duplicating already-populated sections)
+        if (targetKey && productSourceInventory.sections[targetKey].items.length === 0) {
+          const existingNames = new Set(
+            productSourceInventory.sections[targetKey].items.map(i => i.name.toLowerCase())
+          )
+          let added = 0
+          for (const item of rhSection.items) {
+            if (existingNames.has(item.name.toLowerCase())) continue
+            productSourceInventory.sections[targetKey].items.push({
+              name: item.name,
+              description: item.description,
+              itemType: item.itemType || 'red-header-item',
+            })
+            existingNames.add(item.name.toLowerCase())
+            added++
+          }
+          if (added > 0) {
+            console.log(`[product-scraper] Red-header merge: "${rhSection.title}" → inventory "${productSourceInventory.sections[targetKey].title}": ${added} items`)
+            redHeaderMerged += added
+          }
+        }
+      }
+      if (redHeaderMerged > 0) {
+        console.log(`[product-scraper] Red-header merge total: ${redHeaderMerged} items added to inventory`)
+      }
+    }
+
     // Rewrite _product-source.json with deep inventory results (#976)
     writeJsonAtomic(resolve(earlyConfigOutputDir, '_product-source.json'), productSourceInventory)
     writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
@@ -4237,6 +4303,10 @@ export async function scrapeProductPage(
       // Take fullPage screenshot
       await page.screenshot({ path: resolve(earlyConfigOutputDir, '_page-screenshot.png'), fullPage: true })
 
+      // Re-expand accordions after all navigation — required for per-section screenshots (#976 Bug 2)
+      await expandAllAccordions(page)
+      await page.waitForTimeout(2_000)
+
       // Per-section screenshots (#976 Gap 5)
       const screenshotDir = resolve(earlyConfigOutputDir, 'screenshots')
       mkdirSync(screenshotDir, { recursive: true })
@@ -4250,8 +4320,10 @@ export async function scrapeProductPage(
       await page.waitForTimeout(1_000)
 
       // Collect section elements from the DOM for element-based screenshots
-      const mainCol = page.locator('.articleSdk-theme-page-doubleColumn-main')
-      if ((await mainCol.count()) > 0) {
+      const mainCol = page.locator('.articleSdk-theme-page-doubleColumn-main, .articleSdk-theme-page-singleColumn-main')
+      const mainColCount = await mainCol.count()
+      console.log(`[product-scraper] Per-section screenshots: mainCol found=${mainColCount > 0}, page URL=${page.url().slice(0, 80)}`)
+      if (mainColCount > 0) {
         const widgets = mainCol.locator('> *')
         const widgetCount = await widgets.count()
         let sectionIdx = 0
@@ -4352,6 +4424,8 @@ export async function scrapeProductPage(
           // Regular content widget — part of current section
           if (currentTitle && sectionStartIdx < 0) sectionStartIdx = w
         }
+      } else {
+        console.warn(`[product-scraper] Per-section screenshots: main column not found — falling back to fullPage only`)
       }
 
       // Update sourceFiles and rewrite inventory
