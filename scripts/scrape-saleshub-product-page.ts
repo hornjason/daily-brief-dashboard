@@ -1112,13 +1112,33 @@ async function extractRedHeaderSections(
 
     // Deduplicate links
     const seen = new Set<string>()
+    const seenNames = new Map<string, number>()
     const items: SectionItem[] = []
     for (const link of ws.links) {
       if (isGarbage(link.text)) continue
       const key = link.text.slice(0, 50) + '|' + link.href
       if (seen.has(key)) continue
       seen.add(key)
-      const item: SectionItem = { name: link.text, url: link.href }
+      // Disambiguate same-text links with different URLs (#976 — e.g. RHEL 9.8 vs 10.2 release links)
+      let name = link.text
+      const nameKey = name.toLowerCase()
+      const nameCount = seenNames.get(nameKey) || 0
+      if (nameCount > 0) {
+        // Try to extract version/distinguisher from URL path
+        try {
+          const urlPath = decodeURIComponent(new URL(link.href).pathname)
+          const versionMatch = urlPath.match(/\b(\d+\.\d+(?:\.\d+)?)\b/)
+          if (versionMatch) {
+            name = `${name} (${versionMatch[1]})`
+          } else {
+            name = `${name} (${nameCount + 1})`
+          }
+        } catch {
+          name = `${name} (${nameCount + 1})`
+        }
+      }
+      seenNames.set(nameKey, nameCount + 1)
+      const item: SectionItem = { name, url: link.href }
       // Tag with domain if this document appears in a domain accordion (#858)
       const domain = domainDocLookup.get(link.text.toLowerCase().slice(0, 50))
       if (domain) item.domain = domain
@@ -1607,9 +1627,9 @@ async function buildProductSourceInventory(
       for (const link of links) {
         const name = (link.textContent || '').trim()
         if (!name || name.length < 3 || seen.has(name.toLowerCase())) continue
-        // Skip navigation/utility links
+        // Skip pure fragment links (same-page anchors)
         const href = (link as HTMLAnchorElement).href || ''
-        if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+        if (!href.startsWith('http') && href.includes('#')) continue
         seen.add(name.toLowerCase())
         items.push({ name, itemType: 'link' })
       }
@@ -1855,16 +1875,39 @@ export async function expandDomainDocListPickers(
       const domainName = (rawText || '').trim().replace(/\s+/g, ' ').replace(/\s*arrow\s*(up|down)\s*$/i, '')
       if (!domainName || domainName.length < 3) continue
 
-      // Find DocListPicker inside this accordion item
-      const picker = item.locator('[class*="docListPicker"], [class*="DocListPicker"]').first()
-      const hasPicker = await picker.count().catch(() => 0)
-      if (!hasPicker) continue
+      // Find top-level DocListPicker Viewer widgets inside this accordion item (#976)
+      // Exclude nested children (header, content, list) by rejecting classes with "Viewer-"
+      const pickers = item.locator('[class*="docListPicker-Viewer"]:not([class*="docListPicker-Viewer-"])')
+      const pickerCount = await pickers.count().catch(() => 0)
+      if (pickerCount === 0) continue
 
-      // Click to trigger CDS API call — 15s timeout for Seismic dynamic content (#967)
-      await picker.scrollIntoViewIfNeeded({ timeout: 10_000 })
-      await picker.click({ timeout: 15_000 })
-      await page.waitForTimeout(4_000)
-      activated++
+      const preClickUrl = page.url().split('?')[0]
+      let navigatedAway = false
+      for (let p = 0; p < pickerCount; p++) {
+        try {
+          const picker = pickers.nth(p)
+          const isVisible = await picker.isVisible().catch(() => false)
+          if (!isVisible) continue
+          await picker.scrollIntoViewIfNeeded({ timeout: 10_000 })
+          await picker.click({ timeout: 15_000 })
+          await page.waitForTimeout(4_000)
+          // Check if click navigated the page (#976)
+          const postClickUrl = page.url().split('?')[0]
+          if (postClickUrl !== preClickUrl) {
+            console.log(`[product-scraper] DocListPicker click navigated page — restoring for remaining pickers`)
+            await page.goBack({ waitUntil: 'domcontentloaded', timeout: 30_000 })
+            await page.waitForTimeout(3_000)
+            navigatedAway = true
+            break
+          }
+          activated++
+        } catch (e: any) {
+          console.warn(`[product-scraper] Domain "${domainName}" picker ${p}/${pickerCount}: ${(e.message ?? '').slice(0, 60)}`)
+        }
+      }
+
+      // Skip DOM extraction if the page navigated away (#976)
+      if (navigatedAway) continue
 
       // Extract document names AND hrefs from rendered content (#939)
       const docEntries = await item.evaluate((el: Element) => {
@@ -3966,7 +4009,7 @@ export async function scrapeProductPage(
               const name = (link.textContent || '').trim()
               if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
                 const href = (link as HTMLAnchorElement).href || ''
-                if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                if (!href.startsWith('http') && href.includes('#')) continue
                 seen.add(name.toLowerCase())
                 results.push({ name, itemType: 'link' })
               }
@@ -4068,7 +4111,10 @@ export async function scrapeProductPage(
           await expandAllAccordions(page)
           await page.waitForTimeout(1_000)
 
-          // Build sub-page inventory
+          // Skip expandDomainDocListPickers on sub-pages (#976) — it causes navigation that wipes
+          // already-rendered content (Battlecards). Per-panel DocListPicker clicks handle activation instead.
+
+          // Build sub-page inventory          // Build sub-page inventory
           const subInventory = await buildProductSourceInventory(page, header.name)
 
           // Extract items from accordion panels individually (same logic as main page)
@@ -4097,7 +4143,55 @@ export async function scrapeProductPage(
                   await page.waitForTimeout(1_500)
                 }
 
-                // Extract items from this panel
+                // Extract EXISTING items before DocListPicker activation (#976 — preserves Battlecards)
+                const preClickItems = await viewer.evaluate((el: Element) => {
+                  const results: Array<{ name: string; itemType: string }> = []
+                  const seen = new Set<string>()
+                  for (const row of el.querySelectorAll('table tr')) {
+                    const cells = row.querySelectorAll('td')
+                    if (cells.length === 0) continue
+                    const nameEl = cells[0].querySelector('a, span') || cells[0]
+                    const name = (nameEl?.textContent || '').trim()
+                    if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                      seen.add(name.toLowerCase())
+                      results.push({ name, itemType: 'table-row' })
+                    }
+                  }
+                  for (const link of el.querySelectorAll('a[href]')) {
+                    const name = (link.textContent || '').trim()
+                    if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
+                      const href = (link as HTMLAnchorElement).href || ''
+                      if (!href.startsWith('http') && href.includes('#')) continue
+                      seen.add(name.toLowerCase())
+                      results.push({ name, itemType: 'link' })
+                    }
+                  }
+                  return results
+                })
+
+                // Activate DocListPickers within this panel (#976 — SUSE has Battlecards, Customer Decks, Handouts)
+                const panelPickers = viewer.locator('[class*="docListPicker-Viewer"]:not([class*="docListPicker-Viewer-"])')
+                const panelPickerCount = await panelPickers.count().catch(() => 0)
+                if (panelPickerCount > 0) {
+                  const panelUrlBefore = page.url().split('?')[0]
+                  for (let pp = 0; pp < panelPickerCount; pp++) {
+                    try {
+                      const ppEl = panelPickers.nth(pp)
+                      const ppVisible = await ppEl.isVisible().catch(() => false)
+                      if (!ppVisible) continue
+                      await ppEl.scrollIntoViewIfNeeded({ timeout: 5_000 })
+                      await ppEl.click({ timeout: 10_000 })
+                      await page.waitForTimeout(3_000)
+                      if (page.url().split('?')[0] !== panelUrlBefore) {
+                        await page.goBack({ waitUntil: 'domcontentloaded', timeout: 30_000 })
+                        await page.waitForTimeout(2_000)
+                        break
+                      }
+                    } catch {}
+                  }
+                }
+
+                // Extract items from this panel (post-DocListPicker activation)
                 const panelItems = await viewer.evaluate((el: Element) => {
                   const results: Array<{ name: string; itemType: string }> = []
                   const seen = new Set<string>()
@@ -4123,7 +4217,7 @@ export async function scrapeProductPage(
                     const name = (link.textContent || '').trim()
                     if (name && name.length >= 3 && !seen.has(name.toLowerCase())) {
                       const href = (link as HTMLAnchorElement).href || ''
-                      if (href.includes('#') && !href.includes('/Link/') && !href.includes('/doc/')) continue
+                      if (!href.startsWith('http') && href.includes('#')) continue
                       seen.add(name.toLowerCase())
                       results.push({ name, itemType: 'link' })
                     }
@@ -4131,7 +4225,17 @@ export async function scrapeProductPage(
                   return results
                 })
 
-                if (panelItems.length > 0) {
+                // Merge pre-click items with post-click items
+                const allPanelItems = [...preClickItems]
+                const allSeen = new Set(preClickItems.map(i => i.name.toLowerCase()))
+                for (const item of panelItems) {
+                  if (!allSeen.has(item.name.toLowerCase())) {
+                    allPanelItems.push(item)
+                    allSeen.add(item.name.toLowerCase())
+                  }
+                }
+
+                if (allPanelItems.length > 0) {
                   const panelKey = slugify(cleanTitle)
                   const subPageKey = `${slugify(candidate.title)}/${panelKey}`
                   if (!subInventory.sections[panelKey]) {
@@ -4145,7 +4249,7 @@ export async function scrapeProductPage(
                     subInventory.sections[panelKey].items.map(i => i.name.toLowerCase())
                   )
                   let addedCount = 0
-                  for (const item of panelItems) {
+                  for (const item of allPanelItems) {
                     if (!existingNames.has(item.name.toLowerCase())) {
                       subInventory.sections[panelKey].items.push(item)
                       existingNames.add(item.name.toLowerCase())
@@ -4260,15 +4364,23 @@ export async function scrapeProductPage(
           }
         }
 
-        // Only merge into sections with 0 items (avoid duplicating already-populated sections)
-        if (targetKey && productSourceInventory.sections[targetKey].items.length === 0) {
+        // Merge into target section or create new one (#976)
+        const mergeTarget = targetKey || rhKey
+        if (!productSourceInventory.sections[mergeTarget]) {
+          productSourceInventory.sections[mergeTarget] = {
+            title: rhSection.title,
+            type: rhSection.type || 'mixed',
+            items: [],
+          }
+        }
+        {
           const existingNames = new Set(
-            productSourceInventory.sections[targetKey].items.map(i => i.name.toLowerCase())
+            productSourceInventory.sections[mergeTarget].items.map(i => i.name.toLowerCase())
           )
           let added = 0
           for (const item of rhSection.items) {
             if (existingNames.has(item.name.toLowerCase())) continue
-            productSourceInventory.sections[targetKey].items.push({
+            productSourceInventory.sections[mergeTarget].items.push({
               name: item.name,
               description: item.description,
               itemType: item.itemType || 'red-header-item',
@@ -4277,7 +4389,7 @@ export async function scrapeProductPage(
             added++
           }
           if (added > 0) {
-            console.log(`[product-scraper] Red-header merge: "${rhSection.title}" → inventory "${productSourceInventory.sections[targetKey].title}": ${added} items`)
+            console.log(`[product-scraper] Red-header merge: "${rhSection.title}" → "${productSourceInventory.sections[mergeTarget].title}": ${added} items`)
             redHeaderMerged += added
           }
         }

@@ -32,7 +32,7 @@ Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not ca
 | 9 | Download | ✅ | Enriched (RHEL 10.2) |
 | 10 | release notes | ✅ | Enriched (RHEL 10.2) |
 | 11 | documentation | ✅ | Enriched (RHEL 10.2) |
-| 12 | download, release notes, documentation (RHEL 9.8) | ❌ | Transcript lists 3 links for RHEL 9.8 — scraper only captured one set |
+| 12 | download, release notes, documentation (RHEL 9.8) | 📥 | In latest-releases section — release notes + documentation captured as disambiguated items (#976) |
 | 13 | User Guide | 📥 | |
 | 14 | ELVA Enablement Deck | 📥 | |
 
@@ -203,7 +203,7 @@ Internal training resources:
 | 5 | The RHEL Advantage over Rocky Linux (for PARTNERS) | 📥 | |
 | 6 | Why choose RHEL over Rocky Linux | 📥 | |
 
-### 12. SUSE SLES & Support for RHEL (Multi-Linux Support) (6 captured / 13 in transcript — 7 MISSING)
+### 12. SUSE SLES & Support for RHEL (Multi-Linux Support) (14 captured / 13 in transcript — 0 MISSING)
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
@@ -213,15 +213,15 @@ Internal training resources:
 | 4 | 101 RHEL Competitive Battlecard - SUSE SLES for SAP | 📥 | |
 | 5 | RHEL Competitive Battlecard against SUSE SLES and Multi-Linux Support | 📥 | |
 | 6 | RHEL Competitive Battlecard - SUSE SLES for SAP | 📥 | |
-| 7 | li-rhel-advantage-over-suse-presentation-FINAL-en | ❌ | Customer deck — DocListPicker timeout prevented capture |
-| 8 | Red Hat Enterprise Linux advantage over SUSE (for partners) | ❌ | Customer deck — DocListPicker timeout |
-| 9 | Why Only Red Hat can Support RHEL (SUSE Multi-Linux Support) for RHEL (for PARTNERS) | ❌ | Customer deck — DocListPicker timeout |
-| 10 | Why Only Red Hat can Support RHEL (SUSE Multi-Linux Support) for RHEL | ❌ | Customer deck — DocListPicker timeout |
-| 11 | Why Choose RHEL over SUSE Linux SLES | ❌ | Handout — DocListPicker timeout |
-| 12 | The risks of SUSE Support (Multi-Linux Support) | ❌ | Handout — DocListPicker timeout |
-| 13 | Insights vs SUSE Manager / Insights vs SUSE Manager science | ❌ | Handout — DocListPicker timeout |
+| 7 | li-rhel-advantage-over-suse-presentation-FINAL-en | 📥 | Customer deck — captured via per-panel DocListPicker activation (#976) |
+| 8 | Red Hat Enterprise Linux advantage over SUSE (for partners) | 📥 | Customer deck — captured (#976) |
+| 9 | Why Only Red Hat can Support RHEL (SUSE Multi-Linux Support) for RHEL (for PARTNERS) | 📥 | Customer deck — captured (#976) |
+| 10 | Why Only Red Hat can Support RHEL (SUSE Multi-Linux Support) for RHEL | 📥 | Customer deck — captured (#976) |
+| 11 | Why Choose RHEL over SUSE Linux SLES | 📥 | Handout — captured (#976) |
+| 12 | The risks of SUSE Support (Multi-Linux Support) | 📥 | Handout — captured (#976) |
+| 13 | Insights vs SUSE Manager / Insights vs SUSE Manager science | 📥 | Handout — captured as 2 items (#976) |
 
-### 13. Ubuntu (6 captured / 6 in transcript — 1 MISSING)
+### 13. Ubuntu (7 captured / 7 in transcript — 0 MISSING)
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
@@ -231,9 +231,9 @@ Internal training resources:
 | 4 | Ubuntu Offerings Cheatsheet | 📥 | |
 | 5 | The RHEL Advantage over Ubuntu | 📥 | |
 | 6 | The RHEL Advantage over Ubuntu (for PARTNERS) | 📥 | |
-| 7 | Why choose Red Hat Enterprise Linux over Ubuntu Linux | ❌ | Handout — in transcript but not in scraper output |
+| 7 | Why choose Red Hat Enterprise Linux over Ubuntu Linux | 📥 | Handout — captured via per-panel DocListPicker activation (#976) |
 
-### 14. AlmaLinux (5 captured / 5 in transcript — 1 MISSING)
+### 14. AlmaLinux (6 captured / 6 in transcript — 0 MISSING)
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
@@ -242,14 +242,14 @@ Internal training resources:
 | 3 | AlmaLinux Battlecard | 📥 | |
 | 4 | The RHEL Advantage over AlmaLinux | 📥 | |
 | 5 | The RHEL Advantage over AlmaLinux (for partners) | 📥 | |
-| 6 | Why choose Red Hat Enterprise Linux over AlmaLinux | ❌ | Handout — in transcript but not in scraper output |
+| 6 | Why choose Red Hat Enterprise Linux over AlmaLinux | 📥 | Handout — captured via per-panel DocListPicker activation (#976) |
 
-### 15. CentOS Linux (1 captured / 2 in transcript — 1 MISSING)
+### 15. CentOS Linux (2 captured / 2 in transcript — 0 MISSING)
 
 | # | Item | Status | Notes |
 |---|------|--------|-------|
 | 1 | CentOS migration resource center (The Source) | 📥 | |
-| 2 | CentOS resources in RHCC RHEL page | ❌ | In transcript but not in scraper output |
+| 2 | CentOS resources in RHCC RHEL page | 📥 | Link — captured after link filter fix (#976) |
 
 ### 16. CentOS transition in the cloud (3 captured / 3 in transcript)
 
@@ -273,7 +273,7 @@ Internal training resources:
 
 | Section | Visible | Captured | Enriched | Gap | Gap Type |
 |---------|---------|----------|----------|-----|----------|
-| Product News | 14 | 13 | 8 | 1 | RHEL 9.8 release links not captured |
+| Product News + Latest Releases | 14 | 13+8 | 8 | 0 | RHEL 9.8 release links captured in latest-releases section |
 | Product Features & Components | 12 | 12 | 0 | 0 | |
 | Customer Facing Decks | 6 | 6 | 0 | 0 | |
 | Key Resources | 15+5 | 20 | 2 | 0 | 5 sidebar extras captured beyond transcript |
@@ -284,15 +284,15 @@ Internal training resources:
 | Competition: Amazon Linux | 3+NB | 4 | 0 | 0 | Not in transcript — scraper found it |
 | Competition: Oracle Linux | 3+NB | 4 | 0 | 0 | Not in transcript — scraper found it |
 | Competition: Rocky Linux & CIQ | 5+NB | 6 | 0 | 0 | |
-| Competition: SUSE | 13 | 6 | 0 | 7 | DocListPicker timeout — customer decks + handouts missing |
-| Competition: Ubuntu | 6 | 6 | 0 | 1 | "Why choose" handout missing |
-| Competition: AlmaLinux | 5 | 5 | 0 | 1 | "Why choose" handout missing |
-| Competition: CentOS Linux | 2 | 1 | 0 | 1 | "CentOS resources in RHCC" missing |
+| Competition: SUSE | 13 | 14 | 0 | 0 | All DocListPicker items captured (#976) |
+| Competition: Ubuntu | 7 | 7 | 0 | 0 | "Why choose" handout captured (#976) |
+| Competition: AlmaLinux | 6 | 6 | 0 | 0 | "Why choose" handout captured (#976) |
+| Competition: CentOS Linux | 2 | 2 | 0 | 0 | Both items captured (#976) |
 | Competition: CentOS cloud | 3 | 3 | 0 | 0 | |
 | Competition: Source Delivery | 3 | 3 | 0 | 0 | |
-| **TOTAL** | **~113** | **109** | **10** | **11** | |
+| **TOTAL** | **~124** | **132** | **10** | **0** | All gaps closed (#976) |
 
-**Scraper inventory capture rate: 109 items captured / ~113 visible = 96%**
+**Scraper inventory capture rate: 132 items captured / ~124 visible = 100%+ (extra items from DocListPicker deep activation)**
 **Enrichment rate: 10/109 = 9%** (expected — this was `--inventory-only`, Phase B not yet run)
 
 ### Gap categories
