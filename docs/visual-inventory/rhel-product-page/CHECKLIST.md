@@ -9,7 +9,7 @@ updated: 2026-07-08
 
 **Source of truth:** Screenshots from `--inventory-only` scrape 2026-07-08 + Jason's transcript from 2026-07-07
 **Page:** Red Hat Enterprise Linux on SalesHub
-**Scrape:** 2026-07-08T19:26:08Z (inventory-only) | Enriched: 12 documents (partial — Phase B not yet run)
+**Scrape:** 2026-07-09 (full --page-only) | Enriched: 45 documents (DC-prefix fix + standalone enrichment)
 
 Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not captured | 🔗 = metadata/nav link (not a document)
 
@@ -22,8 +22,8 @@ Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not ca
 | # | Item | Status | Notes |
 |---|------|--------|-------|
 | 1 | RHEL Conversation Starters | ✅ | Enriched |
-| 2 | RHEL Conversation Starters (CVE focus) | 📥 | |
-| 3 | Seller FAQ | ✅ | Enriched |
+| 2 | RHEL Conversation Starters (CVE focus) | ✅ | Enriched (#976 DC-prefix) |
+| 3 | Seller FAQ | 📥 | Failed quality gate (score 0/85) |
 | 4 | Understanding the Mythos Moment Market Opportunity | 📥 | Video |
 | 5 | RHEL Security Conversation Starters: Opening the Door | 📥 | Course |
 | 6 | Press release | ✅ | Enriched |
@@ -32,7 +32,7 @@ Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not ca
 | 9 | Download | ✅ | Enriched (RHEL 10.2) |
 | 10 | release notes | ✅ | Enriched (RHEL 10.2) |
 | 11 | documentation | ✅ | Enriched (RHEL 10.2) |
-| 12 | download, release notes, documentation (RHEL 9.8) | 📥 | In latest-releases section — release notes + documentation captured as disambiguated items (#976) |
+| 12 | download, release notes, documentation (RHEL 9.8) | ✅ | Enriched — release notes (2) + documentation (2) |
 | 13 | User Guide | 📥 | |
 | 14 | ELVA Enablement Deck | 📥 | |
 
@@ -273,27 +273,28 @@ Internal training resources:
 
 | Section | Visible | Captured | Enriched | Gap | Gap Type |
 |---------|---------|----------|----------|-----|----------|
-| Product News + Latest Releases | 14 | 13+8 | 8 | 0 | RHEL 9.8 release links captured in latest-releases section |
-| Product Features & Components | 12 | 12 | 0 | 0 | |
-| Customer Facing Decks | 6 | 6 | 0 | 0 | |
+| Product News + Latest Releases | 14 | 13+8 | 11 | 0 | RHEL 9.8 release links captured in latest-releases section |
+| Product Features & Components | 12 | 12 | 0 | 0 | Extracted but enrichment pending (viewer-only pages) |
+| Customer Facing Decks | 6 | 6 | 1 | 0 | What's New deck enriched |
 | Key Resources | 15+5 | 20 | 2 | 0 | 5 sidebar extras captured beyond transcript |
-| Top Training Resources | 4 | 4 | 0 | 0 | |
-| Top Services Resources | 4 | 4 | 0 | 0 | |
-| Competition: Why choose RHEL? | 8 | 8 | 0 | 0 | Not in transcript — scraper found it |
-| Competition: Latest news | 4 | 4 | 0 | 0 | Not in transcript — scraper found it |
-| Competition: Amazon Linux | 3+NB | 4 | 0 | 0 | Not in transcript — scraper found it |
-| Competition: Oracle Linux | 3+NB | 4 | 0 | 0 | Not in transcript — scraper found it |
-| Competition: Rocky Linux & CIQ | 5+NB | 6 | 0 | 0 | |
-| Competition: SUSE | 13 | 14 | 0 | 0 | All DocListPicker items captured (#976) |
-| Competition: Ubuntu | 7 | 7 | 0 | 0 | "Why choose" handout captured (#976) |
-| Competition: AlmaLinux | 6 | 6 | 0 | 0 | "Why choose" handout captured (#976) |
-| Competition: CentOS Linux | 2 | 2 | 0 | 0 | Both items captured (#976) |
-| Competition: CentOS cloud | 3 | 3 | 0 | 0 | |
-| Competition: Source Delivery | 3 | 3 | 0 | 0 | |
-| **TOTAL** | **~124** | **132** | **10** | **0** | All gaps closed (#976) |
+| Top Training Resources | 4 | 4 | 0 | 0 | External links (iframe-only) |
+| Top Services Resources | 4 | 4 | 0 | 0 | External links (iframe-only) |
+| Competition: Why choose RHEL? | 8 | 8 | 1 | 0 | Insights Main Deck enriched |
+| Competition: Latest news | 4 | 4 | 0 | 0 | Newstracker v2 failed quality gate |
+| Competition: Amazon Linux | 3+NB | 4 | 0 | 0 | Duplicates skipped |
+| Competition: Oracle Linux | 3+NB | 4 | 0 | 0 | Duplicates skipped |
+| Competition: Rocky Linux & CIQ | 5+NB | 6 | 4 | 0 | |
+| Competition: SUSE | 13 | 14 | 13 | 0 | All DocListPicker items enriched (#976) |
+| Competition: Ubuntu | 7 | 7 | 5 | 0 | Cheatsheet failed quality gate |
+| Competition: AlmaLinux | 6 | 6 | 4 | 0 | |
+| Competition: CentOS Linux | 2 | 2 | 0 | 0 | Link-only items |
+| Competition: CentOS cloud | 3 | 3 | 2 | 0 | |
+| Competition: Source Delivery | 3 | 3 | 2 | 0 | |
+| **TOTAL** | **~124** | **132** | **45** | **0** | All gaps closed, enrichment via DC-prefix (#976) |
 
 **Scraper inventory capture rate: 132 items captured / ~124 visible = 100%+ (extra items from DocListPicker deep activation)**
-**Enrichment rate: 10/109 = 9%** (expected — this was `--inventory-only`, Phase B not yet run)
+**Enrichment rate: 45/109 enrichable = 41%** (up from 9%; DC-prefix extraction unlocked contentId items)
+**Extraction rate: 105/130 extractable = 81%** (up from 15%; 81 contentId + 24 URL extractions)
 
 ### Gap categories
 
@@ -301,12 +302,12 @@ Internal training resources:
 2. **Missing handouts (3)** — Ubuntu, AlmaLinux, CentOS Linux each missing one "Why choose" or resource link that was visible in transcript but not in scraper DOM walk.
 3. **RHEL 9.8 release links (1)** — Transcript shows separate download/release-notes/documentation links for RHEL 9.8; scraper only captured one set (likely RHEL 10.2).
 
-### Actionable next steps (Phase B/C)
+### Actionable next steps
 
-1. **Run full Phase B scrape** — `--page-only` (not `--inventory-only`) to capture, extract, and enrich all 109 items
-2. **Fix SUSE DocListPicker timeout** — investigate 30s timeout on domain accordion; may need longer wait or retry logic
-3. **Add "Why choose" handouts** — Ubuntu, AlmaLinux, CentOS Linux sections each missing one handout document
-4. **RHEL 9.8 gap** — verify whether page has separate 9.8 links or if "Latest Releases" section was partially captured
+1. **Fix enrichment timing** — inline enrichment found 0 docs during scrape despite 109 extracted files on disk. Standalone enrichment succeeded (45 docs). Debug logging added in commit `1d0b110`.
+2. **Increase enrichment yield** — 45/109 enriched (41%). Many contentId Description texts are 68-150 chars — too short for quality gate. Consider lowering quality gate threshold for Description-only content.
+3. **Fix SUSE DocListPicker timeout** — investigate 30s timeout on domain accordion; may need longer wait or retry logic
+4. **Circuit breaker ordering fixed** — download queue now sorted by URL presence (commit `1d0b110`), preventing breaker from tripping on non-downloadable items before reaching PPTX/PDF docs
 
 ### Screenshots
 
