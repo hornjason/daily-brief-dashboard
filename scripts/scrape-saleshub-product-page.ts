@@ -3404,6 +3404,7 @@ interface CdsDocument {
   contentId: string
   versionId: string
   originUrl: string
+  urlLink: string
 }
 
 function setupCdsInterception(page: import('@playwright/test').Page): CdsDocument[] {
@@ -3414,12 +3415,15 @@ function setupCdsInterception(page: import('@playwright/test').Page): CdsDocumen
     try {
       const body = await res.json()
       for (const doc of body?.Documents ?? []) {
+        const locations = doc.Locations ?? []
+        const urlLink = locations.find((l: any) => l.UrlLink)?.UrlLink ?? ''
         documents.push({
           name: doc.Name ?? '',
           format: doc.Format ?? '',
           contentId: doc.Id ?? doc.ContentId ?? '',
           versionId: doc.VersionId ?? '',
           originUrl: doc.OriginUrl ?? '',
+          urlLink,
         })
       }
     } catch { /* non-JSON response */ }
@@ -4944,6 +4948,7 @@ export async function scrapeProductPage(
               if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
               if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
               if (!existing.url && doc.originUrl) existing.url = doc.originUrl
+              if (!existing.url && doc.urlLink) existing.url = doc.urlLink
               if (!existing.url) existing.url = docListPickerUrls[doc.name.toLowerCase().trim()] ?? undefined
               break
             }
@@ -5017,7 +5022,7 @@ export async function scrapeProductPage(
             cdsFound++
             const contentTypeProp = (match.CustomProperties ?? []).find((p: any) => p.name === 'Content Type')
             const contentType = contentTypeProp?.values?.[0]?.value ?? match.Format ?? ''
-            const downloadUrl = doc.originUrl || match.OriginUrl || docListPickerUrls[doc.name.toLowerCase().trim()] || undefined
+            const downloadUrl = doc.originUrl || match.OriginUrl || doc.urlLink || docListPickerUrls[doc.name.toLowerCase().trim()] || undefined
             const contentId = doc.contentId || match.ContentId || undefined
             const sectionName = typeToSection[contentType] || ''
 
@@ -5063,16 +5068,27 @@ export async function scrapeProductPage(
       console.log(`[product-scraper] Dedup: removed ${dedupResult.removed.length} duplicate items`)
     }
 
-    // ── Final DocListPicker URL propagation (#976) ────────────────────────
-    // After all sections are finalized, assign DocListPicker URLs to any
-    // remaining items that have contentId but no URL.
-    if (dlpUrlCount > 0) {
+    // ── Final URL propagation from CDS urlLink + DocListPicker (#976) ────
+    // After all sections are finalized, assign URLs from CDS Locations[].UrlLink
+    // and DocListPicker DOM to any remaining items without URLs.
+    {
+      const cdsUrlLinkMap = new Map<string, string>()
+      for (const doc of cdsDocuments) {
+        if (doc.urlLink && doc.name) {
+          cdsUrlLinkMap.set(doc.name.toLowerCase().trim(), doc.urlLink)
+        }
+      }
       let urlsAssigned = 0
       for (const section of Object.values(sections)) {
         for (const item of section.items) {
           if (!item.url && item.name) {
-            const dlpUrl = docListPickerUrls[item.name.toLowerCase().trim()]
-            if (dlpUrl) {
+            const key = item.name.toLowerCase().trim()
+            const cdsUrl = cdsUrlLinkMap.get(key)
+            const dlpUrl = docListPickerUrls[key]
+            if (cdsUrl) {
+              item.url = cdsUrl
+              urlsAssigned++
+            } else if (dlpUrl) {
               item.url = dlpUrl
               urlsAssigned++
             }
@@ -5080,7 +5096,7 @@ export async function scrapeProductPage(
         }
       }
       if (urlsAssigned > 0) {
-        console.log(`[product-scraper] (#976) Assigned ${urlsAssigned} DocListPicker URLs to items missing URLs`)
+        console.log(`[product-scraper] (#976) Assigned ${urlsAssigned} URLs to items (CDS UrlLink + DocListPicker DOM)`)
       }
     }
 
