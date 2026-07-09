@@ -2379,21 +2379,65 @@ async function extractSinglePage(
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(3_000)
 
-    const innerText = await page.innerText('body').catch(() => '')
+    let innerText = await page.innerText('body').catch(() => '')
+
+    // Check for gateway errors (502/503 JSON responses)
+    if (/^\s*\{.*"Status"\s*:\s*5\d\d.*"Gateway/i.test(innerText.trim())) {
+      return { content: null, reason: `Gateway error: ${innerText.slice(0, 76)}` }
+    }
+
+    // Poll for content if initial text is too short — viewer widgets render asynchronously
+    if (innerText.length <= 500) {
+      for (let elapsed = 3; elapsed < 15; elapsed += 2) {
+        await page.waitForTimeout(2_000)
+        innerText = await page.innerText('body').catch(() => '')
+        if (innerText.length > 500) break
+      }
+    }
 
     // Check for content-not-found pages
     if (/content\s+not\s+found|page\s+not\s+found|error\s+404/i.test(innerText.slice(0, 500))) {
       return { content: null, reason: 'Content not found' }
     }
 
-    // Check for iframe-only pages
+    // Check for iframe-only pages — try extracting from iframe content (#976)
     const hasIframes = await page.locator('iframe').count()
     if (hasIframes > 0 && innerText.length <= 500) {
-      return { content: null, reason: 'iframe-only page' }
+      const frames = page.frames()
+      for (const frame of frames) {
+        if (frame === page.mainFrame()) continue
+        const frameUrl = frame.url()
+        if (frameUrl.includes('checksession') || frameUrl.includes('login')) continue
+        try {
+          await frame.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => {})
+          const frameText = await frame.evaluate(() => document.body?.innerText || '').catch(() => '')
+          if (frameText.length > 500) {
+            innerText = frameText
+            break
+          }
+        } catch { /* frame not accessible */ }
+      }
+      if (innerText.length <= 500) {
+        return { content: null, reason: `iframe-only page (${innerText.length} chars)` }
+      }
     }
 
     // Content validation
     if (!isEnrichableContent(innerText)) {
+      // Seismic viewer chrome pages (#976): the Description field contains enrichable
+      // content even though the overall page text is mostly navigation chrome.
+      // Extract just the description section for enrichment.
+      const lower = innerText.toLowerCase()
+      if (lower.includes('content details') && lower.includes('description')) {
+        const descMatch = innerText.match(/Description\n([\s\S]+?)(?:\nContent Properties|\nReviews|\nVersion\b|\nExpiration|\nRating|\nFile Type|\nContent Type)/i)
+        if (descMatch) {
+          const desc = descMatch[1].trim()
+          if (desc.length > 50) {
+            return { content: desc, contentLength: desc.length }
+          }
+        }
+      }
+
       // Not enrichable — but might be a navigation page
       const bodyHtml = await page.evaluate(() => document.body.innerHTML).catch(() => '')
       const navResult = detectNavigationPage(innerText, bodyHtml)
@@ -2769,7 +2813,10 @@ async function downloadProductDocuments(
 
   for (const { item, sectionKey, sectionTitle } of downloadQueue) {
     if (!item.url) {
-      // Items with contentId but no URL — use Seismic viewer URL (#973)
+      // Items with contentId but no URL — try Seismic viewer URL (#973)
+      // Note: /Link/Content/{contentId} returns 502 for most library items.
+      // The primary fix (#976) assigns doccenter URLs from DocListPicker DOM
+      // before reaching this point. This path is a last-resort fallback.
       if (item.contentId) {
         const viewerUrl = `https://saleshub.redhat.com/Link/Content/${item.contentId}`
         const sectionSlugV = slugify(sectionTitle)
@@ -4822,6 +4869,40 @@ export async function scrapeProductPage(
     await page.screenshot({ fullPage: true, path: resolve(earlyConfigOutputDir, '_page-screenshot.png') })
     console.log('[product-scraper] Saved page screenshot as audit artifact (post-carousel)')
 
+    // ── Harvest DocListPicker URLs from expanded DOM (#976) ─────────────
+    // After DocListPicker expansion, items appear as <a href> links with
+    // doccenter URLs. CDS interception captures metadata but NOT these URLs.
+    // Scan the DOM now and build a name→URL map for CDS items.
+    const docListPickerUrls = await page.evaluate(() => {
+      const urlMap: Record<string, string> = {}
+      const dlpWidgets = document.querySelectorAll('[class*="docListPicker-Viewer"]')
+      for (const widget of dlpWidgets) {
+        const links = widget.querySelectorAll('a[href]')
+        for (const link of links) {
+          const a = link as HTMLAnchorElement
+          const href = a.href || ''
+          const text = a.innerText?.trim() || ''
+          if (text.length > 3 && text.length < 200 && href.includes('/doccenter/') && href.includes('/doc/')) {
+            urlMap[text.toLowerCase().trim()] = href
+          }
+        }
+      }
+      return urlMap
+    })
+    // Also merge URLs from domainDocs (captured during first DocListPicker expansion)
+    for (const [, entries] of domainDocs) {
+      for (const entry of entries) {
+        if (entry.url && entry.name) {
+          const key = entry.name.toLowerCase().trim()
+          if (!docListPickerUrls[key]) docListPickerUrls[key] = entry.url
+        }
+      }
+    }
+    const dlpUrlCount = Object.keys(docListPickerUrls).length
+    if (dlpUrlCount > 0) {
+      console.log(`[product-scraper] (#976) Harvested ${dlpUrlCount} URLs from DocListPicker DOM + domainDocs`)
+    }
+
     // ── CDS document search + section assignment (#973) ─────────────────
     // For each CDS-intercepted document, search the Seismic API by exact name
     // to get downloadUrl + contentType. Use contentType for section assignment.
@@ -4865,6 +4946,7 @@ export async function scrapeProductPage(
               if (!existing.contentId && doc.contentId) existing.contentId = doc.contentId
               if (!existing.versionId && doc.versionId) existing.versionId = doc.versionId
               if (!existing.url && doc.originUrl) existing.url = doc.originUrl
+              if (!existing.url) existing.url = docListPickerUrls[doc.name.toLowerCase().trim()] ?? undefined
               break
             }
           }
@@ -4937,7 +5019,7 @@ export async function scrapeProductPage(
             cdsFound++
             const contentTypeProp = (match.CustomProperties ?? []).find((p: any) => p.name === 'Content Type')
             const contentType = contentTypeProp?.values?.[0]?.value ?? match.Format ?? ''
-            const downloadUrl = doc.originUrl || match.OriginUrl || undefined
+            const downloadUrl = doc.originUrl || match.OriginUrl || docListPickerUrls[doc.name.toLowerCase().trim()] || undefined
             const contentId = doc.contentId || match.ContentId || undefined
             const sectionName = typeToSection[contentType] || ''
 
@@ -4981,6 +5063,27 @@ export async function scrapeProductPage(
     }
     if (dedupResult.removed.length > 0) {
       console.log(`[product-scraper] Dedup: removed ${dedupResult.removed.length} duplicate items`)
+    }
+
+    // ── Final DocListPicker URL propagation (#976) ────────────────────────
+    // After all sections are finalized, assign DocListPicker URLs to any
+    // remaining items that have contentId but no URL.
+    if (dlpUrlCount > 0) {
+      let urlsAssigned = 0
+      for (const section of Object.values(sections)) {
+        for (const item of section.items) {
+          if (!item.url && item.name) {
+            const dlpUrl = docListPickerUrls[item.name.toLowerCase().trim()]
+            if (dlpUrl) {
+              item.url = dlpUrl
+              urlsAssigned++
+            }
+          }
+        }
+      }
+      if (urlsAssigned > 0) {
+        console.log(`[product-scraper] (#976) Assigned ${urlsAssigned} DocListPicker URLs to items missing URLs`)
+      }
     }
 
     // ── Language filter across all sections (#872) ─────────────────────────
