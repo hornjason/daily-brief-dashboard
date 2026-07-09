@@ -2813,12 +2813,10 @@ async function downloadProductDocuments(
 
   for (const { item, sectionKey, sectionTitle } of downloadQueue) {
     if (!item.url) {
-      // Items with contentId but no URL — try Seismic viewer URL (#973)
-      // Note: /Link/Content/{contentId} returns 502 for most library items.
-      // The primary fix (#976) assigns doccenter URLs from DocListPicker DOM
-      // before reaching this point. This path is a last-resort fallback.
+      // Items with contentId but no URL — use DC-prefix Seismic viewer URL (#973, #976)
+      // /Link/Content/{contentId} returns 502; DC prefix routes through DocCenter app.
       if (item.contentId) {
-        const viewerUrl = `https://saleshub.redhat.com/Link/Content/${item.contentId}`
+        const viewerUrl = `https://saleshub.redhat.com/Link/Content/DC${item.contentId}`
         const sectionSlugV = slugify(sectionTitle)
         const extractDirV = resolve(productDir, 'extracted', sectionSlugV)
         const extractFilenameV = `${sanitizeFilename(item.name)}.html`
