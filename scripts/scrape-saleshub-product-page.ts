@@ -3077,7 +3077,15 @@ async function downloadProductDocuments(
   }
 
   // ── Phase 3b: File downloads — SECONDARY, only for items not already extracted/downloaded ──
-  for (const { item, sectionKey, sectionTitle } of downloadQueue) {
+  // Sort: items with URLs first (more likely to succeed), contentId-only last.
+  // Prevents the circuit breaker from tripping on non-downloadable items
+  // before reaching actual PPTX/PDF documents (#976).
+  const sortedDownloadQueue = [...downloadQueue].sort((a, b) => {
+    const aHasUrl = a.item.url ? 1 : 0
+    const bHasUrl = b.item.url ? 1 : 0
+    return bHasUrl - aHasUrl
+  })
+  for (const { item, sectionKey, sectionTitle } of sortedDownloadQueue) {
     // Skip items that already have viewer-extracted content or viewer downloads (#929)
     const safeName = sanitizeFilename(item.name).slice(0, 60)
     if (viewerExtractedNames.has(safeName) || viewerDownloadedNames.has(safeName)) {
@@ -5244,6 +5252,7 @@ export async function scrapeProductPage(
         // Collect documents from extracted/ directory (same logic as enrich endpoint)
         const enrichDocs: Array<{ name: string; content: string; type: string; cloudProvider?: string }> = []
         const extractedDir = resolve(configOutputDir, 'extracted')
+        console.log(`[product-scraper] Enrichment scan: ${extractedDir} exists=${existsSync(extractedDir)}`)
         if (existsSync(extractedDir)) {
           const eSubs = readdirSync(extractedDir, { withFileTypes: true }).filter(d => d.isDirectory())
           for (const eSub of eSubs) {
@@ -5261,6 +5270,8 @@ export async function scrapeProductPage(
             }
           }
         }
+
+        console.log(`[product-scraper] Enrichment scan: ${enrichDocs.length} docs from extracted/`)
 
         // Also collect from downloads/ if any files were downloaded
         const dlDir = resolve(configOutputDir, 'downloads')
