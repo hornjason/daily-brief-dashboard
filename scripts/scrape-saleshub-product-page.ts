@@ -3569,6 +3569,14 @@ export async function scrapeProductPage(
     writeJsonAtomic(resolve(earlyCacheOutputDir, '_product-source.json'), productSourceInventory)
     console.log(`[product-scraper] Phase 1: Wrote _product-source.json (${Object.keys(productSourceInventory.sections).length} sections)`)
 
+    // Snapshot Phase 1 item names before deep inventory enrichment (#981)
+    const phase1SourceNames = new Set<string>()
+    for (const section of Object.values(productSourceInventory.sections)) {
+      for (const item of section.items) {
+        phase1SourceNames.add(item.name.toLowerCase().trim())
+      }
+    }
+
     // --inventory-only: exit after Phase 1 (#975)
     if (inventoryOnly) {
       // Take screenshot before exiting
@@ -4009,6 +4017,27 @@ export async function scrapeProductPage(
     }
     if (languageFiltered > 0) {
       console.log(`[product-scraper] Language filter: ${languageFiltered} non-English items flagged`)
+    }
+
+    // ── Noise filter: remove items not in Phase 1 source inventory (#981) ──
+    {
+      let noiseRemoved = 0
+      for (const [sectionKey, section] of Object.entries(sections)) {
+        const before = section.items.length
+        section.items = section.items.filter(item =>
+          phase1SourceNames.has(item.name.toLowerCase().trim())
+        )
+        noiseRemoved += before - section.items.length
+      }
+      // Remove empty sections that resulted from filtering
+      for (const key of Object.keys(sections)) {
+        if (sections[key].items.length === 0 && !sections[key].subsections?.length) {
+          delete sections[key]
+        }
+      }
+      if (noiseRemoved > 0) {
+        console.log(`[product-scraper] Noise filter: removed ${noiseRemoved} items not in source inventory`)
+      }
     }
 
     // ── Gate 1 blocking check (#874) ───────────────────────────────────────
