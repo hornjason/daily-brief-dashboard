@@ -4171,7 +4171,7 @@ export async function scrapeProductPage(
           // Skip expandDomainDocListPickers on sub-pages (#976) — it causes navigation that wipes
           // already-rendered content (Battlecards). Per-panel DocListPicker clicks handle activation instead.
 
-          // Build sub-page inventory          // Build sub-page inventory
+          // Build sub-page inventory
           const subInventory = await buildProductSourceInventory(page, header.name)
 
           // Extract items from accordion panels individually (same logic as main page)
@@ -4361,7 +4361,7 @@ export async function scrapeProductPage(
                 try {
                   const widget = subAccWidgets.nth(sa)
                   const widgetText = (await widget.textContent({ timeout: 5_000 }).catch(() => '') || '')
-                    .replace(/[\u200e\u200f]+/g, '').trim().slice(0, 50)
+                    .replace(/[‎‏]+/g, '').trim().slice(0, 50)
                   const accSlug = widgetText.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'accordion'
                   await widget.scrollIntoViewIfNeeded({ timeout: 5_000 })
                   await page.waitForTimeout(300)
@@ -4465,6 +4465,14 @@ export async function scrapeProductPage(
         deepInventoryTotal += section.items.length
       }
       console.log(`[product-scraper] Deep inventory: ${Object.keys(productSourceInventory.sections).length} sections, ${deepInventoryTotal} items`)
+    }
+
+    // Snapshot Phase 1 item names before deep inventory enrichment (#981)
+    const phase1SourceNames = new Set<string>()
+    for (const section of Object.values(productSourceInventory.sections)) {
+      for (const item of section.items) {
+        phase1SourceNames.add(item.name.toLowerCase().trim())
+      }
     }
 
     // --inventory-only: exit after Phase 1 with screenshots (#975, #976)
@@ -5122,6 +5130,27 @@ export async function scrapeProductPage(
     }
     if (languageFiltered > 0) {
       console.log(`[product-scraper] Language filter: ${languageFiltered} non-English items flagged`)
+    }
+
+    // ── Noise filter: remove items not in Phase 1 source inventory (#981) ──
+    {
+      let noiseRemoved = 0
+      for (const [sectionKey, section] of Object.entries(sections)) {
+        const before = section.items.length
+        section.items = section.items.filter(item =>
+          phase1SourceNames.has(item.name.toLowerCase().trim())
+        )
+        noiseRemoved += before - section.items.length
+      }
+      // Remove empty sections that resulted from filtering
+      for (const key of Object.keys(sections)) {
+        if (sections[key].items.length === 0 && !sections[key].subsections?.length) {
+          delete sections[key]
+        }
+      }
+      if (noiseRemoved > 0) {
+        console.log(`[product-scraper] Noise filter: removed ${noiseRemoved} items not in source inventory`)
+      }
     }
 
     // ── Gate 1 blocking check (#874) ───────────────────────────────────────
