@@ -36,17 +36,15 @@ The process has three phases:
 
 This checklist must be completed BEFORE running the scraper. It builds the visual inventory that serves as the ground truth for verification.
 
-1. Navigate to the product page manually in a browser
-2. Expand EVERYTHING — every accordion, every DocListPicker, every carousel
-3. Screenshot each section individually (not one giant fullPage shot)
-4. List every document name per section: `"Business decks: [doc1, doc2, doc3]"`, `"Technical decks: [doc4, doc5]"`, etc.
-5. Count total items — this is your expected number
-6. Save as a section-by-section checklist
-7. Run the scraper (Section 4)
-8. Compare scraper output count vs your expected number
-9. Investigate any gaps (Phase C)
+1. Run `--inventory-only` — produces per-section screenshots and `_product-source.json`
+2. Save screenshots and checklist to `docs/visual-inventory/{product-slug}/`
+3. Create `CHECKLIST.md` — section-by-section table of every document name (see `docs/visual-inventory/aap-product-page/CHECKLIST.md` for format)
+4. Count total items — this is your expected number
+5. Run the full scraper (Section 4)
+6. Compare scraper output against the CHECKLIST, document by document
+7. Investigate any gaps (Phase C)
 
-This visual inventory is the GROUND TRUTH. Not `_product-source.json`. Not the API results. The screenshots and the document names you can see on the page.
+**The visual inventory directory (`docs/visual-inventory/{product-slug}/`) is the GROUND TRUTH.** Not `_product-source.json`. Not the API results. The per-section screenshots and the document names in `CHECKLIST.md` — committed to the repo so they persist across sessions and container rebuilds. Every reconciliation compares against this checklist.
 
 ---
 
@@ -69,7 +67,7 @@ This phase builds the ground-truth checklist of everything on the product page. 
 
 ### What the code does
 
-`buildProductSourceInventory(page)` at L1363 reads the sidebar TOC and walks DOM widgets to create `_product-source.json`. This attempts to inventory everything visible, but misses collapsed panels and items that only appear after DocListPicker expansion.
+`buildProductSourceInventory(page)` at L1363 builds `_product-source.json` — the automated inventory. This must match what's visible in the per-section screenshots saved to `docs/visual-inventory/{product-slug}/`. Any mismatch is a scraper bug.
 
 ### What you must verify manually
 
@@ -123,7 +121,7 @@ CRITICAL: This step triggers CDS interception to capture domain-section document
 
 ### Step 7: Build Product Source Inventory
 
-`buildProductSourceInventory(page)` at L1363. Reads the sidebar table of contents (TOC) and walks DOM widgets to create `_product-source.json`. See Phase A notes — this file is an approximation, not the true ground truth.
+`buildProductSourceInventory(page)` at L1363. Builds `_product-source.json` — the machine-readable inventory. Must match the per-section screenshots in `docs/visual-inventory/{product-slug}/`. Any mismatch between screenshots and `_product-source.json` is a scraper bug.
 
 ### Step 8: Red Header Section Extraction
 
@@ -239,7 +237,7 @@ The loop exits when EVERY document in the visual inventory is either:
 
 ### Verification artifacts to check at each iteration
 
-1. **Pipeline manifest** — `_pipeline-manifest.json`: check `gate0` (DOM count), `gate1` (scraped count), `gate2` (enriched count). All three should be non-zero.
+1. **Pipeline manifest** — `_pipeline-manifest.json`: check `gate0` (inventory count), `gate1` (scraped count), `gate2` (enriched count). All three should be non-zero.
 2. **Completeness manifest** — `_completeness-manifest.json`: coverage %, list of MISSING items. Compare section-by-section against visual inventory.
 3. **Drive verification** — `_drive-verification.json`: Drive folder audit. Every CAPTURED item should have a matching Drive entry.
 4. **Section count vs visual inventory** — The number of sections in `_product.json` must match the sections in your visual inventory.
@@ -328,9 +326,9 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 
 ## 10. Known Limitations
 
-1. **Single fullPage screenshot** — May miss collapsed panels if accordion/DocListPicker re-expansion fails silently after carousel navigation. Section-by-section screenshots are not yet automated.
+1. **Per-section screenshots** — `--inventory-only` now produces individual screenshots per section (main page + sub-pages). A fullPage screenshot is also taken. Per-section screenshots may miss content if accordion re-expansion fails silently after carousel navigation.
 
-2. **`_product-source.json` is an approximation** — `buildProductSourceInventory()` attempts to build the inventory from DOM, but misses collapsed panels and late-rendered content. The visual inventory (screenshots + manual listing) is the true ground truth until this is improved.
+2. **`_product-source.json` must match screenshots** — The visual inventory in `docs/visual-inventory/{product-slug}/` (per-section screenshots + CHECKLIST.md) is the source of truth. `_product-source.json` must match it. If `_product-source.json` misses items visible in screenshots, that's a scraper bug. If `_product.json` contains items not visible in screenshots, those are noise and must be filtered out.
 
 3. **Google Docs export as plain text** — Current export uses `text/plain` MIME type, which loses hyperlinks. Should use `text/html` to preserve `<a href>` tags (see ADR/memory on HTML export).
 

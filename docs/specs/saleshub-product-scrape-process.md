@@ -29,10 +29,18 @@ The scraper navigates to the SalesHub product page and builds a ground-truth inv
 **Steps:**
 1. Navigate to product page URL
 2. Expand every accordion, carousel, and DocListPicker
-3. Take full-page screenshot AFTER full expansion (`_page-screenshot.png`) — visual proof of what was on the page
-4. Read the right sidebar table of contents to discover ALL section names
-5. Walk each section, list every document/item name visible in the DOM
-6. Save as `_product-source.json` — the raw DOM inventory BEFORE extraction logic runs
+3. Take per-section screenshots (one per section, saved to `docs/visual-inventory/{product-slug}/`)
+4. Read the sidebar table of contents to discover ALL section names
+5. Walk each section, list every document/item name visible
+6. Save as `_product-source.json` — must match what's visible in the per-section screenshots
+7. Build `CHECKLIST.md` in `docs/visual-inventory/{product-slug}/` — section-by-section table of every document name with status (✅ enriched, 📥 captured, ❌ not captured)
+
+**Visual inventory directory:** `docs/visual-inventory/{product-slug}/`
+- Per-section screenshots (PNG) — the source of truth
+- `CHECKLIST.md` — section-by-section document name table with capture/enrichment status
+- This directory is committed to the repo and persists across sessions
+- Every reconciliation and Phase C verification compares against these screenshots and this checklist
+- See `docs/visual-inventory/aap-product-page/CHECKLIST.md` for the canonical format
 
 **Output:** `_product-source.json`
 ```json
@@ -72,7 +80,7 @@ The scraper navigates to the SalesHub product page and builds a ground-truth inv
 
 Each item has: `name` (always), plus optional `format`, `group`, `subSection`, `description`, `itemType`. No URLs — those come from the scrape. The source file captures what's *visible*, not what's *extractable*.
 
-**This file IS the source of truth.** Phase 2 output is compared against it.
+**This file must accurately reflect what's visible on the product page.** The page itself is the source of truth — `_product-source.json` is the machine-readable representation of it. Phase 2 output is compared against it, and any items in Phase 2 output that aren't in `_product-source.json` (i.e., not visible on the page) are noise and must be filtered out.
 
 **Jason provides only the URL. Everything else is automated.**
 
@@ -228,7 +236,8 @@ Quinn opens localhost:7776, navigates to a customer detail page, verifies produc
 | Artifact | Purpose | Location |
 |----------|---------|----------|
 | Spec | This document | `docs/specs/saleshub-product-scrape-process.md` |
-| Source of truth | Per-product DOM inventory | `config-templates/saleshub-products/{slug}/_product-source.json` |
+| Visual inventory (SOURCE OF TRUTH) | Per-section screenshots + checklist | `docs/visual-inventory/{product-slug}/` |
+| Machine inventory | Automated inventory (must match visual) | `config-templates/saleshub-products/{slug}/_product-source.json` |
 | Completeness gate | Scrape vs source comparison | `config-templates/saleshub-products/{slug}/_completeness-manifest.json` |
 | Drive verification | Document-by-name Drive audit | `config-templates/saleshub-products/{slug}/_drive-verification.json` |
 | Entry point | One input: product page URL | `bun run scripts/scrape-saleshub-product-page.ts <url> --page-only` |
@@ -239,7 +248,7 @@ Quinn opens localhost:7776, navigates to a customer detail page, verifies produc
 
 2. **`_page-screenshot.png`** — move screenshot capture to AFTER all sections are expanded (#964). Makes the screenshot useful for verification.
 
-3. **`_product-source.json` generation** — Phase 1 of the scraper. Schema above. Built from DOM sidebar TOC + section content BEFORE extraction logic. Serves as the baseline the scraper measures itself against.
+3. **`_product-source.json` generation** — Phase 1 of the scraper. Schema above. Must match the per-section screenshots in `docs/visual-inventory/{slug}/`. Serves as the machine-readable baseline the scraper measures itself against.
 
 ## What Does NOT Change
 
