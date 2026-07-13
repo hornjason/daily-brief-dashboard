@@ -168,48 +168,76 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
    * Issue #215: Article URLs from Gemini grounded search are broken redirect tokens
    */
   private async resolveUrls(articles: Omit<NewsItem, 'significanceScore'>[]): Promise<Omit<NewsItem, 'significanceScore'>[]> {
-    const resolved = await Promise.all(articles.map(async (article) => {
-      if (!article.sourceUrl.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
-        return article
-      }
+    const resolved: Omit<NewsItem, 'significanceScore'>[] = []
 
-      try {
-        // First try: manual redirect with immediate check
-        const res = await fetch(article.sourceUrl, { redirect: 'manual' })
-        const location = res.headers.get('location')
-        if (location && this.isValidUrl(location)) {
-          return { ...article, sourceUrl: location }
-        }
-
-        // Second try: full redirect follow with timeout for slow redirects
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 5000)
+    for (const article of articles) {
+      if (article.sourceUrl.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
+        // Resolve Vertex AI redirect tokens
+        let resolvedArticle: Omit<NewsItem, 'significanceScore'> | null = null
 
         try {
-          const followRes = await fetch(article.sourceUrl, {
-            redirect: 'follow',
-            signal: controller.signal
-          })
-          clearTimeout(timeout)
-
-          if (followRes.ok && this.isValidUrl(followRes.url)) {
-            return { ...article, sourceUrl: followRes.url }
+          const res = await fetch(article.sourceUrl, { redirect: 'manual' })
+          const location = res.headers.get('location')
+          if (location && this.isValidUrl(location)) {
+            resolvedArticle = { ...article, sourceUrl: location }
+          } else {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            try {
+              const followRes = await fetch(article.sourceUrl, {
+                redirect: 'follow',
+                signal: controller.signal
+              })
+              clearTimeout(timeout)
+              if (followRes.ok && this.isValidUrl(followRes.url)) {
+                resolvedArticle = { ...article, sourceUrl: followRes.url }
+              }
+            } catch (followErr: any) {
+              clearTimeout(timeout)
+              console.warn(`[news-provider] Follow redirect failed for "${article.headline}": ${followErr.message}`)
+            }
           }
-        } catch (followErr: any) {
-          clearTimeout(timeout)
-          console.warn(`[news-provider] Follow redirect failed for "${article.headline}": ${followErr.message}`)
+        } catch (e: any) {
+          console.warn(`[news-provider] Failed to resolve redirect for "${article.headline}": ${e.message}`)
         }
-      } catch (e: any) {
-        console.warn(`[news-provider] Failed to resolve redirect for "${article.headline}": ${e.message}`)
-      }
 
-      // If we couldn't resolve, use Google search fallback instead of broken link
-      const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent(article.headline)}`
-      console.warn(`[news-provider] Using Google search fallback for "${article.headline}"`)
-      return { ...article, sourceUrl: fallbackUrl }
-    }))
+        if (!resolvedArticle) {
+          const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent(article.headline)}`
+          console.warn(`[news-provider] Using Google search fallback for "${article.headline}"`)
+          resolvedArticle = { ...article, sourceUrl: fallbackUrl }
+        }
+
+        resolved.push(resolvedArticle)
+      } else {
+        // Non-redirect URL — validate with HTTP HEAD
+        const validated = await this.validateArticleUrl(article)
+        resolved.push(validated)
+      }
+    }
 
     return resolved
+  }
+
+  private async validateArticleUrl(article: Omit<NewsItem, 'significanceScore'>): Promise<Omit<NewsItem, 'significanceScore'>> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+
+    try {
+      const res = await fetch(article.sourceUrl, {
+        method: 'HEAD',
+        signal: controller.signal,
+        redirect: 'follow',
+      })
+      clearTimeout(timeout)
+
+      if (res.ok) return article
+    } catch {
+      clearTimeout(timeout)
+    }
+
+    const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent(article.headline)}`
+    console.warn(`[news-provider] URL validation failed for "${article.headline}" (${article.sourceUrl}), using Google search fallback`)
+    return { ...article, sourceUrl: fallbackUrl }
   }
 
   /**
