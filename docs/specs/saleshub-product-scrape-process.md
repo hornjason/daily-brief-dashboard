@@ -1,8 +1,8 @@
 ---
 doc-type: spec
-status: draft
+status: active
 owner: jason
-updated: 2026-07-03
+updated: 2026-07-13
 supersedes: SALESHUB-PRODUCT-FIRST-POC.md
 ---
 
@@ -96,7 +96,7 @@ Single page load — Phase 1 builds the inventory, Phase 2 extracts from the sam
 1. Walk DOM sections using red header bar discovery for section structure
 2. CDS interception captures page-visible document names + contentIds passively during scroll
 3. Name search: for each CDS document, query Seismic API by exact name (`SearchTerm: doc.name`) to get download URLs + content types
-4. ContentId viewer extraction: items with contentId but no URL navigate to `/Link/Content/{contentId}` and extract via `extractSinglePage`
+4. ContentId viewer extraction: items with contentId but no URL navigate to `/Link/Content/DC{contentId}` (DC-prefix required — without it, returns 502 Gateway Error) and extract via `extractSinglePage`
 5. Extract text: Google Docs/Slides via HTML export, external URLs via HTTP fetch
 6. Download files: PPTX/PDF via API download URL or viewer→Download button→blob URL
 
@@ -242,17 +242,36 @@ Quinn opens localhost:7776, navigates to a customer detail page, verifies produc
 | Drive verification | Document-by-name Drive audit | `config-templates/saleshub-products/{slug}/_drive-verification.json` |
 | Entry point | One input: product page URL | `bun run scripts/scrape-saleshub-product-page.ts <url> --page-only` |
 
-## What Needs to Change (Code)
+## Implementation Notes (from RHEL #976)
 
-1. **`generateCompletenessManifest()`** — upgrade to compare against `_product-source.json` (not just `_enriched.json`). If source file exists, compare section-by-section. Report missing sections as scraper bugs, not "0 gaps."
+These learnings apply to ALL products, not just RHEL. They are already implemented in the scraper code.
 
-2. **`_page-screenshot.png`** — move screenshot capture to AFTER all sections are expanded (#964). Makes the screenshot useful for verification.
+### DC-prefix for contentId URLs
+ContentId viewer URLs must use `/Link/Content/DC{contentId}`, NOT `/Link/Content/{contentId}`. Without the `DC` prefix, Seismic returns 502 Gateway Error. This is universal — it never worked without the prefix for any product.
 
-3. **`_product-source.json` generation** — Phase 1 of the scraper. Schema above. Must match the per-section screenshots in `docs/visual-inventory/{slug}/`. Serves as the machine-readable baseline the scraper measures itself against.
+### DocCenter v2 layout detection
+Two layouts exist: `doubleColumn` (AAP, OCP-V) using `.articleSdk-theme-page-doubleColumn-main` and `singleColumn` (RHEL) using `.articleSdk-theme-page-singleColumn-main`. The scraper checks for both at 4 locations. Missing the singleColumn selector causes 0 sections found.
+
+### Product name detection
+On DocCenter v2, `h1` elements are red section dividers ("Product news", "Customer References"), not the product name. `extractProductHeader()` filters dividers by checking `seismic-page-divider-view` class, then falls back to `page.title()`. Without this, RHEL detects "Product news" as its name, breaking sub-page detection and output paths.
+
+### Sub-page detection
+Some products have navigation TOC buttons linking to separate DocCenter pages (e.g., RHEL's "Competition" sub-page with 50+ items across 10 sections). The scraper follows these links generically — any nav button pointing to a different DocCenter URL is a sub-page candidate. Max 10 navigations, depth 1.
+
+### Noise filter (#981)
+CDS interception captures documents from API calls that may include items NOT visible on the page. Phase 1 snapshots the source inventory names before deep extraction, then `_product.json` is filtered to only keep items matching that snapshot. Without this, `_product.json` inflates item count with invisible API results.
+
+### Accordion mutex
+DocCenter v2 accordion panels may be mutually exclusive — expanding one collapses another. The scraper handles this by extracting items per-panel: expand → capture → move to next. Without this, the last-expanded panel's items overwrite earlier panels.
+
+### Unicode LTR mark stripping
+RHEL divider text contains invisible Unicode characters (U+200E Left-to-Right Mark) that break slug matching. The scraper strips these with `.replace(/[‎‏]+/g, '')` before `.trim()`.
+
+### Inline enrichment timing (#980)
+Inline enrichment during a full scrape may find 0 documents because extracted files are written AFTER the enrichment scan runs. Workaround: run standalone enrichment after the scrape completes (`bun run scripts/extract-product-content.ts <slug>` or a custom enrichment-only script). Open issue #980.
 
 ## What Does NOT Change
 
-- The scraper code itself (section discovery, DOM walking, extraction)
 - The enrichment pipeline (quality gate, Gemini prompts)
 - The Drive upload path (sync daemon)
 - The ship skill (already enforces specs)
@@ -263,7 +282,7 @@ Quinn opens localhost:7776, navigates to a customer detail page, verifies produc
 - [ ] SC-2: `_completeness-manifest.json` compares `_product.json` against `_product-source.json` at section and item level. Threshold: manifest flags every MISSING section (sections in source not in scraper output).
 - [ ] SC-3: Coverage gate blocks enrichment when coverage < 80%. Threshold: enrichment does not run when gate fails.
 - [ ] SC-4: `_drive-verification.json` confirms every CAPTURED document from `_product-source.json` exists in the Google Drive product folder by name — as a file upload, shortcut, or link file. AUTH-GATED items listed separately, excluded from coverage. Threshold: 0 CAPTURED items in `missing` array. Verification is name-level, not count-level.
-- [ ] SC-5: Process works identically for AAP and OCP-Virt without product-specific code paths. Threshold: same script, same arguments (only URL differs).
+- [ ] SC-5: Process works identically for AAP, OCP-Virt, and RHEL without product-specific code paths. Threshold: same script, same arguments (only URL differs).
 - [ ] SC-6: AE-facing signals carry clickable URLs back to source material. Threshold: 100% of signals have a non-empty URL pointing to original content.
 
 ## Out of Scope
@@ -282,6 +301,10 @@ Quinn opens localhost:7776, navigates to a customer detail page, verifies produc
 - #916 — SalesHub product enrichment not uploaded to Drive after scrape
 - #970 — Exclude generated data from Docker image
 - #971 — Deduplicate Drive folders
+- #976 — Add RHEL product scrape (singleColumn, DC-prefix, sub-pages, divider filter)
+- #979 — contentId viewer iframe extraction (open)
+- #980 — Inline enrichment timing bug (open — workaround: standalone enrichment)
+- #981 — Filter _product.json to page-visible items only (noise filter)
 
 ## Verification Sequence (for each new product)
 

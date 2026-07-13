@@ -2,7 +2,7 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-07-06
+updated: 2026-07-13
 ---
 
 # Adding a New SalesHub Product — Runbook
@@ -109,13 +109,25 @@ Must be set up BEFORE navigation. Documents captured passively — no explicit A
 
 Up to 8 scroll passes. Each pass scrolls in viewport-height increments, waiting for `scrollHeight` to stabilize between passes. Ensures lazy-loaded content at page bottom is rendered. (Issue #942)
 
+### Step 4b: Detect Page Layout (#976)
+
+DocCenter v2 has two layouts. The scraper checks for both at 4 locations:
+- **doubleColumn** (AAP, OCP-V): `.articleSdk-theme-page-doubleColumn-main`
+- **singleColumn** (RHEL): `.articleSdk-theme-page-singleColumn-main`
+
+### Step 4c: Product Name Detection (#976)
+
+`extractProductHeader(page)` at L1269. On DocCenter v2, `h1` elements are red section dividers — not the product name. The function filters dividers by checking `seismic-page-divider-view` class, then falls back to `page.title()`. Without this filter, RHEL detects "Product news" as its name, breaking sub-page detection and output directory naming.
+
 ### Step 5: Expand All Accordions
 
-`expandAllAccordions(page)` at L1642. Clicks chevron icons on collapsed accordion panels. 800ms pause per click to allow DOM rendering. Content inside collapsed accordions is invisible to later extraction steps.
+`expandAllAccordions(page)` at L1679. Clicks chevron icons on collapsed accordion panels. 800ms pause per click to allow DOM rendering. Content inside collapsed accordions is invisible to later extraction steps.
+
+**Accordion mutex (DocCenter v2):** Some pages have mutually exclusive panels — expanding one collapses another. The scraper extracts items per-panel individually to handle this.
 
 ### Step 6: Expand Domain DocListPickers
 
-`expandDomainDocListPickers(page)` at L1674. Clicks DocListPicker widgets inside accordion panels. 4-second wait per click — this is the wait for the CDS API response that Step 1's interceptor captures.
+`expandDomainDocListPickers(page)` at L1829. Clicks DocListPicker widgets inside accordion panels. 4-second wait per click — this is the wait for the CDS API response that Step 1's interceptor captures.
 
 CRITICAL: This step triggers CDS interception to capture domain-section documents. If DocListPickers don't expand, CDS captures 0 documents.
 
@@ -150,7 +162,7 @@ For each item in the download queue, extraction path depends on URL type:
 | Has URL, Seismic viewer | `extractWithFollowThrough()` at L2187 — handles nav pages, follows links 1 level deep |
 | Has URL, Google Docs/Slides | Google Drive API export as `text/plain` (NOTE: loses hyperlinks — should be `text/html`) |
 | Has URL, external `redhat.com` | HTTP fetch with SSO cookie detection |
-| Has `contentId`, no URL | Builds `/Link/Content/{contentId}` viewer URL, extracts via `extractSinglePage()` at L2115 (issue #973) |
+| Has `contentId`, no URL | Builds `/Link/Content/DC{contentId}` viewer URL (DC-prefix required — without it returns 502), extracts via `extractSinglePage()` at L2373 (#976) |
 | No URL, no contentId | Skipped |
 
 All extracted content saved to `extracted/{section-slug}/`. Cache: `existsSync(extractPath)` skips already-extracted items.
@@ -349,7 +361,12 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 | "Content not found" or login page in viewer | SSO cookies expired | Re-run SSO keepalive or restart container with fresh `session-state.json` |
 | Gemini timeout on enrichment | Large documents (28K+ chars) | Retry — enrichment has 3 attempts per document with backoff |
 | 0 CDS documents captured | DocListPickers didn't expand (selector mismatch on new product) | Check `expandDomainDocListPickers` selectors match the new product's DOM structure |
-| 0 enriched but items extracted | Enrichment gate blocked (coverage < 80%) | Check `_completeness-manifest.json` for MISSING items; fix scraper section discovery |
+| 0 enriched but items extracted | Enrichment gate blocked (coverage < 80%), OR inline enrichment timing bug (#980) | Check `_completeness-manifest.json` for MISSING items. If coverage is fine but 0 enriched, run standalone enrichment after scrape: `bun run scripts/extract-product-content.ts <slug>` |
+| Product name detected as section name ("Product news") | h1 dividers not filtered (#976) | Verify `extractProductHeader` filters `seismic-page-divider-view` class and falls back to `page.title()` |
+| 0 sections found on new product | singleColumn layout not detected (#976) | Check `.articleSdk-theme-page-singleColumn-main` selector is present at all 4 detection points |
+| Sub-pages not followed | Product name wrong → slug mismatch in nav URL comparison | Fix product name detection first, then sub-page links will match |
+| Unicode characters breaking slug matching | Invisible LTR marks (U+200E) in divider text | Verify `.replace(/[‎‏]+/g, '')` stripping before `.trim()` in slug generation |
+| `_product.json` has more items than page shows | CDS interception captures API items not on page | Noise filter (#981) should filter using Phase 1 source inventory snapshot |
 | Python3 not found | PPTX extraction falls back to base64 | Verify `python3` is available in container: `podman exec pai-sync-l3 which python3` |
 | Items in wrong sections | `typeToSection` mapping missing for new content type | Add the content type → section name entry at L3834 |
 
@@ -361,4 +378,4 @@ These were all tried during the OCP-V sessions (5+ days of debugging) and failed
 |---|---|---|---|---|
 | AAP | `https://saleshub.redhat.com/Link/Content/DC6cbpX7BPhjbGCP6T6WH7B43M9B` | 2026-07-04 | 26 | 85 |
 | OCP-V | `https://saleshub.redhat.com/Link/Content/DCgpj38D4BgP2G4RCTjcVQ483WhP` | 2026-07-04 | 14 | 27 |
-| RHEL | `https://saleshub.redhat.com/apps/doccenter/.../lfe9029f53-bab0-4d06-99da-a067fcf164e9` | pending | — | — |
+| RHEL | `https://saleshub.redhat.com/apps/doccenter/.../lfe9029f53-bab0-4d06-99da-a067fcf164e9` | 2026-07-09 | 29 | 92 (95%) |

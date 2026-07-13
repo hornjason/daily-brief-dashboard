@@ -9,7 +9,7 @@ updated: 2026-07-09
 
 **Source of truth:** Screenshots from `--inventory-only` scrape 2026-07-08 + Jason's transcript from 2026-07-07
 **Page:** Red Hat Enterprise Linux on SalesHub
-**Scrape:** 2026-07-09T01:54Z (full --page-only with enrichment) | Enriched: 82/131 items (62.6%) | Pipeline: 95 docs enriched (90.5% coverage)
+**Scrape:** 2026-07-09T16:21Z (full scrape + standalone enrichment) | Enriched: 92/131 items (95% coverage) | Output: 79 docs with summaries
 
 Legend: ✅ = captured + enriched | 📥 = captured, not enriched | ❌ = not captured | 🔗 = metadata/nav link (not a document)
 
@@ -289,10 +289,10 @@ Sidebar extras:
 | Competition: CentOS Linux | 2 | 2 | 0 | Resource links, not enrichable |
 | Competition: CentOS cloud | 3 | 3 | 2 | 1 not enriched |
 | Competition: Source Delivery | 3 | 3 | 2 | 1 partner version not enriched |
-| **TOTAL** | **~124** | **131** | **82** | **Enrichment rate: 62.6%** |
+| **TOTAL** | **~124** | **131** | **92** | **Enrichment rate: 95%** |
 
 **Capture rate: 131/~124 = 100%+ (extra items from DC-prefix + DocListPicker deep activation)**
-**Pipeline enrichment rate: 95/105 enrichable = 90.5%**
+**Pipeline enrichment coverage: 92/97 = 95% | Output: 79 docs with full summaries**
 
 ### Not-enriched categories
 
