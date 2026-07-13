@@ -261,7 +261,10 @@ export function writeCCSPCache(records: CCSPRecord[], fileIds: string[] = []): v
     const existing = readCCSPCache()
     if (existing) {
       const existingHash = existing.hash ?? hashData(existing.records)
-      if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+      if (existingHash === newHash) {
+        writeFileSync(`${CACHE_DIR}/ccsp-data.json`, JSON.stringify({ records: existing.records, cachedAt: new Date().toISOString(), fileIds: existing.fileIds ?? fileIds, hash: existingHash }), { mode: 0o600 })
+        return
+      }
     }
     writeFileSync(`${CACHE_DIR}/ccsp-data.json`, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds, hash: newHash }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] CCSP write failed:', e.message) }
@@ -313,7 +316,10 @@ export function writePipelineCache(records: PipelineRecord[], fileIds: string[] 
     const existing = readPipelineCache()
     if (existing) {
       const existingHash = existing.hash ?? hashData({ records: existing.records, fileIds: existing.fileIds ?? [] })
-      if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+      if (existingHash === newHash) {
+        writeFileSync(`${CACHE_DIR}/pipeline-data.json`, JSON.stringify({ records: existing.records, cachedAt: new Date().toISOString(), fileIds: existing.fileIds ?? fileIds, hash: existingHash }), { mode: 0o600 })
+        return
+      }
     }
     writeFileSync(`${CACHE_DIR}/pipeline-data.json`, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds, hash: newHash }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] pipeline write failed:', e.message) }
