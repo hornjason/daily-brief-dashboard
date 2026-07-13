@@ -306,6 +306,8 @@ export async function buildRedHatIntelligenceForMorningBrief(
 
       if (existsSync(NEWS_CACHE_DIR)) {
         const files = readdirSync(NEWS_CACHE_DIR)
+        const seenHeadlines = new Set<string>()
+        const seenCustomers = new Set<string>()
 
         for (const file of files) {
           if (!file.endsWith('.json')) continue
@@ -316,11 +318,13 @@ export async function buildRedHatIntelligenceForMorningBrief(
             const articles = cacheData.articles ?? []
 
             for (const article of articles) {
-              // Check if this article's productTags match any product used by customers with meetings today
               const productTags = article.productTags ?? []
+              const normalizedHeadline = (article.headline ?? '').toLowerCase().trim()
+              if (seenHeadlines.has(normalizedHeadline)) continue
 
               for (const customer of customers) {
                 if (!customersWithMeetingsToday.has(customer.name.toLowerCase())) continue
+                if (seenCustomers.has(customer.name.toLowerCase())) continue
 
                 const customerProducts = customer.products ?? []
                 const matchingProduct = productTags.find((tag: string) =>
@@ -337,7 +341,9 @@ export async function buildRedHatIntelligenceForMorningBrief(
                     relevantProduct: matchingProduct,
                     publishedDate: article.publishedDate,
                   })
-                  break // Only add once per article
+                  seenHeadlines.add(normalizedHeadline)
+                  seenCustomers.add(customer.name.toLowerCase())
+                  break
                 }
               }
 
@@ -364,16 +370,20 @@ export async function buildRedHatIntelligenceForMorningBrief(
           publishedDate: string
           significanceScore: number
           productTags?: string[]
+          customerName: string
         }> = []
 
         const files = readdirSync(NEWS_CACHE_DIR)
         for (const file of files) {
           if (!file.endsWith('.json')) continue
 
+          const customerName = file.replace(/\.json$/i, '').toLowerCase()
           const cachePath = resolve(NEWS_CACHE_DIR, file)
           try {
             const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
-            allArticles.push(...(cacheData.articles ?? []))
+            for (const a of cacheData.articles ?? []) {
+              allArticles.push({ ...a, customerName })
+            }
           } catch { /* skip invalid cache */ }
         }
 
@@ -389,17 +399,29 @@ export async function buildRedHatIntelligenceForMorningBrief(
           return { ...a, effectiveScore: (a.significanceScore ?? 0) + recencyBoost }
         })
         scored.sort((a, b) => b.effectiveScore - a.effectiveScore)
-        const top3 = scored.slice(0, 3)
 
-        for (const article of top3) {
+        // Deduplicate by normalized headline — keep highest-scored version
+        const headlineMap = new Map<string, typeof scored[0]>()
+        for (const article of scored) {
+          const key = (article.headline ?? '').toLowerCase().trim()
+          if (!headlineMap.has(key)) headlineMap.set(key, article)
+        }
+        const deduped = [...headlineMap.values()]
+
+        // Max 1 article per customer for diversity
+        const seenCustomers = new Set<string>()
+        for (const article of deduped) {
+          if (seenCustomers.has(article.customerName)) continue
           meetingNews.push({
             headline: article.headline,
             summary: article.summary,
             sourceUrl: article.sourceUrl,
-            relevantCustomer: '', // Generic, not customer-specific
+            relevantCustomer: article.customerName,
             relevantProduct: article.productTags?.[0] ?? 'Red Hat',
             publishedDate: article.publishedDate,
           })
+          seenCustomers.add(article.customerName)
+          if (meetingNews.length >= 3) break
         }
       }
     } catch { /* news unavailable — non-fatal */ }
