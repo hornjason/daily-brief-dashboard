@@ -581,10 +581,10 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                               {items.map((item, i) => (
                                 <div key={i} className="text-sm">
                                   <span className="font-medium text-text-primary">{item.headline}</span>
-                                  <div className="text-xs text-text-secondary leading-relaxed mt-0.5">{item.summary?.slice(0, 150)}{item.summary?.length > 150 ? '...' : ''}</div>
+                                  <div className="text-xs text-text-secondary leading-relaxed mt-0.5">{item.summary}</div>
                                   {item.sourceUrl && !item.sourceUrl.includes('vertexaisearch.cloud.google.com') && (
                                     <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:text-accent/80 underline">
-                                      Read Article →
+                                      {item.sourceUrl.includes('google.com/search') ? 'Search for Article →' : 'Read Article →'}
                                     </a>
                                   )}
                                 </div>
