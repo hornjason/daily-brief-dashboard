@@ -27,12 +27,13 @@ export function BookOfBusinessPage({
   productFilterSelected,
   filteredAccounts,
 }: BookOfBusinessPageProps) {
-  const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}` : ''
+  const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}&_=${refreshKey}` : `?_=${refreshKey}`
   const pipelineApi = useApi<PipelineSummary>(`/api/pipeline${pipelineQueryStr}`)
   const ccspQueryStr = (() => {
     const params = new URLSearchParams()
     if (aeFilterSelected !== 'all') params.set('ae', aeFilterSelected)
     if (productFilterSelected.length > 0) params.set('products', productFilterSelected.map(encodeURIComponent).join(','))
+    params.set('_', String(refreshKey))
     const s = params.toString()
     return s ? `?${s}` : ''
   })()
