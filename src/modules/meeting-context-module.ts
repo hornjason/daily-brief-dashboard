@@ -205,6 +205,8 @@ ${combined}
 
 Return structured use cases. If no clear customer-stated use cases are found, return an empty array.`
 
+  console.log(`[meeting-context] Extracting use cases for ${customerName}: ${emailTexts.length} texts, ${combined.length} chars combined`)
+
   try {
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-context-use-case-extraction',
@@ -214,9 +216,11 @@ Return structured use cases. If no clear customer-stated use cases are found, re
     })
 
     const parsed = JSON.parse(result.text)
-    return (parsed.useCases ?? []) as UseCase[]
+    const useCases = (parsed.useCases ?? []) as UseCase[]
+    console.log(`[meeting-context] Extracted ${useCases.length} use cases for ${customerName}`)
+    return useCases
   } catch (e: any) {
-    console.warn(`[meeting-context] Use case extraction failed for ${customerName}: ${e.message}`)
+    console.warn(`[meeting-context] Use case extraction failed for ${customerName}: ${e.message?.slice(0, 200)}`)
     return []
   }
 }
