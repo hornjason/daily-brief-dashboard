@@ -211,7 +211,7 @@ Return structured use cases. If no clear customer-stated use cases are found, re
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-context-use-case-extraction',
       customerName,
-      model: 'lite',
+      model: 'standard',
       responseSchema: USE_CASE_RESPONSE_SCHEMA,
     })
 
@@ -290,7 +290,7 @@ async function fetchThreadsForAttendees(
       threads.push({
         threadId: thread.id ?? '',
         subject,
-        bodyText: fullText.slice(0, 6000),
+        bodyText: fullText.slice(0, 12000),
       })
     }
 
