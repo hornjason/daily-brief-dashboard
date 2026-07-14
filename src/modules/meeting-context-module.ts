@@ -308,20 +308,7 @@ async function fetchUpcomingMeetings(): Promise<any[]> {
 async function correlateForCustomer(
   customerSlug: string,
 ): Promise<MeetingContextSignalData[]> {
-  // Read customer config to get domain
-  const customersPath = resolve(
-    process.env.CONFIG_DIR ?? resolve(CACHE_DIR, '../../config'),
-    'customers.json'
-  )
-  if (!existsSync(customersPath)) return []
-
-  let customers: any[]
-  try {
-    customers = JSON.parse(readFileSync(customersPath, 'utf-8'))
-  } catch {
-    return []
-  }
-
+  const { customers } = await import('../server-state.ts')
   const { toSlug } = await import('../cache-layer.ts')
   const customer = customers.find((c: any) => toSlug(c.name) === customerSlug)
   if (!customer) return []
