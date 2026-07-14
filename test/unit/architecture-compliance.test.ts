@@ -51,6 +51,7 @@ beforeAll(async () => {
   await import('../../src/modules/saleshub-module.ts')
   await import('../../src/modules/solution-intelligence-module.ts')
   await import('../../src/modules/value-positioning-module.ts')
+  await import('../../src/modules/meeting-context-module.ts')
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────

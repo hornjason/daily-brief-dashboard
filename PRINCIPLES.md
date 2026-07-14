@@ -136,6 +136,7 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | src/lib/executive-resolver.ts | Producer | Resolves executive names from company data |
 | src/lib/attendee-profile-cache.ts | Producer | Enriches attendee profiles with Gemini |
 | src/lib/saleshub-product-enrichment.ts | Producer | Enriches SalesHub product documents with Gemini |
+| src/modules/meeting-context-module.ts | Producer | Extracts customer use cases from correlated meeting context |
 
 ## Consumer → ensureFresh Contract
 

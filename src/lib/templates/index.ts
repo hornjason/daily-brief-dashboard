@@ -24,6 +24,7 @@ import { templateStrategicOpportunities } from './strategic.ts'
 import { templateCompetitiveLandscape } from './competitive.ts'
 import { templateIntelligence } from './intelligence.ts'
 import { templateSalesHubInsights, templateSalesHubContext } from './saleshub.ts'
+import { templateMeetingContext } from './meeting-context.ts'
 import { templateSalesAlignment } from './sales-alignment.ts'
 import { getSalesPlayByName, getTacticsByTdp } from '../saleshub-knowledge-loader.ts'
 import { isValidMetric } from '../saleshub-filters.ts'
@@ -43,6 +44,7 @@ export * from './strategic.ts'
 export * from './competitive.ts'
 export * from './intelligence.ts'
 export * from './saleshub.ts'
+export * from './meeting-context.ts'
 export * from './sales-alignment.ts'
 
 /**
@@ -75,6 +77,7 @@ export async function templateAll(
   const intelligence = templateIntelligence(filteredSignals)
   const salesHubInsights = templateSalesHubInsights(filteredSignals)
   const emailIntelligence = templateEmailIntelligence(filteredSignals)
+  const meetingContext = templateMeetingContext(filteredSignals)
 
   // #380: Account plan — render as text section for playbook/brief only
   const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
@@ -101,6 +104,8 @@ export async function templateAll(
   if (cases) sections.push(`## Support Cases\n\n${cases}`)
   // #674: Email intelligence — after cases
   if (emailIntelligence) sections.push(emailIntelligence)
+  // #987: Meeting context correlation — after email intelligence
+  if (meetingContext) sections.push(meetingContext)
   if (techStack) sections.push(`## Technology Stack\n\n${techStack}`)
   if (upcomingEvents) sections.push(`## Upcoming Events\n\n${upcomingEvents}`)
   // #380: Account plan — long-form text, only in playbook/brief (not campaign)

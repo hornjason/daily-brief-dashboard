@@ -17,8 +17,11 @@ import { resolveToSlug } from '../product-vocabulary.ts'
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-export function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'intelligence' | 'partner' | 'saleshub' | 'email' | 'other' {
+export function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'ecosystem' | 'competitive' | 'intelligence' | 'partner' | 'saleshub' | 'email' | 'meeting-context' | 'other' {
   const m = signal.metadata ?? {}
+
+  // #987: Meeting context correlation — before metadata-driven routing
+  if (signal.source === 'meeting-context') return 'meeting-context'
 
   // #672/#673/#674: Source-specific routing — before metadata checks so signals
   // with metadata.product don't incorrectly route to 'product'
