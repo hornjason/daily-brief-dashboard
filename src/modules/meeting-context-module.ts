@@ -317,6 +317,7 @@ async function correlateForCustomer(
 
   // Fetch upcoming meetings
   const allMeetings = await fetchUpcomingMeetings()
+  console.log(`[meeting-context] ${customerSlug}: ${allMeetings.length} upcoming meetings found, domains: ${customerDomains.join(',')}`)
 
   // Filter to meetings with this customer's attendees
   const customerMeetings = allMeetings.filter((ev: any) => {
@@ -326,6 +327,7 @@ async function correlateForCustomer(
       return customerDomains.some(d => emailDomain.endsWith(d))
     })
   })
+  console.log(`[meeting-context] ${customerSlug}: ${customerMeetings.length} meetings match customer domains`)
 
   if (customerMeetings.length === 0) return []
 
