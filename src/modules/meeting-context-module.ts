@@ -192,7 +192,7 @@ async function extractUseCases(
 ): Promise<UseCase[]> {
   if (emailTexts.length === 0) return []
 
-  const combined = emailTexts.slice(0, 10).join('\n---\n').slice(0, 8000)
+  const combined = emailTexts.slice(0, 10).join('\n---\n').slice(0, 24000)
 
   const systemPrompt = `You are extracting customer-stated use cases from email conversations.
 Only extract use cases that the CUSTOMER has stated or confirmed — not suggestions made by Red Hat.
