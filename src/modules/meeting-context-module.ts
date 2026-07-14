@@ -105,6 +105,25 @@ function isCacheFresh(slug: string): boolean {
 }
 
 /**
+ * Decode base64url-encoded Gmail body parts into plain text.
+ */
+function extractBodyText(payload: any): string {
+  if (!payload) return ''
+  // Plain text part
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return Buffer.from(payload.body.data, 'base64url').toString('utf-8')
+  }
+  // Multipart — recurse into parts
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const text = extractBodyText(part)
+      if (text) return text
+    }
+  }
+  return ''
+}
+
+/**
  * Extract external (non-redhat) attendee emails from a calendar event.
  * Mirrors the pattern in proactive-meeting-prep.ts.
  */
@@ -227,14 +246,13 @@ async function fetchThreadsForAttendees(
     const messages = list.data.messages ?? []
     if (messages.length === 0) return []
 
-    // Fetch message details in parallel
+    // Fetch message details with full body
     const details = await Promise.all(
       messages.slice(0, 20).map(msg =>
         gmail.users.messages.get({
           userId: 'me',
           id: msg.id!,
-          format: 'metadata',
-          metadataHeaders: ['From', 'To', 'Subject', 'Date'],
+          format: 'full',
         })
       )
     )
@@ -251,10 +269,12 @@ async function fetchThreadsForAttendees(
       const headers = data.payload?.headers ?? []
       const getHeader = (name: string) => headers.find(h => h.name === name)?.value ?? ''
 
+      const bodyText = extractBodyText(data.payload) || data.snippet || ''
+
       threads.push({
         threadId,
         subject: getHeader('Subject'),
-        bodyText: data.snippet ?? '',
+        bodyText: bodyText.slice(0, 4000),
       })
     }
 
