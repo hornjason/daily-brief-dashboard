@@ -114,7 +114,7 @@ Last updated: 2026-06-28 — docs-module: extractActionItems() added (#912). int
 - `GET /api/customer/:name/tools/artifacts` — List uploaded artifacts
 
 ### Feature Modules
-- `GET /api/modules/status` — Registry status for all modules (30 modules, auto-discovered; includes territory-module)
+- `GET /api/modules/status` — Registry status for all modules (31 modules, auto-discovered; includes territory-module, meeting-context)
 - `POST /api/customer/:name/modules/:moduleName/sync` — Trigger module sync
 - `GET /api/customer/:name/signals/debug` — Signal debug: every signal with score, tier, rawRelevance, metadata, specificity (ADR-027)
 

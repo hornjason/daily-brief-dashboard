@@ -1618,6 +1618,10 @@ Signals auto-route to sections by metadata keys (priority order):
 
 Adding new template sections: add function + routing case in `routeSignal()` + wire into `templateAll()`. All consumers auto-receive. Design principles: `PRINCIPLES.md`. Full design: GitHub issue #326.
 
+### Meeting Context Correlation (#987, 2026-07-14)
+
+`src/modules/meeting-context-module.ts` — cross-references Calendar events + Gmail threads + Drive meeting notes by attendee overlap and temporal proximity. Searches Gmail by specific attendee emails from calendar events (not just customer domain). Extracts customer-stated use cases via `callGemini()` with structured output. Emits correlated `meeting-context` signals through the template engine. Cache at `data/cache/meeting-context/{slug}.json`, 4h TTL. Route: `source === 'meeting-context'` → `meeting-context` section in `templateAll()`. Architecture decision: spec §12.7 — signal stack approach, not parallel gathering pipeline.
+
 ## §25. Pre-flight Signal Refresh (#328, 2026-05-20)
 
 Universal auto-discovery signal refresh before content generation. When any consumer calls `loadCustomerSignals(slug, name, { ensureFresh: true })`, ALL registered modules that implement `ensureFresh()` refresh their data before signals are collected.
