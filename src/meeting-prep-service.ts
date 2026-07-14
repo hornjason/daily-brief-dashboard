@@ -19,6 +19,7 @@ import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { toSlug } from './cache-layer.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { extractDocTextWithTabs } from './customer/doc-extractors.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
@@ -1077,19 +1078,14 @@ export async function generateMeetingPrep(
 
     const docs = recentDocs.data.files ?? []
     if (docs.length > 0) {
-      // Extract text from recent docs (capped)
+      // Extract text from recent docs — uses Docs API for multi-tab support (#986)
       const docTexts: string[] = []
       for (const doc of docs.slice(0, 5)) {
         try {
-          const exported = await drive.files.export({
-            fileId: doc.id!,
-            mimeType: 'text/plain',
-          })
-          const text = typeof exported.data === 'string'
-            ? exported.data.slice(0, 2000)
-            : ''
+          const text = await extractDocTextWithTabs(doc.id!, auth)
           if (text) {
-            docTexts.push(`### ${doc.name} (modified ${new Date(doc.modifiedTime!).toLocaleDateString()})\n${text}`)
+            const capped = text.slice(0, 2000)
+            docTexts.push(`### ${doc.name} (modified ${new Date(doc.modifiedTime!).toLocaleDateString()})\n${capped}`)
           }
         } catch { /* skip unreadable docs */ }
       }

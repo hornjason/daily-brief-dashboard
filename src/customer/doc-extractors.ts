@@ -3,11 +3,12 @@
 // fetchCustomerDocsImpl. Folder resolution stays in docs-fetcher.ts;
 // only the file-content extraction is dispatched through this module.
 
-import { type drive_v3 } from 'googleapis'
+import { google, type drive_v3 } from 'googleapis'
 import { extractText as extractPdfText } from 'unpdf'
 import { Buffer } from 'buffer'
 import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
 import { callGemini } from '../gemini-call.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 
 // ── Constants (moved from docs-fetcher.ts) ──────────────────────────────────
 export const EXPORTABLE_MIME_TYPES = new Set([
@@ -36,6 +37,74 @@ export interface DocExtractor {
   ): Promise<string | null>
 }
 
+// ── Shared helper: extract text from ALL tabs of a Google Doc ──────────────
+/**
+ * Uses Google Docs API v1 with includeTabsContent to read ALL tabs.
+ * Multi-tab docs get "## Tab: {title}" headers; single-tab docs return plain text.
+ * Respects DOC_CONTENT_CAP across all tabs combined.
+ */
+export async function extractDocTextWithTabs(
+  docId: string,
+  auth: ReturnType<typeof makeAuth>,
+): Promise<string | null> {
+  const docs = google.docs({ version: 'v1', auth })
+  const doc = await docs.documents.get({
+    documentId: docId,
+    includeTabsContent: true,
+  })
+
+  const tabs = doc.data.tabs ?? []
+  if (tabs.length === 0) return null
+
+  /** Recursively collect all tabs (including childTabs) */
+  function flattenTabs(tabList: typeof tabs): typeof tabs {
+    const result: typeof tabs = []
+    for (const tab of tabList) {
+      result.push(tab)
+      if (tab.childTabs?.length) {
+        result.push(...flattenTabs(tab.childTabs))
+      }
+    }
+    return result
+  }
+
+  const allTabs = flattenTabs(tabs)
+  const isMultiTab = allTabs.length > 1
+
+  const parts: string[] = []
+  let totalLen = 0
+
+  for (const tab of allTabs) {
+    if (totalLen >= DOC_CONTENT_CAP) break
+    const bodyContent = tab.documentTab?.body?.content ?? []
+    const lines: string[] = []
+    for (const element of bodyContent) {
+      if (element.paragraph?.elements) {
+        const lineText = element.paragraph.elements
+          .map((el: any) => el.textRun?.content ?? '')
+          .join('')
+        if (lineText.trim()) lines.push(lineText)
+      }
+    }
+    const tabText = lines.join('').replace(/\s+/g, ' ').trim()
+    if (!tabText) continue
+
+    const remaining = DOC_CONTENT_CAP - totalLen
+    const capped = tabText.slice(0, remaining)
+
+    if (isMultiTab) {
+      const title = tab.tabProperties?.title ?? 'Untitled'
+      parts.push(`## Tab: ${title}\n${capped}`)
+    } else {
+      parts.push(capped)
+    }
+    totalLen += capped.length
+  }
+
+  const result = parts.join('\n\n').trim()
+  return result.length > 50 ? result : null
+}
+
 // ── ExportableDocExtractor: GoogleDoc / Slides / Sheets via files.export ────
 export class ExportableDocExtractor implements DocExtractor {
   matches(file: { mimeType: string }): boolean {
@@ -48,6 +117,22 @@ export class ExportableDocExtractor implements DocExtractor {
       const cached = readDocContentCache(f.id, f.modifiedTime)
       if (cached !== null) return cached
     }
+
+    // Google Docs: use Docs API v1 with includeTabsContent for multi-tab support
+    if (f.mimeType === 'application/vnd.google-apps.document') {
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const content = await extractDocTextWithTabs(f.id, auth)
+        if (content !== null && f.modifiedTime) {
+          writeDocContentCache(f.id, f.modifiedTime, content)
+        }
+        return content
+      } catch {
+        // Fallback to drive.files.export if Docs API fails
+      }
+    }
+
+    // Slides / Sheets (and Google Docs fallback): use drive.files.export
     try {
       const exportRes = await drive.files.export(
         { fileId: f.id, mimeType: 'text/plain' },
