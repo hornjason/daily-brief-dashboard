@@ -246,35 +246,47 @@ async function fetchThreadsForAttendees(
     const messages = list.data.messages ?? []
     if (messages.length === 0) return []
 
-    // Fetch message details with full body
-    const details = await Promise.all(
-      messages.slice(0, 20).map(msg =>
-        gmail.users.messages.get({
+    // Collect unique thread IDs from message results
+    const threadIds = new Set<string>()
+    for (const msg of messages) {
+      if (msg.threadId) threadIds.add(msg.threadId)
+    }
+
+    // Fetch FULL threads (all messages in each thread) — not individual messages
+    const threadResults = await Promise.all(
+      [...threadIds].slice(0, 15).map(tid =>
+        gmail.users.threads.get({
           userId: 'me',
-          id: msg.id!,
+          id: tid,
           format: 'full',
-        })
+        }).catch(() => null)
       )
     )
 
-    // De-duplicate by threadId
-    const seenThreads = new Set<string>()
     const threads: Array<{ threadId: string; subject: string; bodyText: string }> = []
 
-    for (const { data } of details) {
-      const threadId = data.threadId ?? ''
-      if (seenThreads.has(threadId)) continue
-      seenThreads.add(threadId)
+    for (const result of threadResults) {
+      if (!result) continue
+      const thread = result.data
+      const threadMessages = thread.messages ?? []
+      if (threadMessages.length === 0) continue
 
-      const headers = data.payload?.headers ?? []
-      const getHeader = (name: string) => headers.find(h => h.name === name)?.value ?? ''
+      // Get subject from first message
+      const firstHeaders = threadMessages[0].payload?.headers ?? []
+      const subject = firstHeaders.find(h => h.name === 'Subject')?.value ?? ''
 
-      const bodyText = extractBodyText(data.payload) || data.snippet || ''
+      // Concatenate ALL message bodies in the thread
+      const allBodies: string[] = []
+      for (const msg of threadMessages) {
+        const body = extractBodyText(msg.payload)
+        if (body) allBodies.push(body)
+      }
+      const fullText = allBodies.join('\n---\n')
 
       threads.push({
-        threadId,
-        subject: getHeader('Subject'),
-        bodyText: bodyText.slice(0, 4000),
+        threadId: thread.id ?? '',
+        subject,
+        bodyText: fullText.slice(0, 6000),
       })
     }
 
