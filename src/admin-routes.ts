@@ -36,7 +36,7 @@ import { getAccountTeam, persistTeamCache } from './account-team.ts'
 import { toSlug } from './cache-layer.ts'
 import { computeDealAttribution } from './lib/deal-attribution.ts'
 import { getHealthResults } from './startup-health-probe.ts'
-import { generateTerritoryPartners, readTerritoryPartners } from './lib/territory-partner-generator.ts'
+import { generateTerritoryPartners, readTerritoryPartners, seedPartnersFromEcosystem } from './lib/territory-partner-generator.ts'
 import { enrichTerritoryPartners } from './lib/partner-catalog-scraper.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -381,12 +381,17 @@ export function createAdminRouter(): Hono {
     }
   })
 
-  // POST /api/admin/territory-partners/refresh — regenerate territory partners (#995, #1001)
+  // POST /api/admin/territory-partners/refresh — seed from ecosystem + pipeline (#1002, #1001)
   r.post('/api/admin/territory-partners/refresh', (c) => {
     try {
+      // Primary source: ecosystem catalog (130+ partners with resources)
+      const ecoPartners = seedPartnersFromEcosystem()
+      // Secondary: merge pipeline-extracted partners for loaded customers
       const customerNames = customers.map(cu => cu.name)
-      const partners = generateTerritoryPartners(undefined, undefined, customerNames)
-      return c.json({ count: partners.length })
+      const pipelinePartners = generateTerritoryPartners(undefined, undefined, customerNames)
+      // Ecosystem seeding already wrote the file; pipeline merge wrote again
+      // Return the final count
+      return c.json({ count: pipelinePartners.length, ecosystemSeeded: ecoPartners.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

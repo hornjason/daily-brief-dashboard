@@ -898,6 +898,16 @@ Live verification against Workday AAP Demo meeting. Three integration bugs found
 
 **Implementation:** `territory-partner-generator.ts` passes customer filter to `extractPartnersFromFile()`. `admin-routes.ts` supplies loaded customer names from `server-state.ts`. `partner-catalog.ts` `loadPartnersFromConfig()` merges territory partners with legacy fallback when enriched count < 3.
 
+### 12.11 Ecosystem-First Partner Population (2026-07-15)
+
+**Problem found:** Pipeline opp name extraction (#993) produced 0 useful partners at the territory level. The hardcoded `partners.json` (13 static entries) was still the only source of partner data. catalog.redhat.com has no public search API (Next.js SSR, no REST endpoints).
+
+**Discovery:** The HYDRA SOLR API (already used for ecosystem catalog sync) returns 194 solutions across ~130 unique partners, each with typed resources (labs, trials, solution briefs, videos, case studies, white papers, design guides, documentation). This is the partner discovery mechanism.
+
+**Spec requirement:** `seedPartnersFromEcosystem()` reads per-partner cache files from `ecosystem-catalog/` directory and creates territory-partner entries. Legacy `partners.json` entries are merged as known-good seeds. The admin "Refresh" button runs ecosystem seeding first, then pipeline extraction second. Each seeded partner gets enriched from `catalog.redhat.com/en/partners/detail/{slug}` for tier and specializations (existing scraper). Meeting prep Tier 2 table includes ecosystem resources (labs, training, solution briefs) alongside partner name/tier/specializations — not just names, but what they offer.
+
+**Data flow:** HYDRA SOLR → ecosystem cache → `seedPartnersFromEcosystem()` → territory-partners.json → `enrichTerritoryPartners()` → catalog.redhat.com detail pages → enriched territory-partners.json with tier + specializations. Meeting prep reads both territory-partners.json (names/tiers) and ecosystem cache (resources) for Tier 2 display.
+
 ## 13. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.

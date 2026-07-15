@@ -57,6 +57,7 @@ import {
   type AudienceType,
 } from './lib/audience-filter.ts'
 import { resolveAttendees, type AttendeeProfile } from './lib/attendee-profile-cache.ts'
+import { loadAllEcosystemPartners } from './lib/ecosystem-catalog.ts'
 import { computeEscalation, formatEscalationForPrompt } from './lib/carry-forward.ts'
 
 // @consumer-contract v1.0
@@ -1232,11 +1233,28 @@ export async function generateMeetingPrep(
         p.specializations.some(s => (specToProduct[s] ?? []).some(ps => productSlugs.includes(ps)))
       )
       if (relevantPartners.length > 0) {
-        const partnerRows = relevantPartners.slice(0, 8).map(p => {
+        // Load ecosystem resources for relevant partners (#1002)
+        const ecoPartners = loadAllEcosystemPartners()
+        const ecoByName = new Map(ecoPartners.map(ep => [ep.partnerName.toLowerCase(), ep]))
+
+        const partnerSections = relevantPartners.slice(0, 8).map(p => {
           const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
-          return `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
+          const row = `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
+
+          // Attach ecosystem resources if available
+          const eco = ecoByName.get(p.name.toLowerCase())
+          if (eco && eco.solutions.length > 0) {
+            const resourceLines = eco.solutions.slice(0, 3).flatMap(sol =>
+              sol.resources.slice(0, 2).map(r => `  - [${r.title}](${r.url}) *(${r.type})*`)
+            )
+            if (resourceLines.length > 0) {
+              return row + '\n' + resourceLines.join('\n')
+            }
+          }
+          return row
         }).join('\n')
-        otherPartnersTable = `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerRows}`
+
+        otherPartnersTable = `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerSections}`
       }
     } else {
       // Unknown partner — single Gemini grounding search for the company

@@ -3,11 +3,12 @@
 // Reads pipeline data via extractPartnersFromFile(), maps to TerritoryPartner schema,
 // merges with existing file (preserving enrichment fields), writes territory-partners.json.
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { resolve } from 'path'
 import { extractPartnersFromFile } from './pipeline-partner-extractor.ts'
 import { writeJsonAtomic } from './atomic-write.ts'
 import { CACHE_DIR } from './paths.ts'
+import { getEcosystemCacheDir, type EcosystemPartnerCache } from './ecosystem-catalog.ts'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -123,4 +124,84 @@ export function readTerritoryPartners(
   path: string = TERRITORY_PARTNERS_PATH,
 ): TerritoryPartner[] {
   return readExistingPartners(path)
+}
+
+// ── Ecosystem-First Seeding (#1002) ──────────────────────────────────────────
+
+/**
+ * Seed territory partners from ecosystem catalog cache + legacy partners.json.
+ * Reads per-partner JSON files from ecosystem-catalog/ cache dir, extracts
+ * unique partner names, merges with existing territory-partners.json and
+ * legacy partners.json (preserving enrichment fields), writes result.
+ *
+ * @param outputPath - Override output path
+ * @returns Array of seeded TerritoryPartner entries
+ */
+export function seedPartnersFromEcosystem(
+  outputPath: string = TERRITORY_PARTNERS_PATH,
+): TerritoryPartner[] {
+  const existing = readExistingPartners(outputPath)
+  const existingMap = buildExistingMap(existing)
+  const now = new Date().toISOString()
+  const seen = new Set<string>()
+  const result: TerritoryPartner[] = []
+
+  // Source 1: Ecosystem catalog cache files
+  const ecoDir = getEcosystemCacheDir()
+  if (existsSync(ecoDir)) {
+    const files = readdirSync(ecoDir).filter(f => f.endsWith('.json'))
+    for (const file of files) {
+      try {
+        const cache: EcosystemPartnerCache = JSON.parse(readFileSync(resolve(ecoDir, file), 'utf-8'))
+        if (!cache.partnerName) continue
+        const key = cache.partnerName.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        const prev = existingMap.get(key)
+        result.push({
+          name: cache.partnerName,
+          aliases: [cache.partnerName],
+          domain: prev?.domain ?? null,
+          enrichmentStatus: prev?.enrichmentStatus ?? 'pending',
+          partnershipLevel: prev?.partnershipLevel ?? null,
+          specializations: prev?.specializations ?? [],
+          catalogUrl: prev?.catalogUrl ?? null,
+          customerAssociations: prev?.customerAssociations ?? [],
+          extractedAt: now,
+        })
+      } catch { /* skip malformed files */ }
+    }
+  }
+
+  // Source 2: Legacy partners.json (known-good curated entries)
+  const configDir = process.env.CONFIG_DIR ?? 'data/config'
+  const legacyPath = resolve(configDir, 'partners.json')
+  if (existsSync(legacyPath)) {
+    try {
+      const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
+      for (const lp of Array.isArray(legacy) ? legacy : []) {
+        const key = (lp.name ?? '').toLowerCase()
+        if (!key || seen.has(key)) continue
+        seen.add(key)
+
+        const prev = existingMap.get(key)
+        result.push({
+          name: lp.name,
+          aliases: lp.aliases ?? [lp.name],
+          domain: lp.domain ?? prev?.domain ?? null,
+          enrichmentStatus: lp.partnershipLevel ? 'enriched' : (prev?.enrichmentStatus ?? 'pending'),
+          partnershipLevel: lp.partnershipLevel ?? prev?.partnershipLevel ?? null,
+          specializations: lp.specializations ?? prev?.specializations ?? [],
+          catalogUrl: lp.catalogUrl ?? prev?.catalogUrl ?? null,
+          customerAssociations: prev?.customerAssociations ?? [],
+          extractedAt: now,
+        })
+      }
+    } catch { /* skip malformed file */ }
+  }
+
+  writeJsonAtomic(outputPath, result)
+  console.log(`[territory-partners] Seeded ${result.length} partners from ecosystem catalog (${seen.size - (existsSync(legacyPath) ? 1 : 0)} eco + legacy)`)
+  return result
 }
