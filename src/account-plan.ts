@@ -60,14 +60,30 @@ const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
       description: 'All numbered questions answered: ACV ambition, ACV goal, growth %, why Red Hat, etc. Use ONLY figures from the provided pipeline and intelligence data.',
     },
     accountIntelligence: {
-      type: 'STRING',
+      type: 'OBJECT',
       nullable: true,
-      description: 'Company strategy, financial signals, industry pressures. Every claim MUST come from the provided intelligence context. Never extrapolate or generate plausible-sounding data.',
+      description: 'Structured account intelligence with executive summary, business objectives, and market/competition analysis. Every claim MUST come from the provided intelligence context.',
+      properties: {
+        executiveSummary: { type: 'STRING', description: 'Executive summary: customer objectives, challenges, environment' },
+        businessObjectives: { type: 'STRING', description: 'Customer business objectives, challenges, key initiatives with IT funding analysis' },
+        marketCompetition: { type: 'STRING', description: 'Customer market, competitors, industry dynamics' },
+        innovationPersona: { type: 'STRING', nullable: true, description: 'Rogers Diffusion persona: Innovator, Early Adopter, Early Majority, Late Majority, Laggard' },
+      },
+      required: ['executiveSummary', 'businessObjectives', 'marketCompetition'],
     },
     customerEcosystem: {
-      type: 'STRING',
+      type: 'OBJECT',
       nullable: true,
-      description: 'Partners, technologies, integrations from the provided tech stack and ecosystem data. Only cite partners and technologies present in the context. Must include partner growth strategy — how Services Partners, VARs, and Distributors are leveraged to drive growth (CY27 requirement).',
+      description: 'Structured customer ecosystem with partner strategy, cloud providers, and committed spend. Only cite partners and technologies present in the context.',
+      properties: {
+        summary: { type: 'STRING', description: 'Executive summary of ecosystem strategy' },
+        partnerGrowthStrategy: { type: 'STRING', description: 'CY27 Q#4: How to leverage Services Partners, VARs, Distributors for growth' },
+        cloudProviders: { type: 'STRING', description: 'Cloud providers in use with Red Hat marketplace spend' },
+        committedSpend: { type: 'STRING', nullable: true, description: 'Committed spend agreements (EDP, cloud commits)' },
+        cloudAdoptionLevel: { type: 'STRING', nullable: true, description: 'Cloud adoption level' },
+        specializedPartners: { type: 'STRING', nullable: true, description: 'Key SIs, MSPs, ISVs, OEM partners in the account' },
+      },
+      required: ['summary', 'partnerGrowthStrategy', 'cloudProviders'],
     },
     keyStakeholders: {
       type: 'STRING',
@@ -75,9 +91,28 @@ const ACCOUNT_PLAN_RESPONSE_SCHEMA = {
       description: 'Names, titles, engagement status from the provided stakeholder data. Never fabricate stakeholder names or titles. Must identify the Economic Buyer if stakeholder data exists — distinct from Champion. Include their P&L authority, decision influence, and relationship to the deal (CY27 requirement).',
     },
     technicalLandscape: {
-      type: 'STRING',
+      type: 'OBJECT',
       nullable: true,
-      description: 'Current tech stack and initiatives from the provided technical data. Only reference technologies confirmed in the context. Must address Security, Compliance, Sovereignty & Accessibility considerations including connection to Sovereignty and Lightwell motions (CY27 requirement).',
+      description: 'Structured technical landscape with per-TDP assessments, security/sovereignty analysis, and optional key applications and hardware context.',
+      properties: {
+        summary: { type: 'STRING', description: 'Executive summary of technical landscape and competition' },
+        tdpAssessments: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              tdpName: { type: 'STRING', description: 'TDP name: Server/Cloud OS, Virtualization, Container Management, Application Platform, Mission Critical Automation, or Red Hat AI' },
+              analysis: { type: 'STRING', description: 'Customer usage, competition, and Red Hat fit for this TDP' },
+              maturity: { type: 'STRING', description: 'Adoption maturity: 1=Initial/Ad-Hoc, 2=Basic/Developing, 3=Repeatable, 4=Managed, 5=Optimized' },
+            },
+            required: ['tdpName', 'analysis', 'maturity'],
+          },
+        },
+        securitySovereignty: { type: 'STRING', description: 'CY27 Q#16: Security, Compliance, Sovereignty & Accessibility — connection to Sovereignty and Lightwell motions' },
+        keyApplications: { type: 'STRING', nullable: true, description: 'Key customer applications and workloads' },
+        hardwareStorage: { type: 'STRING', nullable: true, description: 'Hardware and storage landscape' },
+      },
+      required: ['summary', 'tdpAssessments', 'securitySovereignty'],
     },
     customerSuccess: {
       type: 'STRING',
@@ -186,10 +221,10 @@ REQUIRED SECTIONS — every plan MUST include all of these:
 2. Team Members (AE + ASA names and roles)
 3. Scorecard (with % scores per category)
 4. Customer View (all numbered questions: ACV ambition, ACV goal, growth %, why Red Hat, etc.)
-5. Account Intelligence (company strategy, financial signals, industry pressures)
-6. Customer Ecosystem (partners, technologies, integrations, partner growth strategy for VARs/distributors)
+5. Account Intelligence — structured with subsections: (1) Executive Summary of customer objectives/challenges/environment, (2) Business Objectives, Challenges & Key Initiatives with IT funding analysis, (3) Market & Competition analysis, plus Innovation Adopter Persona (Rogers Diffusion)
+6. Customer Ecosystem — structured with subsections: Executive Summary, Partner Growth Strategy (CY27 Q#4: how to leverage Services Partners, VARs, Distributors), Cloud Providers with marketplace spend, Committed Spend Agreements, Cloud Adoption Level, Specialized Partners (SIs, MSPs, ISVs, OEMs)
 7. Key Stakeholders (names, titles, engagement status, Economic Buyer identification)
-8. Technical Landscape (current tech stack, initiatives, Security/Compliance/Sovereignty)
+8. Technical Landscape — structured per-TDP with: executive summary, then per-TDP assessment for each of (Server/Cloud OS, Virtualization, Container Management, Application Platform, Mission Critical Automation, Red Hat AI) with analysis + maturity rating (1=Initial/Ad-Hoc through 5=Optimized), plus Q#16 Security/Compliance/Sovereignty & Accessibility, Key Customer Applications & Workloads, Hardware & Storage
 9. Customer Success (health, open cases, risk)
 10. Whitespace Map — REQUIRED: a markdown table mapping customer Business Units/Functions (rows) against Red Hat products (columns: RHEL, Ansible Automation, OpenShift, OpenShift Virt, RHEL AI / OpenShift AI) with opportunity level (🟢 High / 🟡 Medium / ⚪ Low) and Opportunity Status
 11. Initiatives — REQUIRED: 3-5 customer-centric initiatives, each with: Customer Objective Addressed, Red Hat Solution, Estimated Deal Size, Timeline, Next Steps, Tagged Potential Opportunity
@@ -268,16 +303,53 @@ function convertAccountPlanJsonToMarkdown(rawText: string): string {
     parts.push(`## Customer View\n\n${parsed.customerView}`)
   }
   if (parsed.accountIntelligence) {
-    parts.push(`## Account Intelligence\n\n${parsed.accountIntelligence}`)
+    if (typeof parsed.accountIntelligence === 'string') {
+      parts.push(`## Account Intelligence\n\n${parsed.accountIntelligence}`)
+    } else {
+      const ai = parsed.accountIntelligence
+      const aiParts: string[] = ['## Account Intelligence']
+      if (ai.executiveSummary) aiParts.push(`### 1. Executive Summary\n\n${ai.executiveSummary}`)
+      if (ai.businessObjectives) aiParts.push(`### 2. Customer Business Objectives, Challenges & Key Initiatives\n\n${ai.businessObjectives}`)
+      if (ai.marketCompetition) aiParts.push(`### 3. Customer's Market & Competition\n\n${ai.marketCompetition}`)
+      if (ai.innovationPersona) aiParts.push(`### Innovation Adopter Persona\n\n${ai.innovationPersona}`)
+      parts.push(aiParts.join('\n\n'))
+    }
   }
   if (parsed.customerEcosystem) {
-    parts.push(`## Customer Ecosystem\n\n${parsed.customerEcosystem}`)
+    if (typeof parsed.customerEcosystem === 'string') {
+      parts.push(`## Customer Ecosystem\n\n${parsed.customerEcosystem}`)
+    } else {
+      const ce = parsed.customerEcosystem
+      const ceParts: string[] = ['## Customer Ecosystem']
+      if (ce.summary) ceParts.push(`### Executive Summary\n\n${ce.summary}`)
+      if (ce.partnerGrowthStrategy) ceParts.push(`### Partner Growth Strategy (CY27 Q#4)\n\n${ce.partnerGrowthStrategy}`)
+      if (ce.cloudProviders) ceParts.push(`### Cloud Providers\n\n${ce.cloudProviders}`)
+      if (ce.committedSpend) ceParts.push(`### Committed Spend Agreements\n\n${ce.committedSpend}`)
+      if (ce.cloudAdoptionLevel) ceParts.push(`### Cloud Adoption Level\n\n${ce.cloudAdoptionLevel}`)
+      if (ce.specializedPartners) ceParts.push(`### Specialized Partners\n\n${ce.specializedPartners}`)
+      parts.push(ceParts.join('\n\n'))
+    }
   }
   if (parsed.keyStakeholders) {
     parts.push(`## Key Stakeholders\n\n${parsed.keyStakeholders}`)
   }
   if (parsed.technicalLandscape) {
-    parts.push(`## Technical Landscape\n\n${parsed.technicalLandscape}`)
+    if (typeof parsed.technicalLandscape === 'string') {
+      parts.push(`## Technical Landscape\n\n${parsed.technicalLandscape}`)
+    } else {
+      const tl = parsed.technicalLandscape
+      const tlParts: string[] = ['## Technical Landscape']
+      if (tl.summary) tlParts.push(tl.summary)
+      if (tl.tdpAssessments && Array.isArray(tl.tdpAssessments)) {
+        for (const tdp of tl.tdpAssessments) {
+          tlParts.push(`### ${tdp.tdpName}\n\n${tdp.analysis}\n\n**Adoption Maturity:** ${tdp.maturity}`)
+        }
+      }
+      if (tl.securitySovereignty) tlParts.push(`### Security, Compliance, Sovereignty & Accessibility\n\n${tl.securitySovereignty}`)
+      if (tl.keyApplications) tlParts.push(`### Key Customer Applications & Workloads\n\n${tl.keyApplications}`)
+      if (tl.hardwareStorage) tlParts.push(`### Hardware & Storage\n\n${tl.hardwareStorage}`)
+      parts.push(tlParts.join('\n\n'))
+    }
   }
   if (parsed.customerSuccess) {
     parts.push(`## Customer Success\n\n${parsed.customerSuccess}`)
@@ -318,7 +390,11 @@ function convertAccountPlanJsonToMarkdown(rawText: string): string {
     parts.push(`## Solution Plays Referenced\n\n${playLines.join('\n')}`)
   }
 
-  return parts.join('\n\n')
+  let result = parts.join('\n\n')
+  // Strip lines where Gemini wrote "null" as a value — looks broken to users
+  result = result.replace(/^.*?:\s*null\s*$/gm, '')
+  result = result.replace(/\n{3,}/g, '\n\n')
+  return result
 }
 
 // ── Core generation logic ────────────────────────────────────────────────────

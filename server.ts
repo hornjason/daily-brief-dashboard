@@ -88,6 +88,7 @@ import { createSaleshubProductsRouter } from './src/modules/saleshub-products-mo
 import './src/modules/ecosystem-catalog-module.ts'  // #438
 import './src/modules/cloud-marketplace-module.ts'  // #306, #451
 import './src/modules/meeting-context-module.ts'  // #987
+import './src/modules/partner-detection-module.ts'  // #994
 import './src/modules/saleshub-content-module.ts'  // #448
 import './src/modules/recommended-actions-module.ts'  // #482 — Intelligence Graph cross-referencing
 import './src/modules/rh-product-catalog-module.ts'  // #677 — RH product catalog scraper

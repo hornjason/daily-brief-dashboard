@@ -23,6 +23,9 @@ export function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | '
   // #987: Meeting context correlation — before metadata-driven routing
   if (signal.source === 'meeting-context') return 'meeting-context'
 
+  // #994: Partner detection — routes to partner section
+  if (signal.source === 'partner-detected') return 'partner'
+
   // #672/#673/#674: Source-specific routing — before metadata checks so signals
   // with metadata.product don't incorrectly route to 'product'
   if (signal.source === 'ecosystem-catalog') return 'ecosystem'
