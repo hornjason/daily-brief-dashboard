@@ -36,6 +36,7 @@ import { getAccountTeam, persistTeamCache } from './account-team.ts'
 import { toSlug } from './cache-layer.ts'
 import { computeDealAttribution } from './lib/deal-attribution.ts'
 import { getHealthResults } from './startup-health-probe.ts'
+import { generateTerritoryPartners, readTerritoryPartners } from './lib/territory-partner-generator.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -367,6 +368,26 @@ export function createAdminRouter(): Hono {
     const filter = productsParam ? { products: productsParam.split(',').map(p => p.trim()) } : undefined
     const team = getAccountTeam(customer, filter)
     return c.json({ customer: customer.name, ae: customer.ae, team })
+  })
+
+  // GET /api/admin/territory-partners — list territory partners (#995)
+  r.get('/api/admin/territory-partners', (c) => {
+    try {
+      const partners = readTerritoryPartners()
+      return c.json(partners)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/admin/territory-partners/refresh — regenerate territory partners (#995)
+  r.post('/api/admin/territory-partners/refresh', (c) => {
+    try {
+      const partners = generateTerritoryPartners()
+      return c.json({ count: partners.length })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   // GET /api/admin/deal-attribution — deal outcome tracking (#614)
