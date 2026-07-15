@@ -1,12 +1,14 @@
 // test/unit/partner-catalog-module.test.ts
-// GitHub Issue #640 — Partner Catalog Module: signal structure, scoring, and ensureFresh tests
+// GitHub Issue #640, #996 — Partner Catalog Module: signal structure, scoring, tier filtering, and ensureFresh tests
 
 import { describe, test, expect, beforeAll } from 'bun:test'
 import { FeatureModuleRegistry, scoreSignal } from '../../src/feature-module-registry.ts'
 
 // Dynamic import to avoid ESM TDZ issues with self-registration
+let isKnownTier: (level: string | null | undefined) => boolean
 beforeAll(async () => {
-  await import('../../src/modules/partner-catalog-module.ts')
+  const mod = await import('../../src/modules/partner-catalog-module.ts')
+  isKnownTier = mod.isKnownTier
 })
 
 describe('partner-catalog-module registration', () => {
@@ -51,11 +53,11 @@ describe('partner-catalog-module registration', () => {
     expect(mod.cacheTtlMs! > 0).toBe(true)
   })
 
-  test('cachePaths returns partners.json path', () => {
+  test('cachePaths returns territory-partners.json path (#996)', () => {
     const mod = FeatureModuleRegistry.get('partner-catalog')!
     const paths = mod.cachePaths('test-slug')
     expect(paths.length).toBeGreaterThan(0)
-    expect(paths[0]).toContain('partners')
+    expect(paths[0]).toContain('territory-partners')
   })
 })
 
@@ -131,6 +133,79 @@ describe('partner-catalog signals output structure (AC-2, AC-3, AC-10)', () => {
       const scored = scoreSignal(s)
       // Customer tier floor is 0.50 per ADR-027
       expect(scored.score!).toBeGreaterThanOrEqual(0.50)
+    }
+  })
+})
+
+// ── Tier filtering (#996 AC-3) ──────────────────────────────────────────────
+
+describe('isKnownTier filtering (#996)', () => {
+  test('Premier tier passes', () => {
+    expect(isKnownTier('Premier Business Partner')).toBe(true)
+  })
+
+  test('Advanced tier passes', () => {
+    expect(isKnownTier('Advanced Business Partner')).toBe(true)
+  })
+
+  test('Specialized tier passes', () => {
+    expect(isKnownTier('Red Hat Specialized Partner')).toBe(true)
+  })
+
+  test('Red Hat tier passes', () => {
+    expect(isKnownTier('Red Hat Ready Partner')).toBe(true)
+  })
+
+  test('null partnershipLevel is rejected', () => {
+    expect(isKnownTier(null)).toBe(false)
+  })
+
+  test('undefined partnershipLevel is rejected', () => {
+    expect(isKnownTier(undefined)).toBe(false)
+  })
+
+  test('empty string is rejected', () => {
+    expect(isKnownTier('')).toBe(false)
+  })
+
+  test('unknown tier string is rejected', () => {
+    expect(isKnownTier('Reseller')).toBe(false)
+  })
+})
+
+describe('signals() tier filtering integration (#996)', () => {
+  test('signals exclude partners with null partnershipLevel', async () => {
+    // Write a temporary territory-partners.json with mixed tiers
+    const fs = require('fs')
+    const path = require('path')
+    const tmpDir = '/tmp/test-partner-catalog-996'
+    fs.mkdirSync(tmpDir, { recursive: true })
+    const mixedPartners = [
+      { name: 'Qualified Partner', aliases: [], domain: 'qual.com', partnershipLevel: 'Red Hat Specialized Partner', specializations: ['Automation'], enrichmentStatus: 'enriched' },
+      { name: 'Null Tier Partner', aliases: [], domain: 'nulltier.com', partnershipLevel: null, specializations: ['Container Mgmt'], enrichmentStatus: 'pending' },
+      { name: 'Empty Tier Partner', aliases: [], domain: 'empty.com', partnershipLevel: '', specializations: [], enrichmentStatus: 'pending' },
+      { name: 'Advanced Partner', aliases: [], domain: 'adv.com', partnershipLevel: 'Advanced Business Partner', specializations: [], enrichmentStatus: 'enriched' },
+      { name: 'Unknown Tier', aliases: [], domain: 'unk.com', partnershipLevel: 'Reseller', specializations: [], enrichmentStatus: 'enriched' },
+    ]
+    fs.writeFileSync(path.join(tmpDir, 'territory-partners.json'), JSON.stringify(mixedPartners))
+
+    // Point CACHE_DIR to temp directory
+    const origCacheDir = process.env.CACHE_DIR
+    process.env.CACHE_DIR = tmpDir
+    try {
+      const mod = FeatureModuleRegistry.get('partner-catalog')!
+      const signals = await mod.signals!('test-customer')
+      const partnerNames = signals.map(s => s.metadata?.partnerName)
+      // Only qualified + advanced should appear (2 of 5)
+      expect(partnerNames).toContain('Qualified Partner')
+      expect(partnerNames).toContain('Advanced Partner')
+      expect(partnerNames).not.toContain('Null Tier Partner')
+      expect(partnerNames).not.toContain('Empty Tier Partner')
+      expect(partnerNames).not.toContain('Unknown Tier')
+    } finally {
+      if (origCacheDir !== undefined) process.env.CACHE_DIR = origCacheDir
+      else delete process.env.CACHE_DIR
+      fs.rmSync(tmpDir, { recursive: true, force: true })
     }
   })
 })

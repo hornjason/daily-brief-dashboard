@@ -1,7 +1,7 @@
 // src/lib/partner-catalog.ts
-// GitHub Issue #265 — Partner Catalog Pipeline
+// GitHub Issue #265, #996 — Partner Catalog Pipeline
 // Partner data lookup, matching, and product-partner alignment.
-// Reads structured partner data from data/config/partners.json.
+// Reads structured partner data from data/cache/territory-partners.json.
 
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -22,12 +22,12 @@ export interface PartnerCredential {
 export interface Partner {
   name: string
   aliases: string[]
-  domain: string
-  partnershipLevel: string
+  domain: string | null
+  partnershipLevel: string | null
   specializations: string[]
-  geo: string
-  country: string
-  catalogUrl?: string
+  geo?: string
+  country?: string
+  catalogUrl?: string | null
   sourceUrl?: string
   /** URL slug on catalog.redhat.com */
   slug?: string
@@ -35,6 +35,8 @@ export interface Partner {
   overview?: string
   /** Credential and certification details from Areas of Expertise tab */
   credentials?: PartnerCredential[]
+  /** Enrichment pipeline status (territory-partners.json) */
+  enrichmentStatus?: string
 }
 
 export interface PartnerMatch {
@@ -74,9 +76,15 @@ export function loadPartners(filePath: string): Partner[] {
 }
 
 /**
- * Load partners from the default config path.
+ * Load partners from the default cache path (territory-partners.json).
+ * Falls back to legacy data/config/partners.json if territory file missing.
  */
 export function loadPartnersFromConfig(): Partner[] {
+  const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+  const territoryPath = resolve(cacheDir, 'territory-partners.json')
+  const partners = loadPartners(territoryPath)
+  if (partners.length > 0) return partners
+  // Fallback to legacy path for backward compatibility
   const configDir = process.env.CONFIG_DIR ?? 'data/config'
   return loadPartners(resolve(configDir, 'partners.json'))
 }
@@ -89,7 +97,7 @@ export function loadPartnersFromConfig(): Partner[] {
  */
 export function findPartnerByDomain(domain: string, partners: Partner[]): Partner | undefined {
   const d = domain.toLowerCase()
-  return partners.find(p => d === p.domain || d.endsWith('.' + p.domain))
+  return partners.find(p => p.domain && (d === p.domain || d.endsWith('.' + p.domain)))
 }
 
 /**

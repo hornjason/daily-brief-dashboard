@@ -1,6 +1,6 @@
 // test/unit/partner-catalog.test.ts
-// GitHub Issue #265 — Partner Catalog Pipeline tests
-// TDD: Tests for partner lookup, matching, and signal generation
+// GitHub Issue #265, #996 — Partner Catalog Pipeline tests
+// TDD: Tests for partner lookup, matching, signal generation, and tier filtering
 
 import { describe, test, expect, beforeEach } from 'bun:test'
 import {
@@ -26,6 +26,7 @@ const SEED_PARTNERS: Partner[] = [
     catalogUrl: 'https://catalog.redhat.com/en/partners/detail/shadow-soft',
     sourceUrl: 'https://source.redhat.com/departments/sales/global_red_hat_specialized_partners',
     slug: 'shadow-soft',
+    enrichmentStatus: 'enriched',
     credentials: [
       {
         name: 'Red Hat Ansible Automation Platform: Technical Seller',
@@ -51,6 +52,7 @@ const SEED_PARTNERS: Partner[] = [
     country: 'US, Canada',
     catalogUrl: 'https://catalog.redhat.com/en/partners/detail/cdw',
     sourceUrl: 'https://source.redhat.com/departments/sales/global_red_hat_specialized_partners',
+    enrichmentStatus: 'enriched',
   },
   {
     name: 'Insight Direct USA',
@@ -62,6 +64,7 @@ const SEED_PARTNERS: Partner[] = [
     country: 'US, Canada',
     catalogUrl: 'https://catalog.redhat.com/en/partners/detail/insight',
     sourceUrl: 'https://source.redhat.com/departments/sales/global_red_hat_specialized_partners',
+    enrichmentStatus: 'enriched',
     credentials: [
       {
         name: 'Red Hat Enterprise Linux: System Administrator',
@@ -70,6 +73,23 @@ const SEED_PARTNERS: Partner[] = [
         count: 25,
       },
     ],
+  },
+  // #996: Territory partners with null fields (no enrichment yet)
+  {
+    name: 'Acme Consulting',
+    aliases: [],
+    domain: null,
+    partnershipLevel: null,
+    specializations: [],
+    enrichmentStatus: 'pending',
+  },
+  {
+    name: 'Premier Tech Solutions',
+    aliases: ['PTS'],
+    domain: 'premiertech.com',
+    partnershipLevel: 'Premier Business Partner',
+    specializations: ['Application Platform'],
+    enrichmentStatus: 'enriched',
   },
 ]
 
@@ -96,6 +116,12 @@ describe('findPartnerByDomain', () => {
 
   test('unknown domain returns undefined', () => {
     const result = findPartnerByDomain('unknown-company.com', SEED_PARTNERS)
+    expect(result).toBeUndefined()
+  })
+
+  test('skips partners with null domain (#996)', () => {
+    const result = findPartnerByDomain('acme.com', SEED_PARTNERS)
+    // Acme Consulting has null domain — should not match
     expect(result).toBeUndefined()
   })
 })
@@ -179,6 +205,31 @@ describe('matchPartnersToProducts', () => {
   })
 })
 
+// ── Partner interface — territory-partners.json fields (#996) ────────────────
+
+describe('Partner interface territory fields (#996)', () => {
+  test('Partner supports null partnershipLevel', () => {
+    const p = SEED_PARTNERS.find(p => p.name === 'Acme Consulting')!
+    expect(p.partnershipLevel).toBeNull()
+  })
+
+  test('Partner supports enrichmentStatus', () => {
+    const p = SEED_PARTNERS.find(p => p.name === 'Shadow-Soft, LLC / Arctiq')!
+    expect(p.enrichmentStatus).toBe('enriched')
+  })
+
+  test('Partner supports null domain', () => {
+    const p = SEED_PARTNERS.find(p => p.name === 'Acme Consulting')!
+    expect(p.domain).toBeNull()
+  })
+
+  test('Partner supports optional geo/country', () => {
+    const p = SEED_PARTNERS.find(p => p.name === 'Acme Consulting')!
+    expect(p.geo).toBeUndefined()
+    expect(p.country).toBeUndefined()
+  })
+})
+
 // ── loadPartners ────────────────────────────────────────────────────────────
 
 describe('loadPartners', () => {
@@ -200,8 +251,23 @@ describe('loadPartners', () => {
     const tmpPath = '/tmp/test-partners.json'
     require('fs').writeFileSync(tmpPath, JSON.stringify(SEED_PARTNERS))
     const result = loadPartners(tmpPath)
-    expect(result.length).toBe(3)
+    expect(result.length).toBe(5)
     expect(result[0].name).toBe('Shadow-Soft, LLC / Arctiq')
+    require('fs').unlinkSync(tmpPath)
+  })
+
+  test('loads territory-partners.json format with nullable fields (#996)', () => {
+    const tmpPath = '/tmp/test-territory-partners.json'
+    const territoryPartners = [
+      { name: 'Test Partner', aliases: [], domain: null, partnershipLevel: null, specializations: [], enrichmentStatus: 'pending' },
+      { name: 'Enriched Partner', aliases: ['EP'], domain: 'ep.com', partnershipLevel: 'Advanced Business Partner', specializations: ['Automation'], enrichmentStatus: 'enriched', catalogUrl: 'https://catalog.redhat.com/ep' },
+    ]
+    require('fs').writeFileSync(tmpPath, JSON.stringify(territoryPartners))
+    const result = loadPartners(tmpPath)
+    expect(result.length).toBe(2)
+    expect(result[0].partnershipLevel).toBeNull()
+    expect(result[1].partnershipLevel).toBe('Advanced Business Partner')
+    expect(result[0].enrichmentStatus).toBe('pending')
     require('fs').unlinkSync(tmpPath)
   })
 })
