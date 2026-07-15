@@ -6,6 +6,7 @@ import { SettingsPanel } from '../components/admin/SettingsPanel'
 import { SalesHubCoveragePanel } from '../components/admin/SalesHubCoveragePanel'
 import { RSSFeedsManagementSection } from '../components/admin/RSSFeedsSection'
 import { DocumentSourcesPanel } from '../components/admin/DocumentSourcesPanel'
+import { TerritoryPartnersPanel } from '../components/admin/TerritoryPartnersPanel'
 import { useApi } from '../hooks/useApi'
 
 export function AdminPage() {
@@ -71,6 +72,13 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Document Sources</h2>
           <p className="text-xs text-gray-500 mb-3">Configurable document and data sources -- Google Drive, URLs, email queries, RSS feeds</p>
           <DocumentSourcesPanel />
+        </div>
+
+        {/* Territory Partners — GitHub Issue #999 */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Territory Partners</h2>
+          <p className="text-xs text-gray-500 mb-3">Red Hat partner ecosystem in your territory — enrichment status and catalog data</p>
+          <TerritoryPartnersPanel />
         </div>
 
         {/* RSS Feeds Management — GitHub Issue #270 */}
