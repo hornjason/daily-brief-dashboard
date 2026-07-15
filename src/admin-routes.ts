@@ -37,6 +37,7 @@ import { toSlug } from './cache-layer.ts'
 import { computeDealAttribution } from './lib/deal-attribution.ts'
 import { getHealthResults } from './startup-health-probe.ts'
 import { generateTerritoryPartners, readTerritoryPartners } from './lib/territory-partner-generator.ts'
+import { enrichTerritoryPartners } from './lib/partner-catalog-scraper.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -385,6 +386,16 @@ export function createAdminRouter(): Hono {
     try {
       const partners = generateTerritoryPartners()
       return c.json({ count: partners.length })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/admin/territory-partners/enrich — catalog.redhat.com enrichment (#997)
+  r.post('/api/admin/territory-partners/enrich', async (c) => {
+    try {
+      const enriched = await enrichTerritoryPartners()
+      return c.json({ enriched })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
