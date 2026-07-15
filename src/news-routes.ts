@@ -118,50 +118,49 @@ export function createNewsRouter(): Hono {
    * Return high-significance articles (score >= 7) across all customers
    */
   app.get('/api/news/highlights', (c) => {
-    const highlights: Array<NewsItem & { customerName: string }> = []
-
     try {
-      // Read all cache files
       if (!existsSync(CACHE_DIR)) {
         return c.json({ highlights: [] })
       }
 
       const files = readdirSync(CACHE_DIR).filter(f => f.endsWith('.json'))
 
+      // Collect all critical articles with canonical customer names (#984 AC-2)
+      const articlesByCustomer = new Map<string, Array<NewsItem & { customerName: string }>>()
+
       for (const file of files) {
         const cachePath = resolve(CACHE_DIR, file)
         try {
           const data: NewsCacheEntry = JSON.parse(readFileSync(cachePath, 'utf-8'))
-
-          // Extract customer name from filename (remove .json extension)
           const slug = file.replace(/\.json$/, '')
 
-          // Filter for Critical significance only (score >= 7)
+          // Canonical customer name lookup — includes match for abbreviated slugs
+          const matchedCustomer = customers.find(cu => {
+            const cs = toSlug(cu.name)
+            return cs === slug || cs.includes(slug) || slug.includes(cs)
+          })
+          const canonicalName = matchedCustomer?.name ?? slug.replace(/-/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())
+          const canonicalKey = canonicalName.toLowerCase()
+
           const criticalArticles = data.articles.filter(a => a.significanceScore >= 7)
 
-          // Sort by significance score descending
-          criticalArticles.sort((a, b) => b.significanceScore - a.significanceScore)
-
-          // Take top 2 highest-scored articles per customer (GitHub Issue #217)
-          const top2 = criticalArticles.slice(0, 2)
-
-          // Resolve slug to display name from customers list
-          const matchedCustomer = customers.find(c => toSlug(c.name) === slug)
-          const displayName = matchedCustomer?.name ?? slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-
-          for (const article of top2) {
-            highlights.push({
-              ...article,
-              customerName: displayName,
-            })
+          const existing = articlesByCustomer.get(canonicalKey) ?? []
+          for (const article of criticalArticles) {
+            existing.push({ ...article, customerName: canonicalName })
           }
+          articlesByCustomer.set(canonicalKey, existing)
         } catch (e: any) {
           console.warn(`[news-routes] Failed to read cache file ${file}:`, e.message)
-          // Continue processing other files
         }
       }
 
-      // Sort by significance score descending (global sort across all customers)
+      // Top 2 per canonical customer, then global sort
+      const highlights: Array<NewsItem & { customerName: string }> = []
+      for (const articles of articlesByCustomer.values()) {
+        articles.sort((a, b) => b.significanceScore - a.significanceScore)
+        highlights.push(...articles.slice(0, 2))
+      }
+
       highlights.sort((a, b) => b.significanceScore - a.significanceScore)
 
       return c.json({ highlights })

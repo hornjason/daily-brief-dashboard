@@ -29,7 +29,15 @@
   ],
   "excludeKeywords": [
     "routine press release",
-    "minor mention"
+    "minor mention",
+    "hiring",
+    "job opening",
+    "career",
+    "apply now",
+    "we're looking for",
+    "job posting",
+    "now hiring",
+    "open position"
   ],
   "defaultThreshold": 5,
   "searchDepthDays": 14,

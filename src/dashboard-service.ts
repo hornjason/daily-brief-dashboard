@@ -289,143 +289,101 @@ export async function buildRedHatIntelligenceForMorningBrief(
 ): Promise<RedHatIntelligence | null> {
   const { readdirSync } = require('fs')
 
-  // ── 1. Meeting News (max 3 items) ──────────────────────────────────────────
+  // ── 1. Meeting News (max 3 items) — single blended path (#985) ──────────
   const meetingNews: MeetingNewsItem[] = []
 
-  // Collect customers with meetings today
-  const customersWithMeetingsToday = new Set<string>()
+  // Collect customers with meetings in next 3 days (#985 AC-2)
+  const customersWithUpcomingMeetings = new Set<string>()
+  const nowDate = new Date()
+  const threeDayCutoff = new Date(nowDate.getTime() + 2 * 86_400_000)
   for (const event of calendarEvents) {
-    for (const customerName of event.customers ?? []) {
-      customersWithMeetingsToday.add(customerName.toLowerCase())
+    const eventStart = new Date(event.start)
+    if (eventStart >= nowDate && eventStart <= threeDayCutoff) {
+      for (const customerName of event.customers ?? []) {
+        customersWithUpcomingMeetings.add(customerName.toLowerCase())
+      }
     }
   }
 
-  if (customersWithMeetingsToday.size > 0) {
-    try {
-      const NEWS_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
+  try {
+    const NEWS_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 
-      if (existsSync(NEWS_CACHE_DIR)) {
-        const files = readdirSync(NEWS_CACHE_DIR)
-        const seenHeadlines = new Set<string>()
-        const seenCustomers = new Set<string>()
+    if (existsSync(NEWS_CACHE_DIR)) {
+      const allArticles: Array<{
+        headline: string
+        summary: string
+        sourceUrl: string
+        publishedDate: string
+        significanceScore: number
+        productTags?: string[]
+        customerName: string
+      }> = []
 
-        for (const file of files) {
-          if (!file.endsWith('.json')) continue
+      const files = readdirSync(NEWS_CACHE_DIR)
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
 
-          const cachePath = resolve(NEWS_CACHE_DIR, file)
-          try {
-            const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
-            const articles = cacheData.articles ?? []
-
-            for (const article of articles) {
-              const productTags = article.productTags ?? []
-              const normalizedHeadline = (article.headline ?? '').toLowerCase().trim()
-              if (seenHeadlines.has(normalizedHeadline)) continue
-
-              for (const customer of customers) {
-                if (!customersWithMeetingsToday.has(customer.name.toLowerCase())) continue
-                if (seenCustomers.has(customer.name.toLowerCase())) continue
-
-                const customerProducts = customer.products ?? []
-                const matchingProduct = productTags.find((tag: string) =>
-                  customerProducts.some(p => p.toLowerCase().includes(tag.toLowerCase()))
-                )
-
-                if (matchingProduct) {
-                  if (article.sourceUrl && !/^https?:\/\//i.test(article.sourceUrl)) continue
-                  meetingNews.push({
-                    headline: article.headline,
-                    summary: article.summary,
-                    sourceUrl: article.sourceUrl,
-                    relevantCustomer: customer.name,
-                    relevantProduct: matchingProduct,
-                    publishedDate: article.publishedDate,
-                  })
-                  seenHeadlines.add(normalizedHeadline)
-                  seenCustomers.add(customer.name.toLowerCase())
-                  break
-                }
-              }
-
-              if (meetingNews.length >= 3) break
-            }
-          } catch { /* skip invalid cache file */ }
-
-          if (meetingNews.length >= 3) break
-        }
-      }
-    } catch { /* news unavailable — non-fatal */ }
-  }
-
-  // If no matches to meeting customers, fall back to top 3 highest-significance news
-  if (meetingNews.length === 0) {
-    try {
-      const NEWS_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
-
-      if (existsSync(NEWS_CACHE_DIR)) {
-        const allArticles: Array<{
-          headline: string
-          summary: string
-          sourceUrl: string
-          publishedDate: string
-          significanceScore: number
-          productTags?: string[]
-          customerName: string
-        }> = []
-
-        const files = readdirSync(NEWS_CACHE_DIR)
-        for (const file of files) {
-          if (!file.endsWith('.json')) continue
-
-          const customerName = file.replace(/\.json$/i, '').toLowerCase()
-          const cachePath = resolve(NEWS_CACHE_DIR, file)
-          try {
-            const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
-            for (const a of cacheData.articles ?? []) {
-              allArticles.push({ ...a, customerName })
-            }
-          } catch { /* skip invalid cache */ }
-        }
-
-        // Sort by blended score: significance + recency boost
-        const now = Date.now()
-        const DAY_MS = 86_400_000
-        const scored = allArticles.map(a => {
-          const age = a.publishedDate ? now - new Date(a.publishedDate).getTime() : Infinity
-          let recencyBoost = 0
-          if (age < DAY_MS) recencyBoost = 3
-          else if (age < 3 * DAY_MS) recencyBoost = 1
-          else if (age > 7 * DAY_MS) recencyBoost = -2
-          return { ...a, effectiveScore: (a.significanceScore ?? 0) + recencyBoost }
+        // Canonical customer name lookup (#984 AC-1)
+        const fileSlug = file.replace(/\.json$/i, '')
+        const matchedCustomer = customers.find(c => {
+          const cs = toSlug(c.name)
+          return cs === fileSlug || cs.includes(fileSlug) || fileSlug.includes(cs)
         })
-        scored.sort((a, b) => b.effectiveScore - a.effectiveScore)
+        const canonicalName = matchedCustomer?.name ?? fileSlug
 
-        // Deduplicate by normalized headline — keep highest-scored version
-        const headlineMap = new Map<string, typeof scored[0]>()
-        for (const article of scored) {
-          const key = (article.headline ?? '').toLowerCase().trim()
-          if (!headlineMap.has(key)) headlineMap.set(key, article)
-        }
-        const deduped = [...headlineMap.values()]
-
-        // Max 1 article per customer for diversity
-        const seenCustomers = new Set<string>()
-        for (const article of deduped) {
-          if (seenCustomers.has(article.customerName)) continue
-          meetingNews.push({
-            headline: article.headline,
-            summary: article.summary,
-            sourceUrl: article.sourceUrl,
-            relevantCustomer: article.customerName,
-            relevantProduct: article.productTags?.[0] ?? 'Red Hat',
-            publishedDate: article.publishedDate,
-          })
-          seenCustomers.add(article.customerName)
-          if (meetingNews.length >= 3) break
-        }
+        const cachePath = resolve(NEWS_CACHE_DIR, file)
+        try {
+          const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
+          for (const a of cacheData.articles ?? []) {
+            allArticles.push({ ...a, customerName: canonicalName })
+          }
+        } catch { /* skip invalid cache */ }
       }
-    } catch { /* news unavailable — non-fatal */ }
-  }
+
+      // Blended score: significance + recency + meeting boost (#985 AC-1)
+      const nowMs = Date.now()
+      const DAY_MS = 86_400_000
+      const scored = allArticles.map(a => {
+        const age = a.publishedDate ? nowMs - new Date(a.publishedDate).getTime() : Infinity
+        let recencyBoost = 0
+        if (age < DAY_MS) recencyBoost = 3
+        else if (age < 3 * DAY_MS) recencyBoost = 1
+        else if (age > 7 * DAY_MS) recencyBoost = -2
+
+        const meetingBoost = customersWithUpcomingMeetings.has(a.customerName.toLowerCase()) ? 5 : 0
+        return { ...a, effectiveScore: (a.significanceScore ?? 0) + recencyBoost + meetingBoost }
+      })
+
+      // Filter out noise: effectiveScore ≤ 2 (#983 AC-2)
+      const filtered = scored.filter(a => a.effectiveScore > 2)
+      filtered.sort((a, b) => b.effectiveScore - a.effectiveScore)
+
+      // Deduplicate by normalized headline — keep highest-scored version
+      const headlineMap = new Map<string, typeof filtered[0]>()
+      for (const article of filtered) {
+        const key = (article.headline ?? '').toLowerCase().trim()
+        if (!headlineMap.has(key)) headlineMap.set(key, article)
+      }
+      const deduped = [...headlineMap.values()]
+
+      // Max 1 article per customer for diversity (canonical name dedup)
+      const seenCustomers = new Set<string>()
+      for (const article of deduped) {
+        const customerKey = article.customerName.toLowerCase()
+        if (seenCustomers.has(customerKey)) continue
+        meetingNews.push({
+          headline: article.headline,
+          summary: article.summary,
+          sourceUrl: article.sourceUrl,
+          relevantCustomer: article.customerName,
+          relevantProduct: article.productTags?.[0] ?? 'Red Hat',
+          publishedDate: article.publishedDate,
+        })
+        seenCustomers.add(customerKey)
+        if (meetingNews.length >= 3) break
+      }
+    }
+  } catch { /* news unavailable — non-fatal */ }
 
   // ── 2. Product Releases (max 5 items, within 30 days) ─────────────────────
   const releases: ProductRelease[] = []
