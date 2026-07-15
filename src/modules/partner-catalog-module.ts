@@ -9,6 +9,7 @@
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { loadPartnersFromConfig, matchPartnersToProducts, type Partner } from '../lib/partner-catalog.ts'
 import { loadCustomerContext, matchesTechStack } from '../lib/customer-context-loader.ts'
+import { downloadTerritoryPartnersFromDrive } from '../lib/partner-catalog-drive-sync.ts'
 import { statSync } from 'fs'
 import { resolve } from 'path'
 
@@ -82,15 +83,22 @@ FeatureModuleRegistry.register({
   async ensureFresh(_customerSlug: string): Promise<void> {
     // Check partners.json mtime against TTL (AC-5)
     const configPath = getPartnersConfigPath()
+    let needsSync = false
     try {
       const stat = statSync(configPath)
       if (Date.now() - stat.mtimeMs < CACHE_TTL_MS) return // fresh
+      needsSync = true // stale
     } catch {
-      // File missing — nothing to refresh for config-driven data
-      return
+      needsSync = true // file missing
     }
-    // Stale — log advisory (territory-partners.json is regenerated from pipeline data)
-    console.log('[partner-catalog] territory-partners.json is older than 7 days — consider regenerating')
+
+    if (needsSync) {
+      // Attempt Drive download — L3 sync from Mac Mini uploads (#998)
+      const downloaded = await downloadTerritoryPartnersFromDrive()
+      if (!downloaded) {
+        console.log('[partner-catalog] Drive sync unavailable — using existing cache if present')
+      }
+    }
   },
 
   async fetch(_customerName: string): Promise<void> {
