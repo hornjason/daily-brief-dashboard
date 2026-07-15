@@ -381,10 +381,11 @@ export function createAdminRouter(): Hono {
     }
   })
 
-  // POST /api/admin/territory-partners/refresh — regenerate territory partners (#995)
+  // POST /api/admin/territory-partners/refresh — regenerate territory partners (#995, #1001)
   r.post('/api/admin/territory-partners/refresh', (c) => {
     try {
-      const partners = generateTerritoryPartners()
+      const customerNames = customers.map(cu => cu.name)
+      const partners = generateTerritoryPartners(undefined, undefined, customerNames)
       return c.json({ count: partners.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

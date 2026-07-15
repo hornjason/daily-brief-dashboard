@@ -364,16 +364,36 @@ export function extractPartnersFromPipeline(records: PipelineRecordInput[]): Ext
 }
 
 /**
+ * Filter noise: exclude partners with only 1 customer AND 1 opp (#1001).
+ * Applied at the file-read level, not in the core extraction function.
+ */
+export function filterNoisePartners(partners: ExtractedPartner[]): ExtractedPartner[] {
+  return partners.filter(p =>
+    p.customerAssociations.length > 1 ||
+    p.customerAssociations.reduce((sum, ca) => sum + ca.oppCount, 0) > 1
+  )
+}
+
+/**
  * Extract partners from a pipeline data JSON file.
  * Expects `{ records: PipelineRecordInput[] }` or `PipelineRecordInput[]`.
+ * Applies customer filter and noise filter automatically.
  * Fail-open: returns empty array on missing file or parse error.
+ * @param customerNames - When provided, filters records to only loaded customers (#1001)
  */
-export function extractPartnersFromFile(filePath: string): ExtractedPartner[] {
+export function extractPartnersFromFile(filePath: string, customerNames?: string[]): ExtractedPartner[] {
   if (!existsSync(filePath)) return []
   try {
     const raw = JSON.parse(readFileSync(filePath, 'utf-8'))
-    const records: PipelineRecordInput[] = Array.isArray(raw) ? raw : raw.records ?? []
-    return extractPartnersFromPipeline(records)
+    let records: PipelineRecordInput[] = Array.isArray(raw) ? raw : raw.records ?? []
+    if (customerNames && customerNames.length > 0) {
+      const lowerNames = customerNames.map(n => n.toLowerCase())
+      records = records.filter(r => {
+        const acct = r.accountName.toLowerCase()
+        return lowerNames.some(cn => acct.includes(cn) || cn.includes(acct))
+      })
+    }
+    return filterNoisePartners(extractPartnersFromPipeline(records))
   } catch {
     return []
   }

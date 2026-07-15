@@ -890,6 +890,14 @@ Live verification against Workday AAP Demo meeting. Three integration bugs found
 
 **Spec requirement added:** Integration testing against live Gmail/Calendar is mandatory for signal producer modules. Unit tests with mocks verify code logic but cannot validate auth, API response shape, data format, or content completeness.
 
+### 12.10 Partner Extraction Scope (2026-07-15)
+
+**Problem found:** Territory partner extraction ran against ALL 3,955 pipeline records from 63 territories across the entire org. Only the user's loaded customers should be in scope. Additionally, 88% of extracted entries (487/555) were single-opp parsing noise — product names, deal types, contract numbers, and opp name fragments.
+
+**Spec requirement:** `generateTerritoryPartners()` must accept a `customerNames` filter. When provided, pipeline records are filtered to only those whose `accountName` matches a loaded customer (case-insensitive substring). Post-extraction noise filter in `extractPartnersFromPipeline()` excludes entries with only 1 customer AND 1 opp. When enriched Tier 1 partners (those with a known `partnershipLevel` — Premier, Advanced, Specialized, Red Hat) number fewer than 3, Tier 2 fallback loads legacy catalog partners with known tiers to ensure meeting prep and playbook always have partner recommendations available.
+
+**Implementation:** `territory-partner-generator.ts` passes customer filter to `extractPartnersFromFile()`. `admin-routes.ts` supplies loaded customer names from `server-state.ts`. `partner-catalog.ts` `loadPartnersFromConfig()` merges territory partners with legacy fallback when enriched count < 3.
+
 ## 13. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.

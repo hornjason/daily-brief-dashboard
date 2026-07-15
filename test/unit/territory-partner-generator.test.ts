@@ -68,10 +68,11 @@ afterEach(() => {
 // ── AC-1: generateTerritoryPartners writes file with ≥15 entries ─────────────
 
 describe('AC-1: generation count', () => {
-  test('generates ≥15 partner entries from pipeline data', () => {
+  test('generates multi-customer partner entries from pipeline data', () => {
     writeFileSync(pipelinePath, JSON.stringify(makePipelineData()))
     const result = generateTerritoryPartners(pipelinePath, outputPath)
-    expect(result.length).toBeGreaterThanOrEqual(15)
+    // Noise filter (#1001) removes single-customer/single-opp entries
+    expect(result.length).toBeGreaterThanOrEqual(3)
 
     // Verify file was written
     const onDisk = JSON.parse(readFileSync(outputPath, 'utf-8'))
@@ -170,11 +171,13 @@ describe('AC-2: schema validation', () => {
 // ── AC-3: POST refresh triggers regeneration and returns count ───────────────
 
 describe('AC-3: refresh endpoint (unit logic)', () => {
-  test('generateTerritoryPartners returns array with count ≥15', () => {
+  test('generateTerritoryPartners returns array with multi-customer partners only', () => {
     writeFileSync(pipelinePath, JSON.stringify(makePipelineData()))
     const result = generateTerritoryPartners(pipelinePath, outputPath)
-    // Simulates what the POST endpoint returns: { count: partners.length }
-    expect(result.length).toBeGreaterThanOrEqual(15)
+    // Noise filter (#1001) removes single-customer/single-opp entries
+    // Only CDW (4 customers), SHI (3), WWT (2) survive
+    expect(result.length).toBeGreaterThanOrEqual(3)
+    expect(result.length).toBeLessThan(15)
   })
 })
 
@@ -257,8 +260,9 @@ describe('AC-5: incremental merge', () => {
     enriched[0].enrichmentStatus = 'enriched'
     writeFileSync(outputPath, JSON.stringify(enriched))
 
-    // Add a new record with a new partner
+    // Add two records for the same new partner so it passes noise filter
     data.records.push({ oppName: 'NN - Boeing - Accenture - OCP', accountName: 'Boeing' })
+    data.records.push({ oppName: 'NN - Starbucks - Accenture - AAP', accountName: 'Starbucks' })
     writeFileSync(pipelinePath, JSON.stringify(data))
 
     const second = generateTerritoryPartners(pipelinePath, outputPath)
@@ -267,5 +271,58 @@ describe('AC-5: incremental merge', () => {
     // Enrichment on first partner should be preserved
     const preservedPartner = second.find(p => p.name.toLowerCase() === enriched[0].name.toLowerCase())
     expect(preservedPartner?.enrichmentStatus).toBe('enriched')
+  })
+})
+
+// ── #1001: Customer filter ──────────────────────────────────────────────────
+
+describe('#1001: customer name filter', () => {
+  test('filters pipeline records to only loaded customers', () => {
+    writeFileSync(pipelinePath, JSON.stringify(makePipelineData()))
+    const result = generateTerritoryPartners(pipelinePath, outputPath, ['Agilent Technologies', 'Zions Bancorporation', 'KLA Corporation'])
+    // Only records matching these 3 customers are processed
+    // Partners found: SHI (Agilent + KLA = 2 customers), CDW (Zions = 1 customer, 1 opp → filtered)
+    const names = result.map(p => p.name.toLowerCase())
+    expect(names).toContain('shi')
+    // CDW only has 1 customer in the filtered set → noise-filtered
+    expect(names).not.toContain('cdw')
+  })
+
+  test('no filter returns all multi-customer partners', () => {
+    writeFileSync(pipelinePath, JSON.stringify(makePipelineData()))
+    const withFilter = generateTerritoryPartners(pipelinePath, outputPath, ['Agilent Technologies'])
+    const withoutFilter = generateTerritoryPartners(pipelinePath, outputPath)
+    expect(withoutFilter.length).toBeGreaterThan(withFilter.length)
+  })
+})
+
+// ── #1001: Noise filter ─────────────────────────────────────────────────────
+
+describe('#1001: noise filter', () => {
+  test('excludes single-customer/single-opp entries', () => {
+    const { filterNoisePartners } = require('../../src/lib/pipeline-partner-extractor.ts')
+    const partners = [
+      { name: 'CDW', aliases: ['CDW'], customerAssociations: [
+        { customerName: 'Acme', oppNames: ['opp1'], oppCount: 1 },
+        { customerName: 'Beta', oppNames: ['opp2'], oppCount: 1 },
+      ]},
+      { name: 'Noise', aliases: ['Noise'], customerAssociations: [
+        { customerName: 'Solo', oppNames: ['opp1'], oppCount: 1 },
+      ]},
+    ]
+    const filtered = filterNoisePartners(partners)
+    expect(filtered.length).toBe(1)
+    expect(filtered[0].name).toBe('CDW')
+  })
+
+  test('keeps entries with multiple opps for single customer', () => {
+    const { filterNoisePartners } = require('../../src/lib/pipeline-partner-extractor.ts')
+    const partners = [
+      { name: 'Repeat', aliases: ['Repeat'], customerAssociations: [
+        { customerName: 'Solo', oppNames: ['opp1', 'opp2'], oppCount: 2 },
+      ]},
+    ]
+    const filtered = filterNoisePartners(partners)
+    expect(filtered.length).toBe(1)
   })
 })

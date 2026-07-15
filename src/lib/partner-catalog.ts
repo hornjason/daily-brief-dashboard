@@ -75,18 +75,37 @@ export function loadPartners(filePath: string): Partner[] {
   }
 }
 
+const KNOWN_TIERS = ['Premier', 'Advanced', 'Specialized', 'Red Hat'] as const
+
+function isKnownTier(level: string | null | undefined): boolean {
+  if (!level) return false
+  return KNOWN_TIERS.some(tier => level.includes(tier))
+}
+
 /**
  * Load partners from the default cache path (territory-partners.json).
  * Falls back to legacy data/config/partners.json if territory file missing.
+ * When enriched Tier 1 partners < 3, appends Tier 2 fallback from legacy catalog (#1001).
  */
 export function loadPartnersFromConfig(): Partner[] {
   const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
-  const territoryPath = resolve(cacheDir, 'territory-partners.json')
-  const partners = loadPartners(territoryPath)
-  if (partners.length > 0) return partners
-  // Fallback to legacy path for backward compatibility
   const configDir = process.env.CONFIG_DIR ?? 'data/config'
-  return loadPartners(resolve(configDir, 'partners.json'))
+  const territoryPath = resolve(cacheDir, 'territory-partners.json')
+  const legacyPath = resolve(configDir, 'partners.json')
+  const partners = loadPartners(territoryPath)
+  if (partners.length === 0) return loadPartners(legacyPath)
+
+  // Tier 2 fallback: when few enriched partners, supplement with legacy catalog (#1001)
+  const enrichedCount = partners.filter(p =>
+    (p as any).enrichmentStatus === 'enriched' && isKnownTier(p.partnershipLevel)
+  ).length
+  if (enrichedCount < 3) {
+    const legacy = loadPartners(legacyPath)
+    const existingNames = new Set(partners.map(p => p.name.toLowerCase()))
+    const fallback = legacy.filter(p => isKnownTier(p.partnershipLevel) && !existingNames.has(p.name.toLowerCase()))
+    return [...partners, ...fallback]
+  }
+  return partners
 }
 
 // ── Lookup ────────────────────────────────────────────────────────────────────

@@ -75,13 +75,15 @@ function buildExistingMap(partners: TerritoryPartner[]): Map<string, TerritoryPa
  *
  * @param pipelinePath - Override path for pipeline data (default: CACHE_DIR/pipeline-data.json)
  * @param outputPath - Override path for output (default: CACHE_DIR/territory-partners.json)
+ * @param customerNames - When provided, filters pipeline records to only loaded customers (#1001)
  * @returns Array of generated TerritoryPartner entries
  */
 export function generateTerritoryPartners(
   pipelinePath: string = PIPELINE_DATA_PATH,
   outputPath: string = TERRITORY_PARTNERS_PATH,
+  customerNames?: string[],
 ): TerritoryPartner[] {
-  const extracted = extractPartnersFromFile(pipelinePath)
+  const extracted = extractPartnersFromFile(pipelinePath, customerNames)
   const existing = readExistingPartners(outputPath)
   const existingMap = buildExistingMap(existing)
   const now = new Date().toISOString()
