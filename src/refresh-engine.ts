@@ -660,12 +660,11 @@ export function createRefreshRouter(): Hono {
     }
   })
   router.post('/api/refresh/ecosystem-catalog', async (c) => {
-    const mod = FeatureModuleRegistry.get('ecosystem-catalog')
-    if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
     try {
-      await mod.syncNow('')
-      FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: true })
-      return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+      const { syncEcosystemCatalog } = await import('./lib/ecosystem-catalog.ts')
+      const result = await syncEcosystemCatalog()
+      FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: true, recordCount: result.solutionCount })
+      return c.json({ ok: true, solutionCount: result.solutionCount, partnerCount: result.partnerCount, refreshedAt: new Date().toISOString() })
     } catch (e: any) {
       FeatureModuleRegistry.recordOutcome('ecosystem-catalog', { success: false, error: sanitizeErr(e) })
       return c.json({ ok: false, error: sanitizeErr(e) }, 500)
