@@ -1110,6 +1110,31 @@ Each slice gets its own issue with ACs, ships through the harness (SCOPE → BUI
 
 **Phase 2 and 3** decompose into slices after Phase 1 ships and we validate the foundation.
 
+### 13.10 Council Review Findings (2026-07-16)
+
+Three-perspective review (architecture, risk, gaps) on §13.1–13.9.
+
+**Architecture findings:**
+1. **routeSignal() update required** — §3 Engagement Timeline is a new template section. `routeSignal()` in `signal-templates.ts` needs a route for meeting-context signals → 'engagement-timeline'. Without this, signals fall to 'other' and are invisible. **→ Added to Phase 1 Slice 2.**
+2. **Other consumers benefit** — meeting-context signals should flow to ALL consumers (morning brief, playbook, campaign), not just meeting prep. Per PRINCIPLES.md pre-flight #4: "Does every consumer that should see this data actually see it?" **→ Phase 2 follow-up issue.**
+3. **Graph is an index, not a content store** — Graph engagement nodes contain labels and metadata (e.g., `"email-invitation-dropbox-red-hat"`), not full email body text. Building §3 Engagement Timeline requires fetching actual content from email cache or Gmail API, not just reading graph node labels. **→ Phase 1 Slice 3 must read from email cache, not graph alone.**
+
+**Risk findings:**
+4. **Prompt size budget** — Current Gemini prompts are ~15K tokens. Adding email thread content + graph evidence + meeting-context signals could push to 50K+. Must set a token budget: cap email thread text at 3K tokens, evidence doc excerpts at 2K tokens, total additional context ≤ 8K tokens. **→ Constraint added to Phase 1 Slice 2.**
+5. **Deduplication** — emails-module (domain-based) and meeting-context-module (attendee-based) may return overlapping emails. Signals from both will contain the same email thread. Must deduplicate by Gmail threadId before merging. **→ Added to Phase 1 Slice 2.**
+6. **Timestamp normalization** — Emails (RFC 2822 date), calendar events (ISO 8601), Drive docs (ISO 8601 modifiedTime) use different formats. §3 chronological ordering needs a unified timestamp parser. **→ Added to Phase 1 Slice 3.**
+
+**Gap findings:**
+7. **Section rename ripple** — Changing "Recent Interactions" → "Engagement Timeline" affects: Gemini responseSchema field name, quality validator regex, HTML template section parsing, deterministic overrides, and meeting-prep-validator.ts. **→ Phase 1 Slice 3 must update all 5 locations.**
+8. **Action item carry-forward source (Phase 2)** — Prior prep action items live in Google Docs (update-in-place). Extracting structured items requires parsing the previous doc. **→ Phase 2 issue.** For Phase 1, action items are Gemini-generated as today.
+9. **Graph freshness** — If graph was built before latest emails arrived, Engagement Timeline will be incomplete. Should trigger graph rebuild before prep generation if stale > 2 hours. **→ Phase 2 issue (graph refresh before consumer generation).**
+10. **Gmail API combined load** — Two search paths (customer.ts domain search + meeting-context attendee search) could hit 70+ messages. At 5 units/message, that's 350+ quota units. Below the 250/second limit but should be batched. **→ Constraint noted for implementation.**
+
+**Dispositions:**
+- Findings 1, 3, 4, 5, 6, 7 → incorporated into Phase 1 slice definitions
+- Findings 2, 8, 9 → logged as Phase 2 follow-up issues
+- Finding 10 → implementation constraint (no separate issue needed)
+
 ## 14. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.
