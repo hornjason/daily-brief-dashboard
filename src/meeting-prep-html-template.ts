@@ -77,13 +77,14 @@ function applyInlineFormatting(text: string): string {
   // Italic: *text* (but not in URLs)
   result = result.replace(/(?<!https?:\/\/[^\s]*)\*([^*]+)\*/g, '<em>$1</em>')
 
-  // Color badges for key terms
-  result = result.replace(/\b(HIGH|URGENT|CRITICAL|IMMEDIATE)\b/gi, '<span class="badge-urgent">$1</span>')
-  result = result.replace(/\b(Coming [A-Z][a-z]+ \d{4}|GA —|New Product|NEW|COMING|Available)\b/gi, '<span class="badge-new">$1</span>')
-  result = result.replace(/\b(Announced [A-Z][a-z]+ \d+|Tech Preview|Technology Preview|BETA)\b/gi, '<span class="badge-info">$1</span>')
-
-  // Links: [text](url)
+  // Links FIRST — convert to <a> tags so badge regex won't touch URLs
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#0066cc">$1</a>')
+
+  // Color badges — only outside HTML tags (skip content inside href="...")
+  result = result.replace(/(?<![a-zA-Z])(HIGH|URGENT|IMMEDIATE)(?![a-zA-Z]|[^<]*>)/gi, '<span class="badge-urgent">$1</span>')
+  result = result.replace(/(?<!Mission\s)(?<![a-zA-Z])CRITICAL(?![a-zA-Z]|[^<]*>)/gi, '<span class="badge-urgent">CRITICAL</span>')
+  result = result.replace(/(?<![a-zA-Z])(Coming [A-Z][a-z]+ \d{4}|GA —|New Product|COMING|Available)(?![a-zA-Z]|[^<]*>)/gi, '<span class="badge-new">$1</span>')
+  result = result.replace(/(?<![a-zA-Z])(Announced [A-Z][a-z]+ \d+|Tech Preview|Technology Preview|BETA)(?![a-zA-Z]|[^<]*>)/gi, '<span class="badge-info">$1</span>')
 
   return result
 }

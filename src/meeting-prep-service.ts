@@ -1176,30 +1176,29 @@ export async function generateMeetingPrep(
 
   // Resolve ALL attendees (customer + partner) via profile cache (#645)
   // AC-4: Partner attendees get full research — no skip
+  // Split resolution: customer-domain emails get customer name, partner-domain emails get domain-derived company
+  const partnerDomainSet = new Set(partnerDomains)
   try {
-    resolvedProfiles = await resolveAttendees(
-      attendeeEmails,
-      customer.name,
-      {
-        calendarDisplayNames,
-        meetingHistory,
-        customerName: customer.name,
-      }
-    )
+    const customerEmails = attendeeEmails.filter(e => !partnerDomainSet.has(e.split('@')[1] ?? ''))
+    const partnerEmails = attendeeEmails.filter(e => partnerDomainSet.has(e.split('@')[1] ?? ''))
+
+    const customerProfiles = await resolveAttendees(customerEmails, customer.name, { calendarDisplayNames, meetingHistory, customerName: customer.name })
+    const partnerProfiles = await resolveAttendees(partnerEmails, '', { calendarDisplayNames, meetingHistory })
+    resolvedProfiles = [...customerProfiles, ...partnerProfiles]
 
     // Get AE name for unresolved attendee messages
     const team = getAccountTeam(customer)
     const aeEntry = team.find(m => m.role === 'ae')
     const aeName = aeEntry?.name ?? 'your AE'
 
-    // Format resolved profiles into attendee research output
+    // Format resolved profiles into attendee research output — include email and company
     const profileLines = resolvedProfiles.map(profile => {
+      const titlePart = profile.title ? `, ${profile.title}` : ''
+      const linkedinPart = profile.linkedinUrl ? ` — [LinkedIn](${profile.linkedinUrl})` : ''
       if (profile.resolved) {
-        const titlePart = profile.title ? `, ${profile.title}` : ''
-        const linkedinPart = profile.linkedinUrl ? ` — [LinkedIn](${profile.linkedinUrl})` : ''
-        return `- **${profile.name}**${titlePart} at ${profile.company}${linkedinPart}`
+        return `- **${profile.name}**${titlePart} at ${profile.company} (${profile.email})${linkedinPart}`
       } else {
-        return `- **${profile.name}** at ${profile.company} — Profile not found — ask ${aeName} for context`
+        return `- **${profile.name}** at ${profile.company} (${profile.email}) — Profile not found — ask ${aeName} for context`
       }
     })
 
@@ -1245,23 +1244,34 @@ export async function generateMeetingPrep(
     )
     if (relevantPartners.length > 0) {
       const ecoPartners = loadAllEcosystemPartners()
-      const ecoByName = new Map(ecoPartners.map(ep => [ep.partnerName.toLowerCase(), ep]))
+      const normalizeKey = (n: string) => n.toLowerCase().replace(/[,.\s]+/g, ' ').replace(/\b(inc|llc|ltd|corp|corporation|systems)\b/gi, '').trim()
+      const ecoByName = new Map<string, typeof ecoPartners[0]>()
+      for (const ep of ecoPartners) {
+        ecoByName.set(normalizeKey(ep.partnerName), ep)
+      }
 
-      const partnerSections = relevantPartners.slice(0, 8).map(p => {
+      const tableRows: string[] = []
+      const resourceSections: string[] = []
+
+      for (const p of relevantPartners.slice(0, 8)) {
         const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
-        const row = `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
+        tableRows.push(`| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`)
 
-        const eco = ecoByName.get(p.name.toLowerCase())
+        const eco = ecoByName.get(normalizeKey(p.name))
         if (eco && eco.solutions.length > 0) {
-          const resourceLines = eco.solutions.slice(0, 3).flatMap(sol =>
-            sol.resources.slice(0, 2).map(r => `  - [${r.title}](${r.url}) *(${r.type})*`)
+          const resources = eco.solutions.slice(0, 3).flatMap(sol =>
+            sol.resources.slice(0, 2).map(r => `- [${r.title}](${r.url}) *(${r.type})*`)
           )
-          if (resourceLines.length > 0) return row + '\n' + resourceLines.join('\n')
+          if (resources.length > 0) {
+            resourceSections.push(`**${p.name}:**\n${resources.join('\n')}`)
+          }
         }
-        return row
-      }).join('\n')
+      }
 
-      otherPartnersTable = `\n\n**Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerSections}`
+      otherPartnersTable = `\n\n**Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${tableRows.join('\n')}`
+      if (resourceSections.length > 0) {
+        otherPartnersTable += `\n\n**Partner Resources:**\n${resourceSections.join('\n\n')}`
+      }
     }
   }
 
