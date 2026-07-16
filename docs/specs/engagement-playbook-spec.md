@@ -908,7 +908,209 @@ Live verification against Workday AAP Demo meeting. Three integration bugs found
 
 **Data flow:** HYDRA SOLR → ecosystem cache → `seedPartnersFromEcosystem()` → territory-partners.json → `enrichTerritoryPartners()` → catalog.redhat.com detail pages → enriched territory-partners.json with tier + specializations. Meeting prep reads both territory-partners.json (names/tiers) and ecosystem cache (resources) for Tier 2 display.
 
-## 13. Open Questions for Jason
+## 13. Engagement Runbook Evolution (Grill 2026-07-16)
+
+Design decisions from grill-with-docs session. Addresses: meeting prep intelligence pipeline gaps (#1004), Gmail query fix, meeting-context module wiring, engagement lifecycle.
+
+### 13.1 Vision: Living Engagement Runbook
+
+Meeting prep is one view into a **long-lived engagement intelligence record**, not a standalone throwaway document. Each generation is additive — re-running updates with latest intelligence rather than regenerating from scratch.
+
+**Lifecycle model:**
+- Meeting 1 → prep doc + captured intelligence (what was discussed, committed, asked for)
+- Meeting 2 → builds ON meeting 1's intelligence + new signals
+- Meeting N → full engagement history, every interaction threaded
+- Opportunity → accumulated intelligence becomes the deal context
+
+**Auto-detection signals (any 2+ = ongoing engagement → runbook mode):**
+- Same customer has a pipeline opportunity (renewal, expansion)
+- Calendar shows recurring series or ≥2 meetings in 30 days
+- Email thread has ≥3 back-and-forth messages
+- Prior meeting prep exists in history
+- Intelligence graph has ≥10 edges for this customer
+
+**If ongoing engagement →** Runbook mode: accumulate, persist, update-in-place, shareable
+**If standalone →** Quick prep mode: generate once, don't create a runbook
+**Auto-upgrade:** A first meeting that later gets a follow-up auto-upgrades from standalone to runbook.
+
+**Runbook home:** Google Doc (shareable artifact for team) + Dashboard (live intelligence view). Both stay in sync.
+
+### 13.2 Gold Standard Output Format
+
+Nine sections, informed by competitive research ([Sybill](https://www.sybill.ai/blogs/ai-pre-meeting-brief-sales-call-prospect-research), [AmpUp](https://www.ampup.ai/resources/best-ai-pre-call-briefing-meeting-prep-tools), [SiftHub](https://www.sifthub.io/blog/strategic-sales-meeting-prep-tools-with-ai)):
+
+| § | Section | Source | Deterministic? |
+|---|---------|--------|----------------|
+| 1 | Meeting Objective | Gemini synthesis + pipeline data | Hybrid — pipeline $ injected deterministically |
+| 2 | Who's in the Room | Calendar + attendee profiles + graph | Yes — from resolved profiles (name, title, company, email) |
+| 3 | Engagement Timeline | Intelligence graph edges + email threads | Yes — timestamped entries with source links. REPLACES "Recent Interactions" |
+| 4 | Value Play | Gemini synthesis grounded in customer's own words | No — Gemini, but grounded in §3 evidence |
+| 5 | Discovery Questions | Gemini per-attendee, informed by prior conversations | No — Gemini, constrained to attendee list |
+| 6 | Assets & Resources | TDP alignment + partner resources | Yes — clean table, full link text. REPLACES blockquote dump |
+| 7 | Partner Intelligence | Partner config + ecosystem catalog (Pyxis) | Yes — table + resources section |
+| 8 | Open Items & Pipeline | Cases + subscriptions + pipeline opps | Yes — merged from current §6+§7 |
+| 9 | Action Items | Gemini + carry-forward from prior meetings | Hybrid — prior items deterministic, new items from Gemini |
+
+**Key changes from current format:**
+- §3 Engagement Timeline: built deterministically from graph edges, not Gemini hallucination. Each entry has date, content summary, source link, and (when available) direct customer quotes from email threads.
+- §6 Assets & Resources: clean table with columns [Asset Name (full, not truncated) | Link | Why Relevant]. Replaces nested blockquote TDP dump.
+- §9 Action Items: carry-forward open items from prior meeting preps. "Pre-meeting" items that are past due are flagged.
+
+### 13.3 Data Flow Architecture
+
+**Decision:** Signals pipeline (A) + intelligence graph query (C) combined.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  SIGNAL PRODUCERS (existing modules)                        │
+│  cases, subscriptions, CCSP, pipeline, product-lifecycle,   │
+│  emails, meeting-context (NEW WIRING)                       │
+└────────────────────────┬────────────────────────────────────┘
+                         │ signals
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  templateAll() — PRINCIPLES.md Layer 3                      │
+│  Routes signals to named sections, produces evidence blocks │
+└────────────────────────┬────────────────────────────────────┘
+                         │ template result + evidence blocks
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MEETING PREP SERVICE                                       │
+│                                                             │
+│  1. Template signals (from registry)                        │
+│  2. + meeting-context signals (NEW — attendee correlation)  │
+│  3. + intelligence graph query (NEW — evidence doc content) │
+│  4. + resolved attendee profiles                            │
+│  5. + partner intelligence                                  │
+│  6. → Gemini synthesis (§1, §4, §5 — non-deterministic)    │
+│  7. → Deterministic overrides (§2, §3, §6, §7, §8, §9)    │
+│  8. → Google Doc upload                                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Intelligence graph consumption (new):**
+At prep time, query the graph for:
+- `engagement:*` nodes → email thread content for §3 Engagement Timeline
+- `evidence:doc-*` nodes → account plan excerpts, prior meeting prep summaries for Gemini context
+- `event:*` nodes → past meeting dates/topics for §3
+- Edge timestamps → chronological ordering for §3
+
+### 13.4 Gmail Query Fix
+
+**Root cause:** `customer.ts:216` uses `subject:"${customer.name}"` which requires exact match on formal names like "DROPBOX, INC." — misses 9/10 emails.
+
+**Fix:** Use the customer's `aliases` array (already in config) for subject search. Query becomes:
+```
+(from:@{domain} OR to:@{domain} {aliasDomains...} OR subject:"{alias1}" OR subject:"{alias2}") after:{date}
+```
+
+For Dropbox: `(from:@dropbox.com OR to:@dropbox.com OR subject:"dropbox") after:2026/6/16` — returns 10 results vs 1.
+
+**Additionally for meeting prep:** The meeting-context-module uses **attendee-based search** (per spec §4.2) which is even more targeted. Both approaches should be available:
+- `fetchCustomerEmails()` in customer.ts: domain + alias search (for morning brief, general intelligence)
+- meeting-context-module signals: attendee-based search (for meeting-specific prep)
+
+### 13.5 Invocation Modes
+
+**Calendar-driven (existing):** System detects upcoming meeting from calendar, generates prep automatically or on-demand via dashboard button.
+
+**Ad-hoc (new first-class mode):** User provides meeting parameters directly — customer, topic, attendees, objectives — even without a calendar event. Useful for:
+- Prep for a meeting not yet scheduled
+- Prep for a partner meeting using customer context
+- "What if" prep exploring a customer scenario
+- Re-running prep with updated context
+
+POST `/api/customer/:name/meeting-prep/generate` already accepts these parameters. The spec formalizes this as a supported invocation mode with the same output quality bar as calendar-driven.
+
+### 13.6 Phased Implementation
+
+**Phase 1 — Immediate quality (S/M, ship now):**
+- Fix Gmail query in customer.ts to use aliases array
+- Wire meeting-context-module signals into meeting-prep-service (import + merge with registry signals)
+- Build §3 Engagement Timeline deterministically from intelligence graph engagement/event edges
+- Replace §6 TDP blockquote dump with clean assets table
+- Fix attendee display (company + email from resolved profiles)
+
+**Phase 2 — Engagement lifecycle (M):**
+- Engagement auto-detection (signal thresholds)
+- Runbook vs standalone mode
+- Action item carry-forward across meeting preps
+- Intelligence graph evidence doc content injection into Gemini prompt
+- Customer quote extraction from email threads for §4 Value Play grounding
+
+**Phase 3 — Dashboard + team (M/L):**
+- Dashboard engagement timeline view
+- Runbook management UI (list, filter, archive)
+- Re-run/update workflow with diff highlighting
+- Team sharing features (comments, annotations)
+- Ad-hoc meeting prep UI in dashboard
+
+### 13.7 Research Findings — Competitive Landscape (2026)
+
+Revenue intelligence market ($1.2B, 12.8% growth). Key findings from [Gartner MQ for Revenue Action Orchestration](https://pipeline.zoominfo.com/sales/revenue-intelligence-platforms) (Dec 2025):
+
+- **Gong** ($500M ARR, May 2026): Revenue Graph trained on 3B interactions. Strong on post-call analysis and coaching. Weak on pre-call intelligence. $1,600/user/yr + platform fee.
+- **Clari+Salesloft** ($450M ARR combined): Forecasting + engagement merged. MCP Server opens data to Claude (Apr 2026). Cross-platform Plays (Mar 2026). Unification "coming years" away.
+- **Market gap:** Most tools are strong on **post-call analysis** but weak on **pre-meeting preparation**. This is exactly where PAI builds.
+- **Best practice:** AI meeting prep in 2 minutes vs 20 minutes manual. Top performers spend 6x more time on pre-call research. Buyers trust prepared reps more and share more information.
+- **Three-phase model:** Before (prep) → During (capture) → After (summary + follow-up + persist). PAI currently covers Before only. The runbook evolution bridges all three.
+
+### 13.8 Verification Framework — Testing & Accuracy
+
+Every phase ships with verification at three layers. No phase is complete until all three pass.
+
+**Layer 1 — API correctness (automated, runs every commit):**
+| Test | What it verifies | Pass criteria |
+|------|-----------------|---------------|
+| Gmail query coverage | Alias-based search returns ≥ domain+formal search | Count from alias query ≥ count from formal query for 3 test customers |
+| Meeting-context signal production | Module produces signals when email+calendar data exists | ≥1 signal with type=meeting-context for customer with known email threads |
+| Engagement Timeline build | Deterministic builder produces timestamped entries from graph | ≥3 entries for Workday (known 17 engagements), each with date + source |
+| Assets table format | TDP block renders as markdown table, not blockquotes | Regex validates `\| Asset \|` table structure, no `> **Aligned to:**` |
+| Attendee enrichment | Profiles include company + email | Every attendee line matches `**Name** at Company (email@domain)` |
+| Action item carry-forward | Prior meeting's open items appear in new generation | Re-generation includes ≥1 item tagged `[carry-forward]` |
+| Link validation | All markdown links resolve to valid URLs | 0 self-referential links, 0 PRM API URLs, 0 404s from static links |
+
+**Layer 2 — Document formatting (Playwright, runs after build):**
+| Test | What it verifies | Pass criteria |
+|------|-----------------|---------------|
+| HTML rendering | All 9 sections render with Red Hat styling | Screenshot comparison: section count = 9, all h2 headers red |
+| Table integrity | Partner table and assets table render as single tables | No split tables (table-count check per section) |
+| Link rendering | All links are clickable with full text (not truncated) | No `...` in link text, all `<a>` tags have `href` |
+| Badge sanity | "Mission Critical" not badged, URLs not corrupted | Zero `<span class="badge-*">` inside `href` attributes |
+| Mobile readability | Content readable at 375px viewport | No horizontal scroll, text not clipped |
+
+**Layer 3 — Intelligence accuracy (manual + automated, per customer):**
+| Test | What it verifies | Pass criteria |
+|------|-----------------|---------------|
+| Email coverage | System finds same emails as manual Gmail search | Side-by-side: system count ≥ 80% of manual search count |
+| Customer quote fidelity | Quotes in §3 match actual email text | Spot-check 3 quotes against source emails |
+| Pipeline accuracy | Dollar amounts, dates, opp names match Salesforce | Every $ figure traceable to pipeline data |
+| Case accuracy | Case numbers, severity, descriptions match RH Portal | Every case# exists and severity matches |
+| Attendee accuracy | Names, titles, companies match LinkedIn/calendar | Zero wrong names (the §12.2 Workday bug class) |
+
+**Regression gate:** Full test suite (unit + integration) must pass with 0 new failures before any commit. Consumer output verification chain (API → UI → rendered output → goal statement) required for every change touching meeting-prep-service.ts.
+
+**Validation test cases:**
+1. **Dropbox** (current gap customer): Must produce ≥8 emails, engagement timeline with ≥3 sourced entries, Level Up partner context, clean assets table
+2. **Workday** (gold standard): Must maintain current quality — 4+ Recent Interactions with source links, attendee-based questions, product-matched team
+3. **New customer with no history**: Must gracefully produce a useful prep from public intelligence only (no emails, no graph = standalone mode)
+
+### 13.9 Vertical Slice Decomposition
+
+Phase 1 decomposes into vertical slices via `/to-issues` after council review. Each slice is independently shippable and testable:
+
+**Expected slices (Phase 1):**
+1. Gmail query alias fix (XS) — customer.ts one-line change + regression test
+2. Wire meeting-context signals into meeting-prep-service (S) — import, merge, verify in output
+3. Engagement Timeline deterministic builder (S/M) — graph query, chronological build, source links
+4. Assets table formatting (S) — replace blockquote TDP dump with clean table
+5. Attendee company/email enrichment (XS) — deterministic override fix (already shipped partially)
+
+Each slice gets its own issue with ACs, ships through the harness (SCOPE → BUILD → VERIFY → CLOSE), and has Layer 1 + Layer 2 tests before merge.
+
+**Phase 2 and 3** decompose into slices after Phase 1 ships and we validate the foundation.
+
+## 14. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.
 
