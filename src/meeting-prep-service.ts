@@ -1901,6 +1901,34 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
   })
   prepContent = overrideResult.content
 
+  // ── Step 4e: Inject Partner Intelligence section (#1003) ───────────────
+  if (partnerResearch || otherPartnersTable) {
+    const partnerLines: string[] = ['', '### Partner Intelligence']
+    if (detectedPartners.length > 0) {
+      partnerLines.push('**Detected Partners (from meeting attendees):**')
+      for (const p of detectedPartners) {
+        const tierPart = p.partnershipLevel ? ` — ${p.partnershipLevel}` : ''
+        const specPart = p.specializations.length > 0 ? `\n  - Specializations: ${p.specializations.join(', ')}` : ''
+        const catalogPart = p.catalogUrl ? `\n  - [Partner Catalog](${p.catalogUrl})` : ''
+        partnerLines.push(`- **${p.name}**${tierPart}${specPart}${catalogPart}`)
+      }
+    } else if (partnerResearch) {
+      partnerLines.push('**Partner Context:**')
+      partnerLines.push(partnerResearch)
+    }
+    if (otherPartnersTable) {
+      partnerLines.push(otherPartnersTable)
+    }
+    // Insert before Action Items section
+    const actionMarker = prepContent.match(/###\s*\d+\.\s*Action Items/i)
+    if (actionMarker && actionMarker.index !== undefined) {
+      prepContent = prepContent.slice(0, actionMarker.index) + partnerLines.join('\n') + '\n\n' + prepContent.slice(actionMarker.index)
+      console.log(`[meeting-prep] Partner Intelligence section injected for ${customer.name}`)
+    } else {
+      prepContent += '\n' + partnerLines.join('\n')
+    }
+  }
+
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
 
   let docUrl = ''

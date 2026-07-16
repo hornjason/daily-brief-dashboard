@@ -258,6 +258,13 @@ function buildUnresolved(email: string, companyName: string): AttendeeProfile {
 }
 
 function deriveCompany(domain: string): string {
+  // Check partner config for known partner domains (#1003)
+  try {
+    const { loadPartnersFromConfig, findPartnerByDomain } = require('./partner-catalog.ts')
+    const partners = loadPartnersFromConfig()
+    const match = findPartnerByDomain(domain, partners)
+    if (match) return match.name
+  } catch { /* partner catalog not available */ }
   const company = domain.split('.')[0] ?? ''
   return company.charAt(0).toUpperCase() + company.slice(1)
 }
