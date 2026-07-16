@@ -451,8 +451,8 @@ function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring
   // Section 3: Recent Interactions
   lines.push('### 3. Recent Interactions')
   for (const ri of parsed.recentInteractions ?? []) {
-    const urlPart = ri.sourceUrl ? ` [source](${ri.sourceUrl})` : ''
-    lines.push(`- ${ri.date}: ${ri.summary}${urlPart}`)
+    // Drop sourceUrl — Gemini cites the output doc back (update-in-place #641 = always self-referential)
+    lines.push(`- ${ri.date}: ${ri.summary}`)
   }
   lines.push('')
 
@@ -1218,54 +1218,50 @@ export async function generateMeetingPrep(
       partnerResearch = detectedPartners.map(p =>
         `**${p.name}**\n- Partnership Level: ${p.partnershipLevel}\n- Specializations: ${p.specializations.join(', ')}\n- Geo: ${p.country}\n- Catalog: ${p.catalogUrl ?? 'N/A'}`
       ).join('\n\n')
-
-      // Also find recommended partners for the product focus
-      const specToProduct: Record<string, string[]> = {
-        'Mission Critical Automation': ['aap'],
-        'Container Mgmt': ['ocp'],
-        'Application Platform': ['ocp', 'rhdh'],
-        'Virtualization': ['ocp'],
-        'Server Cloud': ['rhel'],
-        'Server Cloud OS': ['rhel'],
-      }
-      const relevantPartners = partnerConfigs.filter(p =>
-        !detectedPartners.includes(p) &&
-        p.specializations.some(s => (specToProduct[s] ?? []).some(ps => productSlugs.includes(ps)))
-      )
-      if (relevantPartners.length > 0) {
-        // Load ecosystem resources for relevant partners (#1002)
-        const ecoPartners = loadAllEcosystemPartners()
-        const ecoByName = new Map(ecoPartners.map(ep => [ep.partnerName.toLowerCase(), ep]))
-
-        const partnerSections = relevantPartners.slice(0, 8).map(p => {
-          const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
-          const row = `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
-
-          // Attach ecosystem resources if available
-          const eco = ecoByName.get(p.name.toLowerCase())
-          if (eco && eco.solutions.length > 0) {
-            const resourceLines = eco.solutions.slice(0, 3).flatMap(sol =>
-              sol.resources.slice(0, 2).map(r => `  - [${r.title}](${r.url}) *(${r.type})*`)
-            )
-            if (resourceLines.length > 0) {
-              return row + '\n' + resourceLines.join('\n')
-            }
-          }
-          return row
-        }).join('\n')
-
-        otherPartnersTable = `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerSections}`
-      }
     } else {
       // Unknown partner — single Gemini grounding search for the company
       try {
         const partnerResult = await callGemini(
           'You are a B2B sales intelligence researcher. Research this company and describe their business and any Red Hat partnership status. Be concise — 3-4 lines max.',
-          `Research: ${partnerDomains.join(', ')} — what do they do? Are they a Red Hat partner?`,
+          `Research: ${partnerDomains.join(', ')} — what do they do? Are they a Red Hat partner? Include their catalog page URL if they have one on catalog.redhat.com.`,
           { callType: 'meeting-prep-partner-research', customerName: customer.name, grounding: true, timeoutMs: 30_000 }
         )
         partnerResearch = partnerResult.text
       } catch { partnerResearch = `Partner domains identified: ${partnerDomains.join(', ')}` }
+    }
+
+    // Build recommended partners table for the product focus — always, not just when config-matched (#1003)
+    const specToProduct: Record<string, string[]> = {
+      'Mission Critical Automation': ['aap'],
+      'Container Mgmt': ['ocp'],
+      'Application Platform': ['ocp', 'rhdh'],
+      'Virtualization': ['ocp'],
+      'Server Cloud': ['rhel'],
+      'Server Cloud OS': ['rhel'],
+    }
+    const relevantPartners = partnerConfigs.filter(p =>
+      !detectedPartners.includes(p) &&
+      p.specializations.some(s => (specToProduct[s] ?? []).some(ps => productSlugs.includes(ps)))
+    )
+    if (relevantPartners.length > 0) {
+      const ecoPartners = loadAllEcosystemPartners()
+      const ecoByName = new Map(ecoPartners.map(ep => [ep.partnerName.toLowerCase(), ep]))
+
+      const partnerSections = relevantPartners.slice(0, 8).map(p => {
+        const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
+        const row = `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
+
+        const eco = ecoByName.get(p.name.toLowerCase())
+        if (eco && eco.solutions.length > 0) {
+          const resourceLines = eco.solutions.slice(0, 3).flatMap(sol =>
+            sol.resources.slice(0, 2).map(r => `  - [${r.title}](${r.url}) *(${r.type})*`)
+          )
+          if (resourceLines.length > 0) return row + '\n' + resourceLines.join('\n')
+        }
+        return row
+      }).join('\n')
+
+      otherPartnersTable = `\n\n**Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerSections}`
     }
   }
 
