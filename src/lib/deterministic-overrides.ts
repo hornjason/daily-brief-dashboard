@@ -96,12 +96,16 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       }
       // #654: Use enriched name (title + company) from resolved profiles for external attendees
       const profile = ctx.resolvedProfiles.find(p => p.email === email)
-      if (profile?.resolved && profile.title) {
-        return `- **${profile.name}, ${profile.title} at ${profile.company}**`
+      if (profile?.resolved) {
+        const titlePart = profile.title ? `, ${profile.title}` : ''
+        const companyPart = profile.company ? ` at ${profile.company}` : ''
+        return `- **${profile.name}**${titlePart}${companyPart} (${email})`
       }
-      // Unresolved: fall back to display name + domain
+      // Unresolved: fall back to display name + email
       const displayName = ctx.getAttendeeDisplayName(ctx.meeting, email)
-      return `- **${displayName}** (${email.split('@')[1]?.replace(/\.\w+$/, '') ?? 'external'})`
+      const domain = email.split('@')[1] ?? ''
+      const company = domain.replace(/\.\w+$/, '')
+      return `- **${displayName}** at ${company.charAt(0).toUpperCase() + company.slice(1)} (${email})`
     })
     const deterministicSection2 = `### 2. Who's in the Room\n${attendeeLines.join('\n')}`
     const s2Start = prepContent.indexOf('### 2.')

@@ -164,7 +164,7 @@ function resolveFromCalendar(
   if (!calendarDisplayNames?.has(email)) return null
   const name = calendarDisplayNames.get(email)!
   const domain = email.split('@')[1] ?? ''
-  const company = companyName ?? deriveCompany(domain)
+  const company = companyName || deriveCompany(domain)
 
   return {
     email,
