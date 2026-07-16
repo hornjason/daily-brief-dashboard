@@ -134,6 +134,18 @@ function renderContent(content: string): string {
       tableRows = []
     }
 
+    // Blockquote lines (> text) — render as indented styled block
+    if (/^>\s*/.test(trimmed)) {
+      if (inList) { html += '</ul>\n'; inList = false }
+      const quoteText = trimmed.replace(/^>\s*/, '')
+      if (quoteText.startsWith('- ')) {
+        html += `<p style="margin:4px 0 4px 20px;color:#333">${applyInlineFormatting(quoteText.replace(/^-\s+/, '• '))}</p>\n`
+      } else {
+        html += `<p style="margin:6px 0 6px 20px;padding:4px 8px;border-left:3px solid #ccc;color:#333">${applyInlineFormatting(quoteText)}</p>\n`
+      }
+      continue
+    }
+
     // Bullet list
     if (/^[-*•]\s+/.test(trimmed)) {
       if (!inList) { html += '<ul>\n'; inList = true }

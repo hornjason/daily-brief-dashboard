@@ -1903,7 +1903,13 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
 
   // ── Step 4e: Inject Partner Intelligence section (#1003) ───────────────
   if (partnerResearch || otherPartnersTable) {
-    const partnerLines: string[] = ['', '### Partner Intelligence']
+    // Find the Action Items heading to determine its number and insert before it
+    const actionMatch = prepContent.match(/###\s*(\d+)\.\s*Action Items/i)
+    const actionNum = actionMatch ? parseInt(actionMatch[1]) : 8
+    const partnerNum = actionNum
+    const newActionNum = actionNum + 1
+
+    const partnerLines: string[] = ['', `### ${partnerNum}. Partner Intelligence`]
     if (detectedPartners.length > 0) {
       partnerLines.push('**Detected Partners (from meeting attendees):**')
       for (const p of detectedPartners) {
@@ -1919,11 +1925,16 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     if (otherPartnersTable) {
       partnerLines.push(otherPartnersTable)
     }
-    // Insert before Action Items section
-    const actionMarker = prepContent.match(/###\s*\d+\.\s*Action Items/i)
-    if (actionMarker && actionMarker.index !== undefined) {
-      prepContent = prepContent.slice(0, actionMarker.index) + partnerLines.join('\n') + '\n\n' + prepContent.slice(actionMarker.index)
-      console.log(`[meeting-prep] Partner Intelligence section injected for ${customer.name}`)
+
+    if (actionMatch && actionMatch.index !== undefined) {
+      // Renumber Action Items heading
+      const before = prepContent.slice(0, actionMatch.index)
+      const after = prepContent.slice(actionMatch.index).replace(
+        /###\s*\d+\.\s*Action Items/i,
+        `### ${newActionNum}. Action Items`
+      )
+      prepContent = before + partnerLines.join('\n') + '\n\n' + after
+      console.log(`[meeting-prep] Partner Intelligence section injected as §${partnerNum} for ${customer.name}`)
     } else {
       prepContent += '\n' + partnerLines.join('\n')
     }
