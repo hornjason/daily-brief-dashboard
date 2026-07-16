@@ -126,31 +126,41 @@ interface SolrResponse {
   }
 }
 
-/** Shape of a single PRM resource entry */
-interface PrmResource {
-  title?: string
+/** Shape of a Pyxis solution resource entry */
+interface PyxisResource {
   name?: string
-  url?: string
   link?: string
   type?: string
-  resourceType?: { code?: string; label?: string }
   description?: string
+  catalog_order?: number
+  language?: string
 }
 
-// ── Resource Type Mapping (§29) ──────────────────────────────────────────────
+/** Pyxis API response for /api/containers/v1/solutions/id/{hex_id} */
+interface PyxisSolutionResponse {
+  _id?: string
+  solution_content?: {
+    resources?: PyxisResource[]
+    solution_brief?: { name?: string; link?: string }
+  }
+}
+
+// ── Resource Type Mapping — Pyxis title-case types ──────────────────────────
 
 const RESOURCE_TYPE_MAP: Record<string, EcosystemResource['type']> = {
-  solution_brief: 'solution-brief',
-  customer_case_study: 'case-study',
-  reference_architecture: 'design-guide',
-  demo: 'lab',
-  learning_course: 'lab',
-  video: 'video',
-  overview: 'documentation',
+  'Blog': 'other',
+  'Customer case study': 'case-study',
+  'Demo': 'lab',
+  'E-book': 'white-paper',
+  'Learning course': 'lab',
+  'Other': 'other',
+  'Overview': 'documentation',
+  'Reference architecture': 'design-guide',
+  'Video': 'video',
 }
 
 /**
- * Map a PRM API resource type code to our EcosystemResource type.
+ * Map a Pyxis resource type string to our EcosystemResource type.
  * Falls back to 'other' for unrecognized types.
  */
 export function mapResourceType(apiType: string | undefined): EcosystemResource['type'] {
@@ -241,28 +251,46 @@ function inferPlatform(solutionType: string | undefined): string {
 // ── Sync Function ────────────────────────────────────────────────────────────
 
 const SOLR_URL = 'https://access.redhat.com/hydra/rest/search/kcs?redhat_client=ecosystem-catalog&q=*&fq=documentKind%3AEcoSolution&rows=500'
-const PRM_BASE = 'https://connect.redhat.com/hydra/prm/v1/solutions'
+const PYXIS_BASE = 'https://catalog.redhat.com/api/containers/v1/solutions/id'
 const CONCURRENCY = 5
 
 /**
- * Fetch resources for a single solution from the PRM API.
+ * Fetch resources for a single solution from the Pyxis API.
+ * Pyxis embeds resources in the solution response — no separate call needed.
+ * Also extracts solution_brief as an additional resource when present.
  * Fail-open: returns empty array on error.
  */
 export async function fetchSolutionResources(solutionId: string): Promise<EcosystemResource[]> {
   try {
-    const resp = await fetch(`${PRM_BASE}/${solutionId}/resources`, {
+    const resp = await fetch(`${PYXIS_BASE}/${solutionId}`, {
       headers: { Accept: 'application/json' },
     })
     if (!resp.ok) return []
-    const data = (await resp.json()) as PrmResource[] | { resources?: PrmResource[]; items?: PrmResource[] }
-    const items = Array.isArray(data) ? data : (data.resources || data.items || [])
-    return items
-      .filter((r): r is PrmResource => !!(r.title || r.name) && !!(r.url || r.link))
-      .map(r => ({
-        title: (r.title || r.name)!,
-        url: (r.url || r.link)!,
-        type: mapResourceType(r.resourceType?.code || r.type),
-      }))
+    const data = (await resp.json()) as PyxisSolutionResponse
+    const sc = data.solution_content
+    if (!sc) return []
+
+    const results: EcosystemResource[] = []
+
+    for (const r of sc.resources ?? []) {
+      if (r.name && r.link) {
+        results.push({
+          title: r.name,
+          url: r.link,
+          type: mapResourceType(r.type),
+        })
+      }
+    }
+
+    if (sc.solution_brief?.link && sc.solution_brief?.name) {
+      results.push({
+        title: sc.solution_brief.name,
+        url: sc.solution_brief.link,
+        type: 'solution-brief',
+      })
+    }
+
+    return results
   } catch {
     return []
   }
