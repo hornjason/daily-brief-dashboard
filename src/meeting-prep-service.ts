@@ -427,7 +427,7 @@ function convertMeetingPrep4SToMarkdown(parsed: any, header: string): string {
   return lines.join('\n')
 }
 
-function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring: boolean): string {
+function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring: boolean, profiles?: AttendeeProfile[]): string {
   const lines: string[] = [header, '']
 
   if (isRecurring) {
@@ -440,11 +440,19 @@ function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring
   lines.push(parsed.meetingObjective ?? 'No objective provided')
   lines.push('')
 
-  // Section 2: Who's in the Room
+  // Section 2: Who's in the Room — enrich with resolved profile data
   lines.push("### 2. Who's in the Room")
+  const profileMap = new Map((profiles ?? []).map(p => [p.name.toLowerCase(), p]))
   for (const a of parsed.attendees ?? []) {
-    const titlePart = a.title ? `, ${a.title}` : ''
-    lines.push(`- **${a.name}**${titlePart} — ${a.insight}`)
+    const profile = profileMap.get(a.name.toLowerCase())
+    const fullName = profile?.name ?? a.name
+    const title = a.title || profile?.title || ''
+    const company = profile?.company ?? ''
+    const email = profile?.email ?? ''
+    const titlePart = title ? `, ${title}` : ''
+    const companyPart = company ? ` at ${company}` : ''
+    const emailPart = email ? ` (${email})` : ''
+    lines.push(`- **${fullName}**${titlePart}${companyPart}${emailPart} — ${a.insight}`)
   }
   lines.push('')
 
@@ -1641,7 +1649,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
       const parsed = JSON.parse(geminiResult.text)
       derivedMarkdown = filteredEvidenceBlocks.length > 0
         ? convertMeetingPrep4SToMarkdown(parsed, derivedHeader)
-        : convertMeetingPrep7SToMarkdown(parsed, derivedHeader, isRecurring)
+        : convertMeetingPrep7SToMarkdown(parsed, derivedHeader, isRecurring, resolvedProfiles)
     } catch {
       console.warn('[meeting-prep] Failed to parse structured response from playbook path, using raw text')
       derivedMarkdown = geminiResult.text
@@ -1669,7 +1677,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
           const retryParsed = JSON.parse(retryResult.text)
           return filteredEvidenceBlocks.length > 0
             ? convertMeetingPrep4SToMarkdown(retryParsed, derivedHeader)
-            : convertMeetingPrep7SToMarkdown(retryParsed, derivedHeader, isRecurring)
+            : convertMeetingPrep7SToMarkdown(retryParsed, derivedHeader, isRecurring, resolvedProfiles)
         } catch {
           return retryResult.text
         }
@@ -1834,7 +1842,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
       const parsed = JSON.parse(geminiResult.text)
       standardMarkdown = filteredEvidenceBlocks.length > 0
         ? convertMeetingPrep4SToMarkdown(parsed, standardHeader)
-        : convertMeetingPrep7SToMarkdown(parsed, standardHeader, isRecurring)
+        : convertMeetingPrep7SToMarkdown(parsed, standardHeader, isRecurring, resolvedProfiles)
     } catch {
       console.warn('[meeting-prep] Failed to parse structured response from standard path, using raw text')
       standardMarkdown = geminiResult.text
@@ -1862,7 +1870,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
           const retryParsed = JSON.parse(retryResult.text)
           return filteredEvidenceBlocks.length > 0
             ? convertMeetingPrep4SToMarkdown(retryParsed, standardHeader)
-            : convertMeetingPrep7SToMarkdown(retryParsed, standardHeader, isRecurring)
+            : convertMeetingPrep7SToMarkdown(retryParsed, standardHeader, isRecurring, resolvedProfiles)
         } catch {
           return retryResult.text
         }
