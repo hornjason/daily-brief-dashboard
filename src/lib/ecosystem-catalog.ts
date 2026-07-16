@@ -129,8 +129,11 @@ interface SolrResponse {
 /** Shape of a single PRM resource entry */
 interface PrmResource {
   title?: string
+  name?: string
   url?: string
+  link?: string
   type?: string
+  resourceType?: { code?: string; label?: string }
   description?: string
 }
 
@@ -251,14 +254,14 @@ export async function fetchSolutionResources(solutionId: string): Promise<Ecosys
       headers: { Accept: 'application/json' },
     })
     if (!resp.ok) return []
-    const data = (await resp.json()) as PrmResource[] | { resources?: PrmResource[] }
-    const items = Array.isArray(data) ? data : (data.resources || [])
+    const data = (await resp.json()) as PrmResource[] | { resources?: PrmResource[]; items?: PrmResource[] }
+    const items = Array.isArray(data) ? data : (data.resources || data.items || [])
     return items
-      .filter((r): r is PrmResource => !!r.title && !!r.url)
+      .filter((r): r is PrmResource => !!(r.title || r.name) && !!(r.url || r.link))
       .map(r => ({
-        title: r.title!,
-        url: r.url!,
-        type: mapResourceType(r.type),
+        title: (r.title || r.name)!,
+        url: (r.url || r.link)!,
+        type: mapResourceType(r.resourceType?.code || r.type),
       }))
   } catch {
     return []
