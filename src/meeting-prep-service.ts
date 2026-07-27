@@ -1938,17 +1938,43 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
   // ── Step 4b: Build Engagement Timeline (#1007) ─────────────────────────
   const engagementTimeline = buildEngagementTimeline(slug)
 
-  // ── Steps 4c/4d/4e/4f: Deterministic overrides (#657, #1007) ──────────
-  // Pipeline section, attendee list, engagement timeline, and validation
-  // extracted to src/lib/deterministic-overrides.ts
+  // ── Step 4b-2: Extract organizer intent from email cache (#1016, §13.11) ──
+  let organizerIntent = ''
+  try {
+    const emailCachePath = resolve(CACHE_DIR, `${slug}-emails.json`)
+    if (existsSync(emailCachePath)) {
+      const emailData = JSON.parse(readFileSync(emailCachePath, 'utf-8'))
+      const emails = emailData.data || emailData || []
+      if (Array.isArray(emails)) {
+        const planningEmail = emails.find((e: any) => {
+          const subj = (e.subject || '').toLowerCase()
+          return subj.includes('next meeting') || subj.includes('onsite') || subj.includes('agenda') || subj.includes('briefing')
+        })
+        if (planningEmail) {
+          const body = (planningEmail.bodyText || planningEmail.body || planningEmail.snippet || '').slice(0, 500)
+          if (body) organizerIntent = body.replace(/\n+/g, ' ').trim()
+        }
+      }
+    }
+  } catch { /* email cache not available */ }
+
+  // Extract confirmed use cases from meeting-context signals
+  const meetingContextSignals = allSignals.filter((s: any) => s.source === 'meeting-context')
+  const meetingContextUseCases = meetingContextSignals
+    .flatMap((s: any) => (s.metadata?.useCases || []) as Array<{ description: string; category: string; confirmationLevel: string }>)
+
+  // ── Steps 4c/4d/4e/4f: Deterministic overrides (#657, #1007, #1016) ───
   const overrideResult = applyDeterministicOverrides({
     prepContent,
     signalData: { registrySignals: allSignals },
-    meeting, accountTeam,
+    meeting: { ...meeting, meetingStart: meeting.meetingStart },
+    accountTeam,
     resolvedProfiles, filteredEvidenceBlocks, templateResult,
     getAttendeeDisplayName, getEnrichedAttendeeName,
     customerName: customer.name,
     engagementTimeline,
+    organizerIntent,
+    meetingContextUseCases,
   })
   prepContent = overrideResult.content
 

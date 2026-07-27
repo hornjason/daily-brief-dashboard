@@ -952,9 +952,44 @@ Nine sections, informed by competitive research ([Sybill](https://www.sybill.ai/
 | 9 | Action Items | Gemini + carry-forward from prior meetings | Hybrid — prior items deterministic, new items from Gemini |
 
 **Key changes from current format:**
+- §1 Meeting Objective: NOT generic "advance evaluations." Must answer "WHY are we going to this meeting?" by correlating pipeline close dates, organizer planning emails, and unresolved threads. See §13.11 for rules and §13.13 for gold standard example.
 - §3 Engagement Timeline: built deterministically from graph edges, not Gemini hallucination. Each entry has date, content summary, source link, and (when available) direct customer quotes from email threads.
-- §6 Assets & Resources: clean table with columns [Asset Name (full, not truncated) | Link | Why Relevant]. Replaces nested blockquote TDP dump.
+- §6 Assets & Resources: clean table with columns [Asset Name (full, not truncated) | Link | Type]. Replaces nested blockquote TDP dump.
+- §8 Open Items & Pipeline: ONLY open cases (status != Closed). Pipeline deals with dollar amounts, stages, close dates. Subscriptions with node counts and renewal dates. Merged into single section.
 - §9 Action Items: carry-forward open items from prior meeting preps. "Pre-meeting" items that are past due are flagged.
+
+### 13.13 Gold Standard Example — Illumio Onsite (2026-07-30)
+
+This is the reference output that the system must produce. Validated by Jason on 2026-07-27.
+
+**§1 Meeting Objective (what good looks like):**
+> Carolanne's July 1 email stated the purpose: Red Hat briefing, review counts for the September renewal, and reschedule the BVA kickoff with Stephan. But the pipeline tells a bigger story — "Illumio Openshift for HW" ($505K, Best Case) closes August 7, 8 days after this onsite. This is the last face-to-face before that close. The $1.05M VMware replacement deal (Pipeline, close 9/29) is the strategic play. The AWS consumption report is unresolved since July 2 — Stephan (who's in the room) is the one AWS sent it to.
+
+This is NOT: "solidify Red Hat as foundational partner for ZTS innovation." That's a playbook summary, not a meeting-specific objective.
+
+**§2 Who's in the Room (what good looks like):**
+> Must include BOTH customer and Red Hat attendees with titles/roles:
+> - **Stephan Joe**, [title] at Illumio (stephan.joe@illumio.com) — AWS consumption report recipient
+> - **Lorenz Quintos**, [title] at Illumio (lorenz.quintos@illumio.com) — Renewal count contact
+> - **Sharanya Raja**, [title] at Illumio (sharanya.raja@illumio.com) — OpenShift cadence primary
+> - **Carolanne Farrell**, AE (cfarrell@redhat.com) — Meeting organizer
+> - **Jason Horn**, ASA (jhorn@redhat.com)
+> - **Brad Hinson**, Ansible SSP — Ansible deep dive lead
+> - **Gabe Deupree**, OpenShift SSP — OpenShift cadence co-lead
+
+**§3 Engagement Timeline (what good looks like):**
+> Real email subjects with dates. No calendar invite noise. Source links where available. Entries like:
+> - 2026-07-27: Ansible meeting reschedule (Brad rescheduling to Aug 4, needs Eric Ames)
+> - 2026-07-22: AWS consumption report — Lorenz still hasn't received data, Tommy confirmed AWS sent to Stephan end of June
+> - 2026-07-08: NFR 500 nodes subscription coverage request
+> - 2026-07-02: MedPic Illumio document shared (deal qualification in progress)
+> - 2026-07-01: Carolanne → Lorenz: "review counts for September renewal + BVA kickoff with Stephan"
+
+**§8 Open Items & Pipeline (what good looks like):**
+> Pipeline: $505K OpenShift for HW (Best Case, 8/7), $1.05M VMware replace (Pipeline, 9/29)
+> Open cases: "No open support cases" (all 25 are Closed)
+> Subscriptions: 500-node partner subscription (NFR), Red Hat Developer Subscription (3 seats)
+> Unresolved: AWS consumption report — Lorenz hasn't received it, Stephan may have it
 
 ### 13.3 Data Flow Architecture
 

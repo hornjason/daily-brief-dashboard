@@ -30,7 +30,7 @@ export interface EngagementTimelineEntry {
 export interface DeterministicOverrideContext {
   prepContent: string
   signalData: { registrySignals?: any[] }
-  meeting: { attendees?: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }> }
+  meeting: { attendees?: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>; meetingStart?: string }
   accountTeam: AccountTeamMember[]
   resolvedProfiles: AttendeeProfile[]
   filteredEvidenceBlocks: EvidenceBlock[]
@@ -39,6 +39,8 @@ export interface DeterministicOverrideContext {
   getEnrichedAttendeeName: (email: string, meeting: any, profiles: AttendeeProfile[]) => string
   customerName: string
   engagementTimeline?: EngagementTimelineEntry[]
+  organizerIntent?: string
+  meetingContextUseCases?: Array<{ description: string; category: string; confirmationLevel: string }>
 }
 
 export interface DeterministicOverrideResult {
@@ -59,6 +61,53 @@ export interface DeterministicOverrideResult {
 export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): DeterministicOverrideResult {
   let prepContent = ctx.prepContent
   const validationWarnings: string[] = []
+
+  // ── Step 4a: Intelligence Synthesis for §1 Meeting Objective (#1016, §13.11) ──
+  const allPipelineSignals = (ctx.signalData.registrySignals ?? []).filter((s: any) => s.source === 'pipeline')
+  const openDeals = allPipelineSignals.filter((s: any) => {
+    const stage = (s.metadata?.stage ?? '').toLowerCase()
+    return !stage.includes('closed')
+  })
+  const synthesisLines: string[] = []
+  const meetingDate = ctx.meeting.meetingStart ? new Date(ctx.meeting.meetingStart) : null
+
+  if (meetingDate && openDeals.length > 0) {
+    for (const deal of openDeals) {
+      const m = deal.metadata ?? {} as any
+      const closeDate = m.closeDate ? new Date(m.closeDate) : null
+      if (!closeDate) continue
+      const daysUntilClose = Math.ceil((closeDate.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
+      const amount = m.amount ? `$${Math.round(Number(m.amount)).toLocaleString()}` : ''
+      const name = m.opportunityName ?? deal.headline ?? 'deal'
+      if (daysUntilClose > 0 && daysUntilClose <= 14) {
+        synthesisLines.push(`**Closing meeting:** ${name} (${amount}) closes ${m.closeDate} — ${daysUntilClose} days after this meeting.`)
+      } else if (daysUntilClose > 14 && daysUntilClose <= 30) {
+        synthesisLines.push(`**Acceleration opportunity:** ${name} (${amount}) closes ${m.closeDate}.`)
+      }
+    }
+  }
+
+  if (ctx.organizerIntent) {
+    synthesisLines.push(`**Organizer stated purpose:** ${ctx.organizerIntent}`)
+  }
+
+  if (ctx.meetingContextUseCases && ctx.meetingContextUseCases.length > 0) {
+    const confirmed = ctx.meetingContextUseCases.filter(uc => uc.confirmationLevel === 'confirmed')
+    if (confirmed.length > 0) {
+      synthesisLines.push(`**Confirmed use cases:** ${confirmed.map(uc => uc.description).join('; ')}`)
+    }
+  }
+
+  if (synthesisLines.length > 0) {
+    const s1Start = prepContent.indexOf('### 1.')
+    const s2Start = prepContent.indexOf('### 2.')
+    if (s1Start !== -1 && s2Start !== -1) {
+      const existingObjective = prepContent.slice(s1Start, s2Start).replace(/^### 1\.[^\n]*\n/, '').trim()
+      const enriched = `### 1. Meeting Objective\n${existingObjective}\n\n${synthesisLines.join('\n')}`
+      prepContent = prepContent.slice(0, s1Start) + enriched + '\n\n' + prepContent.slice(s2Start)
+      console.log(`[meeting-prep] Intelligence synthesis injected into §1 (${synthesisLines.length} signals)`)
+    }
+  }
 
   // ── Step 4c: Deterministic pipeline section (#446) ────────────────────
   // Replace Gemini's pipeline section with real data from pipeline signals.
@@ -115,7 +164,13 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       const company = domain.replace(/\.\w+$/, '')
       return `- **${displayName}** at ${company.charAt(0).toUpperCase() + company.slice(1)} (${email})`
     })
-    const deterministicSection2 = `### 2. Who's in the Room\n${attendeeLines.join('\n')}`
+    // Add Red Hat team members from account team who are calendar attendees
+    const internalAttendees = calendarAttendees.filter(e => e.endsWith('@redhat.com'))
+    const externalAttendees = calendarAttendees.filter(e => !e.endsWith('@redhat.com'))
+    const externalLines = attendeeLines.filter((_, i) => !calendarAttendees[i]?.endsWith('@redhat.com'))
+    const internalLines = attendeeLines.filter((_, i) => calendarAttendees[i]?.endsWith('@redhat.com'))
+
+    const deterministicSection2 = `### 2. Who's in the Room\n**Customer:**\n${externalLines.join('\n')}${internalLines.length > 0 ? `\n\n**Red Hat:**\n${internalLines.join('\n')}` : ''}`
     const s2Start = prepContent.indexOf('### 2.')
     const s3Start = prepContent.indexOf('### 3.')
     if (s2Start !== -1 && s3Start !== -1) {
