@@ -15,7 +15,7 @@ import { extractCandidateTactics } from './meeting-prep-intelligence.ts'
 import { scoreTactics, type ScoredTactic } from './tactic-scorer.ts'
 import { computeGraphDiff, type GraphDiff } from './graph-diff.ts'
 import { CACHE_DIR } from './paths.ts'
-import { resolve } from 'path'
+import type { Signal, SignalType } from '../feature-module-registry.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,8 +35,7 @@ export interface GraphScoringResult {
  * Returns empty results if no graph exists (graceful degradation).
  */
 export function loadAndScoreTactics(customerSlug: string): GraphScoringResult {
-  const dataDir = resolve(CACHE_DIR, 'intelligence')
-  const graph = loadGraph(customerSlug, dataDir)
+  const graph = loadGraph(customerSlug, CACHE_DIR)
 
   if (!graph) {
     return {
@@ -62,6 +61,62 @@ export function loadAndScoreTactics(customerSlug: string): GraphScoringResult {
     graphDiff,
     graphLoaded: true,
   }
+}
+
+/**
+ * Extract non-Closed deal nodes from the intelligence graph as pipeline signals.
+ * Supplements pipeline-module signals when pipeline-data.json is stale or incomplete.
+ * Deduplicates against existing pipeline signals by opportunity name.
+ */
+export function extractGraphDealSignals(
+  customerSlug: string,
+  existingPipelineSignals: { metadata?: { opportunityName?: string } }[],
+): Signal[] {
+  const graph = loadGraph(customerSlug, CACHE_DIR)
+  if (!graph) return []
+
+  const existingNames = new Set(
+    existingPipelineSignals
+      .map(s => (s.metadata?.opportunityName ?? '').toLowerCase())
+      .filter(Boolean),
+  )
+
+  const dealNodes = Object.values(graph.nodes).filter(n => n.type === 'deal')
+  const signals: Signal[] = []
+
+  for (const deal of dealNodes) {
+    const props = deal.properties as Record<string, any>
+    const stage = (props.forecastCategory ?? props.stage ?? '').toString()
+    if (stage.toLowerCase().includes('closed')) continue
+    if (existingNames.has(deal.name.toLowerCase())) continue
+
+    const amount = Number(props.amount ?? 0)
+    const closeDate = (props.closeDate ?? '').toString()
+    let rawRelevance = 0.5
+    const sl = stage.toLowerCase()
+    if (sl.includes('commit')) rawRelevance = 0.9
+    else if (sl.includes('best case') || sl.includes('upside')) rawRelevance = 0.7
+    else if (sl.includes('pipeline')) rawRelevance = 0.5
+
+    signals.push({
+      source: 'pipeline',
+      type: 'expansion' as SignalType,
+      headline: `${deal.name} — ${stage}`,
+      detail: `$${Math.round(amount).toLocaleString()} ACV${closeDate ? ` | Close: ${closeDate}` : ''}`,
+      rawRelevance,
+      timestamp: graph.builtAt,
+      metadata: {
+        customerSlug,
+        opportunityName: deal.name,
+        stage,
+        amount,
+        closeDate,
+        sourceGraph: true,
+      },
+    })
+  }
+
+  return signals
 }
 
 /**

@@ -40,7 +40,7 @@ import { buildEnrichmentPromptContext, buildSalesAlignmentBlock } from './meetin
 import { templateAll } from './lib/signal-templates.ts'
 import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
-import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt } from './lib/meeting-prep-graph-integration.ts'
+import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt, extractGraphDealSignals } from './lib/meeting-prep-graph-integration.ts'
 import { buildEvidenceBlocks, type EvidenceBlock } from './lib/evidence-block-builder.ts'
 import { applyDeterministicOverrides } from './lib/deterministic-overrides.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
@@ -1334,8 +1334,15 @@ export async function generateMeetingPrep(
     driveDocsContext,
   })
 
-  // Merge meeting-specific signals with registry signals
-  const rawSignals = [...(signalData.registrySignals ?? []), ...meetingSignals]
+  // Supplement pipeline signals with graph deal nodes (#1013)
+  const existingPipelineSignals = (signalData.registrySignals ?? []).filter((s: any) => s.source === 'pipeline')
+  const graphDealSignals = extractGraphDealSignals(slug, existingPipelineSignals)
+  if (graphDealSignals.length > 0) {
+    console.log(`[meeting-prep] Graph deal supplementation: ${graphDealSignals.length} non-Closed deals from graph`)
+  }
+
+  // Merge meeting-specific signals with registry signals + graph deals
+  const rawSignals = [...(signalData.registrySignals ?? []), ...graphDealSignals, ...meetingSignals]
 
   // Audience filter (#644) is applied later to evidence blocks, not raw signals.
   // Raw signals pass through to templateAll() for deterministic sections.
@@ -1360,8 +1367,10 @@ export async function generateMeetingPrep(
 
   // ── Step 3: Filter cases to this customer ──────────────────────────────
 
+  const closedStatuses = ['closed', 'closed - resolved', 'closed - cancelled', 'closed - duplicate']
   const customerCases = casesData.filter((sc) =>
     (customer.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
+    && !closedStatuses.includes((sc.status ?? '').toLowerCase())
   )
   const caseSummary = customerCases.length > 0
     ? customerCases.map(sc => `- ${sc.summary} (Sev${sc.severity}, ${sc.status})`).join('\n')

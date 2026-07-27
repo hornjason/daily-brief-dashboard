@@ -257,7 +257,16 @@ function buildUnresolved(email: string, companyName: string): AttendeeProfile {
   }
 }
 
+const DOMAIN_COMPANY_OVERRIDES: Record<string, string> = {
+  'levelupla.com': 'Level Up Technology',
+  'intl.convergetp.com': 'Pellera Technologies (Converge + Mainline)',
+  'shadow-soft.com': 'Shadow-Soft, LLC / Arctiq',
+  'stonedoorgroup.com': 'Stone Door Group',
+}
+
 function deriveCompany(domain: string): string {
+  const override = DOMAIN_COMPANY_OVERRIDES[domain.toLowerCase()]
+  if (override) return override
   // Check partner config for known partner domains (#1003)
   try {
     const { loadPartnersFromConfig, findPartnerByDomain } = require('./partner-catalog.ts')
