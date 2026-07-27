@@ -771,6 +771,14 @@ function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
   const entries: EngagementTimelineEntry[] = []
 
   // Source 1: Graph engagement nodes — email subjects and dates
+  const noisePatterns = [
+    /^invitation:/i, /^accepted:/i, /^declined:/i,
+    /^updated invitation:/i, /^canceled event:/i,
+    /^ooo alert/i, /^notes:/i, /^out of office/i,
+  ]
+  const isNoise = (s: string) => noisePatterns.some(p => p.test(s))
+  const seenSummaries = new Set<string>()
+
   const graph = loadGraph(slug, CACHE_DIR)
   if (graph) {
     const engagementNodes = Object.values(graph.nodes).filter(n => n.type === 'engagement')
@@ -779,13 +787,12 @@ function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
       const date = props.date || props.timestamp || node.updatedAt || ''
       const subject = node.name || ''
       if (!date || !subject) continue
-      // Skip calendar invite metadata (just noise)
-      if (subject.startsWith('Invitation:') || subject.startsWith('Accepted:') || subject.startsWith('Declined:') || subject.startsWith('Updated invitation:')) continue
-      entries.push({
-        date: String(date),
-        summary: subject.replace(/^(Re: |Fwd: )+/i, ''),
-        source: 'graph',
-      })
+      if (isNoise(subject)) continue
+      const clean = subject.replace(/^(Re: |Fwd: )+/i, '')
+      const key = clean.toLowerCase().substring(0, 40)
+      if (seenSummaries.has(key)) continue
+      seenSummaries.add(key)
+      entries.push({ date: String(date), summary: clean, source: 'graph' })
     }
   }
 
@@ -800,25 +807,24 @@ function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
           const date = email.date || email.receivedAt || ''
           const subject = email.subject || ''
           if (!date || !subject) continue
-          // Skip auto-generated noise
-          if (subject.startsWith('OOO Alert') || subject.startsWith('Notes:')) continue
-          // Deduplicate against graph entries by subject similarity
-          const subjectClean = subject.replace(/^(Re: |Fwd: )+/i, '').toLowerCase()
-          const isDup = entries.some(e => e.summary.toLowerCase().includes(subjectClean) || subjectClean.includes(e.summary.toLowerCase()))
-          if (isDup) continue
-          entries.push({
-            date: String(date),
-            summary: subject.replace(/^(Re: |Fwd: )+/i, ''),
-            source: 'email',
-          })
+          if (isNoise(subject)) continue
+          const clean = subject.replace(/^(Re: |Fwd: )+/i, '')
+          const key = clean.toLowerCase().substring(0, 40)
+          if (seenSummaries.has(key)) continue
+          seenSummaries.add(key)
+          entries.push({ date: String(date), summary: clean, source: 'email' })
         }
       }
     }
   } catch { /* email cache not available */ }
 
-  // Source 3: Meeting prep history
+  // Source 3: Meeting prep history (deduplicate by title)
   const history = readHistory(slug)
+  const seenTitles = new Set<string>()
   for (const h of history.slice(0, 5)) {
+    const titleKey = h.meetingTitle.toLowerCase()
+    if (seenTitles.has(titleKey)) continue
+    seenTitles.add(titleKey)
     entries.push({
       date: h.meetingStart,
       summary: `Meeting: ${h.meetingTitle}`,
@@ -1589,7 +1595,7 @@ ${recentInteractionsContext ? `## Recent Interactions & History\n${recentInterac
 ### Open Support Cases
 ${caseSummary}
 
-${templateResult.deterministic ? `## Signal Intelligence\n${templateResult.deterministic}` : ''}
+${templateResult.deterministic ? `## Signal Intelligence\n${templateResult.deterministic.slice(0, 12000)}` : ''}
 
 ${serializeVerifiedSolutionPlays(templateResult)}
 
