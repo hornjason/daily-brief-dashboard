@@ -141,9 +141,15 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   const s2Start = prepContent.indexOf('### 2.')
   if (s1Start !== -1 && s2Start !== -1) {
     const existingObjective = prepContent.slice(s1Start, s2Start).replace(/^### 1\.[^\n]*\n/, '').trim()
-    let enriched = `### 1. Meeting Objective\n${existingObjective}`
-    if (synthesisLines.length > 0) {
-      enriched += `\n\n${synthesisLines.join('\n')}`
+    // When synthesis is strong (closing meeting + intent), lead with synthesis
+    // and keep Gemini's narrative as context. Per §13.13 gold standard.
+    let enriched: string
+    if (synthesisLines.length >= 2) {
+      enriched = `### 1. Meeting Objective\n${synthesisLines.join('\n')}\n\n*Gemini analysis:* ${existingObjective}`
+    } else if (synthesisLines.length > 0) {
+      enriched = `### 1. Meeting Objective\n${existingObjective}\n\n${synthesisLines.join('\n')}`
+    } else {
+      enriched = `### 1. Meeting Objective\n${existingObjective}`
     }
     if (suggestedTopics.length > 0) {
       // Deduplicate topics
