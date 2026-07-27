@@ -20,6 +20,13 @@ import type { AccountTeamMember } from '../types.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface EngagementTimelineEntry {
+  date: string
+  summary: string
+  source: 'email' | 'graph' | 'calendar' | 'prep-history'
+  sourceUrl?: string
+}
+
 export interface DeterministicOverrideContext {
   prepContent: string
   signalData: { registrySignals?: any[] }
@@ -31,6 +38,7 @@ export interface DeterministicOverrideContext {
   getAttendeeDisplayName: (meeting: any, email: string) => string
   getEnrichedAttendeeName: (email: string, meeting: any, profiles: AttendeeProfile[]) => string
   customerName: string
+  engagementTimeline?: EngagementTimelineEntry[]
 }
 
 export interface DeterministicOverrideResult {
@@ -112,6 +120,27 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     const s3Start = prepContent.indexOf('### 3.')
     if (s2Start !== -1 && s3Start !== -1) {
       prepContent = prepContent.slice(0, s2Start) + deterministicSection2 + '\n\n' + prepContent.slice(s3Start)
+    }
+  }
+
+  // ── Step 4e: Deterministic Engagement Timeline (#1007) ─────────────────
+  // Replace Gemini's "Recent Interactions" with real data from graph + email cache.
+  if (ctx.engagementTimeline && ctx.engagementTimeline.length > 0) {
+    const sorted = [...ctx.engagementTimeline].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+    const timelineLines = sorted.slice(0, 8).map(e => {
+      const d = new Date(e.date)
+      const dateStr = isNaN(d.getTime()) ? e.date : d.toISOString().split('T')[0]
+      const link = e.sourceUrl ? ` [source](${e.sourceUrl})` : ''
+      return `- **${dateStr}:** ${e.summary}${link}`
+    })
+    const deterministicSection3 = `### 3. Engagement Timeline\n${timelineLines.join('\n')}`
+    const s3Start = prepContent.indexOf('### 3.')
+    const s4Start = prepContent.indexOf('### 4.')
+    if (s3Start !== -1 && s4Start !== -1) {
+      prepContent = prepContent.slice(0, s3Start) + deterministicSection3 + '\n\n' + prepContent.slice(s4Start)
+      console.log(`[meeting-prep] Deterministic Engagement Timeline injected (${sorted.length} entries)`)
     }
   }
 

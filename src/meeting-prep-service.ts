@@ -42,7 +42,7 @@ import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt, extractGraphDealSignals } from './lib/meeting-prep-graph-integration.ts'
 import { buildEvidenceBlocks, type EvidenceBlock } from './lib/evidence-block-builder.ts'
-import { applyDeterministicOverrides } from './lib/deterministic-overrides.ts'
+import { applyDeterministicOverrides, type EngagementTimelineEntry } from './lib/deterministic-overrides.ts'
 import { CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 import {
   extractActionItems,
@@ -456,8 +456,8 @@ function convertMeetingPrep7SToMarkdown(parsed: any, header: string, isRecurring
   }
   lines.push('')
 
-  // Section 3: Recent Interactions
-  lines.push('### 3. Recent Interactions')
+  // Section 3: Engagement Timeline (renamed from Recent Interactions #1007)
+  lines.push('### 3. Engagement Timeline')
   for (const ri of parsed.recentInteractions ?? []) {
     // Drop sourceUrl — Gemini cites the output doc back (update-in-place #641 = always self-referential)
     lines.push(`- ${ri.date}: ${ri.summary}`)
@@ -761,6 +761,73 @@ export function buildIntelligenceContext(slug: string): string {
   } catch {
     return ''
   }
+}
+
+// ── Engagement Timeline Builder (#1007) ─────────────────────────────────────
+
+import { loadGraph } from './lib/intelligence-graph.ts'
+
+function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
+  const entries: EngagementTimelineEntry[] = []
+
+  // Source 1: Graph engagement nodes — email subjects and dates
+  const graph = loadGraph(slug, CACHE_DIR)
+  if (graph) {
+    const engagementNodes = Object.values(graph.nodes).filter(n => n.type === 'engagement')
+    for (const node of engagementNodes) {
+      const props = node.properties as Record<string, any>
+      const date = props.date || props.timestamp || node.updatedAt || ''
+      const subject = node.name || ''
+      if (!date || !subject) continue
+      // Skip calendar invite metadata (just noise)
+      if (subject.startsWith('Invitation:') || subject.startsWith('Accepted:') || subject.startsWith('Declined:') || subject.startsWith('Updated invitation:')) continue
+      entries.push({
+        date: String(date),
+        summary: subject.replace(/^(Re: |Fwd: )+/i, ''),
+        source: 'graph',
+      })
+    }
+  }
+
+  // Source 2: Email cache — recent emails with subjects
+  try {
+    const emailCachePath = resolve(CACHE_DIR, `${slug}-emails.json`)
+    if (existsSync(emailCachePath)) {
+      const emailData = JSON.parse(readFileSync(emailCachePath, 'utf-8'))
+      const emails = emailData.data || emailData || []
+      if (Array.isArray(emails)) {
+        for (const email of emails.slice(0, 20)) {
+          const date = email.date || email.receivedAt || ''
+          const subject = email.subject || ''
+          if (!date || !subject) continue
+          // Skip auto-generated noise
+          if (subject.startsWith('OOO Alert') || subject.startsWith('Notes:')) continue
+          // Deduplicate against graph entries by subject similarity
+          const subjectClean = subject.replace(/^(Re: |Fwd: )+/i, '').toLowerCase()
+          const isDup = entries.some(e => e.summary.toLowerCase().includes(subjectClean) || subjectClean.includes(e.summary.toLowerCase()))
+          if (isDup) continue
+          entries.push({
+            date: String(date),
+            summary: subject.replace(/^(Re: |Fwd: )+/i, ''),
+            source: 'email',
+          })
+        }
+      }
+    }
+  } catch { /* email cache not available */ }
+
+  // Source 3: Meeting prep history
+  const history = readHistory(slug)
+  for (const h of history.slice(0, 5)) {
+    entries.push({
+      date: h.meetingStart,
+      summary: `Meeting: ${h.meetingTitle}`,
+      source: 'prep-history',
+      sourceUrl: h.docUrl,
+    })
+  }
+
+  return entries
 }
 
 // ── Recent Interactions Context Builder (#426) ──────────────────────────────
@@ -1913,14 +1980,18 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     }
   }
 
-  // ── Steps 4c/4d/4f: Deterministic overrides (#657) ─────────────────────
-  // Pipeline section, attendee list, and post-generation validation
+  // ── Step 4b: Build Engagement Timeline (#1007) ─────────────────────────
+  const engagementTimeline = buildEngagementTimeline(slug)
+
+  // ── Steps 4c/4d/4e/4f: Deterministic overrides (#657, #1007) ──────────
+  // Pipeline section, attendee list, engagement timeline, and validation
   // extracted to src/lib/deterministic-overrides.ts
   const overrideResult = applyDeterministicOverrides({
     prepContent, signalData, meeting, accountTeam,
     resolvedProfiles, filteredEvidenceBlocks, templateResult,
     getAttendeeDisplayName, getEnrichedAttendeeName,
     customerName: customer.name,
+    engagementTimeline,
   })
   prepContent = overrideResult.content
 

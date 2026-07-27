@@ -47,13 +47,13 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
-  // 3. Recent Interactions — present with 2-5 bullet points
+  // 3. Engagement Timeline (renamed from Recent Interactions #1007) — present with 2+ entries
   const section3 = extractNumberedSection(output, 3)
   const section3Bullets = (section3.match(/^[\s]*[-*]\s/gm) ?? []).length
   checks.push({
-    name: 'recent-interactions',
+    name: 'engagement-timeline',
     passed: section3.length > 0 && section3Bullets >= 2,
-    expected: 'Section 3 (Recent Interactions) present with >= 2 bullets',
+    expected: 'Section 3 (Engagement Timeline) present with >= 2 entries',
     actual: section3.length > 0
       ? `${section3Bullets} bullet points`
       : 'section not found',
