@@ -105,3 +105,45 @@ describe('#1009: Domain company overrides', () => {
     expect(profile!.company).toBe('Unknowncorp')
   })
 })
+
+describe('#1006: Meeting-context signals are wired into templateAll', () => {
+  it('meeting-context signals route to meeting-context section', async () => {
+    const { routeSignal } = await import('../../src/lib/templates/route-signal.ts')
+    const signal = {
+      source: 'meeting-context',
+      type: 'meeting' as const,
+      headline: 'Customer confirmed use cases',
+      detail: '3 use cases',
+      rawRelevance: 0.75,
+      timestamp: new Date().toISOString(),
+      metadata: { meetingTitle: 'Test', useCases: [], attendeeEmails: [] },
+    }
+    expect(routeSignal(signal as any)).toBe('meeting-context')
+  })
+
+  it('templateMeetingContext produces output for valid signals', async () => {
+    const { templateMeetingContext } = await import('../../src/lib/templates/meeting-context.ts')
+    const signals = [{
+      source: 'meeting-context',
+      type: 'meeting' as const,
+      headline: 'Customer confirmed use cases',
+      detail: '3 use cases',
+      rawRelevance: 0.75,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        meetingTitle: 'Illumio/ RedHat - Onsite',
+        meetingDate: '2026-07-30T15:00:00-04:00',
+        attendeeEmails: ['stephan.joe@illumio.com'],
+        useCases: [{ description: 'Ansible automation', category: 'automation', confirmationLevel: 'exploring' }],
+        relatedDocs: [],
+        sourceThreadIds: ['thread1', 'thread2'],
+      },
+    }]
+    const output = templateMeetingContext(signals as any)
+    expect(output).not.toBeNull()
+    expect(output).toContain('Meeting Context')
+    expect(output).toContain('Illumio/ RedHat - Onsite')
+    expect(output).toContain('Ansible automation')
+    expect(output).toContain('Correlated from 2 email thread(s)')
+  })
+})
