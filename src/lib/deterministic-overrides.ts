@@ -144,6 +144,71 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     }
   }
 
+  // ── Step 4g: Clean Assets & Resources from blockquote dump (#1008) ─────
+  // Extract asset links from blockquote TDP sections, remove blockquotes,
+  // and insert a clean table before Action Items
+  const blockquotePattern = /^>\s.+$/gm
+  const blockquoteLines = prepContent.match(blockquotePattern) || []
+  if (blockquoteLines.length > 0) {
+    const assets: { name: string; url: string; context: string }[] = []
+    const services: string[] = []
+    let currentTdp = ''
+
+    for (const line of blockquoteLines) {
+      const stripped = line.replace(/^>\s*/, '')
+      const tdpMatch = stripped.match(/\*?\*?Aligned to:\*?\*?\s*(.+)/i)
+      if (tdpMatch) { currentTdp = tdpMatch[1].replace(/\*\*/g, '').trim(); continue }
+      const svcMatch = stripped.match(/\*?\*?Services to propose:\*?\*?\s*(.+)/i)
+      if (svcMatch) { services.push(...svcMatch[1].split(',').map(s => s.trim()).filter(Boolean)); continue }
+      const linkMatch = stripped.match(/[-*]\s*\[([^\]]+)\]\(([^)]+)\)/)
+      if (linkMatch) {
+        assets.push({ name: linkMatch[1], url: linkMatch[2], context: currentTdp })
+      }
+    }
+
+    if (assets.length > 0) {
+      // Remove blockquote lines from content
+      prepContent = prepContent.replace(/^>\s.*\n?/gm, '').replace(/\n{3,}/g, '\n\n')
+
+      // Deduplicate by URL
+      const seen = new Set<string>()
+      const uniqueAssets = assets.filter(a => {
+        if (seen.has(a.url)) return false
+        seen.add(a.url)
+        return true
+      })
+
+      // Build clean table
+      const tableLines = [
+        '| Asset | Type |',
+        '|---|---|',
+        ...uniqueAssets.map(a => {
+          const type = a.url.includes('demo.redhat.com') ? 'Demo/Lab'
+            : a.url.includes('interact.redhat.com') ? 'Interactive'
+            : a.url.includes('gartner.com') ? 'Analyst Report'
+            : a.url.includes('content.redhat.com') ? 'Content'
+            : 'Resource'
+          return `| [${a.name}](${a.url}) | ${type} |`
+        }),
+      ]
+
+      const uniqueServices = [...new Set(services)]
+      const servicesLine = uniqueServices.length > 0
+        ? `\n**Recommended Services:** ${uniqueServices.join(', ')}`
+        : ''
+
+      const assetsSection = `### Assets & Resources\n${tableLines.join('\n')}${servicesLine}`
+
+      // Insert before Action Items
+      const actionMatch = prepContent.match(/###\s*\d+\.\s*Action Items/i)
+      if (actionMatch) {
+        const idx = prepContent.indexOf(actionMatch[0])
+        prepContent = prepContent.slice(0, idx) + assetsSection + '\n\n' + prepContent.slice(idx)
+        console.log(`[meeting-prep] Clean Assets table injected (${uniqueAssets.length} assets, ${uniqueServices.length} services)`)
+      }
+    }
+  }
+
   // ── Step 4f: Post-generation validation (#643) ────────────────────────
   // Validate that Gemini didn't fabricate case numbers, dollar amounts, or names
   if (ctx.filteredEvidenceBlocks.length > 0) {
