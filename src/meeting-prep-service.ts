@@ -1672,11 +1672,9 @@ ${escalationContext ? `${escalationContext}` : ''}
 
 ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items from the last meeting are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
 
-    // Shorter Gemini call — playbook is primary context
-    // ADR-040: temperature 0.3, responseSchema for structured output, grounding rules in system prompt
-    const derivedResponseSchema = filteredEvidenceBlocks.length > 0
-      ? MEETING_PREP_RESPONSE_SCHEMA_4S
-      : MEETING_PREP_RESPONSE_SCHEMA_7S
+    // Always use 7S schema for meeting prep — evidence blocks enrich context,
+    // don't change output format. 4S was causing truncated output (#1016).
+    const derivedResponseSchema = MEETING_PREP_RESPONSE_SCHEMA_7S
     const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
       callType: 'meeting-prep-derived-from-playbook',
       customerName: customer.name,
@@ -1690,9 +1688,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     let derivedMarkdown: string
     try {
       const parsed = JSON.parse(geminiResult.text)
-      derivedMarkdown = filteredEvidenceBlocks.length > 0
-        ? convertMeetingPrep4SToMarkdown(parsed, derivedHeader)
-        : convertMeetingPrep7SToMarkdown(parsed, derivedHeader, isRecurring, resolvedProfiles)
+      derivedMarkdown = convertMeetingPrep7SToMarkdown(parsed, derivedHeader, isRecurring, resolvedProfiles)
     } catch {
       console.warn('[meeting-prep] Failed to parse structured response from playbook path, using raw text')
       derivedMarkdown = geminiResult.text
@@ -1718,9 +1714,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
         // ADR-040: Parse retry JSON response
         try {
           const retryParsed = JSON.parse(retryResult.text)
-          return filteredEvidenceBlocks.length > 0
-            ? convertMeetingPrep4SToMarkdown(retryParsed, derivedHeader)
-            : convertMeetingPrep7SToMarkdown(retryParsed, derivedHeader, isRecurring, resolvedProfiles)
+          return convertMeetingPrep7SToMarkdown(retryParsed, derivedHeader, isRecurring, resolvedProfiles)
         } catch {
           return retryResult.text
         }
@@ -1866,10 +1860,8 @@ ${serializeVerifiedSolutionPlays(templateResult)}
 
 ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEventId}). Outstanding items are in Recent Interactions above — reference them in discussion questions and check their status.\n\n` : ''}Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
 
-    // ADR-040: temperature 0.3, responseSchema for structured output, grounding rules in system prompt
-    const standardResponseSchema = filteredEvidenceBlocks.length > 0
-      ? MEETING_PREP_RESPONSE_SCHEMA_4S
-      : MEETING_PREP_RESPONSE_SCHEMA_7S
+    // Always use 7S schema — evidence blocks enrich context, don't change format (#1016)
+    const standardResponseSchema = MEETING_PREP_RESPONSE_SCHEMA_7S
     const geminiResult = await callGemini(systemPrompt, userPrompt, {
       callType: 'meeting-prep-synthesis',
       customerName: customer.name,
@@ -1883,9 +1875,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     let standardMarkdown: string
     try {
       const parsed = JSON.parse(geminiResult.text)
-      standardMarkdown = filteredEvidenceBlocks.length > 0
-        ? convertMeetingPrep4SToMarkdown(parsed, standardHeader)
-        : convertMeetingPrep7SToMarkdown(parsed, standardHeader, isRecurring, resolvedProfiles)
+      standardMarkdown = convertMeetingPrep7SToMarkdown(parsed, standardHeader, isRecurring, resolvedProfiles)
     } catch {
       console.warn('[meeting-prep] Failed to parse structured response from standard path, using raw text')
       standardMarkdown = geminiResult.text
@@ -1911,9 +1901,7 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
         // ADR-040: Parse retry JSON response
         try {
           const retryParsed = JSON.parse(retryResult.text)
-          return filteredEvidenceBlocks.length > 0
-            ? convertMeetingPrep4SToMarkdown(retryParsed, standardHeader)
-            : convertMeetingPrep7SToMarkdown(retryParsed, standardHeader, isRecurring, resolvedProfiles)
+          return convertMeetingPrep7SToMarkdown(retryParsed, standardHeader, isRecurring, resolvedProfiles)
         } catch {
           return retryResult.text
         }
