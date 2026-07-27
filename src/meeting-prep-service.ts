@@ -1616,10 +1616,10 @@ ${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n`
 ## From Customer Playbook
 
 ### Strategic Position (established intelligence)
-${strategicPosition}
+${strategicPosition.slice(0, 1000)}
 
 ### Current Priorities (from playbook)
-${currentPriorities}
+${currentPriorities.slice(0, 1000)}
 
 ### Key Relationships (filtered to meeting attendees)
 ${keyRelationships || 'No key relationships match this meeting\'s attendees'}
@@ -1646,39 +1646,8 @@ ${(() => {
     : 'No solution plays identified'
 })()}
 
-### Tactical Recommendations (from SalesHub knowledge)
-${(() => {
-  const plays = playbook.deterministic?.solutionPlays ?? []
-  if (plays.length === 0) return 'No tactical recommendations — no solution plays matched'
-  const recs: string[] = []
-  for (const play of plays) {
-    const tdpNode = getTdpByName(play.tdp)
-    const salesPlay = getSalesPlayByName(play.playName)
-
-    if (tdpNode?.whatToShow?.length) {
-      recs.push(`**Recommended Demos (${play.tdp}):**`)
-      for (const demo of tdpNode.whatToShow.slice(0, 3)) {
-        recs.push(`- [${demo.name}](${demo.url}) — ${demo.type}`)
-      }
-    }
-
-    const examples = (play as any).realWorldExamples ?? salesPlay?.realWorldExamples ?? []
-    if (examples.length > 0) {
-      recs.push(`**Reference Case Studies (${play.playName}):**`)
-      for (const ex of examples.slice(0, 3)) {
-        recs.push(`- ${ex.customer} — ${ex.outcome}`)
-      }
-    }
-
-    if (tdpNode?.services?.length) {
-      recs.push(`**Services to Propose (${play.tdp}):**`)
-      for (const svc of tdpNode.services.slice(0, 3)) {
-        recs.push(`- ${svc.name}: ${svc.description}`)
-      }
-    }
-  }
-  return recs.length > 0 ? recs.join('\n') : 'No tactical recommendations available for matched plays'
-})()}
+### Tactical Recommendations
+*(Demos, case studies, and services are in Signal Intelligence below — injected post-generation as Assets & Resources table)*
 
 ### Renewals & Risk (from playbook)
 ${renewalsRisk}
@@ -1691,19 +1660,11 @@ ${attendeeResearch || 'No attendee research available'}
 ### Open Support Cases
 ${caseSummary}
 
-${templateResult.deterministic ? `### Signal Intelligence (from registry — includes ecosystem catalog, tech stack, cloud marketplace)\n${templateResult.deterministic}` : ''}
+${templateResult.deterministic ? `### Signal Intelligence (key signals — deterministic sections injected post-generation)\n${templateResult.deterministic.slice(0, 6000)}` : ''}
 
-${filteredEvidenceBlocks.length === 0 && enrichmentContext ? `### ${graphScoring.graphLoaded && scoredTacticsBlock ? 'Scored Intelligence (pre-ranked by intelligence graph — use these to guide Value Play and Discussion Questions)' : 'Product & Market Intelligence (for contextual use in Discussion Questions and Value Play)'}\n${enrichmentContext}` : ''}
-
-${graphDiffBlock ? `### ${graphDiffBlock}` : ''}
-
-${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext}` : ''}
-
-${partnerCrossRefContext ? `### Partner Cross-Reference\n${partnerCrossRefContext}` : ''}
+${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext.slice(0, 3000)}` : ''}
 
 ${escalationContext ? `${escalationContext}` : ''}
-
-${serializeVerifiedSolutionPlays(templateResult)}
 
 ---
 

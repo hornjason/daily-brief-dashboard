@@ -941,7 +941,7 @@ Nine sections, informed by competitive research ([Sybill](https://www.sybill.ai/
 
 | § | Section | Source | Deterministic? |
 |---|---------|--------|----------------|
-| 1 | Meeting Objective | Gemini synthesis + pipeline data | Hybrid — pipeline $ injected deterministically |
+| 1 | Meeting Objective | Gemini synthesis + pipeline data + organizer intent + deal urgency (see §13.11) | Hybrid — pipeline $ and closing-meeting flag injected deterministically |
 | 2 | Who's in the Room | Calendar + attendee profiles + graph | Yes — from resolved profiles (name, title, company, email) |
 | 3 | Engagement Timeline | Intelligence graph edges + email threads | Yes — timestamped entries with source links. REPLACES "Recent Interactions" |
 | 4 | Value Play | Gemini synthesis grounded in customer's own words | No — Gemini, but grounded in §3 evidence |
@@ -1134,6 +1134,57 @@ Three-perspective review (architecture, risk, gaps) on §13.1–13.9.
 - Findings 1, 3, 4, 5, 6, 7 → incorporated into Phase 1 slice definitions
 - Findings 2, 8, 9 → logged as Phase 2 follow-up issues
 - Finding 10 → implementation constraint (no separate issue needed)
+
+### 13.11 Intelligence Synthesis Rules (2026-07-27)
+
+The §1 Meeting Objective must be a **correlation-driven synthesis**, not a generic "advance evaluations" statement. The system correlates these signals to determine WHY this meeting is happening and WHAT the commercial urgency is:
+
+**Temporal proximity rules:**
+| Signal Pattern | Correlation Logic | Output |
+|---|---|---|
+| Pipeline deal closes within 14 days of meeting date | Flag as **closing meeting** | "This is likely the last face-to-face before [deal name] ($[amount]) closes on [date]" |
+| Pipeline deal closes within 30 days | Flag as **acceleration opportunity** | "[Deal name] closes [date] — use this meeting to advance" |
+| Renewal within 60 days | Flag as **renewal review** | "September renewal requires count validation" |
+| Unresolved email thread (no customer reply >7 days) | Flag as **open item requiring resolution** | "[Subject] — unresolved since [date], [person] is in the room" |
+| Rescheduled meeting referencing this meeting's timeframe | Flag as **alignment opportunity** | "[Rescheduled meeting] moved to [date] — align scope at this onsite" |
+
+**Organizer intent extraction:**
+- Search email cache for organizer's planning emails (subject contains meeting name or "next meetings" or "onsite" or "agenda")
+- Extract stated purpose verbatim as the primary objective
+- Example: Carolanne's "Next meetings" email → "Red Hat briefing + review counts for September renewal + BVA kickoff with Stephan"
+
+**MEDDPICC signal:**
+- If a MEDDPICC doc was shared or updated within 14 days, the deal is being actively qualified → mention in objective
+
+**Use case confirmation:**
+- meeting-context module provides confirmed use cases from email correlation
+- Confirmed use cases (not "exploring") should drive the Value Play narrative
+- Example: "AWS cost optimization (confirmed)" → Value Play should connect to CCSP/Marketplace
+
+**Prompt size budget (§13.10 finding #4, refined):**
+Total Gemini prompt for playbook-derived meeting prep must not exceed ~25K chars of injected context. Budget allocation:
+- Playbook sections: 6K chars (strategic position 1K, priorities 1K, product alignment 1.5K, expansion 1K, other 1.5K)
+- Signal intelligence: 6K chars (score-ranked, highest first)
+- Recent interactions: 3K chars
+- Attendee research: 2K chars
+- Evidence blocks: 3K chars
+- Case/pipeline data: 2K chars
+- Buffer: 3K chars
+
+Sections overridden deterministically (§2 attendees, §3 timeline, §7 pipeline, §8 open items) do NOT need detailed data in the Gemini prompt — they're replaced post-generation.
+
+### 13.12 Phase 1 Shipping Status (2026-07-27)
+
+| # | Slice | Status | Evidence |
+|---|---|---|---|
+| #1005 | Gmail alias query fix | **SHIPPED** | 1→12 emails for Dropbox |
+| #1006 | Wire meeting-context signals | **SHIPPED** (was already wired; graph path bug masked it) | routeSignal verified, templateMeetingContext verified |
+| #1007 | Engagement Timeline deterministic | **SHIPPED** | Illumio timeline: 8 real entries from email+graph+history |
+| #1008 | Assets table formatting | **SHIPPED** | Blockquote→table post-processing code in deterministic-overrides |
+| #1009 | Attendee company name | **SHIPPED** | levelupla.com → "Level Up Technology" |
+| #1013 | Pipeline empty (NEW) | **SHIPPED** | Graph path fix + deal node supplementation |
+| #1014 | Closed cases as active (NEW) | **SHIPPED** | Status filter excludes Closed/Resolved/Cancelled |
+| #1016 | Gemini truncation (NEW) | **IN PROGRESS** | Prompt size optimization — cap sections, remove redundancy |
 
 ## 14. Open Questions for Jason
 
