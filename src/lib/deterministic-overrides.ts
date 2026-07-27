@@ -41,6 +41,7 @@ export interface DeterministicOverrideContext {
   engagementTimeline?: EngagementTimelineEntry[]
   organizerIntent?: string
   meetingContextUseCases?: Array<{ description: string; category: string; confirmationLevel: string }>
+  caseSummary?: string
 }
 
 export interface DeterministicOverrideResult {
@@ -196,6 +197,19 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     if (s3Start !== -1 && s4Start !== -1) {
       prepContent = prepContent.slice(0, s3Start) + deterministicSection3 + '\n\n' + prepContent.slice(s4Start)
       console.log(`[meeting-prep] Deterministic Engagement Timeline injected (${sorted.length} entries)`)
+    }
+  }
+
+  // ── Step 4f-2: Deterministic Open Items — filter Gemini's case hallucinations ──
+  if (ctx.caseSummary) {
+    const s6Start = prepContent.indexOf('### 6.')
+    const s7Start = prepContent.indexOf('### 7.')
+    if (s6Start !== -1 && s7Start !== -1) {
+      const deterministicSection6 = ctx.caseSummary === 'No open support cases'
+        ? `### 6. Open Items\nNo open support cases.`
+        : `### 6. Open Items\n${ctx.caseSummary}`
+      prepContent = prepContent.slice(0, s6Start) + deterministicSection6 + '\n\n' + prepContent.slice(s7Start)
+      console.log(`[meeting-prep] Deterministic Open Items injected (replaced Gemini case hallucinations)`)
     }
   }
 
