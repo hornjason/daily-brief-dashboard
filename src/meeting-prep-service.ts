@@ -812,7 +812,9 @@ function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
           const key = clean.toLowerCase().substring(0, 40)
           if (seenSummaries.has(key)) continue
           seenSummaries.add(key)
-          entries.push({ date: String(date), summary: clean, source: 'email' })
+          const messageId = email.id || email.messageId || ''
+          const gmailUrl = messageId ? `https://mail.google.com/mail/u/0/#inbox/${messageId}` : undefined
+          entries.push({ date: String(date), summary: clean, source: 'email', sourceUrl: gmailUrl })
         }
       }
     }
@@ -1310,7 +1312,10 @@ export async function generateMeetingPrep(
       } catch { partnerResearch = `Partner domains identified: ${partnerDomains.join(', ')}` }
     }
 
-    // Build recommended partners table for the product focus — always, not just when config-matched (#1003)
+  }
+
+  // Build territory-level partner table for the product focus — runs even without partner attendees (#1016 Gap 4)
+  if (productSlugs.length > 0 && !otherPartnersTable) {
     const specToProduct: Record<string, string[]> = {
       'Mission Critical Automation': ['aap'],
       'Container Mgmt': ['ocp'],
@@ -1353,6 +1358,7 @@ export async function generateMeetingPrep(
       if (resourceSections.length > 0) {
         otherPartnersTable += `\n\n**Partner Resources:**\n${resourceSections.join('\n\n')}`
       }
+      console.log(`[meeting-prep] Territory partner intelligence: ${relevantPartners.length} partners for products ${productSlugs.join(', ')}`)
     }
   }
 

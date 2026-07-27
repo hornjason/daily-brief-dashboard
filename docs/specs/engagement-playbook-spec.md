@@ -1221,6 +1221,43 @@ Sections overridden deterministically (§2 attendees, §3 timeline, §7 pipeline
 | #1014 | Closed cases as active (NEW) | **SHIPPED** | Status filter excludes Closed/Resolved/Cancelled |
 | #1016 | Gemini truncation (NEW) | **IN PROGRESS** | Prompt size optimization — cap sections, remove redundancy |
 
+### 13.14 Two-Tier Output: Meeting Prep vs Agenda Builder (2026-07-27)
+
+**Design decision (Jason, 2026-07-27):** Meeting prep and agenda are two different outputs, not one merged thing.
+
+**Tier 1 — Meeting Prep (default, every meeting):**
+Standard 9-section output with intelligence. Includes a new **"Suggested Topics"** section (between §1 and §2) that shows what the data says the meeting should cover, ranked by commercial urgency. This is deterministic — built from pipeline close dates, unresolved email threads, rescheduled meetings, and organizer intent. Example:
+
+```
+### Suggested Topics (from intelligence correlation)
+- **$505K OpenShift deal** — closes 8/7, 8 days away [closing meeting]
+- **AWS consumption report** — unresolved since Jul 2, Stephan has the data [open item]
+- **VMware replacement** — $1.05M pipeline, OpenShift evaluation active [strategic play]
+- **Ansible deep dive scope** — rescheduled to Aug 4, align requirements [alignment]
+- **September renewal** — node count validation with Lorenz [renewal review]
+- **BVA kickoff** — needs scheduling with Stephan [planning]
+```
+
+This section is data-driven and deterministic. No Gemini involvement. The AE reads it and knows what to prioritize.
+
+**Tier 2 — Agenda Builder (opt-in, AE requests):**
+When the AE sees the suggested topics and decides "I need a full agenda for this meeting," they can flag it. The agenda builder:
+- Takes the suggested topics as input
+- Adds time allocation based on meeting duration (from calendar)
+- Structures into an ordered agenda with talking points per topic
+- Allows AE to reorder, add/remove topics, adjust time allocation
+- Produces a shareable agenda (Google Doc or email)
+
+**Invocation:**
+- Default: `POST /api/customer/:name/meeting-prep/generate` → produces Tier 1
+- Agenda: `POST /api/customer/:name/meeting-prep/generate?agenda=true` → produces Tier 1 + Tier 2
+- Or: AE clicks "Build Agenda" on the meeting prep page after reviewing suggested topics
+
+**Phase plan:**
+- Phase 1 (current): Ship "Suggested Topics" section as part of the meeting prep
+- Phase 2: Agenda builder with time allocation and AE editing
+- Phase 3: AE can share agenda with attendees, track against outcomes
+
 ## 14. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.

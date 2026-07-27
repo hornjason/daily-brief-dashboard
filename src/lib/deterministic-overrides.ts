@@ -99,15 +99,65 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     }
   }
 
-  if (synthesisLines.length > 0) {
-    const s1Start = prepContent.indexOf('### 1.')
-    const s2Start = prepContent.indexOf('### 2.')
-    if (s1Start !== -1 && s2Start !== -1) {
-      const existingObjective = prepContent.slice(s1Start, s2Start).replace(/^### 1\.[^\n]*\n/, '').trim()
-      const enriched = `### 1. Meeting Objective\n${existingObjective}\n\n${synthesisLines.join('\n')}`
-      prepContent = prepContent.slice(0, s1Start) + enriched + '\n\n' + prepContent.slice(s2Start)
-      console.log(`[meeting-prep] Intelligence synthesis injected into §1 (${synthesisLines.length} signals)`)
+  // Build Suggested Topics from all synthesis signals (#1016, §13.14)
+  const suggestedTopics: string[] = []
+  if (meetingDate && openDeals.length > 0) {
+    for (const deal of openDeals) {
+      const m = deal.metadata ?? {} as any
+      const closeDate = m.closeDate ? new Date(m.closeDate) : null
+      const amount = m.amount ? `$${Math.round(Number(m.amount)).toLocaleString()}` : ''
+      const name = m.opportunityName ?? deal.headline ?? 'deal'
+      if (closeDate) {
+        const daysUntilClose = Math.ceil((closeDate.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysUntilClose > 0 && daysUntilClose <= 14) {
+          suggestedTopics.push(`- **${name}** (${amount}) — closes ${m.closeDate}, ${daysUntilClose} days away [closing meeting]`)
+        } else if (daysUntilClose > 0 && daysUntilClose <= 60) {
+          suggestedTopics.push(`- **${name}** (${amount}) — closes ${m.closeDate} [pipeline]`)
+        }
+      }
     }
+  }
+
+  // Add timeline entries that suggest topics (unresolved threads, rescheduled meetings)
+  if (ctx.engagementTimeline) {
+    for (const entry of ctx.engagementTimeline) {
+      const s = entry.summary.toLowerCase()
+      if (s.includes('consumption') || s.includes('utilization')) {
+        suggestedTopics.push(`- **${entry.summary}** — ${entry.date.split('T')[0]} [open item]`)
+      } else if (s.includes('reschedul')) {
+        suggestedTopics.push(`- **${entry.summary}** — align scope [alignment]`)
+      } else if (s.includes('nfr') || s.includes('subscription') || s.includes('renewal')) {
+        suggestedTopics.push(`- **${entry.summary}** — ${entry.date.split('T')[0]} [renewal review]`)
+      }
+    }
+  }
+
+  if (ctx.organizerIntent) {
+    suggestedTopics.push(`- **Organizer stated purpose:** ${ctx.organizerIntent}`)
+  }
+
+  // Inject §1 enrichment + Suggested Topics between §1 and §2
+  const s1Start = prepContent.indexOf('### 1.')
+  const s2Start = prepContent.indexOf('### 2.')
+  if (s1Start !== -1 && s2Start !== -1) {
+    const existingObjective = prepContent.slice(s1Start, s2Start).replace(/^### 1\.[^\n]*\n/, '').trim()
+    let enriched = `### 1. Meeting Objective\n${existingObjective}`
+    if (synthesisLines.length > 0) {
+      enriched += `\n\n${synthesisLines.join('\n')}`
+    }
+    if (suggestedTopics.length > 0) {
+      // Deduplicate topics
+      const seen = new Set<string>()
+      const unique = suggestedTopics.filter(t => {
+        const key = t.substring(0, 40).toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      enriched += `\n\n### Suggested Topics\n*Based on intelligence correlation — ranked by commercial urgency*\n${unique.join('\n')}`
+    }
+    prepContent = prepContent.slice(0, s1Start) + enriched + '\n\n' + prepContent.slice(s2Start)
+    console.log(`[meeting-prep] Intelligence synthesis: ${synthesisLines.length} signals, ${suggestedTopics.length} suggested topics`)
   }
 
   // ── Step 4c: Deterministic pipeline section (#446) ────────────────────
@@ -138,11 +188,14 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     }
   }
 
-  // ── Step 4d: Deterministic attendee list (#446) ───────────────────────
-  // Replace Gemini's "Who's in the Room" with a clean list from calendar data.
-  // Gemini ignores "ONLY list calendar attendees" and dumps the full account team.
+  // ── Step 4d: Deterministic attendee list (#446, #1016) ────────────────
+  // Replace Gemini's "Who's in the Room" with clean calendar + profile data.
+  // Cross-reference playbook Key Relationships for titles when profile has none.
   const calendarAttendees = (ctx.meeting.attendees ?? []).filter(Boolean)
   if (calendarAttendees.length > 0) {
+    // Parse playbook Key Relationships for title cross-reference
+    const keyRelationships = (ctx.templateResult.deterministic || '').match(/\|[^|]+\|[^|]+\|[^|]+\|/g) ?? []
+
     const attendeeLines = calendarAttendees.map(email => {
       const isInternal = email.endsWith('@redhat.com')
       if (isInternal) {
@@ -152,26 +205,33 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
         )
         return `- **${name}**${teamMember ? `, ${teamMember.role.toUpperCase()}` : ''}`
       }
-      // #654: Use enriched name (title + company) from resolved profiles for external attendees
       const profile = ctx.resolvedProfiles.find(p => p.email === email)
-      if (profile?.resolved) {
-        const titlePart = profile.title ? `, ${profile.title}` : ''
-        const companyPart = profile.company ? ` at ${profile.company}` : ''
-        return `- **${profile.name}**${titlePart}${companyPart} (${email})`
+      let title = profile?.title || ''
+      // Cross-reference Key Relationships for title if profile has none
+      if (!title && profile?.name) {
+        const firstName = profile.name.split(' ')[0].toLowerCase()
+        const match = keyRelationships.find(r => r.toLowerCase().includes(firstName))
+        if (match) {
+          const parts = match.split('|').map(p => p.trim()).filter(Boolean)
+          if (parts.length >= 2) title = parts[1] // Role/title column
+        }
       }
-      // Unresolved: fall back to display name + email
-      const displayName = ctx.getAttendeeDisplayName(ctx.meeting, email)
-      const domain = email.split('@')[1] ?? ''
-      const company = domain.replace(/\.\w+$/, '')
-      return `- **${displayName}** at ${company.charAt(0).toUpperCase() + company.slice(1)} (${email})`
+      const company = profile?.company || email.split('@')[1]?.replace(/\.\w+$/, '') || ''
+      const displayName = profile?.name || ctx.getAttendeeDisplayName(ctx.meeting, email)
+      const titlePart = title ? `, ${title}` : ''
+      const companyPart = company ? ` at ${company}` : ''
+      return `- **${displayName}**${titlePart}${companyPart} (${email})`
     })
-    // Add Red Hat team members from account team who are calendar attendees
-    const internalAttendees = calendarAttendees.filter(e => e.endsWith('@redhat.com'))
-    const externalAttendees = calendarAttendees.filter(e => !e.endsWith('@redhat.com'))
+
     const externalLines = attendeeLines.filter((_, i) => !calendarAttendees[i]?.endsWith('@redhat.com'))
     const internalLines = attendeeLines.filter((_, i) => calendarAttendees[i]?.endsWith('@redhat.com'))
 
-    const deterministicSection2 = `### 2. Who's in the Room\n**Customer:**\n${externalLines.join('\n')}${internalLines.length > 0 ? `\n\n**Red Hat:**\n${internalLines.join('\n')}` : ''}`
+    // Add Red Hat team members even if not in calendar attendees list
+    const rhTeamLines = internalLines.length > 0 ? internalLines : ctx.accountTeam.slice(0, 5).map(m =>
+      `- **${m.name}**, ${m.role.toUpperCase()}`
+    )
+
+    const deterministicSection2 = `### 2. Who's in the Room\n**Customer:**\n${externalLines.join('\n')}\n\n**Red Hat:**\n${rhTeamLines.join('\n')}`
     const s2Start = prepContent.indexOf('### 2.')
     const s3Start = prepContent.indexOf('### 3.')
     if (s2Start !== -1 && s3Start !== -1) {
