@@ -30,7 +30,7 @@ export interface EngagementTimelineEntry {
 export interface DeterministicOverrideContext {
   prepContent: string
   signalData: { registrySignals?: any[] }
-  meeting: { attendees?: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>; meetingStart?: string }
+  meeting: { attendees?: string[]; attendeeDetails?: Array<{ email: string; displayName?: string; linkedinUrl?: string }>; meetingStart?: string; [key: string]: any }
   accountTeam: AccountTeamMember[]
   resolvedProfiles: AttendeeProfile[]
   filteredEvidenceBlocks: EvidenceBlock[]
@@ -191,42 +191,56 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   // ── Step 4d: Deterministic attendee list (#446, #1016) ────────────────
   // Replace Gemini's "Who's in the Room" with clean calendar + profile data.
   // Cross-reference playbook Key Relationships for titles when profile has none.
-  const calendarAttendees = (ctx.meeting.attendees ?? []).filter(Boolean)
+  // Use attendeeDetails (full list) not just attendees (external only).
+  const allAttendeeEmails = (ctx.meeting as any).attendeeDetails?.map((d: any) => d.email).filter(Boolean) ?? ctx.meeting.attendees ?? []
+  const calendarAttendees = [...new Set(allAttendeeEmails)].filter(Boolean)
   if (calendarAttendees.length > 0) {
     // Parse playbook Key Relationships for title cross-reference
     const keyRelationships = (ctx.templateResult.deterministic || '').match(/\|[^|]+\|[^|]+\|[^|]+\|/g) ?? []
+    // Filter noise values from titles (confidence labels, etc.)
+    const noiseValues = new Set(['low', 'medium', 'high', 'unknown', 'n/a', 'none', '-', '—'])
 
-    const attendeeLines = calendarAttendees.map(email => {
+    const externalLines: string[] = []
+    const internalLines: string[] = []
+
+    for (const email of calendarAttendees) {
       const isInternal = email.endsWith('@redhat.com')
       if (isInternal) {
-        const name = ctx.getAttendeeDisplayName(ctx.meeting, email)
-        const teamMember = ctx.accountTeam.find(m =>
-          m.name.toLowerCase().includes(name.split(' ')[0].toLowerCase())
-        )
-        return `- **${name}**${teamMember ? `, ${teamMember.role.toUpperCase()}` : ''}`
+        // Match against account team by email prefix → full name + role
+        const prefix = email.split('@')[0].toLowerCase()
+        const teamMember = ctx.accountTeam.find(m => {
+          const nameParts = m.name.toLowerCase().split(' ')
+          return prefix.includes(nameParts[0]) || prefix.includes(nameParts[nameParts.length - 1])
+        })
+        if (teamMember) {
+          internalLines.push(`- **${teamMember.name}**, ${teamMember.role.toUpperCase()}`)
+        } else {
+          const name = ctx.getAttendeeDisplayName(ctx.meeting, email)
+          internalLines.push(`- **${name}** (${email})`)
+        }
+        continue
       }
       const profile = ctx.resolvedProfiles.find(p => p.email === email)
       let title = profile?.title || ''
+      // Filter noise from title
+      if (noiseValues.has(title.toLowerCase())) title = ''
       // Cross-reference Key Relationships for title if profile has none
       if (!title && profile?.name) {
         const firstName = profile.name.split(' ')[0].toLowerCase()
         const match = keyRelationships.find(r => r.toLowerCase().includes(firstName))
         if (match) {
           const parts = match.split('|').map(p => p.trim()).filter(Boolean)
-          if (parts.length >= 2) title = parts[1] // Role/title column
+          if (parts.length >= 2 && !noiseValues.has(parts[1].toLowerCase())) title = parts[1]
         }
       }
       const company = profile?.company || email.split('@')[1]?.replace(/\.\w+$/, '') || ''
       const displayName = profile?.name || ctx.getAttendeeDisplayName(ctx.meeting, email)
       const titlePart = title ? `, ${title}` : ''
       const companyPart = company ? ` at ${company}` : ''
-      return `- **${displayName}**${titlePart}${companyPart} (${email})`
-    })
+      externalLines.push(`- **${displayName}**${titlePart}${companyPart} (${email})`)
+    }
 
-    const externalLines = attendeeLines.filter((_, i) => !calendarAttendees[i]?.endsWith('@redhat.com'))
-    const internalLines = attendeeLines.filter((_, i) => calendarAttendees[i]?.endsWith('@redhat.com'))
-
-    // Add Red Hat team members even if not in calendar attendees list
+    // Fallback: if no RH attendees found in attendeeDetails, use account team
     const rhTeamLines = internalLines.length > 0 ? internalLines : ctx.accountTeam.slice(0, 5).map(m =>
       `- **${m.name}**, ${m.role.toUpperCase()}`
     )
