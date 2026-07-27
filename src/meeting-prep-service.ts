@@ -1942,7 +1942,9 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
   // Pipeline section, attendee list, engagement timeline, and validation
   // extracted to src/lib/deterministic-overrides.ts
   const overrideResult = applyDeterministicOverrides({
-    prepContent, signalData, meeting, accountTeam,
+    prepContent,
+    signalData: { registrySignals: allSignals },
+    meeting, accountTeam,
     resolvedProfiles, filteredEvidenceBlocks, templateResult,
     getAttendeeDisplayName, getEnrichedAttendeeName,
     customerName: customer.name,
