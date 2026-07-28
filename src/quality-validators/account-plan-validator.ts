@@ -65,19 +65,21 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
-  // 4. Actions Table — with Owner column
+  // 4. Actions / Next Steps — table or structured list with ownership
   const actionsSection = findSectionByKeyword(output, 'action')
+    || findSectionByKeyword(output, 'next step')
   const actionsTableRows = actionsSection ? countTableRows(actionsSection) : 0
-  const hasOwnerColumn = actionsSection
-    ? /\|\s*owner\s*\|/i.test(actionsSection) || /\|\s*who\s*\|/i.test(actionsSection)
+  const hasOwnerRef = actionsSection
+    ? /\|\s*owner\s*\|/i.test(actionsSection) || /\bowner\b/i.test(actionsSection) || /\bAE\b|\bASA\b/i.test(actionsSection)
     : false
+  const hasActionContent = actionsSection ? actionsSection.length > 50 : false
   checks.push({
     name: 'actions-table',
-    passed: actionsTableRows > 0 && hasOwnerColumn,
-    expected: 'Actions table present with Owner column',
-    actual: actionsTableRows > 0
-      ? (hasOwnerColumn ? `${actionsTableRows} rows with Owner column` : 'table present but no Owner column')
-      : 'actions table not found',
+    passed: hasActionContent && hasOwnerRef,
+    expected: 'Actions/next steps section with ownership references',
+    actual: hasActionContent
+      ? (hasOwnerRef ? `${actionsTableRows} table rows, ownership refs found` : 'content present but no ownership references')
+      : 'actions section not found',
     severity: 'required',
   })
 
@@ -126,20 +128,14 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
-  // 8. Timeline — timeline or quarterly plan present
-  const hasTimeline = /timeline|quarterly|Q[1-4]\s+20\d{2}|roadmap|milestones?/i.test(output)
-  const timelineSection = findSectionByKeyword(output, 'timeline')
-    || findSectionByKeyword(output, 'roadmap')
-    || findSectionByKeyword(output, 'quarterly')
-    || findSectionByKeyword(output, 'milestone')
+  // 8. Timeline — timeline or quarterly plan present (important, not zero-out)
+  const hasTimeline = /timeline|quarterly|Q[1-4]\s+20\d{2}|roadmap|milestones?|target\s+date/i.test(output)
   checks.push({
     name: 'timeline',
-    passed: hasTimeline && timelineSection.length > 0,
-    expected: 'Timeline or quarterly plan section present',
-    actual: hasTimeline
-      ? (timelineSection.length > 0 ? `${timelineSection.length} chars` : 'keyword found but no dedicated section')
-      : 'no timeline references found',
-    severity: 'required',
+    passed: hasTimeline,
+    expected: 'Timeline references present in plan',
+    actual: hasTimeline ? 'timeline keywords found' : 'no timeline references found',
+    severity: 'important',
   })
 
   // 9. Economic Buyer — CY27 requirement

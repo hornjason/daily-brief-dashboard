@@ -867,7 +867,8 @@ export function createCustomerRouter(): Hono {
 
   // ── #1017: CY27 Account Plan ──────────────────────────────────────────────
 
-  const _cy27PlanInFlight = new Set<string>()
+  const _cy27PlanInFlight = new Map<string, number>()
+  const CY27_LOCK_TTL_MS = 10 * 60 * 1000
 
   router.post('/api/customers/:id/account-plan/generate-cy27', async (c) => {
     const rawName = decodeURIComponent(c.req.param('id'))
@@ -876,21 +877,19 @@ export function createCustomerRouter(): Hono {
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
     const slug = toSlug(customer.name)
-    if (_cy27PlanInFlight.has(slug)) {
-      return c.json({ error: 'CY27 plan generation already in progress for this customer' }, 409)
+    const lockTime = _cy27PlanInFlight.get(slug)
+    if (lockTime && Date.now() - lockTime < CY27_LOCK_TTL_MS) {
+      return c.json({ status: 'generating', message: 'Account plan generation in progress' })
     }
 
-    _cy27PlanInFlight.add(slug)
-    try {
-      const configDir = process.env.CONFIG_DIR ?? ''
-      const result = await generateAccountPlanCY27(customer, CACHE_DIR, configDir)
-      return c.json({ ok: true, generatedAt: result.generatedAt, driveUrl: result.driveUrl })
-    } catch (e: any) {
-      console.error(`[acct-plan-cy27] Generation failed for ${customer.name}:`, e.message)
-      return c.json({ error: sanitizeErr(e) }, 500)
-    } finally {
-      _cy27PlanInFlight.delete(slug)
-    }
+    _cy27PlanInFlight.set(slug, Date.now())
+    const configDir = process.env.CONFIG_DIR ?? ''
+    generateAccountPlanCY27(customer, CACHE_DIR, configDir)
+      .then(() => console.log(`[acct-plan-cy27] Done for ${customer.name}`))
+      .catch((e: any) => console.error(`[acct-plan-cy27] Failed for ${customer.name}:`, e.message))
+      .finally(() => _cy27PlanInFlight.delete(slug))
+
+    return c.json({ status: 'generating', message: 'Account plan generation started' })
   })
 
   router.get('/api/customers/:id/account-plan/cy27', (c) => {
