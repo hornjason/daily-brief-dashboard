@@ -1333,6 +1333,7 @@ export function CustomerDetailPage() {
   const customerSlug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
 
   const [activeTab, setActiveTab] = useState<AccountTab>('overview')
+  const [widgetOpen, setWidgetOpen] = useState(false)
 
   const sse = useCustomerSSE(customerName)
   const accountInfo = useAccountInfo(customerName)
@@ -1885,6 +1886,33 @@ export function CustomerDetailPage() {
           {renderTabContent(activeTab, customerName)}
         </div>
       )}
+
+      {/* Floating Product Q&A Widget — persists across tabs */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {widgetOpen && (
+          <div className="absolute bottom-12 right-0 w-[400px] max-h-[500px] bg-surface border border-border rounded-xl shadow-lg overflow-hidden flex flex-col mb-2">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">Ask about {customerName}</h3>
+                <p className="text-xs text-text-secondary mt-0.5">Grounded Q&A against this customer's product data, subscriptions, and tech stack.</p>
+              </div>
+              <button onClick={() => setWidgetOpen(false)} className="text-text-secondary hover:text-text-primary p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <ProductQueryPanel customerName={customerName} />
+            </div>
+          </div>
+        )}
+        <button
+          onClick={() => setWidgetOpen(v => !v)}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-accent/30 text-accent text-sm shadow-lg hover:bg-surface-elevated hover:border-accent transition-colors"
+        >
+          <Sparkles className="w-4 h-4" />
+          Ask about this account
+        </button>
+      </div>
     </div>
   )
 }
