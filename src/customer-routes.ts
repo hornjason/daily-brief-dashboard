@@ -285,7 +285,8 @@ export function createCustomerRouter(): Hono {
         }
 
         // Meta (send after account numbers are resolved so client gets the latest)
-        await safeWrite('meta', JSON.stringify(customer))
+        const intel = getIntelligenceCacheEntry(customer.name)
+        await safeWrite('meta', JSON.stringify({ ...customer, industry: intel?.industry ?? null }))
 
         // Fetch all sections in parallel
         const [meetings, emails, docs, cases, subscriptions] = await Promise.all([

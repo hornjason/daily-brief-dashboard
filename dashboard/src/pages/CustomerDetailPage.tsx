@@ -1629,7 +1629,14 @@ export function CustomerDetailPage() {
               </div>
             )}
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+                {meta?.industry && (
+                  <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-accent/10 text-accent border border-accent/20">
+                    {meta.industry}
+                  </span>
+                )}
+              </div>
               {(meta?.ae || meta?.segment) && (
                 <span className="text-xs text-text-secondary">
                   {meta.ae ? `AE: ${meta.ae}` : ''}{meta.ae && meta.segment ? ' · ' : ''}{meta.segment ?? ''}

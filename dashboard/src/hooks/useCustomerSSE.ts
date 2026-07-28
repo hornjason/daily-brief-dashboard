@@ -34,6 +34,7 @@ export interface CustomerMeta {
   ae?: string
   segment?: string
   region?: string
+  industry?: string | null
 }
 
 export interface CustomerSSEState {
