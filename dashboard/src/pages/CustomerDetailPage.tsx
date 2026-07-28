@@ -27,6 +27,8 @@ import {
   X,
   BookOpen,
   Activity,
+  Target,
+  BarChart3,
 } from 'lucide-react'
 import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
@@ -72,6 +74,7 @@ import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
 import { ExpansionOpportunitiesPanel } from '../components/ExpansionOpportunitiesPanel'
 import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { SidebarGroup } from '../components/SidebarGroup'
 import { TopPlaysCard } from '../components/TopPlaysCard'
 import { ProductOpportunities } from '../components/ProductOpportunities'
 
@@ -1326,6 +1329,7 @@ export function CustomerDetailPage() {
   const { name } = useParams<{ name: string }>()
   const navigate = useNavigate()
   const customerName = decodeURIComponent(name ?? '')
+  const customerSlug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
 
   const [activeTab, setActiveTab] = useState<AccountTab>('overview')
 
@@ -1745,40 +1749,61 @@ export function CustomerDetailPage() {
           </CollapsibleSection>
         </main>
 
-        {/* Right column — 35%, flows with main content (no independent scroll) */}
+        {/* Right column — 35%, 4 collapsible groups per DESIGN-SPEC v2.0 §4 */}
         <aside className="hidden lg:block w-[38%] p-6 pl-3 space-y-4 border-l border-border/40">
-          {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
-          <ProductOpportunities customerName={customerName} />
-          <SignalInventoryPanel customerName={customerName} />
-          <IntelligenceInsightsCard customerName={customerName} />
-          <AccountPlanPanel customerName={customerName} />
-          <ExpansionOpportunitiesPanel customerName={customerName} />
-          <AccountIntelligencePanel customerName={customerName} />
-          <div className="bg-surface border border-border rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Cloud className="w-4 h-4 text-accent" />
-              <h2 className="text-base font-semibold text-text-primary">Cloud Marketplace</h2>
-              <StalenessIndicator sectionName="cloud-marketplace" freshness={freshness} refreshStatus={refreshStatus} />
-            </div>
-            <CloudMarketplaceDetail customerName={customerName} />
-          </div>
-          {/* BKL-HERO-18: L4-only — Cases section absent on L3 hero install */}
-          {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
-          <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
-          {stakeholderContacts.length > 0 && (
-            <CollapsibleSection
-              sectionName="stakeholder-engagement"
-              title="Stakeholder Engagement"
-              icon={<Users className="w-4 h-4" />}
-              summaryText={`${stakeholderContacts.length} contact${stakeholderContacts.length !== 1 ? 's' : ''}`}
-            >
-              <div className="p-5">
-                <StakeholderEngagementPanel contacts={stakeholderContacts} />
+          {/* Group 1: Opportunities (default expanded) */}
+          <SidebarGroup
+            title="Opportunities"
+            icon={<Target className="w-4 h-4" />}
+            defaultExpanded={true}
+            storageKey={`${customerSlug}:opportunities`}
+          >
+            <ProductOpportunities customerName={customerName} />
+            <ExpansionOpportunitiesPanel customerName={customerName} />
+          </SidebarGroup>
+
+          {/* Group 2: People */}
+          <SidebarGroup
+            title="People"
+            icon={<Users className="w-4 h-4" />}
+            storageKey={`${customerSlug}:people`}
+          >
+            <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
+            {stakeholderContacts.length > 0 && (
+              <StakeholderEngagementPanel contacts={stakeholderContacts} />
+            )}
+          </SidebarGroup>
+
+          {/* Group 3: Intelligence */}
+          <SidebarGroup
+            title="Intelligence"
+            icon={<Sparkles className="w-4 h-4" />}
+            storageKey={`${customerSlug}:intelligence`}
+          >
+            <AccountIntelligencePanel customerName={customerName} />
+            <IntelligenceInsightsCard customerName={customerName} />
+            <AccountPlanPanel customerName={customerName} />
+          </SidebarGroup>
+
+          {/* Group 4: Account Data */}
+          <SidebarGroup
+            title="Account Data"
+            icon={<BarChart3 className="w-4 h-4" />}
+            storageKey={`${customerSlug}:account-data`}
+          >
+            <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
+            {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Cloud className="w-4 h-4 text-accent" />
+                <h2 className="text-base font-semibold text-text-primary">Cloud Marketplace</h2>
+                <StalenessIndicator sectionName="cloud-marketplace" freshness={freshness} refreshStatus={refreshStatus} />
               </div>
-            </CollapsibleSection>
-          )}
-          <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
-          <DriveSection files={sse.drive} loading={sectionLoading} />
+              <CloudMarketplaceDetail customerName={customerName} />
+            </div>
+            <DriveSection files={sse.drive} loading={sectionLoading} />
+            <SignalInventoryPanel customerName={customerName} />
+          </SidebarGroup>
         </aside>
         </div>
       ) : (
