@@ -480,9 +480,12 @@ export async function generateAccountPlan(
   customer: Customer,
   cacheDir: string,
   configDir: string,
+  opts?: { playbookOverride?: string; cachePrefix?: string; label?: string },
 ): Promise<AccountPlanResult> {
   const slug = toSlug(customer.name)
-  console.log(`[acct-plan] Generating account plan for ${customer.name} (${slug})`)
+  const label = opts?.label ?? 'acct-plan'
+  const cachePrefix = opts?.cachePrefix ?? 'account-plan'
+  console.log(`[${label}] Generating account plan for ${customer.name} (${slug})`)
 
   // Get operator profile
   const operatorProfile = getOperatorProfile()
@@ -497,9 +500,11 @@ export async function generateAccountPlan(
   const questionsPdfPath = resolveTemplatePath('questions.pdf') ?? resolve(APP_CONFIG_DIR, 'questions.pdf')
   const questionsB64 = readFileSync(questionsPdfPath).toString('base64')
 
-  // 3. Load playbook markdown (cache-first, baked-in fallback)
-  const playbookPath = resolveTemplatePath('playbook.md') ?? resolve(APP_CONFIG_DIR, 'playbook.md')
-  const playbook = readFileSync(playbookPath, 'utf-8').substring(0, 8000)
+  // 3. Load playbook/planning deck (override or default)
+  const playbookFile = opts?.playbookOverride ?? 'playbook.md'
+  const playbookPath = resolveTemplatePath(playbookFile) ?? resolve(APP_CONFIG_DIR, playbookFile)
+  const playbookMaxChars = opts?.playbookOverride ? 15000 : 8000
+  const playbook = readFileSync(playbookPath, 'utf-8').substring(0, playbookMaxChars)
 
   // 4. Load customer intelligence from cache
   const intelPath = resolve(cacheDir, 'intelligence', `${slug}.json`)
@@ -606,16 +611,16 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
   // Write to cache
   const intelDir = resolve(cacheDir, 'intelligence')
   mkdirSync(intelDir, { recursive: true })
-  const outputPath = resolve(intelDir, `${slug}-account-plan.md`)
+  const outputPath = resolve(intelDir, `${slug}-${cachePrefix}.md`)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
   const fullContent = `<!-- Generated: ${generatedAt} -->\n\n${markdown}`
   writeFileSync(outputPath, fullContent, { mode: 0o600 })
-  console.log(`[acct-plan] Written to ${outputPath} (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
+  console.log(`[${label}] Written to ${outputPath} (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
 
   // Write quality scorecard meta alongside the plan
-  const metaPath = resolve(intelDir, `${slug}-account-plan-meta.json`)
+  const metaPath = resolve(intelDir, `${slug}-${cachePrefix}-meta.json`)
   writeJsonAtomic(metaPath, {
     customerName: customer.name,
     generatedAt,
@@ -628,11 +633,12 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
     const plansFolderId = await ensureAccountPlansSubfolder(customerFolderId)
-    const docName = `${customer.name} - Account Plan`
+    const docSuffix = cachePrefix === 'account-plan' ? '' : ` ${cachePrefix.replace('account-plan-', '').toUpperCase()}`
+    const docName = `${customer.name} - Account Plan${docSuffix}`
     driveUrl = await upsertAccountPlanDoc(plansFolderId, docName, `Generated: ${timestamp}\n\n${markdown}`)
-    console.log(`[acct-plan] Uploaded to Drive: ${driveUrl}`)
+    console.log(`[${label}] Uploaded to Drive: ${driveUrl}`)
   } catch (e: any) {
-    console.error(`[acct-plan] Drive upload failed (non-fatal): ${e.message}`)
+    console.error(`[${label}] Drive upload failed (non-fatal): ${e.message}`)
     // Non-fatal — the cached markdown is still available
   }
 
@@ -876,181 +882,19 @@ export function readMidyearUpdate(
   }
 }
 
-// ── #1017: CY27 Account Plan generation ─────────────────────────────────────
+// ── #1017: CY27 Account Plan — thin wrappers over generateAccountPlan ──────
 
-export interface CY27AccountPlanResult {
-  markdown: string
-  generatedAt: string
-  driveUrl: string
-}
-
-/**
- * Generate a CY27-specific account plan. Uses the same generateAccountPlan()
- * logic but swaps playbook.md for cy27-planning-deck.txt as the planning context.
- * Still uses questions.pdf for multimodal vision and sample.md for structure.
- *
- * Cached separately as {slug}-account-plan-cy27.md in data/cache/intelligence/.
- */
 export async function generateAccountPlanCY27(
   customer: Customer,
   cacheDir: string,
   configDir: string,
-): Promise<CY27AccountPlanResult> {
-  const slug = toSlug(customer.name)
-  console.log(`[acct-plan-cy27] Generating CY27 account plan for ${customer.name} (${slug})`)
-
-  const operatorProfile = getOperatorProfile()
-  const operatorName = operatorProfile?.name ?? 'the Account Solution Architect'
-  const operatorTitle = operatorProfile?.title ?? 'Account Solution Architect'
-
-  // 1. Load sample plan markdown (same as standard plan)
-  const samplePlanPath = resolveTemplatePath('sample.md') ?? resolve(APP_CONFIG_DIR, 'sample.md')
-  const samplePlan = readFileSync(samplePlanPath, 'utf-8')
-
-  // 2. Load questions PDF as base64 for vision (same as standard plan)
-  const questionsPdfPath = resolveTemplatePath('questions.pdf') ?? resolve(APP_CONFIG_DIR, 'questions.pdf')
-  const questionsB64 = readFileSync(questionsPdfPath).toString('base64')
-
-  // 3. Load CY27 planning deck instead of playbook (the key difference)
-  const cy27DeckPath = resolveTemplatePath('cy27-planning-deck.txt') ?? resolve(APP_CONFIG_DIR, 'cy27-planning-deck.txt')
-  if (!existsSync(cy27DeckPath)) {
-    throw new Error('cy27-planning-deck.txt not found -- sync templates from Drive or add to config/account-plan/')
-  }
-  // CY27 deck is ~205K chars; use first 15000 for Gemini context (playbook uses 8000)
-  const cy27Deck = readFileSync(cy27DeckPath, 'utf-8').substring(0, 15000)
-
-  // 4. Load customer intelligence from cache
-  const intelPath = resolve(cacheDir, 'intelligence', `${slug}.json`)
-  let companyIntel = ''
-  let productIntel = ''
-  let customerDisplayName = customer.name
-  try {
-    const intel = JSON.parse(readFileSync(intelPath, 'utf-8'))
-    companyIntel = intel.company ?? ''
-    productIntel = intel.products ? JSON.stringify(intel.products, null, 2) : ''
-    customerDisplayName = intel.customerName ?? customer.name
-  } catch {
-    console.warn(`[acct-plan-cy27] No intelligence cache for ${slug} -- generating with limited data`)
-  }
-
-  const aeName = customer.ae ?? 'Account Executive'
-
-  // Load signal context
-  let signalContext = ''
-  let solutionPlaysContext = ''
-  try {
-    const teamMembers = getAccountTeam(customer)
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
-    const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
-    signalContext = templateResult.deterministic || ''
-
-    const structuredPlays = templateResult.structured?.solutionPlays ?? []
-    if (structuredPlays.length > 0) {
-      solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub -- cite these for peer proof, do not fabricate alternatives)\n\n'
-      for (const play of structuredPlays) {
-        solutionPlaysContext += `### Play: "${play.playName}"\n`
-        solutionPlaysContext += `- TDP: ${play.tdp}\n`
-        if (play.customerWins?.length) solutionPlaysContext += `- Customer Wins: ${JSON.stringify(play.customerWins)}\n`
-        if (play.realWorldExamples?.length) solutionPlaysContext += `- Real-World Examples: ${JSON.stringify(play.realWorldExamples)}\n`
-        if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
-        if (play.talkTrack) solutionPlaysContext += `- Talk Track: ${play.talkTrack.slice(0, 300)}\n`
-        solutionPlaysContext += '\n'
-      }
-    }
-  } catch (e: any) {
-    console.warn(`[acct-plan-cy27] templateAll enrichment failed (non-fatal): ${e.message}`)
-  }
-
-  const signalSection = signalContext ? `\n\n### Signal Context\n${signalContext}` : ''
-  const userPrompt = `## Sample Account Plan (use as structural template)
-${samplePlan.substring(0, 15000)}
-
-## Customer: ${customerDisplayName}
-## Account Team
-- Account Executive (AE): ${aeName}
-- ${operatorTitle} (ASA): ${operatorName}
-
-### Company Intelligence
-${companyIntel.substring(0, 8000)}
-
-### Product Intelligence
-${productIntel.substring(0, 5000)}${signalSection}
-${solutionPlaysContext}
-## CY27 Account Planning Guidance (from Planning Deck)
-${cy27Deck}
-
----
-Now generate a complete CY27 Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. This is a CY27-specific plan using the latest planning guidance. Include ${aeName} as the AE and ${operatorName} as the ASA in the team members section.`
-
-  const rawResponse = await callGeminiForAccountPlan({
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt,
-    pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-    temperature: 0.3,
-    customerName: customer.name,
-    responseSchema: ACCOUNT_PLAN_RESPONSE_SCHEMA,
+): Promise<AccountPlanResult> {
+  return generateAccountPlan(customer, cacheDir, configDir, {
+    playbookOverride: 'cy27-planning-deck.txt',
+    cachePrefix: 'account-plan-cy27',
+    label: 'acct-plan-cy27',
   })
-
-  const rawMarkdown = convertAccountPlanJsonToMarkdown(rawResponse)
-
-  // Quality gate
-  const gateResult = await validateAndRetry(
-    rawMarkdown,
-    { validator: accountPlanValidator },
-    async (failures) => {
-      const feedback = formatFailureFeedback(failures)
-      const retryResponse = await callGeminiForAccountPlan({
-        systemPrompt: SYSTEM_PROMPT,
-        userPrompt: userPrompt + '\n\n' + feedback,
-        pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-        temperature: 0.3,
-        customerName: customer.name,
-        responseSchema: ACCOUNT_PLAN_RESPONSE_SCHEMA,
-      })
-      return convertAccountPlanJsonToMarkdown(retryResponse)
-    }
-  )
-  const markdown = gateResult.output
-
-  const generatedAt = new Date().toISOString()
-
-  // Write to cache with CY27-specific filename
-  const intelDir = resolve(cacheDir, 'intelligence')
-  mkdirSync(intelDir, { recursive: true })
-  const outputPath = resolve(intelDir, `${slug}-account-plan-cy27.md`)
-  const fullContent = `<!-- Generated: ${generatedAt} -->\n\n${markdown}`
-  writeFileSync(outputPath, fullContent, { mode: 0o600 })
-  console.log(`[acct-plan-cy27] Written to ${outputPath} (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
-
-  // Write quality scorecard meta
-  const metaPath = resolve(intelDir, `${slug}-account-plan-cy27-meta.json`)
-  writeJsonAtomic(metaPath, {
-    customerName: customer.name,
-    generatedAt,
-    markdownLength: markdown.length,
-    qualityScorecard: gateResult.scorecard,
-    planType: 'cy27',
-  })
-
-  // Upload to Drive
-  let driveUrl = ''
-  try {
-    const customerFolderId = await findCustomerDriveFolder(customer)
-    const plansFolderId = await ensureAccountPlansSubfolder(customerFolderId)
-    const docName = `${customer.name} - Account Plan CY27`
-    const timestamp = new Date().toLocaleDateString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-    driveUrl = await upsertAccountPlanDoc(plansFolderId, docName, `Generated: ${timestamp}\n\n${markdown}`)
-    console.log(`[acct-plan-cy27] Uploaded to Drive: ${driveUrl}`)
-  } catch (e: any) {
-    console.error(`[acct-plan-cy27] Drive upload failed (non-fatal): ${e.message}`)
-  }
-
-  return { markdown, generatedAt, driveUrl }
 }
-
-// ── Read cached CY27 account plan ───────────────────────────────────────────
 
 export function readAccountPlanCY27(
   customerSlug: string,
