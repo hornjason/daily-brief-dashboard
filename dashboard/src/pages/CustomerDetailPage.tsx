@@ -1548,10 +1548,10 @@ export function CustomerDetailPage() {
           </div>
         </div>
 
-        {/* Row 2: hero name + stat badges */}
-        <div className="py-4 px-6 bg-surface/60 border-b border-border/40 min-h-[4rem]">
+        {/* Row 2: hero bar (slim — v2.0 Phase 1) */}
+        <div className="py-3 px-6 bg-surface/60 border-b border-border/40">
           <div className="flex items-center gap-4 flex-wrap">
-            {/* Health dot + numeric score (BKL-G13) */}
+            {/* Health dot + numeric score */}
             {(sectionLoading || sse.meta !== null) && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <div
@@ -1571,100 +1571,22 @@ export function CustomerDetailPage() {
                 Customer not found
               </div>
             )}
-            <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+              {(meta?.ae || meta?.segment) && (
+                <span className="text-xs text-text-secondary">
+                  {meta.ae ? `AE: ${meta.ae}` : ''}{meta.ae && meta.segment ? ' · ' : ''}{meta.segment ?? ''}
+                </span>
+              )}
+            </div>
 
-            {/* Refresh This Customer (ADR-037 F5) */}
-            <button
-              onClick={handleRefreshCustomer}
-              disabled={customerRefreshing}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-text-secondary transition-all disabled:opacity-50"
-              title="Refresh all data sources for this customer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${customerRefreshing ? 'animate-spin' : ''}`} />
-              {customerRefreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
-            {refreshResult === 'success' && <span className="text-green-400 text-xs ml-1">Refreshed</span>}
-            {refreshResult === 'error' && <span className="text-red-400 text-xs ml-1">Refresh failed</span>}
-
-            {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
-              <AccountCountPill accountNumbers={meta.accountNumbers.map(String)} />
-            )}
-
-            {/* Stat badges */}
-            {(sectionLoading || sse.meta !== null) && (
-              <>
-                {isL3Only ? null : (
-                  <StatBadge
-                    icon={<AlertCircle className={`w-3.5 h-3.5 ${sse.cases.some((c) => c.severity === '1') ? 'text-critical' : sse.cases.length > 0 ? 'text-warning' : 'text-success'}`} />}
-                    value={sse.cases.length}
-                    label="Cases"
-                    loading={sectionLoading}
-                  />
-                )}
-                <StatBadge
-                  icon={<Package className="w-3.5 h-3.5 text-text-secondary" />}
-                  value={accountInfo?.productCount ?? 0}
-                  label="Products"
-                  loading={!accountInfo}
-                />
-                <StatBadge
-                  icon={<Key className="w-3.5 h-3.5 text-text-secondary" />}
-                  value={accountInfo?.totalLicenses?.toLocaleString() ?? '0'}
-                  label="Licenses"
-                  loading={!accountInfo}
-                />
-                {/* BKL-G05: Cloud$ stat badge with sparkline (BKL-HERO-18: L4-only) */}
-                {isL3Only ? null : (
-                  <StatBadge
-                    icon={
-                      <div className="flex items-center gap-1">
-                        <Cloud className="w-3.5 h-3.5 text-text-secondary" />
-                        {headerCcsp?.byQuarter && headerCcsp.byQuarter.length >= 2 && (
-                          <InlineSparkline values={headerCcsp.byQuarter.map(q => q.acv)} />
-                        )}
-                      </div>
-                    }
-                    value={headerCcsp ? fmtCurrency(headerCcsp.totalAcv) : '$0'}
-                    label="Cloud$"
-                    loading={!headerCcsp}
-                  />
-                )}
-                {/* BKL-G05: Pipeline ACV stat badge with sparkline (BKL-HERO-18: L4-only) */}
-                {isL3Only ? null : (
-                  <StatBadge
-                    icon={
-                      <div className="flex items-center gap-1">
-                        <TrendingUp className="w-3.5 h-3.5 text-text-secondary" />
-                        {headerPipeline?.opps && headerPipeline.opps.length >= 2 && (
-                          <InlineSparkline values={headerPipeline.opps.map(o => o.acv)} />
-                        )}
-                      </div>
-                    }
-                    value={headerPipeline ? fmtCurrency(headerPipeline.totalAcv) : '$0'}
-                    label="Pipeline"
-                    loading={!headerPipeline}
-                  />
-                )}
-              </>
-            )}
-
-            {/* BKL-REG-17: only render segment badge when segment is populated — hide entirely when null/empty */}
-            {meta?.segment && (
-              <span className="text-xs px-2 py-0.5 rounded border font-medium bg-accent/10 text-accent border-accent/20">
-                {meta.segment}
-              </span>
-            )}
-
-            {/* Right-aligned: next meeting + AE */}
+            {/* Right-aligned: next meeting + Meeting Prep + refresh */}
             <div className="ml-auto flex items-center gap-4">
               {nextLabel && (
                 <div className="flex items-center gap-1.5 text-xs">
                   <Calendar className="w-3.5 h-3.5 text-accent" />
                   <span className="font-semibold text-accent">{nextLabel}</span>
                 </div>
-              )}
-              {meta?.ae && (
-                <span className="text-sm text-text-secondary">{meta.ae}</span>
               )}
               <button
                 onClick={() => setActiveTab('meeting-prep-brief' as any)}
@@ -1674,17 +1596,17 @@ export function CustomerDetailPage() {
                 <Zap className="w-3.5 h-3.5" />
                 Meeting Prep
               </button>
-              {notebookUrl && (
-                <a
-                  href={notebookUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-accent hover:underline"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  Notebook
-                </a>
-              )}
+              <button
+                onClick={handleRefreshCustomer}
+                disabled={customerRefreshing}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-text-secondary transition-all disabled:opacity-50"
+                title="Refresh all data sources for this customer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${customerRefreshing ? 'animate-spin' : ''}`} />
+                {customerRefreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
+              {refreshResult === 'success' && <span className="text-green-400 text-xs ml-1">Refreshed</span>}
+              {refreshResult === 'error' && <span className="text-red-400 text-xs ml-1">Refresh failed</span>}
             </div>
           </div>
         </div>
@@ -1700,11 +1622,6 @@ export function CustomerDetailPage() {
         )}
       </header>
 
-      {/* Temporal diff strip — progressive disclosure (#619) */}
-      <TemporalDiffStrip
-        customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-      />
-
       {/* Tab bar (GitHub Issue #142, #240) */}
       <CustomerTabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -1716,51 +1633,40 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Customer Signal Banner (BKL-F10a, BKL-F10b) — top signal with action chips */}
-      {priorityAction && (
-        <div className="px-6 pt-3">
-          <CustomerSignalBanner
-            signal={priorityAction.text}
-            priority={priorityAction.severity === 'critical' ? 'urgent' : 'this-week'}
-            chips={[
-              ...(priorityAction.source.toLowerCase().includes('case') && priorityAction.source.match(/\d{8,}/)
-                ? [{ label: 'View Case', href: `https://access.redhat.com/support/cases/#/case/${priorityAction.source.match(/(\d{8,})/)?.[1]}`, variant: 'case' as const }]
-                : []),
-              { label: 'Schedule', href: `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(`Follow up: ${priorityAction.text.slice(0, 60)}`)}`, variant: 'calendar' as const },
-            ]}
-          />
-        </div>
-      )}
-
-      {/* Health Score Hero (R12) */}
-      {healthScore && (
-        <div className="px-6 pt-4">
-          <HealthScoreHero score={healthScore.score} status={healthScore.status} breakdown={healthScore.breakdown as any} />
-        </div>
-      )}
-
-      {/* Strategic Motion Hero (#517) */}
-      <div className="px-6 pt-4">
-        <ExpansionMotionSection
-          customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-          customerName={customerName}
-        />
-      </div>
-
-      {/* Tab content area */}
+      {/* Tab content area — two-column starts immediately after tab bar */}
       {activeTab === 'overview' ? (
         /* Two-column body (65/35 — BKL-G14) */
         <div className="flex flex-1 overflow-hidden">
           {/* Left column — 65% */}
           <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
-          {/* Always visible: Top expansion plays (#620) */}
+          {/* Priority Action Banner (conditional — v2.0 position 1) */}
+          {priorityAction && (
+            <CustomerSignalBanner
+              signal={priorityAction.text}
+              priority={priorityAction.severity === 'critical' ? 'urgent' : 'this-week'}
+              chips={[
+                ...(priorityAction.source.toLowerCase().includes('case') && priorityAction.source.match(/\d{8,}/)
+                  ? [{ label: 'View Case', href: `https://access.redhat.com/support/cases/#/case/${priorityAction.source.match(/(\d{8,})/)?.[1]}`, variant: 'case' as const }]
+                  : []),
+                { label: 'Schedule', href: `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(`Follow up: ${priorityAction.text.slice(0, 60)}`)}`, variant: 'calendar' as const },
+              ]}
+            />
+          )}
+
+          {/* Account Brief (v2.0 position 2) */}
+          <BriefSection name={customerName} />
+
+          {/* Top Plays (v2.0 position 3) */}
           <TopPlaysCard
             customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
             customerName={customerName}
           />
 
-          {/* Always visible: Brief section */}
-          <BriefSection name={customerName} />
+          {/* Strategic Motion (v2.0 position 4) */}
+          <ExpansionMotionSection
+            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+            customerName={customerName}
+          />
 
           {/* Collapsible: Temporal changes (#619) */}
           <CollapsibleSection
