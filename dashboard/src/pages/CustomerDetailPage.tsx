@@ -75,7 +75,6 @@ import { ExpansionOpportunitiesPanel } from '../components/ExpansionOpportunitie
 
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { SidebarGroup } from '../components/SidebarGroup'
-import { TopPlaysCard } from '../components/TopPlaysCard'
 import { ProductOpportunities } from '../components/ProductOpportunities'
 
 // ── Staleness indicators (ADR-037 F6) ────────────────────────────────────────
@@ -1662,13 +1661,7 @@ export function CustomerDetailPage() {
           {/* Account Brief (v2.0 position 2) */}
           <BriefSection name={customerName} />
 
-          {/* Top Plays (v2.0 position 3) */}
-          <TopPlaysCard
-            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-            customerName={customerName}
-          />
-
-          {/* Strategic Motion (v2.0 position 4) */}
+          {/* Sales Strategy (v2.0 position 3) */}
           <ExpansionMotionSection
             customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
             customerName={customerName}

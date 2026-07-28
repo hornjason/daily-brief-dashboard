@@ -799,7 +799,7 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
       <div className="px-5 py-4 border-b border-border/60">
         <div className="flex items-center gap-2 mb-2">
           <Target className="w-4 h-4 text-accent" />
-          <h2 className="text-base font-semibold text-text-primary">Strategic Motion</h2>
+          <h2 className="text-base font-semibold text-text-primary">Sales Strategy</h2>
         </div>
         <h3 className="text-lg font-bold text-text-primary mb-2">{motion.salesPlay ? `Sales Play: ${motion.title}` : motion.title}</h3>
         <div className="flex items-center gap-3 flex-wrap">
@@ -834,7 +834,7 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
       {/* Phase cards */}
       <div className="px-5 py-4 space-y-2">
         {motion.phases.map((phase, idx) => (
-          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} />
+          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
         ))}
       </div>
 
