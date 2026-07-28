@@ -22,7 +22,7 @@ import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
-import { readAccountPlan, generateAndSaveAccountPlan, generateMidyearUpdate, readMidyearUpdate } from './account-plan.ts'
+import { readAccountPlan, generateAndSaveAccountPlan, generateMidyearUpdate, readMidyearUpdate, generateAccountPlanCY27, readAccountPlanCY27 } from './account-plan.ts'
 import { readCachedPositioning, generateValuePositioning } from './value-positioning.ts'
 import { getAiConfig } from './ai-config.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
@@ -31,6 +31,7 @@ import { getCustomerProductContext } from './lib/customer-product-context.ts'
 import { structuredTechStack } from './lib/templates/tech-structured.ts'
 import { structuredRecommendations } from './lib/templates/recommendations-structured.ts'
 import { structuredCustomerOverview } from './lib/templates/customer-overview-structured.ts'
+import { getTemplateStatus, syncTemplatesFromDrive } from './template-sync.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -862,6 +863,68 @@ export function createCustomerRouter(): Hono {
     const cached = readMidyearUpdate(slug, CACHE_DIR)
     if (!cached) return c.json({ notGenerated: true })
     return c.json({ sections: cached.sections, generatedAt: cached.generatedAt })
+  })
+
+  // ── #1017: CY27 Account Plan ──────────────────────────────────────────────
+
+  const _cy27PlanInFlight = new Set<string>()
+
+  router.post('/api/customers/:id/account-plan/generate-cy27', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    if (_cy27PlanInFlight.has(slug)) {
+      return c.json({ error: 'CY27 plan generation already in progress for this customer' }, 409)
+    }
+
+    _cy27PlanInFlight.add(slug)
+    try {
+      const configDir = process.env.CONFIG_DIR ?? ''
+      const result = await generateAccountPlanCY27(customer, CACHE_DIR, configDir)
+      return c.json({ ok: true, generatedAt: result.generatedAt, driveUrl: result.driveUrl })
+    } catch (e: any) {
+      console.error(`[acct-plan-cy27] Generation failed for ${customer.name}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    } finally {
+      _cy27PlanInFlight.delete(slug)
+    }
+  })
+
+  router.get('/api/customers/:id/account-plan/cy27', (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const plan = readAccountPlanCY27(slug, CACHE_DIR)
+    if (!plan) return c.json({ notGenerated: true })
+    return c.json({ markdown: plan.markdown, generatedAt: plan.generatedAt, driveUrl: plan.driveUrl })
+  })
+
+  // ── #1017: Account Plan Template sync routes ────────────────────────────────
+
+  router.get('/api/account-plan-templates/status', (c) => {
+    return c.json(getTemplateStatus())
+  })
+
+  router.post('/api/account-plan-templates/sync', async (c) => {
+    const ae = aes[0]
+    const parentFolderId = ae?.parentFolderId
+    if (!parentFolderId) {
+      return c.json({ error: 'No parentFolderId configured — bootstrap an AE first' }, 400)
+    }
+
+    try {
+      const result = await syncTemplatesFromDrive(parentFolderId)
+      return c.json(result)
+    } catch (e: any) {
+      console.error('[template-sync] Sync failed:', e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   // ── #264: Value Positioning — proactive value proposition briefs ────────────

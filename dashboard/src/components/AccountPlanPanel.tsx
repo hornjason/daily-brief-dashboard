@@ -78,11 +78,11 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
       })
       .catch(() => {})
 
-    fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/midyear-update`)
+    fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/cy27`)
       .then(r => r.json())
-      .then((d: MidyearResponse) => {
-        if (d.sections && d.generatedAt) {
-          setMidyear({ sections: d.sections, generatedAt: d.generatedAt })
+      .then((d: PlanResponse) => {
+        if (d.markdown && d.generatedAt) {
+          setMidyear({ sections: { initiatives: d.markdown, economicBuyer: '', ecosystemStrategy: '', securitySovereignty: '', timeframeGuidance: '' }, generatedAt: d.generatedAt })
         }
       })
       .catch(() => {})
@@ -155,7 +155,7 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
     setMidyearGenerating(true)
     setMidyearError(null)
     try {
-      const res = await fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/midyear-update`, {
+      const res = await fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/generate-cy27`, {
         method: 'POST',
       })
       let data: any
@@ -166,8 +166,12 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
         setMidyearGenerating(false)
         return
       }
-      if (data.sections) {
-        setMidyear({ sections: data.sections, generatedAt: data.generatedAt })
+      if (data.ok) {
+        const cy27Res = await fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/cy27`)
+        const cy27Data = await cy27Res.json()
+        if (cy27Data.markdown) {
+          setMidyear({ sections: { initiatives: cy27Data.markdown, economicBuyer: '', ecosystemStrategy: '', securitySovereignty: '', timeframeGuidance: '' }, generatedAt: cy27Data.generatedAt })
+        }
         setMidyearGenerating(false)
       } else if (data.error) {
         setMidyearError(data.error)

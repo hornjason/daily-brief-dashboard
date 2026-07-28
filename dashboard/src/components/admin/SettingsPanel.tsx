@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Step0RegionAccess } from '../Step0RegionAccess'
 import { formatRelTime } from '../../lib/format'
 import { NewsRadarSettings } from '../NewsRadarSettings'
+import { AccountPlanTemplatesSection } from './AccountPlanTemplatesSection'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -642,6 +643,10 @@ export function SettingsPanel() {
 
       <CollapsibleSection title="Value Maps">
         <ValueMapsSection />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Account Plan Templates">
+        <AccountPlanTemplatesSection />
       </CollapsibleSection>
 
       <CollapsibleSection title="Config Backup">

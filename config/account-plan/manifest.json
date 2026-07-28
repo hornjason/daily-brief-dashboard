@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-28T00:00:00.000Z",
+  "templatesFolderId": null,
+  "files": {
+    "playbook.md": {
+      "description": "Account planning playbook - guidance for structuring and writing account plans",
+      "required": true
+    },
+    "questions.pdf": {
+      "description": "Account plan scorecard questions reference (PDF for multimodal vision)",
+      "required": true
+    },
+    "sample.md": {
+      "description": "Sample account plan - structural template for AI generation",
+      "required": true
+    },
+    "cy27-planning-deck.txt": {
+      "description": "CY27 planning slides text - planning context for CY27 account plan generation",
+      "required": false
+    },
+    "manifest.json": {
+      "description": "This file - tracks version, template metadata, and Drive folder ID",
+      "required": true
+    }
+  }
+}
