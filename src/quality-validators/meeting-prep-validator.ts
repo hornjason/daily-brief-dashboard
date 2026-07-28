@@ -50,12 +50,14 @@ function validate(output: string): QualityScorecard {
   // 3. Engagement Timeline (renamed from Recent Interactions #1007) — present with 2+ entries
   const section3 = extractNumberedSection(output, 3)
   const section3Bullets = (section3.match(/^[\s]*[-*]\s/gm) ?? []).length
+  const section3TableRows = countTableRows(section3)
+  const section3Items = Math.max(section3Bullets, section3TableRows)
   checks.push({
     name: 'engagement-timeline',
-    passed: section3.length > 0 && section3Bullets >= 2,
+    passed: section3.length > 0 && section3Items >= 2,
     expected: 'Section 3 (Engagement Timeline) present with >= 2 entries',
     actual: section3.length > 0
-      ? `${section3Bullets} bullet points`
+      ? `${section3Items} items (${section3Bullets} bullets, ${section3TableRows} table rows)`
       : 'section not found',
     severity: 'required',
   })
@@ -120,12 +122,14 @@ function validate(output: string): QualityScorecard {
   // 7. Pipeline Opportunities — present with >= 1 item
   const section7 = extractNumberedSection(output, 7)
   const section7Bullets = (section7.match(/^[\s]*[-*]\s|^[\s]*\d+\.\s/gm) ?? []).length
+  const section7TableRows = countTableRows(section7)
+  const section7Items = Math.max(section7Bullets, section7TableRows)
   checks.push({
     name: 'pipeline-opportunities',
-    passed: section7.length > 0 && section7Bullets >= 1,
+    passed: section7.length > 0 && section7Items >= 1,
     expected: 'Section 7 (Pipeline Opportunities) present with >= 1 item',
     actual: section7.length > 0
-      ? `${section7Bullets} items`
+      ? `${section7Items} items`
       : 'section not found',
     severity: 'recommended',
   })
@@ -170,8 +174,8 @@ function validate(output: string): QualityScorecard {
     severity: 'recommended',
   })
 
-  // Format check: no tables outside section 2
-  const sectionsNoTables = [section1, section3, section4]
+  // Format check: no tables outside sections that use them (§2, §3, §6, §7)
+  const sectionsNoTables = [section1, section4]
   const tableLeakFound = sectionsNoTables.some(s =>
     s.includes('|') && s.split('\n').filter(l => l.trim().startsWith('|')).length >= 3
   )

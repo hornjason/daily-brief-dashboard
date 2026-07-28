@@ -1452,7 +1452,7 @@ export async function generateMeetingPrep(
     && !closedStatuses.includes((sc.status ?? '').toLowerCase())
   )
   const caseSummary = customerCases.length > 0
-    ? customerCases.map(sc => `- ${sc.summary} (Sev${sc.severity}, ${sc.status})`).join('\n')
+    ? `| Case | Severity | Status |\n|---|---|---|\n${customerCases.map(sc => `| ${sc.summary} | Sev ${sc.severity} | ${sc.status} |`).join('\n')}`
     : 'No open support cases'
 
   // ── Step 3b: Compute carry-forward escalation (#646) ────────────────────

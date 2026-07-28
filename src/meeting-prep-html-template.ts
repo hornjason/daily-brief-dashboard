@@ -163,6 +163,14 @@ function renderContent(content: string): string {
       continue
     }
 
+    // Sub-headings within a section (### or **)
+    if (/^#{2,3}\s+/.test(trimmed)) {
+      if (inList) { html += '</ul>\n'; inList = false }
+      const headingText = trimmed.replace(/^#{2,3}\s+/, '')
+      html += `<h3 style="font-size:11pt;color:#5f0000;margin-top:16px;margin-bottom:4px">${applyInlineFormatting(headingText)}</h3>\n`
+      continue
+    }
+
     // Regular paragraph
     if (inList) { html += '</ul>\n'; inList = false }
     html += `<p style="margin:8px 0">${applyInlineFormatting(trimmed)}</p>\n`

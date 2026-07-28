@@ -100,7 +100,7 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   }
 
   // Build Suggested Topics from all synthesis signals (#1016, §13.14)
-  const suggestedTopics: string[] = []
+  const suggestedTopics: { topic: string; context: string; tag: string }[] = []
   if (meetingDate && openDeals.length > 0) {
     for (const deal of openDeals) {
       const m = deal.metadata ?? {} as any
@@ -110,30 +110,29 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       if (closeDate) {
         const daysUntilClose = Math.ceil((closeDate.getTime() - meetingDate.getTime()) / (1000 * 60 * 60 * 24))
         if (daysUntilClose > 0 && daysUntilClose <= 14) {
-          suggestedTopics.push(`- **${name}** (${amount}) — closes ${m.closeDate}, ${daysUntilClose} days away [closing meeting]`)
+          suggestedTopics.push({ topic: `${name} (${amount})`, context: `Closes ${m.closeDate}, ${daysUntilClose} days away`, tag: 'Closing Meeting' })
         } else if (daysUntilClose > 0 && daysUntilClose <= 60) {
-          suggestedTopics.push(`- **${name}** (${amount}) — closes ${m.closeDate} [pipeline]`)
+          suggestedTopics.push({ topic: `${name} (${amount})`, context: `Closes ${m.closeDate}`, tag: 'Pipeline' })
         }
       }
     }
   }
 
-  // Add timeline entries that suggest topics (unresolved threads, rescheduled meetings)
   if (ctx.engagementTimeline) {
     for (const entry of ctx.engagementTimeline) {
       const s = entry.summary.toLowerCase()
       if (s.includes('consumption') || s.includes('utilization')) {
-        suggestedTopics.push(`- **${entry.summary}** — ${entry.date.split('T')[0]} [open item]`)
+        suggestedTopics.push({ topic: entry.summary, context: entry.date.split('T')[0], tag: 'Open Item' })
       } else if (s.includes('reschedul')) {
-        suggestedTopics.push(`- **${entry.summary}** — align scope [alignment]`)
+        suggestedTopics.push({ topic: entry.summary, context: 'Align scope', tag: 'Alignment' })
       } else if (s.includes('nfr') || s.includes('subscription') || s.includes('renewal')) {
-        suggestedTopics.push(`- **${entry.summary}** — ${entry.date.split('T')[0]} [renewal review]`)
+        suggestedTopics.push({ topic: entry.summary, context: entry.date.split('T')[0], tag: 'Renewal Review' })
       }
     }
   }
 
   if (ctx.organizerIntent) {
-    suggestedTopics.push(`- **Organizer stated purpose:** ${ctx.organizerIntent}`)
+    suggestedTopics.push({ topic: 'Organizer stated purpose', context: ctx.organizerIntent, tag: 'Intent' })
   }
 
   // Inject §1 enrichment + Suggested Topics between §1 and §2
@@ -152,15 +151,15 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       enriched = `### 1. Meeting Objective\n${existingObjective}`
     }
     if (suggestedTopics.length > 0) {
-      // Deduplicate topics
       const seen = new Set<string>()
       const unique = suggestedTopics.filter(t => {
-        const key = t.substring(0, 40).toLowerCase()
+        const key = t.topic.substring(0, 40).toLowerCase()
         if (seen.has(key)) return false
         seen.add(key)
         return true
       })
-      enriched += `\n\n### Suggested Topics\n*Based on intelligence correlation — ranked by commercial urgency*\n${unique.join('\n')}`
+      const topicRows = unique.map(t => `| ${t.topic} | ${t.context} | ${t.tag} |`).join('\n')
+      enriched += `\n\n### Suggested Topics\n*Based on intelligence correlation — ranked by commercial urgency*\n| Topic | Context | Priority |\n|---|---|---|\n${topicRows}`
     }
     prepContent = prepContent.slice(0, s1Start) + enriched + '\n\n' + prepContent.slice(s2Start)
     console.log(`[meeting-prep] Intelligence synthesis: ${synthesisLines.length} signals, ${suggestedTopics.length} suggested topics`)
@@ -176,15 +175,15 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       return !stage.includes('closed')
     })
     if (openPipeline.length > 0) {
-      const pipelineLines = openPipeline.map((s: any) => {
+      const pipelineRows = openPipeline.map((s: any) => {
         const m = s.metadata ?? {}
         const name = m.opportunityName ?? s.headline ?? 'Unknown'
-        const amount = m.amount ? `$${Number(m.amount).toLocaleString()}` : ''
-        const close = m.closeDate ?? ''
-        const stage = m.stage ?? ''
-        return `- **${name}:** ${amount}${close ? `, closing ${close}` : ''}${stage ? ` [${stage}]` : ''}`
+        const amount = m.amount ? `$${Number(m.amount).toLocaleString()}` : '—'
+        const close = m.closeDate ?? '—'
+        const stage = m.stage ?? '—'
+        return `| ${name} | ${amount} | ${close} | ${stage} |`
       })
-      const deterministicPipeline = `### 7. Pipeline Opportunities\n${pipelineLines.join('\n')}`
+      const deterministicPipeline = `### 7. Pipeline Opportunities\n| Opportunity | Amount | Close Date | Stage |\n|---|---|---|---|\n${pipelineRows.join('\n')}`
       const p7Start = prepContent.indexOf('### 7.')
       const p8Start = prepContent.indexOf('### 8.')
       if (p7Start !== -1 && p8Start !== -1) {
@@ -206,31 +205,28 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     // Filter noise values from titles (confidence labels, etc.)
     const noiseValues = new Set(['low', 'medium', 'high', 'unknown', 'n/a', 'none', '-', '—'])
 
-    const externalLines: string[] = []
-    const internalLines: string[] = []
+    const externalRows: { name: string; title: string; company: string; email: string }[] = []
+    const internalRows: { name: string; role: string; email: string }[] = []
 
     for (const email of calendarAttendees) {
       const isInternal = email.endsWith('@redhat.com')
       if (isInternal) {
-        // Match against account team by email prefix → full name + role
         const prefix = email.split('@')[0].toLowerCase()
         const teamMember = ctx.accountTeam.find(m => {
           const nameParts = m.name.toLowerCase().split(' ')
           return prefix.includes(nameParts[0]) || prefix.includes(nameParts[nameParts.length - 1])
         })
         if (teamMember) {
-          internalLines.push(`- **${teamMember.name}**, ${teamMember.role.toUpperCase()}`)
+          internalRows.push({ name: teamMember.name, role: teamMember.role.toUpperCase(), email })
         } else {
           const name = ctx.getAttendeeDisplayName(ctx.meeting, email)
-          internalLines.push(`- **${name}** (${email})`)
+          internalRows.push({ name, role: '—', email })
         }
         continue
       }
       const profile = ctx.resolvedProfiles.find(p => p.email === email)
       let title = profile?.title || ''
-      // Filter noise from title
       if (noiseValues.has(title.toLowerCase())) title = ''
-      // Cross-reference Key Relationships for title if profile has none
       if (!title && profile?.name) {
         const firstName = profile.name.split(' ')[0].toLowerCase()
         const match = keyRelationships.find(r => r.toLowerCase().includes(firstName))
@@ -241,17 +237,17 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       }
       const company = profile?.company || email.split('@')[1]?.replace(/\.\w+$/, '') || ''
       const displayName = profile?.name || ctx.getAttendeeDisplayName(ctx.meeting, email)
-      const titlePart = title ? `, ${title}` : ''
-      const companyPart = company ? ` at ${company}` : ''
-      externalLines.push(`- **${displayName}**${titlePart}${companyPart} (${email})`)
+      externalRows.push({ name: displayName, title: title || '—', company, email })
     }
 
     // Fallback: if no RH attendees found in attendeeDetails, use account team
-    const rhTeamLines = internalLines.length > 0 ? internalLines : ctx.accountTeam.slice(0, 5).map(m =>
-      `- **${m.name}**, ${m.role.toUpperCase()}`
+    const rhRows = internalRows.length > 0 ? internalRows : ctx.accountTeam.slice(0, 5).map(m =>
+      ({ name: m.name, role: m.role.toUpperCase(), email: '' })
     )
 
-    const deterministicSection2 = `### 2. Who's in the Room\n**Customer:**\n${externalLines.join('\n')}\n\n**Red Hat:**\n${rhTeamLines.join('\n')}`
+    const custTable = `**Customer Attendees**\n| Name | Title | Company | Email |\n|---|---|---|---|\n${externalRows.map(r => `| ${r.name} | ${r.title} | ${r.company} | ${r.email} |`).join('\n')}`
+    const rhTable = `**Red Hat Team**\n| Name | Role | Email |\n|---|---|---|\n${rhRows.map(r => `| ${r.name} | ${r.role} | ${r.email} |`).join('\n')}`
+    const deterministicSection2 = `### 2. Who's in the Room\n${custTable}\n\n${rhTable}`
     const s2Start = prepContent.indexOf('### 2.')
     const s3Start = prepContent.indexOf('### 3.')
     if (s2Start !== -1 && s3Start !== -1) {
@@ -265,13 +261,14 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     const sorted = [...ctx.engagementTimeline].sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     )
-    const timelineLines = sorted.slice(0, 8).map(e => {
+    const timelineRows = sorted.slice(0, 8).map(e => {
       const d = new Date(e.date)
       const dateStr = isNaN(d.getTime()) ? e.date : d.toISOString().split('T')[0]
-      const link = e.sourceUrl ? ` [source](${e.sourceUrl})` : ''
-      return `- **${dateStr}:** ${e.summary}${link}`
+      const sourceLabel = e.source === 'email' ? 'Email' : e.source === 'graph' ? 'Graph' : e.source === 'prep-history' ? 'Meeting' : e.source
+      const link = e.sourceUrl ? `[${sourceLabel}](${e.sourceUrl})` : sourceLabel
+      return `| ${dateStr} | ${e.summary} | ${link} |`
     })
-    const deterministicSection3 = `### 3. Engagement Timeline\n${timelineLines.join('\n')}`
+    const deterministicSection3 = `### 3. Engagement Timeline\n| Date | Activity | Source |\n|---|---|---|\n${timelineRows.join('\n')}`
     const s3Start = prepContent.indexOf('### 3.')
     const s4Start = prepContent.indexOf('### 4.')
     if (s3Start !== -1 && s4Start !== -1) {
