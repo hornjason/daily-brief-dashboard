@@ -70,7 +70,7 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     const stage = (s.metadata?.stage ?? '').toLowerCase()
     if (stage.includes('closed')) return false
     const oppName = (s.metadata?.opportunityName ?? s.headline ?? '').toLowerCase()
-    const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)\b/i.test(oppName)
+    const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)(?:\s|,|$)/i.test(oppName)
     if (hasCorpSuffix && !custWords.some(w => oppName.includes(w))) return false
     return true
   })
@@ -100,14 +100,17 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   if (ctx.meetingContextUseCases && ctx.meetingContextUseCases.length > 0) {
     const confirmed = ctx.meetingContextUseCases.filter(uc => uc.confirmationLevel === 'confirmed')
     if (confirmed.length > 0) {
-      // Deduplicate by first 30 chars (catches near-identical descriptions)
-      const seen = new Set<string>()
-      const unique = confirmed.filter(uc => {
-        const key = uc.description.toLowerCase().slice(0, 30)
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+      // Deduplicate by keyword overlap (catches semantically similar descriptions)
+      const unique: typeof confirmed = []
+      for (const uc of confirmed) {
+        const words = new Set(uc.description.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 3))
+        const isDuplicate = unique.some(existing => {
+          const existingWords = new Set(existing.description.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 3))
+          const overlap = [...words].filter(w => existingWords.has(w)).length
+          return overlap >= 3
+        })
+        if (!isDuplicate) unique.push(uc)
+      }
       synthesisLines.push(`**Confirmed use cases:** ${unique.map(uc => uc.description).join('; ')}`)
     }
   }
@@ -173,7 +176,7 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
         seen.add(key)
         return true
       })
-      const topicRows = unique.map(t => `| ${t.topic} | ${t.context} | ${t.tag} |`).join('\n')
+      const topicRows = unique.map(t => `| ${t.topic} | ${t.context || 'Recent'} | ${t.tag} |`).join('\n')
       enriched += `\n\n### Suggested Topics\n*Based on intelligence correlation — ranked by commercial urgency*\n| Topic | Context | Priority |\n|---|---|---|\n${topicRows}`
     }
     prepContent = prepContent.slice(0, s1Start) + enriched + '\n\n' + prepContent.slice(s2Start)
@@ -190,7 +193,7 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       if (stage.includes('closed')) return false
       // Filter out deals from other customers (AE territory can include multiple customers)
       const oppName = (s.metadata?.opportunityName ?? s.headline ?? '').toLowerCase()
-      const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)\b/i.test(oppName)
+      const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)(?:\s|,|$)/i.test(oppName)
       if (hasCorpSuffix && !custWords.some(w => oppName.includes(w))) return false
       return true
     })
