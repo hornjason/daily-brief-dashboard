@@ -279,12 +279,18 @@ async function callGeminiForAccountPlan(opts: {
 
 // ── ADR-040: Convert structured JSON response back to markdown ──────────────
 
+function formatGeminiString(s: string): string {
+  return s
+    .replace(/(?<!\n)(\d+)\.\s+/g, '\n$1. ')
+    .replace(/(?<!\n)\*\s+/g, '\n* ')
+    .replace(/^\n/, '')
+}
+
 function convertAccountPlanJsonToMarkdown(rawText: string): string {
   let parsed: any
   try {
     parsed = JSON.parse(rawText)
   } catch {
-    // If Gemini returned raw markdown instead of JSON, pass through
     console.warn('[acct-plan] Failed to parse structured JSON response, using raw text')
     return rawText
   }
@@ -292,16 +298,19 @@ function convertAccountPlanJsonToMarkdown(rawText: string): string {
   const parts: string[] = []
 
   if (parsed.executiveSummary) {
-    parts.push(`## Executive Summary\n\n${parsed.executiveSummary}`)
+    parts.push(`## Executive Summary\n\n${formatGeminiString(parsed.executiveSummary)}`)
   }
   if (parsed.teamMembers) {
-    parts.push(`## Team Members\n\n${parsed.teamMembers}`)
+    const formatted = parsed.teamMembers
+      .replace(/\.\s+(?=[A-Z])/g, '.\n- ')
+      .replace(/^(?!-)/, '- ')
+    parts.push(`## Team Members\n\n${formatted}`)
   }
   if (parsed.scorecard) {
-    parts.push(`## Scorecard\n\n${parsed.scorecard}`)
+    parts.push(`## Scorecard\n\n${formatGeminiString(parsed.scorecard)}`)
   }
   if (parsed.customerView) {
-    parts.push(`## Customer View\n\n${parsed.customerView}`)
+    parts.push(`## Customer View\n\n${formatGeminiString(parsed.customerView)}`)
   }
   if (parsed.accountIntelligence) {
     if (typeof parsed.accountIntelligence === 'string') {
@@ -332,7 +341,7 @@ function convertAccountPlanJsonToMarkdown(rawText: string): string {
     }
   }
   if (parsed.keyStakeholders) {
-    parts.push(`## Key Stakeholders\n\n${parsed.keyStakeholders}`)
+    parts.push(`## Key Stakeholders\n\n${formatGeminiString(parsed.keyStakeholders)}`)
   }
   if (parsed.technicalLandscape) {
     if (typeof parsed.technicalLandscape === 'string') {
@@ -353,7 +362,7 @@ function convertAccountPlanJsonToMarkdown(rawText: string): string {
     }
   }
   if (parsed.customerSuccess) {
-    parts.push(`## Customer Success\n\n${parsed.customerSuccess}`)
+    parts.push(`## Customer Success\n\n${formatGeminiString(parsed.customerSuccess)}`)
   }
   if (parsed.whitespaceMap) {
     parts.push(`## Whitespace Map\n\n${parsed.whitespaceMap}`)
