@@ -480,7 +480,7 @@ export function IntelligenceInsightsCard({ customerName }: { customerName: strin
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Lightbulb className="w-4 h-4 text-accent" />
-          <h2 className="text-base font-semibold text-text-primary">Intelligence Insights</h2>
+          <h2 className="text-base font-semibold text-text-primary">Recommended Actions</h2>
         </div>
         <div className="space-y-2">
           <div className="bg-border/40 rounded animate-pulse-slow h-16" />
@@ -495,7 +495,7 @@ export function IntelligenceInsightsCard({ customerName }: { customerName: strin
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
           <Lightbulb className="w-4 h-4 text-text-secondary" />
-          <h2 className="text-base font-semibold text-text-primary">Intelligence Insights</h2>
+          <h2 className="text-base font-semibold text-text-primary">Recommended Actions</h2>
         </div>
         <p className="text-xs text-text-secondary">
           No recommendations yet — signals are building
@@ -512,7 +512,7 @@ export function IntelligenceInsightsCard({ customerName }: { customerName: strin
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <Lightbulb className="w-4 h-4 text-accent" />
-        <h2 className="text-base font-semibold text-text-primary">Intelligence Insights</h2>
+        <h2 className="text-base font-semibold text-text-primary">Recommended Actions</h2>
         <span className="text-xs text-text-secondary">{recommendations.length}</span>
       </div>
       <div className="space-y-2">

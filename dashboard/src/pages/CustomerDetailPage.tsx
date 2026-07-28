@@ -1823,7 +1823,7 @@ export function CustomerDetailPage() {
           </CollapsibleSection>
         </main>
 
-        {/* Right column — 35%, 4 collapsible groups per DESIGN-SPEC v2.0 §4 */}
+        {/* Right column — 35%, 3 collapsible groups (#1027) */}
         <aside className="hidden lg:block w-[38%] p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Group 1: Opportunities (default expanded) */}
           <SidebarGroup
@@ -1834,6 +1834,7 @@ export function CustomerDetailPage() {
           >
             <ProductOpportunities customerName={customerName} />
             <ExpansionOpportunitiesPanel customerName={customerName} />
+            <IntelligenceInsightsCard customerName={customerName} />
           </SidebarGroup>
 
           {/* Group 2: People */}
@@ -1848,23 +1849,14 @@ export function CustomerDetailPage() {
             )}
           </SidebarGroup>
 
-          {/* Group 3: Intelligence */}
-          <SidebarGroup
-            title="Intelligence"
-            icon={<Sparkles className="w-4 h-4" />}
-            storageKey={`${customerSlug}:intelligence`}
-          >
-            <AccountIntelligencePanel customerName={customerName} />
-            <IntelligenceInsightsCard customerName={customerName} />
-            <AccountPlanPanel customerName={customerName} />
-          </SidebarGroup>
-
-          {/* Group 4: Account Data */}
+          {/* Group 3: Account Data */}
           <SidebarGroup
             title="Account Data"
             icon={<BarChart3 className="w-4 h-4" />}
             storageKey={`${customerSlug}:account-data`}
           >
+            <AccountIntelligencePanel customerName={customerName} />
+            <AccountPlanPanel customerName={customerName} />
             <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
             {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
             <div className="bg-surface border border-border rounded-xl p-5">

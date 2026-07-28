@@ -101,7 +101,7 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
       <div className="bg-bg-secondary/30 rounded-lg border border-border p-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-text-secondary" />
-          <span className="text-sm font-medium text-text-primary">Product Opportunities</span>
+          <span className="text-sm font-medium text-text-primary">Product Signals</span>
           <span className="text-xs text-text-secondary">0 signals</span>
         </div>
         <p className="text-xs text-text-secondary mt-2">No product opportunity signals found for this customer.</p>
@@ -115,7 +115,7 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
       <div className="bg-bg-secondary/30 rounded-lg border border-border p-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-text-secondary" />
-          <span className="text-sm font-medium text-text-primary">Product Opportunities</span>
+          <span className="text-sm font-medium text-text-primary">Product Signals</span>
         </div>
         <div className="mt-2 space-y-2">
           {[1, 2, 3].map(i => (
@@ -149,7 +149,7 @@ export function ProductOpportunities({ customerName }: ProductOpportunitiesProps
       >
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-text-secondary" />
-          <span className="text-sm font-medium text-text-primary">Product Opportunities</span>
+          <span className="text-sm font-medium text-text-primary">Product Signals</span>
           <span className="text-xs text-text-secondary">
             {signals.length} signal{signals.length !== 1 ? 's' : ''}
           </span>

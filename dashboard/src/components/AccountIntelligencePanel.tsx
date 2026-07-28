@@ -93,7 +93,7 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
       >
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
-          <h3 className="text-sm font-semibold text-text-primary">Account Intelligence Docs</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Research Docs</h3>
           {isRunning && (
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
           )}

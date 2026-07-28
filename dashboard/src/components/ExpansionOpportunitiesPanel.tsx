@@ -141,7 +141,7 @@ export function ExpansionOpportunitiesPanel({ customerName }: ExpansionOpportuni
       >
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-accent" />
-          <h3 className="text-sm font-semibold text-text-primary">Expansion Opportunities</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Expansion Fit</h3>
           {generating && (
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
           )}
