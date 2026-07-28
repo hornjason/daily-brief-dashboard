@@ -1258,6 +1258,46 @@ When the AE sees the suggested topics and decides "I need a full agenda for this
 - Phase 2: Agenda builder with time allocation and AE editing
 - Phase 3: AE can share agenda with attendees, track against outcomes
 
+### 13.15 Intelligence Correlation Audit (2026-07-28)
+
+Data flow audit of the Illumio July 30 onsite meeting prep. Council review identified 4 gaps.
+
+**11 sources flowing in:**
+- Gmail emails (90-day window, 50 max — expanded from 30d/20 in #1030)
+- Customer folder docs (all tabs + transcripts read)
+- Gemini meeting notes from all Drive (BVA kickoffs, cadence transcripts — #1016)
+- Playbook (strategic position, priorities, expansion, renewals)
+- Product intel (7 products, 14 expansion opportunities)
+- Account plan (16K chars)
+- Meeting-context signals (attendee-correlated use cases)
+- Tech stack detections
+- Pipeline (Salesforce deals)
+- Support cases (Red Hat API)
+- Email body intelligence (business context from thread bodies — #1016)
+
+**Gaps closed (2026-07-28):**
+| # | Gap | Fix | Issue |
+|---|---|---|---|
+| 1 | BVA Slides not readable | Added Slides export via Drive API | #1031 |
+| 2 | Email window 30d/20 max | Extended to 90d/50 max | #1030 |
+| 3 | Transcript truncated at 2000 chars | Smart extraction (Summary + Next Steps), 4000 cap for Gemini notes, 12 doc limit | #1029 |
+| 4 | Stale intelligence graph | Deferred — playbook and signals are fresh | — |
+
+**Council recommendation:** Push more sections deterministic (like attendees, timeline, pipeline). Business value correlation should be structured data extracted from transcripts and emails, not dependent on Gemini prompt attention.
+
+### 13.16 Output Format Standardization (2026-07-28)
+
+All deterministic sections now use markdown tables (matching playbook format):
+- §2 Attendees: Customer (Name|Title|Company|Email) + Red Hat (Name|Role|Email)
+- §3 Engagement Timeline: Date|Activity|Source
+- §7 Pipeline: Opportunity|Amount|Close Date|Stage
+- §6 Open Items: Case|Severity|Status (when cases exist)
+- Suggested Topics: Topic|Context|Priority
+- Assets & Resources: Asset|Type
+- Partner Intelligence: Partner|Specializations|Region|Link
+
+HTML template renders tables with Red Hat branding (dark maroon headers, alternating rows) matching campaign and playbook doc formats.
+
 ## 14. Open Questions for Jason
 
 1. **Template:** Should the playbook use the existing Red Hat branded template (same as discovery/meeting-prep), or do you want a different layout? The current template is session-oriented (Session 1-4 headings) which doesn't map naturally to playbook sections.
