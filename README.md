@@ -2,11 +2,11 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-12
+updated: 2026-07-28
 ---
 
 # Daily Brief Dashboard
-*Last validated: 2026-05-12 | Owner: DA | Trigger: Review and update on any structural change to this doc*
+*Last validated: 2026-07-28 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 A containerized customer intelligence dashboard for Red Hat Account Executives and Solution Architects. Aggregates support cases, subscriptions, cloud spend, pipeline, and Google Workspace data into a single daily-brief view — so you walk into every customer conversation prepared.
 
@@ -125,12 +125,41 @@ Your AE Parent Folder/          ← the folder you create and paste into the wiz
 
 ## What It Does
 
-- **Support Cases** — Open cases by severity from the Red Hat Customer Portal per account
-- **Subscriptions** — Active subscription data from SF bookings, organized by customer
+### Portfolio View
+- **Accounts Grid** — All your customers at a glance with health scores, pipeline, and alert indicators
+- **Morning Summary** — AI-generated daily brief with priority actions across your territory
+- **Calendar** — Upcoming meetings with customer context and prep links
+
+### Account Detail (v2.0)
+Click any customer to see their full intelligence page:
+
+- **Account Brief** — AI-generated narrative: who they are, what's happening, what to talk about
+- **Sales Strategy** — TDP-aligned expansion phases and tactics with evidence chains and campaign generation
+- **AI-Discovered Opportunities** — Gemini-surfaced novel sales angles from cross-signal analysis
+- **Health Score** — Composite score (cases, contacts, renewal, meetings, resolution) with breakdown popover
+- **3 Sidebar Groups:**
+  - **Opportunities** — Product Signals, Expansion Fit, and Recommended Actions (cross-referenced case/solution matches)
+  - **People** — Key Contacts with engagement frequency and days-silent alerts
+  - **Account Data** — Research Docs, Account Plan (generate/download), Subscriptions, Cases, Cloud Marketplace, Drive Documents, Signal Sources
+- **Floating Q&A Widget** — Ask grounded questions about any customer's product data, subscriptions, and tech stack
+- **What Changed** — Brief-over-brief delta showing new signals, returned items, and inactive items
+- **Deep Dive** — Product Intelligence, Cloud Spend & Pipeline, Activity Timeline (compressed to 5 items with engagement summary)
+
+### Intelligence Modules
+- **Meeting Prep** — Pre-meeting intelligence briefs with customer context, exported to Google Docs
+- **Campaigns** — Multi-persona email campaigns generated from customer signals and solution plays
+- **Product Intelligence** — Product lifecycle tracking, feature radar, release notes across Red Hat portfolio
+- **News** — Customer-matched news from RSS feeds with relevance scoring
+- **Tech Stack** — Detected technologies from support cases and customer data
+- **Expansion Motion** — Strategic sales plays with evidence-backed tactics
+
+### Data Sources
+- **Support Cases** — Open cases by severity from the Red Hat Customer Portal
+- **Subscriptions** — Active subscription data from SF bookings
 - **Cloud Spend (CCSP)** — Cloud consumption data per account
 - **Pipeline** — Salesforce pipeline opportunities per AE
-- **AI Briefs** — On-demand customer intelligence briefs powered by Google Gemini via Vertex AI
-- **Google Workspace** — Gmail and Calendar context for meeting prep
+- **Google Workspace** — Gmail, Calendar, and Drive context
+- **AI Briefs** — On-demand intelligence powered by Google Gemini via Vertex AI
 
 All data is cached locally. Nothing leaves your machine except API calls to services you already have access to.
 
