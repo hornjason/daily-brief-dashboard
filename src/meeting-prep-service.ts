@@ -838,6 +838,56 @@ function buildEngagementTimeline(slug: string): EngagementTimelineEntry[] {
   return entries
 }
 
+// ── Email Intelligence Builder (#1016) ─────────────────────────────────────
+// Extracts business context from email bodies — not just subjects.
+// Surfaces renewal discussions, unresolved threads, BVA references, etc.
+function buildEmailIntelligence(slug: string): string {
+  const noisePatterns = [
+    /^invitation:/i, /^accepted:/i, /^declined:/i,
+    /^updated invitation:/i, /^canceled event:/i,
+    /^ooo alert/i, /^out of office/i,
+  ]
+  try {
+    const emailCachePath = resolve(CACHE_DIR, `${slug}-emails.json`)
+    if (!existsSync(emailCachePath)) return ''
+    const emailData = JSON.parse(readFileSync(emailCachePath, 'utf-8'))
+    const emails = emailData.data || emailData || []
+    if (!Array.isArray(emails) || emails.length === 0) return ''
+
+    const threads: string[] = []
+    const seen = new Set<string>()
+
+    for (const email of emails) {
+      const subject = (email.subject || '').trim()
+      if (!subject) continue
+      if (noisePatterns.some(p => p.test(subject))) continue
+      if ((email.from || '').includes('gemini')) continue
+
+      const threadKey = subject.replace(/^(Re: |Fwd: )+/i, '').toLowerCase().substring(0, 40)
+      if (seen.has(threadKey)) continue
+      seen.add(threadKey)
+
+      const body = (email.bodyText || email.snippet || '').trim()
+      if (!body || body.length < 30) continue
+
+      // Extract first meaningful paragraph (skip signatures, forwarded headers)
+      const paragraphs = body.split(/\n\n+/).filter(p => {
+        const t = p.trim()
+        return t.length > 20 && !t.startsWith('On ') && !t.startsWith('--') && !t.includes('sent from my')
+      })
+      const excerpt = paragraphs[0]?.trim().replace(/\n+/g, ' ').slice(0, 300) || ''
+      if (!excerpt) continue
+
+      const date = (email.date || '').substring(0, 10)
+      const from = (email.from || '').replace(/<[^>]+>/g, '').trim()
+      threads.push(`**${subject}** (${date}, ${from})\n${excerpt}`)
+    }
+
+    if (threads.length === 0) return ''
+    return `## Email Thread Intelligence\nKey business discussions from recent email threads:\n\n${threads.slice(0, 8).join('\n\n')}`
+  } catch { return '' }
+}
+
 // ── Recent Interactions Context Builder (#426) ──────────────────────────────
 
 /**
@@ -1138,7 +1188,7 @@ export async function generateMeetingPrep(
   // Escalation will be applied in the prompt injection below after evidence blocks are available.
   let escalationContext = ''
 
-  // ── Step 1a-2: Scan customer Drive folder for recent docs (#269) ──────
+  // ── Step 1a-2: Scan customer Drive folder + all-Drive meeting notes (#269, #1016) ──
   let driveDocsContext = ''
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
@@ -1160,22 +1210,48 @@ export async function generateMeetingPrep(
       includeItemsFromAllDrives: true,
     })
 
-    const docs = recentDocs.data.files ?? []
-    if (docs.length > 0) {
-      // Extract text from recent docs — uses Docs API for multi-tab support (#986)
+    // Search ALL Drive for Gemini meeting notes mentioning this customer (transcripts, BVA notes, etc.)
+    // These auto-create in My Drive root, not the customer folder
+    const customerShortName = customer.name.split(/[,.]/, 1)[0].trim()
+    const geminiNotesQuery = `fullText contains '${customerShortName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.document' and (name contains 'Notes by Gemini' or name contains 'Business Value' or name contains 'kick off' or name contains 'transcript') and modifiedTime > '${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}' and trashed = false`
+    let geminiNotes: any[] = []
+    try {
+      const notesRes = await drive.files.list({
+        q: geminiNotesQuery,
+        fields: 'files(id,name,modifiedTime,webViewLink)',
+        pageSize: 10,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      geminiNotes = notesRes.data.files ?? []
+    } catch (e: any) {
+      console.warn(`[meeting-prep] Gemini notes search failed:`, e.message)
+    }
+
+    // Deduplicate by doc ID and merge
+    const seenIds = new Set<string>()
+    const allDocs = [...(recentDocs.data.files ?? []), ...geminiNotes].filter(d => {
+      if (seenIds.has(d.id!)) return false
+      seenIds.add(d.id!)
+      return true
+    })
+
+    if (allDocs.length > 0) {
       const docTexts: string[] = []
-      for (const doc of docs.slice(0, 5)) {
+      for (const doc of allDocs.slice(0, 8)) {
         try {
           const text = await extractDocTextWithTabs(doc.id!, auth)
           if (text) {
             const capped = text.slice(0, 2000)
-            docTexts.push(`### ${doc.name} (modified ${new Date(doc.modifiedTime!).toLocaleDateString()})\n${capped}`)
+            const isGeminiNote = geminiNotes.some(g => g.id === doc.id)
+            const label = isGeminiNote ? '(Gemini meeting notes)' : `(modified ${new Date(doc.modifiedTime!).toLocaleDateString()})`
+            docTexts.push(`### ${doc.name} ${label}\n${capped}`)
           }
         } catch { /* skip unreadable docs */ }
       }
       if (docTexts.length > 0) {
-        driveDocsContext = `## Account Notes & Recent Documents\nThe following documents were found in the customer's Drive folder, modified since the last prep:\n\n${docTexts.join('\n\n')}`
-        console.log(`[meeting-prep] Drive scan: ${docTexts.length} recent docs found for ${customer.name}`)
+        driveDocsContext = `## Account Notes, Meeting Transcripts & Recent Documents\n${docTexts.join('\n\n')}`
+        console.log(`[meeting-prep] Drive scan: ${docTexts.length} docs (${geminiNotes.length} Gemini notes) for ${customer.name}`)
       }
     }
   } catch (e: any) {
@@ -1533,6 +1609,12 @@ export async function generateMeetingPrep(
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
+    // ── Build email intelligence — business context from email bodies (#1016) ──
+    const emailIntelligence = buildEmailIntelligence(slug)
+    if (emailIntelligence) {
+      console.log(`[meeting-prep] Email intelligence: extracted business context from email threads`)
+    }
+
     // ── Build evidence blocks context for prompt (#643) ────────────────
     const evidenceBlocksContext = formatEvidenceBlocksForPrompt(filteredEvidenceBlocks)
 
@@ -1597,6 +1679,8 @@ ${currentPriorities}
 ${openActions || 'No open action items'}
 
 ${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
+
+${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
 
 ### Open Support Cases
 ${caseSummary}
@@ -1670,9 +1754,13 @@ ${templateResult.deterministic ? `### Signal Intelligence (key signals — deter
 
 ${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext.slice(0, 3000)}` : ''}
 
+${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
+
 ${escalationContext ? `${escalationContext}` : ''}
 
 ---
+
+**IMPORTANT: Use the Email Thread Intelligence and Meeting Transcripts above to ground your Meeting Objective (§1) and Value Play (§4) in SPECIFIC conversations, not generic playbook language. Reference actual email discussions, unresolved items, and stated purposes.**
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
@@ -1751,6 +1839,12 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
+    // ── Build email intelligence — business context from email bodies (#1016) ──
+    const emailIntelligence = buildEmailIntelligence(slug)
+    if (emailIntelligence) {
+      console.log(`[meeting-prep] Email intelligence: extracted business context from email threads`)
+    }
+
     // ── Build evidence blocks context for standard path (#643) ────────
     const evidenceBlocksContextStd = formatEvidenceBlocksForPrompt(filteredEvidenceBlocks)
 
@@ -1815,9 +1909,13 @@ ${caseSummary}
 
 ${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
+${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
+
 ${serializeVerifiedSolutionPlays(templateResult)}
 
 ---
+
+**IMPORTANT: Use the Email Thread Intelligence and Meeting Transcripts above to ground your Meeting Objective (§1) and Value Play (§4) in SPECIFIC conversations, not generic playbook language. Reference actual email discussions, unresolved items, and stated purposes.**
 
 Respond with a JSON object matching the response schema. Populate all fields from the provided context data above. Set nullable fields to null when no data is available — never fabricate.`
       : `Generate a 7-section meeting prep for:
@@ -1852,6 +1950,8 @@ ${graphDiffBlock ? `## ${graphDiffBlock}` : ''}
 
 ${recentInteractionsContext ? `## Recent Interactions & History (synthesize into Section 3)\n${recentInteractionsContext}` : ''}
 
+${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
+
 ${escalationContext ? `${escalationContext}` : ''}
 
 ${partnerResearch ? `## Partner Context\n${partnerResearch}` : ''}
@@ -1861,6 +1961,8 @@ ${partnerCrossRefContext}
 ${serializeVerifiedSolutionPlays(templateResult)}
 
 ---
+
+**IMPORTANT: Use the Email Thread Intelligence and Meeting Transcripts above to ground your Meeting Objective (§1) and Value Play (§4) in SPECIFIC conversations, not generic playbook language. Reference actual email discussions, unresolved items, and stated purposes.**
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
