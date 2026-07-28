@@ -916,8 +916,8 @@ export async function generateAccountPlanCY27(
   if (!existsSync(cy27DeckPath)) {
     throw new Error('cy27-planning-deck.txt not found -- sync templates from Drive or add to config/account-plan/')
   }
-  // CY27 deck is ~205K chars; use first 30000 for Gemini context (more than playbook's 8000)
-  const cy27Deck = readFileSync(cy27DeckPath, 'utf-8').substring(0, 30000)
+  // CY27 deck is ~205K chars; use first 15000 for Gemini context (playbook uses 8000)
+  const cy27Deck = readFileSync(cy27DeckPath, 'utf-8').substring(0, 15000)
 
   // 4. Load customer intelligence from cache
   const intelPath = resolve(cacheDir, 'intelligence', `${slug}.json`)
