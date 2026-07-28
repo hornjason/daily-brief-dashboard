@@ -1213,12 +1213,12 @@ export async function generateMeetingPrep(
     // Search ALL Drive for Gemini meeting notes mentioning this customer (transcripts, BVA notes, etc.)
     // These auto-create in My Drive root, not the customer folder
     const customerShortName = customer.name.split(/[,.]/, 1)[0].trim()
-    const geminiNotesQuery = `fullText contains '${customerShortName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.document' and (name contains 'Notes by Gemini' or name contains 'Business Value' or name contains 'kick off' or name contains 'transcript') and modifiedTime > '${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}' and trashed = false`
+    const geminiNotesQuery = `fullText contains '${customerShortName.replace(/'/g, "\\'")}' and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'application/vnd.google-apps.presentation') and (name contains 'Notes by Gemini' or name contains 'Business Value' or name contains 'kick off' or name contains 'transcript') and modifiedTime > '${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}' and trashed = false`
     let geminiNotes: any[] = []
     try {
       const notesRes = await drive.files.list({
         q: geminiNotesQuery,
-        fields: 'files(id,name,modifiedTime,webViewLink)',
+        fields: 'files(id,name,modifiedTime,webViewLink,mimeType)',
         pageSize: 10,
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
@@ -1238,15 +1238,38 @@ export async function generateMeetingPrep(
 
     if (allDocs.length > 0) {
       const docTexts: string[] = []
-      for (const doc of allDocs.slice(0, 8)) {
+      for (const doc of allDocs.slice(0, 12)) {
         try {
-          const text = await extractDocTextWithTabs(doc.id!, auth)
-          if (text) {
-            const capped = text.slice(0, 2000)
-            const isGeminiNote = geminiNotes.some(g => g.id === doc.id)
-            const label = isGeminiNote ? '(Gemini meeting notes)' : `(modified ${new Date(doc.modifiedTime!).toLocaleDateString()})`
-            docTexts.push(`### ${doc.name} ${label}\n${capped}`)
+          // Slides: export as plain text via Drive API (#1031)
+          let text: string | null = null
+          if (doc.mimeType === 'application/vnd.google-apps.presentation') {
+            try {
+              const exported = await drive.files.export({ fileId: doc.id!, mimeType: 'text/plain' }, { responseType: 'text' })
+              text = typeof exported.data === 'string' ? exported.data : null
+            } catch { /* Slides export failed — skip */ }
+          } else {
+            text = await extractDocTextWithTabs(doc.id!, auth)
           }
+          if (!text) continue
+          const isGeminiNote = geminiNotes.some(g => g.id === doc.id)
+          let extracted: string
+          if (isGeminiNote) {
+            // Smart extraction: pull Summary + Next steps sections from Gemini notes
+            // These contain the business value; raw transcript is low-signal
+            const summaryMatch = text.match(/Summary\n([\s\S]*?)(?=\n(?:Next steps|Details|Transcript|$))/i)
+            const nextStepsMatch = text.match(/Next steps\n([\s\S]*?)(?=\n(?:Details|Transcript|$))/i)
+            const summary = summaryMatch?.[1]?.trim() || ''
+            const nextSteps = nextStepsMatch?.[1]?.trim() || ''
+            if (summary || nextSteps) {
+              extracted = [summary ? `**Summary:** ${summary}` : '', nextSteps ? `**Next Steps:** ${nextSteps}` : ''].filter(Boolean).join('\n\n')
+            } else {
+              extracted = text.slice(0, 4000)
+            }
+          } else {
+            extracted = text.slice(0, 2000)
+          }
+          const label = isGeminiNote ? '(Gemini meeting notes)' : `(modified ${new Date(doc.modifiedTime!).toLocaleDateString()})`
+          docTexts.push(`### ${doc.name} ${label}\n${extracted}`)
         } catch { /* skip unreadable docs */ }
       }
       if (docTexts.length > 0) {
@@ -1752,7 +1775,7 @@ ${caseSummary}
 
 ${templateResult.deterministic ? `### Signal Intelligence (key signals — deterministic sections injected post-generation)\n${templateResult.deterministic.slice(0, 6000)}` : ''}
 
-${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext.slice(0, 3000)}` : ''}
+${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext.slice(0, 5000)}` : ''}
 
 ${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
 

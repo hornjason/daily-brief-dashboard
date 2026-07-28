@@ -208,7 +208,7 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
   const auth = makeAuth(GMAIL_TOKEN_PATH)
   const gmail = google.gmail({ version: 'v1', auth })
 
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
   const afterStr = `${since.getFullYear()}/${since.getMonth() + 1}/${since.getDate()}`
   // BKL-DOMAIN-01: check all domains (primary + alias) — matches Calendar search pattern at line 78
   const allDomains = [customer.domain, ...(customer.aliasDomains ?? [])].filter(Boolean) as string[]
@@ -219,7 +219,7 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
     ? `(${allDomains.map(d => `from:@${d} OR to:@${d}`).join(' OR ')} OR ${subjectClause}) after:${afterStr}`
     : `(${subjectClause}) after:${afterStr}`
 
-  const list = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 20 })
+  const list = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 50 })
   const messages = list.data.messages ?? []
   if (messages.length === 0) {
     writeEmailCache(customerSlug, [])
