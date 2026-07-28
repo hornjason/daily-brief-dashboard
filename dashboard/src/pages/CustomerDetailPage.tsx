@@ -43,7 +43,7 @@ import { AccountPlanPanel } from '../components/AccountPlanPanel'
 import { ProductQueryPanel } from '../components/ProductQueryPanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
 import CustomerSignalBanner from '../components/CustomerSignalBanner'
-import HealthScoreHero from '../components/HealthScoreHero'
+
 import CitationTooltip from '../components/CitationTooltip'
 import BriefDeltaMarker from '../components/BriefDeltaMarker'
 import { renderMarkdownInline } from '../lib/markdown'
@@ -72,7 +72,7 @@ import { CloudMarketplaceDetail } from '../components/CloudMarketplaceDetail'
 import { IntelligenceInsightsCard } from '../components/RecommendationCard'
 import { ExpansionMotionSection } from '../components/ExpansionMotionSection'
 import { ExpansionOpportunitiesPanel } from '../components/ExpansionOpportunitiesPanel'
-import { TemporalDiffStrip } from '../components/TemporalDiffStrip'
+
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { SidebarGroup } from '../components/SidebarGroup'
 import { TopPlaysCard } from '../components/TopPlaysCard'
@@ -748,11 +748,13 @@ function ActivityTimeline({
   emails,
   drive,
   loading,
+  maxItems = 5,
 }: {
   meetings: any[]
   emails: any[]
   drive: any[]
   loading: boolean
+  maxItems?: number
 }) {
   const [showAll, setShowAll] = useState(false)
 
@@ -808,7 +810,7 @@ function ActivityTimeline({
     })
   }, [meetings, emails, drive])
 
-  const visible = showAll ? items : items.slice(0, 10)
+  const visible = showAll ? items : items.slice(0, maxItems)
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
@@ -907,13 +909,13 @@ function ActivityTimeline({
           )
         })}
 
-        {!loading && items.length > 10 && (
+        {!loading && items.length > maxItems && (
           <button
             onClick={() => setShowAll((v) => !v)}
             className="w-full px-5 py-3 text-xs text-text-secondary hover:text-accent transition-colors flex items-center justify-center gap-1.5"
           >
             {showAll ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {showAll ? 'Show less' : `Show ${items.length - 10} more`}
+            {showAll ? 'Show less' : `Show ${items.length - maxItems} more`}
           </button>
         )}
       </div>
@@ -1685,66 +1687,93 @@ export function CustomerDetailPage() {
             </div>
           </CollapsibleSection>
 
-          {/* Collapsible: Product Intelligence (#619) */}
+          {/* Deep Dive — parent collapsible wrapping 4 sub-sections (Phase 3 #1020) */}
           <CollapsibleSection
-            sectionName="product-intel"
-            title="Product Intelligence"
-            icon={<Package className="w-4 h-4" />}
-            summaryText="Product lifecycle and intel"
-            summaryExtra={<StalenessIndicator sectionName="product-intel" freshness={freshness} refreshStatus={refreshStatus} />}
-          >
-            <div className="p-4">
-              <ProductIntelSection
-                customerName={customerName}
-                customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-              />
-            </div>
-          </CollapsibleSection>
-
-          {/* BKL-HERO-18: Drive-sourced sections — L3 safe */}
-          {/* Collapsible: Cloud Spend + Pipeline (#619) */}
-          <CollapsibleSection
-            sectionName="financials"
-            title="Cloud Spend & Pipeline"
-            icon={<Cloud className="w-4 h-4" />}
-            summaryText="CCSP revenue and open opps"
-            summaryExtra={<StalenessIndicator sectionName="financials" freshness={freshness} refreshStatus={refreshStatus} />}
+            sectionName="deep-dive"
+            title="Deep Dive"
+            icon={<BookOpen className="w-4 h-4" />}
+            summaryText="Product Intel · Cloud Spend · Activity · Q&A"
           >
             <div className="p-4 space-y-4">
-              <CloudSpendCard customerName={customerName} />
-              <PipelineCard customerName={customerName} />
-            </div>
-          </CollapsibleSection>
+              {/* Product Intelligence */}
+              <CollapsibleSection
+                sectionName="product-intel"
+                title="Product Intelligence"
+                icon={<Package className="w-4 h-4" />}
+                summaryText="Product lifecycle and intel"
+                summaryExtra={<StalenessIndicator sectionName="product-intel" freshness={freshness} refreshStatus={refreshStatus} />}
+              >
+                <div className="p-4">
+                  <ProductIntelSection
+                    customerName={customerName}
+                    customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+                  />
+                </div>
+              </CollapsibleSection>
 
-          {/* Collapsible: Activity Timeline (#619) */}
-          <CollapsibleSection
-            sectionName="activity-timeline"
-            title="Activity"
-            icon={<Clock className="w-4 h-4" />}
-            summaryText={`Meetings, emails, docs`}
-            summaryExtra={<StalenessIndicator sectionName="activity-timeline" freshness={freshness} refreshStatus={refreshStatus} />}
-          >
-            <div className="p-0">
-              <ActivityTimeline
-                meetings={sse.meetings}
-                emails={sse.emails}
-                drive={sse.drive}
-                loading={sectionLoading}
-              />
-            </div>
-          </CollapsibleSection>
+              {/* Cloud Spend + Pipeline */}
+              <CollapsibleSection
+                sectionName="financials"
+                title="Cloud Spend & Pipeline"
+                icon={<Cloud className="w-4 h-4" />}
+                summaryText="CCSP revenue and open opps"
+                summaryExtra={<StalenessIndicator sectionName="financials" freshness={freshness} refreshStatus={refreshStatus} />}
+              >
+                <div className="p-4 space-y-4">
+                  <CloudSpendCard customerName={customerName} />
+                  <PipelineCard customerName={customerName} />
+                </div>
+              </CollapsibleSection>
 
-          {/* Collapsible: Product Q&A (#619) */}
-          {/* BKL-AI16: Product Q&A panel — grounded Gemini for RHEL / OCP / AAP */}
-          <CollapsibleSection
-            sectionName="product-qa"
-            title="Product Q&A"
-            icon={<Sparkles className="w-4 h-4" />}
-            summaryText="Ask about this customer's products"
-            summaryExtra={<StalenessIndicator sectionName="product-qa" freshness={freshness} refreshStatus={refreshStatus} />}
-          >
-            <div className="p-4">
-              <ProductQueryPanel customerName={customerName} />
+              {/* Activity Timeline (compressed Phase 3) */}
+              <CollapsibleSection
+                sectionName="activity-timeline"
+                title="Activity"
+                icon={<Clock className="w-4 h-4" />}
+                summaryText={(() => {
+                  if (sectionLoading) return 'Loading...'
+                  const allDates = [
+                    ...sse.meetings.map(m => new Date(m.start).getTime()),
+                    ...sse.emails.map(e => new Date(e.date).getTime()),
+                  ].filter(d => d <= Date.now())
+                  const lastContactMs = allDates.length > 0 ? Math.max(...allDates) : 0
+                  const lastContactDays = lastContactMs > 0 ? Math.round((Date.now() - lastContactMs) / 86_400_000) : null
+                  const thirtyDaysAgo = Date.now() - 30 * 86_400_000
+                  const now = new Date()
+                  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+                  const mtgsThisMonth = sse.meetings.filter(m => new Date(m.start).getTime() >= monthStart && new Date(m.start).getTime() <= Date.now()).length
+                  const emails30d = sse.emails.filter(e => new Date(e.date).getTime() >= thirtyDaysAgo).length
+                  const parts: string[] = []
+                  if (lastContactDays !== null) parts.push(`Last contact: ${lastContactDays === 0 ? 'today' : `${lastContactDays}d ago`}`)
+                  parts.push(`${mtgsThisMonth} meeting${mtgsThisMonth !== 1 ? 's' : ''} this month`)
+                  parts.push(`${emails30d} email${emails30d !== 1 ? 's' : ''} in 30d`)
+                  return parts.join(' · ')
+                })()}
+                summaryExtra={<StalenessIndicator sectionName="activity-timeline" freshness={freshness} refreshStatus={refreshStatus} />}
+              >
+                <div className="p-0">
+                  <ActivityTimeline
+                    meetings={sse.meetings}
+                    emails={sse.emails}
+                    drive={sse.drive}
+                    loading={sectionLoading}
+                    maxItems={5}
+                  />
+                </div>
+              </CollapsibleSection>
+
+              {/* Product Q&A */}
+              <CollapsibleSection
+                sectionName="product-qa"
+                title="Product Q&A"
+                icon={<Sparkles className="w-4 h-4" />}
+                summaryText="Ask about this customer's products"
+                summaryExtra={<StalenessIndicator sectionName="product-qa" freshness={freshness} refreshStatus={refreshStatus} />}
+              >
+                <div className="p-4">
+                  <ProductQueryPanel customerName={customerName} />
+                </div>
+              </CollapsibleSection>
             </div>
           </CollapsibleSection>
         </main>

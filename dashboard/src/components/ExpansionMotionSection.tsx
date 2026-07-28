@@ -394,7 +394,85 @@ function CampaignEmailsDisplay({
   )
 }
 
-// ── Phase Card ──────────────────────────────────────────────────────────────
+// ── Compact Tactic Row (Phase 3 compression) ─────────────────────────────────
+
+function CompactTacticRow({ tactic, isLimited, customerSlug, customerName }: {
+  tactic: MotionPhase['tactics'][number]
+  isLimited: boolean
+  customerSlug: string
+  customerName: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className={isLimited ? 'opacity-70' : ''}>
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full text-left flex items-center gap-2 py-1.5 px-2 -mx-0.5 rounded hover:bg-border/10 transition-colors"
+      >
+        <span className="w-1 h-1 rounded-full bg-accent/60 shrink-0" />
+        <span className="text-sm text-text-primary truncate flex-1">{tactic.name}</span>
+        <span className="text-xs text-text-secondary bg-border/40 px-1.5 py-0.5 rounded shrink-0">
+          {tactic.parentTdp}
+        </span>
+        {expanded
+          ? <ChevronUp className="w-3 h-3 text-text-secondary shrink-0" />
+          : <ChevronDown className="w-3 h-3 text-text-secondary shrink-0" />}
+      </button>
+
+      {expanded && (
+        <div className="ml-3 pl-3 border-l border-border/40 mt-1 mb-2 space-y-2">
+          {tactic.tdpUrl && (
+            <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+              Open TDP <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          )}
+          {tactic.brief && (
+            <p className="text-xs text-text-secondary leading-relaxed">{tactic.brief}</p>
+          )}
+          {tactic.materials && tactic.materials.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tactic.materials.map((mat, j) => (
+                <a
+                  key={j}
+                  href={mat.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+                >
+                  {mat.type === 'cheatsheet' ? '📄' : mat.type === 'deck' ? '📊' : mat.type === 'lab' ? '🔬' : '📎'}
+                  <span>{mat.title.length > 30 ? mat.title.slice(0, 28) + '...' : mat.title}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              ))}
+            </div>
+          )}
+          {tactic.evidenceTrail && tactic.evidenceTrail.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-xs text-text-secondary uppercase tracking-wide">
+                {isLimited ? 'Why suggested' : 'Why recommended'}
+              </span>
+              {tactic.evidenceTrail.filter(ev => ev.module !== 'density').slice(0, 3).map((ev, idx) => (
+                <div key={idx} className="text-xs text-text-secondary flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
+                  <span>{ev.fact}</span>
+                  {ev.recency && <span className="text-text-secondary/60 ml-1">({ev.recency})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {tactic.signalDensity && (
+            <div className="text-xs text-text-secondary/60">
+              Based on {tactic.signalDensity.populated} of {tactic.signalDensity.total} signal sources
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Phase Card (compressed — Phase 3) ──────────────────────────────────────
 
 function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaultExpanded = false }: { phase: MotionPhase; enrichedContacts?: EnrichedContact[]; customerSlug: string; customerName: string; defaultExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -407,6 +485,8 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
   const urgencyStyle = URGENCY_STYLE[phase.urgency] ?? URGENCY_STYLE.low
 
   const totalAssets = phase.tactics.reduce((sum, t) => sum + t.assets.length, 0)
+  const density = phase.tactics[0]?.signalDensity
+  const isLimited = density != null && density.populated < 4
 
   return (
     <div className="border border-border/60 rounded-lg overflow-hidden">
@@ -420,6 +500,12 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
           <span className="text-sm font-medium text-text-primary truncate block">
             {phase.name}
           </span>
+          {/* Compact tactic names shown inline when collapsed */}
+          {!expanded && phase.tactics.length > 0 && (
+            <span className="text-xs text-text-secondary truncate block mt-0.5">
+              {phase.tactics.map(t => t.name).join(' · ')}
+            </span>
+          )}
         </div>
         {/* Urgency indicator */}
         <span className={`inline-flex items-center gap-1.5 text-xs ${urgencyStyle.text}`}>
@@ -435,10 +521,10 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
           : <ChevronDown className="w-4 h-4 text-text-secondary shrink-0" />}
       </button>
 
-      {/* Expanded content */}
+      {/* Expanded content — evidence ONCE, then compact tactic list */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-4 border-t border-border/40">
-          {/* WHY THIS MATTERS */}
+        <div className="px-4 pb-4 space-y-3 border-t border-border/40">
+          {/* Evidence shown ONCE per phase (not repeated per tactic) */}
           {phase.evidence.length > 0 && (
             <div className="pt-3">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">
@@ -457,12 +543,7 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
                       )}
                     </span>
                     {ev.url && (
-                      <a
-                        href={ev.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent hover:underline shrink-0"
-                      >
+                      <a href={ev.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline shrink-0">
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
@@ -472,81 +553,25 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
             </div>
           )}
 
-          {/* WHAT WE'RE RECOMMENDING */}
-          {phase.tactics.length > 0 && (() => {
-            const density = phase.tactics[0]?.signalDensity
-            const isLimited = density != null && density.populated < 4
-            return (
+          {/* Compact tactic list — each expandable for detail */}
+          {phase.tactics.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary mb-1.5">
                 {isLimited ? 'Suggested Tactics (limited data)' : 'Recommended Tactics'}
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-0.5">
                 {phase.tactics.map((tactic, i) => (
-                  <div key={i} className={`bg-bg-secondary/30 rounded-lg p-3 border border-border/30${isLimited ? ' opacity-70' : ''}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                      {tactic.tdpUrl ? (
-                        <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-accent hover:underline">
-                          {tactic.name} <ExternalLink className="w-3 h-3 inline" />
-                        </a>
-                      ) : (
-                        <span className="text-sm font-medium text-text-primary">{tactic.name}</span>
-                      )}
-                      {tactic.tdpUrl ? (
-                        <a href={tactic.tdpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 hover:bg-accent/20">
-                          TDP: {tactic.parentTdp} <ExternalLink className="w-2.5 h-2.5 inline" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
-                          TDP: {tactic.parentTdp}
-                        </span>
-                      )}
-                    </div>
-                    {tactic.materials && tactic.materials.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {tactic.materials.map((mat, j) => (
-                          <a
-                            key={j}
-                            href={mat.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
-                          >
-                            {mat.type === 'cheatsheet' ? '📄' : mat.type === 'deck' ? '📊' : mat.type === 'lab' ? '🔬' : '📎'}
-                            <span>{mat.title.length > 30 ? mat.title.slice(0, 28) + '…' : mat.title}</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                    {tactic.brief && (
-                      <p className="text-xs text-text-secondary leading-relaxed">{tactic.brief}</p>
-                    )}
-                    {tactic.evidenceTrail && tactic.evidenceTrail.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        <span className="text-xs text-text-secondary uppercase tracking-wide">
-                          {isLimited ? 'Why suggested' : 'Why recommended'}
-                        </span>
-                        {tactic.evidenceTrail.filter(ev => ev.module !== 'density').slice(0, 3).map((ev, idx) => (
-                          <div key={idx} className="text-xs text-text-secondary flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0" />
-                            <span>{ev.fact}</span>
-                            {ev.recency && <span className="text-text-secondary/60 ml-1">({ev.recency})</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {tactic.signalDensity && (
-                      <div className="mt-1.5 text-xs text-text-secondary/60">
-                        Based on {tactic.signalDensity.populated} of {tactic.signalDensity.total} signal sources
-                      </div>
-                    )}
-                  </div>
+                  <CompactTacticRow
+                    key={i}
+                    tactic={tactic}
+                    isLimited={isLimited}
+                    customerSlug={customerSlug}
+                    customerName={customerName}
+                  />
                 ))}
               </div>
             </div>
-            )
-          })()}
+          )}
 
           {/* ASSETS — collapsed by default, grouped by tactic */}
           {totalAssets > 0 && (
@@ -564,7 +589,7 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
                   <div key={i} className="flex items-center gap-2 text-sm">
                     <Users className="w-3.5 h-3.5 text-text-secondary shrink-0" />
                     <span className="text-text-primary">{contact.name}</span>
-                    {contact.title && <span className="text-text-secondary">— {contact.title}</span>}
+                    {contact.title && <span className="text-text-secondary">--- {contact.title}</span>}
                     {contact.source && <span className="text-xs text-text-secondary bg-border/40 px-1 py-0.5 rounded">{contact.source}</span>}
                   </div>
                 ))}
@@ -610,8 +635,7 @@ function PhaseCard({ phase, enrichedContacts, customerSlug, customerName, defaul
                 try {
                   const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/playbook/generate`, { method: 'POST' })
                   if (!res.ok) throw new Error(`Failed: ${res.status}`)
-                  // Playbook appears in the Playbook tab on the customer page
-                  alert('Playbook generated — view it in the Playbook tab')
+                  alert('Playbook generated --- view it in the Playbook tab')
                 } catch (e: any) {
                   alert(`Playbook generation failed: ${e.message}`)
                 } finally {
@@ -810,7 +834,7 @@ export function ExpansionMotionSection({ customerSlug, customerName }: Expansion
       {/* Phase cards */}
       <div className="px-5 py-4 space-y-2">
         {motion.phases.map((phase, idx) => (
-          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} defaultExpanded={idx === 0} />
+          <PhaseCard key={phase.id} phase={phase} enrichedContacts={motion.enrichedContacts} customerSlug={customerSlug} customerName={customerName} />
         ))}
       </div>
 
