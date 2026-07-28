@@ -1807,18 +1807,6 @@ export function CustomerDetailPage() {
                 </div>
               </CollapsibleSection>
 
-              {/* Product Q&A */}
-              <CollapsibleSection
-                sectionName="product-qa"
-                title="Product Q&A"
-                icon={<Sparkles className="w-4 h-4" />}
-                summaryText="Ask about this customer's products"
-                summaryExtra={<StalenessIndicator sectionName="product-qa" freshness={freshness} refreshStatus={refreshStatus} />}
-              >
-                <div className="p-4">
-                  <ProductQueryPanel customerName={customerName} />
-                </div>
-              </CollapsibleSection>
             </div>
           </CollapsibleSection>
         </main>
