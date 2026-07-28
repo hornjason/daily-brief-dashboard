@@ -628,11 +628,12 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
   writeFileSync(outputPath, fullContent, { mode: 0o600 })
   console.log(`[${label}] Written to ${outputPath} (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
 
-  // Write quality scorecard meta alongside the plan
+  // Write quality scorecard meta alongside the plan (includes driveUrl for reader)
   const metaPath = resolve(intelDir, `${slug}-${cachePrefix}-meta.json`)
   writeJsonAtomic(metaPath, {
     customerName: customer.name,
     generatedAt,
+    driveUrl,
     markdownLength: markdown.length,
     qualityScorecard: gateResult.scorecard,
   })
