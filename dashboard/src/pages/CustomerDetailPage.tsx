@@ -1411,6 +1411,27 @@ export function CustomerDetailPage() {
 
   // Health Score Hero (R12)
   const [healthScore, setHealthScore] = useState<{ score: number; status: 'red' | 'yellow' | 'green'; breakdown: Record<string, { score: number; signal: string }> } | null>(null)
+  const [healthPopoverOpen, setHealthPopoverOpen] = useState(false)
+  const healthPopoverRef = useRef<HTMLDivElement>(null)
+  const healthHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!healthPopoverOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (healthPopoverRef.current && !healthPopoverRef.current.contains(e.target as Node)) {
+        setHealthPopoverOpen(false)
+      }
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setHealthPopoverOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [healthPopoverOpen])
   useEffect(() => {
     if (customerName) {
       fetch(`/api/health-scores/${encodeURIComponent(customerName)}`)
@@ -1556,9 +1577,15 @@ export function CustomerDetailPage() {
         {/* Row 2: hero bar (slim — v2.0 Phase 1) */}
         <div className="py-3 px-6 bg-surface/60 border-b border-border/40">
           <div className="flex items-center gap-4 flex-wrap">
-            {/* Health dot + numeric score */}
+            {/* Health dot + numeric score + breakdown popover */}
             {(sectionLoading || sse.meta !== null) && (
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div
+                ref={healthPopoverRef}
+                className="relative flex items-center gap-1.5 shrink-0 cursor-pointer"
+                onMouseEnter={() => { healthHoverTimer.current = setTimeout(() => setHealthPopoverOpen(true), 200) }}
+                onMouseLeave={() => { if (healthHoverTimer.current) clearTimeout(healthHoverTimer.current) }}
+                onClick={() => setHealthPopoverOpen(v => !v)}
+              >
                 <div
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: health.color }}
@@ -1566,6 +1593,30 @@ export function CustomerDetailPage() {
                 />
                 {healthScore && (
                   <span className="text-xs font-semibold text-text-primary tabular-nums">{healthScore.score}/100</span>
+                )}
+                {healthPopoverOpen && healthScore?.breakdown && (
+                  <div className="absolute top-full left-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-lg p-4 z-50">
+                    <h4 className="text-sm font-semibold text-text-primary mb-3">Health Score Breakdown</h4>
+                    <div className="space-y-2">
+                      {Object.entries(healthScore.breakdown).map(([key, { score, signal }]) => (
+                        <div key={key}>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-text-secondary capitalize">{key.replace(/-/g, ' ')}</span>
+                            <span className="text-text-primary font-medium tabular-nums">{score}/100</span>
+                          </div>
+                          <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${score}%`,
+                                backgroundColor: score >= 70 ? '#22c55e' : score >= 40 ? '#eab308' : '#ef4444',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

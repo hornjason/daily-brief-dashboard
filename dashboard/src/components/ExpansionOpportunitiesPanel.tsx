@@ -26,7 +26,7 @@ export function ExpansionOpportunitiesPanel({ customerName }: ExpansionOpportuni
   // Fetch current state on mount
   useEffect(() => {
     if (!customerName) return
-    fetch(`/api/customers/${encodeURIComponent(customerName)}/expansion-opportunities`)
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`)
       .then(r => {
         if (!r.ok) return null
         return r.json()
@@ -46,7 +46,7 @@ export function ExpansionOpportunitiesPanel({ customerName }: ExpansionOpportuni
 
   // Poll for updates during generation
   const { data: polledData } = usePolledStatus<ExpansionResponse>(
-    `/api/customers/${encodeURIComponent(customerName)}/expansion-opportunities`,
+    `/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`,
     {
       intervalMs: 3000,
       enabled: generating,
@@ -70,7 +70,7 @@ export function ExpansionOpportunitiesPanel({ customerName }: ExpansionOpportuni
     setError(null)
     try {
       const res = await fetch(
-        `/api/customers/${encodeURIComponent(customerName)}/expansion-opportunities`,
+        `/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`,
         { method: 'POST' }
       )
       let respData: any
