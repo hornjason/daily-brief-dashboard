@@ -65,9 +65,14 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
 
   // ── Step 4a: Intelligence Synthesis for §1 Meeting Objective (#1016, §13.11) ──
   const allPipelineSignals = (ctx.signalData.registrySignals ?? []).filter((s: any) => s.source === 'pipeline')
+  const custWords = ctx.customerName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2)
   const openDeals = allPipelineSignals.filter((s: any) => {
     const stage = (s.metadata?.stage ?? '').toLowerCase()
-    return !stage.includes('closed')
+    if (stage.includes('closed')) return false
+    const oppName = (s.metadata?.opportunityName ?? s.headline ?? '').toLowerCase()
+    const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)\b/i.test(oppName)
+    if (hasCorpSuffix && !custWords.some(w => oppName.includes(w))) return false
+    return true
   })
   const synthesisLines: string[] = []
   const meetingDate = ctx.meeting.meetingStart ? new Date(ctx.meeting.meetingStart) : null
@@ -95,7 +100,15 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   if (ctx.meetingContextUseCases && ctx.meetingContextUseCases.length > 0) {
     const confirmed = ctx.meetingContextUseCases.filter(uc => uc.confirmationLevel === 'confirmed')
     if (confirmed.length > 0) {
-      synthesisLines.push(`**Confirmed use cases:** ${confirmed.map(uc => uc.description).join('; ')}`)
+      // Deduplicate by first 30 chars (catches near-identical descriptions)
+      const seen = new Set<string>()
+      const unique = confirmed.filter(uc => {
+        const key = uc.description.toLowerCase().slice(0, 30)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      synthesisLines.push(`**Confirmed use cases:** ${unique.map(uc => uc.description).join('; ')}`)
     }
   }
 
@@ -122,17 +135,19 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
     for (const entry of ctx.engagementTimeline) {
       const s = entry.summary.toLowerCase()
       if (s.includes('consumption') || s.includes('utilization')) {
-        suggestedTopics.push({ topic: entry.summary, context: entry.date.split('T')[0], tag: 'Open Item' })
+        suggestedTopics.push({ topic: entry.summary, context: entry.date ? entry.date.split('T')[0] : 'Recent', tag: 'Open Item' })
       } else if (s.includes('reschedul')) {
         suggestedTopics.push({ topic: entry.summary, context: 'Align scope', tag: 'Alignment' })
       } else if (s.includes('nfr') || s.includes('subscription') || s.includes('renewal')) {
-        suggestedTopics.push({ topic: entry.summary, context: entry.date.split('T')[0], tag: 'Renewal Review' })
+        const dateCtx = entry.date ? entry.date.split('T')[0] : 'Recent'
+        suggestedTopics.push({ topic: entry.summary, context: dateCtx, tag: 'Renewal Review' })
       }
     }
   }
 
   if (ctx.organizerIntent) {
-    suggestedTopics.push({ topic: 'Organizer stated purpose', context: ctx.organizerIntent, tag: 'Intent' })
+    // Truncate for table display — full text is in §1
+    suggestedTopics.push({ topic: 'Organizer stated purpose', context: ctx.organizerIntent.slice(0, 120), tag: 'Intent' })
   }
 
   // Inject §1 enrichment + Suggested Topics between §1 and §2
@@ -172,7 +187,12 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   if (pipelineSignals.length > 0) {
     const openPipeline = pipelineSignals.filter((s: any) => {
       const stage = (s.metadata?.stage ?? '').toLowerCase()
-      return !stage.includes('closed')
+      if (stage.includes('closed')) return false
+      // Filter out deals from other customers (AE territory can include multiple customers)
+      const oppName = (s.metadata?.opportunityName ?? s.headline ?? '').toLowerCase()
+      const hasCorpSuffix = /\b(inc\.|corp\.|llc|ltd\.|gmbh|s\.a\.|plc)\b/i.test(oppName)
+      if (hasCorpSuffix && !custWords.some(w => oppName.includes(w))) return false
+      return true
     })
     if (openPipeline.length > 0) {
       const pipelineRows = openPipeline.map((s: any) => {
@@ -201,7 +221,9 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
   const calendarAttendees = [...new Set(allAttendeeEmails)].filter(Boolean)
   if (calendarAttendees.length > 0) {
     // Parse playbook Key Relationships for title cross-reference
-    const keyRelationships = (ctx.templateResult.deterministic || '').match(/\|[^|]+\|[^|]+\|[^|]+\|/g) ?? []
+    // Filter out markdown headings and separator lines that leak into pipe-delimited matches
+    const keyRelationships = ((ctx.templateResult.deterministic || '').match(/\|[^|]+\|[^|]+\|[^|]+\|/g) ?? [])
+      .filter(r => !r.includes('##') && !r.includes('---') && !/^\|[\s-]+\|/.test(r))
     // Filter noise values from titles (confidence labels, etc.)
     const noiseValues = new Set(['low', 'medium', 'high', 'unknown', 'n/a', 'none', '-', '—'])
 
@@ -219,7 +241,13 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
         if (teamMember) {
           internalRows.push({ name: teamMember.name, role: teamMember.role.toUpperCase(), email })
         } else {
-          const name = ctx.getAttendeeDisplayName(ctx.meeting, email)
+          // Try attendeeDetails displayName first, then capitalize email prefix
+          const detail = (ctx.meeting as any).attendeeDetails?.find((d: any) => d.email === email)
+          let name = detail?.displayName || ctx.getAttendeeDisplayName(ctx.meeting, email)
+          // Capitalize email prefix fallback (e.g., "thutchin" → "Thutchin")
+          if (name && !name.includes(' ') && name === name.toLowerCase()) {
+            name = name.charAt(0).toUpperCase() + name.slice(1)
+          }
           internalRows.push({ name, role: '—', email })
         }
         continue

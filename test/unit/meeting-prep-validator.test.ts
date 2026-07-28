@@ -162,7 +162,7 @@ describe('meetingPrepValidator', () => {
 
     it('detects all 7 sections', () => {
       const sectionChecks = scorecard.checks.filter(c =>
-        ['meeting-objective', 'whos-in-the-room', 'recent-interactions',
+        ['meeting-objective', 'whos-in-the-room', 'engagement-timeline',
          'value-play', 'discussion-questions', 'action-items'].includes(c.name)
       )
       const passed = sectionChecks.filter(c => c.passed)
@@ -218,8 +218,8 @@ describe('meetingPrepValidator', () => {
       expect(objCheck?.passed).toBe(false)
     })
 
-    it('flags insufficient recent interactions bullets', () => {
-      const riCheck = scorecard.checks.find(c => c.name === 'recent-interactions')
+    it('flags insufficient engagement timeline items', () => {
+      const riCheck = scorecard.checks.find(c => c.name === 'engagement-timeline')
       expect(riCheck?.passed).toBe(false)
     })
 
