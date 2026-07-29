@@ -169,13 +169,17 @@ export function applyDeterministicOverrides(ctx: DeterministicOverrideContext): 
       enriched = `### 1. Meeting Objective\n${existingObjective}`
     }
     if (suggestedTopics.length > 0) {
-      const seen = new Set<string>()
-      const unique = suggestedTopics.filter(t => {
-        const key = t.topic.substring(0, 40).toLowerCase()
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+      // Deduplicate by keyword overlap (e.g., "AWS Cloud Utilization Report" ≈ "Illumio AWS consumption report")
+      const unique: typeof suggestedTopics = []
+      for (const t of suggestedTopics) {
+        const words = new Set(t.topic.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 2))
+        const isDuplicate = unique.some(existing => {
+          const existingWords = new Set(existing.topic.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 2))
+          const overlap = [...words].filter(w => existingWords.has(w)).length
+          return overlap >= 2
+        })
+        if (!isDuplicate) unique.push(t)
+      }
       const topicRows = unique.map(t => `| ${t.topic} | ${t.context || 'Recent'} | ${t.tag} |`).join('\n')
       enriched += `\n\n### Suggested Topics\n*Based on intelligence correlation — ranked by commercial urgency*\n| Topic | Context | Priority |\n|---|---|---|\n${topicRows}`
     }

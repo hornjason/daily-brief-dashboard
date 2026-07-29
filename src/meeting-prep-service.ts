@@ -1190,6 +1190,7 @@ export async function generateMeetingPrep(
 
   // ── Step 1a-2: Scan customer Drive folder + all-Drive meeting notes (#269, #1016) ──
   let driveDocsContext = ''
+  let bvaContext = ''
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
@@ -1238,9 +1239,9 @@ export async function generateMeetingPrep(
 
     if (allDocs.length > 0) {
       const docTexts: string[] = []
+      const bvaTexts: string[] = []
       for (const doc of allDocs.slice(0, 12)) {
         try {
-          // Slides: export as plain text via Drive API (#1031)
           let text: string | null = null
           if (doc.mimeType === 'application/vnd.google-apps.presentation') {
             try {
@@ -1252,10 +1253,9 @@ export async function generateMeetingPrep(
           }
           if (!text) continue
           const isGeminiNote = geminiNotes.some(g => g.id === doc.id)
+          const isBVA = /business\s*value|bva|kick\s*off/i.test(doc.name ?? '')
           let extracted: string
           if (isGeminiNote) {
-            // Smart extraction: pull Summary + Next steps sections from Gemini notes
-            // These contain the business value; raw transcript is low-signal
             const summaryMatch = text.match(/Summary\n([\s\S]*?)(?=\n(?:Next steps|Details|Transcript|$))/i)
             const nextStepsMatch = text.match(/Next steps\n([\s\S]*?)(?=\n(?:Details|Transcript|$))/i)
             const summary = summaryMatch?.[1]?.trim() || ''
@@ -1269,13 +1269,22 @@ export async function generateMeetingPrep(
             extracted = text.slice(0, 2000)
           }
           const label = isGeminiNote ? '(Gemini meeting notes)' : `(modified ${new Date(doc.modifiedTime!).toLocaleDateString()})`
-          docTexts.push(`### ${doc.name} ${label}\n${extracted}`)
+          const docEntry = `### ${doc.name} ${label}\n${extracted}`
+          if (isBVA) {
+            bvaTexts.push(docEntry)
+          } else {
+            docTexts.push(docEntry)
+          }
         } catch { /* skip unreadable docs */ }
+      }
+      if (bvaTexts.length > 0) {
+        bvaContext = `## Business Value Assessment Context (CRITICAL — ground §1 and §4 in this)\n${bvaTexts.join('\n\n')}`
+        console.log(`[meeting-prep] BVA context: ${bvaTexts.length} docs extracted for ${customer.name}`)
       }
       if (docTexts.length > 0) {
         driveDocsContext = `## Account Notes, Meeting Transcripts & Recent Documents\n${docTexts.join('\n\n')}`
-        console.log(`[meeting-prep] Drive scan: ${docTexts.length} docs (${geminiNotes.length} Gemini notes) for ${customer.name}`)
       }
+      console.log(`[meeting-prep] Drive scan: ${docTexts.length + bvaTexts.length} docs (${geminiNotes.length} Gemini notes, ${bvaTexts.length} BVA) for ${customer.name}`)
     }
   } catch (e: any) {
     console.warn(`[meeting-prep] Drive folder scan failed for ${customer.name}:`, e.message)
@@ -1701,6 +1710,8 @@ ${currentPriorities}
 ### Open Action Items
 ${openActions || 'No open action items'}
 
+${bvaContext ? `${bvaContext.slice(0, 6000)}` : ''}
+
 ${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
 
 ${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
@@ -1775,6 +1786,8 @@ ${caseSummary}
 
 ${templateResult.deterministic ? `### Signal Intelligence (key signals — deterministic sections injected post-generation)\n${templateResult.deterministic.slice(0, 6000)}` : ''}
 
+${bvaContext ? `${bvaContext.slice(0, 6000)}` : ''}
+
 ${recentInteractionsContext ? `### Recent Interactions & History\n${recentInteractionsContext.slice(0, 5000)}` : ''}
 
 ${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
@@ -1783,7 +1796,7 @@ ${escalationContext ? `${escalationContext}` : ''}
 
 ---
 
-**IMPORTANT: Use the Email Thread Intelligence and Meeting Transcripts above to ground your Meeting Objective (§1) and Value Play (§4) in SPECIFIC conversations, not generic playbook language. Reference actual email discussions, unresolved items, and stated purposes.**
+**IMPORTANT: Use the Business Value Assessment context, Email Thread Intelligence, and Meeting Transcripts above to ground your Meeting Objective (§1) and Value Play (§4) in SPECIFIC conversations, not generic playbook language. Reference actual BVA findings, email discussions, unresolved items, and stated purposes.**
 
 **Audience: ${audienceType.toUpperCase()}**${audienceType === 'customer' ? ' — Do NOT include internal incentives, spiff data, or competitive intelligence.' : audienceType === 'partner' ? ' — Do NOT include internal incentives, spiff data, competitive intelligence, or specific pipeline dollar amounts.' : ''}
 
@@ -1930,7 +1943,9 @@ ${templateResult.narrativeContext || 'No signals available'}
 ## Open Support Cases
 ${caseSummary}
 
-${recentInteractionsContext ? `## Recent Interactions & History\n${recentInteractionsContext}` : ''}
+${bvaContext ? `${bvaContext.slice(0, 6000)}` : ''}
+
+${recentInteractionsContext ? `## Recent Interactions & History (synthesize into Section 3)\n${recentInteractionsContext}` : ''}
 
 ${emailIntelligence ? `${emailIntelligence.slice(0, 4000)}` : ''}
 
@@ -2087,10 +2102,13 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
           return subj.includes('next meeting') || subj.includes('next step') || subj.includes('agenda') || subj.includes('briefing') || subj.includes('planning') || (subj.includes('follow') && (subj.includes('up') || subj.includes('plan')))
         })
         if (planningEmail) {
-          const body = (planningEmail.bodyText || planningEmail.body || planningEmail.snippet || '').slice(0, 500)
-          // Extract just the first meaningful paragraph
+          let body = (planningEmail.bodyText || planningEmail.body || planningEmail.snippet || '').slice(0, 500)
+          // Strip email signatures and forwarded content
+          body = body.replace(/\n--\s*\n[\s\S]*/m, '').replace(/\nOn .* wrote:\s*\n[\s\S]*/m, '')
+          body = body.replace(/\n(Thanks|Best|Regards|Cheers),?\s*\n[\s\S]*/mi, '')
+          body = body.replace(/<https?:\/\/[^>]+>/g, '').replace(/\s{2,}/g, ' ')
           const firstPara = body.split(/\n\n/)[0] || body
-          if (firstPara) organizerIntent = firstPara.replace(/\n+/g, ' ').trim()
+          if (firstPara && firstPara.length > 20) organizerIntent = firstPara.replace(/\n+/g, ' ').trim()
         }
       }
     }
