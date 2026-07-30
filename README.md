@@ -33,7 +33,7 @@ A containerized intelligence dashboard for Red Hat Account Solution Architects a
 
 It aggregates support cases, subscriptions, cloud spend, pipeline, product intelligence, competitive signals, and Google Workspace data — then layers AI-powered intelligence on top to surface **what matters** and **what to do about it**.
 
-**This is not a data dashboard.** It's an intelligence engine that cross-references 23 signal sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
+**This is not a data dashboard.** It's an intelligence engine that cross-references 30 signal sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
 
 ```
 Your data stays on your machine. Nothing leaves except API calls
@@ -472,7 +472,7 @@ Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 
 ## Architecture
 
-The dashboard is built with React + TypeScript on the frontend and Bun + TypeScript on the backend. 34 feature modules register with a central registry. The intelligence engine scores and routes signals deterministically. Gemini handles narrative synthesis only — all signal ranking, filtering, and routing is code, not prompts.
+The dashboard is built with React + TypeScript on the frontend and Bun + TypeScript on the backend. 35 feature modules register with a central registry. The intelligence engine scores and routes signals deterministically. Gemini handles narrative synthesis only — all signal ranking, filtering, and routing is code, not prompts.
 
 **Supported platforms:** Linux and macOS on Intel (x86_64) and Apple Silicon (arm64). Multi-arch container image.
 
