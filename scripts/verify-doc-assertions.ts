@@ -28,6 +28,7 @@ interface AssertionResult {
 
 const ASSERTION_RE = /<!--\s*ASSERTION:\s*(.+?)\s*-->/g
 const COUNT_RE = /^count\("(.+?)"\)\s*>=\s*(\d+)$/
+const COUNT_EQ_RE = /^count\("(.+?)"\)\s*==\s*(\d+)$/
 const GREP_RE = /^grep\("(.+?)",\s*"(.+?)"\)$/
 const EXISTS_RE = /^file_exists\("(.+?)"\)$/
 
@@ -84,8 +85,23 @@ function evaluateFileExists(filePath: string): { passed: boolean; detail: string
   return { passed: exists, detail: exists ? 'file exists' : `file not found: ${filePath}` }
 }
 
+function evaluateCountEq(globPattern: string, expected: number): { passed: boolean; actual: number } {
+  const g = new Glob(globPattern)
+  let count = 0
+  for (const _f of g.scanSync({ cwd: ROOT })) {
+    count++
+  }
+  return { passed: count === expected, actual: count }
+}
+
 function evaluate(assertion: string): { passed: boolean; detail: string } {
   let m: RegExpExecArray | null
+
+  m = COUNT_EQ_RE.exec(assertion)
+  if (m) {
+    const { passed, actual } = evaluateCountEq(m[1], parseInt(m[2], 10))
+    return { passed, detail: `actual: ${actual}, expected: ==${m[2]}` }
+  }
 
   m = COUNT_RE.exec(assertion)
   if (m) {

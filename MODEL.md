@@ -15,9 +15,9 @@ Read this file first. Follow doc routing table for deeper detail.
 
 ## Architecture Layers
 
-<!-- ASSERTION: count("src/modules/*-module.ts") >= 35 -->
-<!-- ASSERTION: count("src/quality-validators/*.ts") >= 16 -->
-<!-- ASSERTION: count("docs/adr/ADR-*.md") >= 26 -->
+<!-- ASSERTION: count("src/modules/*-module.ts") == 35 -->
+<!-- ASSERTION: count("src/quality-validators/*.ts") == 16 -->
+<!-- ASSERTION: count("docs/adr/ADR-*.md") == 26 -->
 <!-- ASSERTION: file_exists("src/lib/context-orchestrator.ts") -->
 <!-- ASSERTION: file_exists("src/lib/grounding-rules.ts") -->
 <!-- ASSERTION: grep("GROUNDING_RULES_BLOCK", "src/lib/grounding-rules.ts") -->

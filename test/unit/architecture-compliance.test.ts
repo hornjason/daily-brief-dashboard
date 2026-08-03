@@ -1579,3 +1579,26 @@ describe('Context orchestrator compliance (#1033)', () => {
     expect(templateAllImport).toBeNull()
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 25. DOC ASSERTIONS — content matches code reality (#127)
+//     Runs verify-doc-assertions.ts and surfaces failures as test failures.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Doc assertions — content matches code reality', () => {
+  test('all doc assertions pass', async () => {
+    const proc = Bun.spawn(['bun', 'run', 'scripts/verify-doc-assertions.ts'], {
+      cwd: resolve(import.meta.dir, '../..'),
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const exitCode = await proc.exited
+    const stdout = await new Response(proc.stdout).text()
+
+    if (exitCode !== 0) {
+      const failures = stdout.split('\n').filter(l => l.startsWith('FAIL'))
+      expect(failures).toEqual([])
+    }
+    expect(exitCode).toBe(0)
+  })
+})
