@@ -70,10 +70,12 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
 7. **If this is a consumer that generates output, does it call `ensureFresh: true`?** Any consumer that produces user-facing content (campaigns, meeting prep, playbooks, account plans, email outreach) MUST call `loadCustomerSignals(slug, name, { ensureFresh: true })` before generation. This guarantees all signal modules are current before the output is built. Without this, consumers generate from empty or stale data — producing low-quality output that damages trust. No consumer may skip this. The cost (a few seconds of cache checks + selective refresh) is always worth it vs generating from stale signals.
 8. **Does this module appear in the admin Data Sources panel?** Every registered module must have: a `refreshEndpoint` (so users can manually refresh), a display name that matches Signal Quality names, and `recordOutcome()` called after every refresh so "Last checked" updates. If a module is invisible to the admin panel, it's invisible to the user — they can't diagnose or fix stale data.
-9. **If this module calls Gemini, does it have a quality validator?** (ADR-024) Every module that generates content via Gemini MUST have a quality validator in `src/quality-validators/`. The validator checks the output for completeness, specificity, and structural correctness before caching. Quality scorecard is saved alongside the output. No Gemini-generated content may be cached without validation. Existing validators: `campaign-validator.ts`, `meeting-prep-validator.ts`, `intelligence-validator.ts`, `account-plan-validator.ts`, `playbook-validator.ts`, `tech-stack-validator.ts`. Reference: `docs/adr/ADR-024-gemini-output-quality-gate.md`.
+<!-- ASSERTION: count("src/quality-validators/*.ts") >= 16 -->
+9. **If this module calls Gemini, does it have a quality validator?** (ADR-024) Every module that generates content via Gemini MUST have a quality validator in `src/quality-validators/`. The validator checks the output for completeness, specificity, and structural correctness before caching. Quality scorecard is saved alongside the output. No Gemini-generated content may be cached without validation. Existing validators (16): `account-plan-validator.ts`, `brief-validator.ts`, `campaign-validator.ts`, `cloud-marketplace-validator.ts`, `competitive-intel-validator.ts`, `customer-product-intel-validator.ts`, `document-intelligence-validator.ts`, `intelligence-validator.ts`, `meeting-prep-brief-validator.ts`, `meeting-prep-validator.ts`, `morning-summary-validator.ts`, `playbook-html-validator.ts`, `playbook-validator.ts`, `product-enrichment-validator.ts`, `tech-stack-validator.ts`, `value-positioning-validator.ts`. Reference: `docs/adr/ADR-024-gemini-output-quality-gate.md`.
 10. **Does this module register with `FeatureModuleRegistry` with all required fields?** (ADR-020) Every feature module MUST implement: `name`, `cachePaths(slug)`, `fetch(customerName)`, `cleanup(customerName)`, `syncNow(customerName)`. Optional but expected: `refreshInterval` (for scheduled execution), `signals(customerSlug)` (if producing signals), `displayName` (for admin UI), `scope` ('customer'|'portfolio'|'both'), `nav` (sidebar entry), `accountTab` (customer detail tab). TypeScript enforces the interface at compile time, but incomplete implementations (empty methods, missing recordOutcome) slip through. Reference: `docs/adr/ADR-020-feature-module-registry.md`.
 11. **If this module produces signals, do metadata fields map to ADR-027 scoring boosters?** (ADR-021) Every `signals()` implementation should emit metadata that maps to the scoring system: `customerSlug` (→ customer-tier, floor 0.50), `redHatProducts` (→ +0.10 booster), `confidence` (HIGH → +0.05), `context` (evaluating/migrating → +0.10), `severity` (1 → +0.15, 2 → +0.10), `endDate` within 90 days (→ +0.10), `hasCloudSpend` (→ +0.10), `acvPlus`/`amount` (→ +0.10). Missing `customerSlug` = scores as general (ceiling 0.35 = Noise). Reference: `docs/adr/ADR-021-signal-contract-auto-discovery.md`.
-12. **If this module calls Gemini, does it use `callGemini()`?** (ADR-023) Every Gemini API call MUST go through `callGemini()` in `src/gemini-call.ts`. This wrapper provides: retry with backoff (429/503), cost tracking via `recordGeminiUsage()`, timeout tiers (fast/standard/long), input-hash delta caching via `deltaKey`, and model selection. Modules that bypass `callGemini()` lose retry, cost visibility, and timeout management. Exception: `account-intelligence.ts` uses `callGeminiGrounded()` (ADR-023 Phase 2 migration pending). Reference: `docs/adr/ADR-023-gemini-call-standardization.md`.
+<!-- ASSERTION: grep("callGemini", "src/gemini-call.ts") -->
+12. **If this module calls Gemini, does it use `callGemini()`?** (ADR-023) Every Gemini API call MUST go through `callGemini()` in `src/gemini-call.ts`. This wrapper provides: retry with backoff (429/503), cost tracking via `recordGeminiUsage()`, timeout tiers (fast/standard/long), input-hash delta caching via `deltaKey`, and model selection. Modules that bypass `callGemini()` lose retry, cost visibility, and timeout management. Migration complete: `account-intelligence.ts` now uses `callGemini()`. `gemini-fetch.ts` provides `callGeminiGroundedFetch` with retry+backoff for grounded calls requiring the two-pass pattern (ADR-040). Reference: `docs/adr/ADR-023-gemini-call-standardization.md`.
 13. **If this module's signals feed playbook generation, do they support attribution?** (ADR-026) Modules whose signals are consumed by the playbook generator MUST include `sourceNoteId` in signal metadata for provenance tracking. When meeting notes are merged with existing playbook state, the merge prompt receives all contributing signals — each must be attributable. Modules that don't support attribution produce playbook sections that can't trace back to their source. Reference: `docs/adr/ADR-026-customer-engagement-playbook.md`.
 14. **Does this module need scheduled execution?** (ADR-028) If a module needs to run on a timer (daily, weekly, interval), it MUST call `SchedulerRegistry.register()` instead of using `setInterval`/`setTimeout` directly. The registry provides: timer lifecycle management, enabled-check-at-fire-time, `primaryOnly` flag (skip on hero installs), status tracking (`lastRun`, `nextRun`, `lastError`), and visibility via `GET /api/admin/scheduler-status`. Reference: `docs/adr/ADR-028-unified-scheduler-registry.md`.
 15. **Does this module produce portfolio-level data?** (ADR-029) Modules that emit signals about Red Hat products (not customer-specific data) MUST cross-reference against customer subscriptions/interests using `getCustomerProductContext(customerSlug)`. Without this, portfolio signals score as general tier (ceiling 0.35 = Noise) even when directly relevant to a customer who owns that product. With the cross-reference, matching signals get `customerSlug` set → customer tier (floor 0.50). Reference: `docs/adr/ADR-029-signal-scoring-evolution.md`.
@@ -91,6 +93,8 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 
 ## Consumer → File Mapping (Compliance-Enforced)
 
+<!-- ASSERTION: grep("buildConsumerContext", "src/campaign-service.ts") -->
+<!-- ASSERTION: grep("buildConsumerContext", "src/meeting-prep-service.ts") -->
 <!-- PARSED BY test/unit/architecture-compliance.test.ts — keep format exact -->
 
 | Consumer | Source File | templateAll | getExpansionMotion | ensureFresh |
@@ -99,7 +103,7 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | Brief Pipeline | src/brief-pipeline.ts | ✅ | — | — |
 | Campaign (standard) | src/campaign-service.ts | ✅ | — | ✅ |
 | Meeting Prep | src/meeting-prep-service.ts | ✅ | — | ✅ |
-| Playbook | src/playbook-generator.ts | ✅ | — | ✅ |
+| Playbook | src/playbook-generator.ts | orchestrator | — | ✅ |
 | Account Plan | src/account-plan.ts | ✅ | — | — |
 | Morning Summary | src/dashboard-service.ts | ✅ | — | — |
 | Value Positioning | src/value-positioning.ts | ✅ | — | — |
@@ -143,11 +147,11 @@ No hardcoded product, competitor, or technology vocabularies. Every keyword list
 | Consumer | Must call `ensureFresh: true`? | Current status |
 |----------|-------------------------------|----------------|
 | Playbook | ✅ Yes | ✅ Implemented |
-| Campaign | ✅ Yes | ❌ **MISSING** — uses stale signals |
+| Campaign | ✅ Yes | ✅ via orchestrator (`buildConsumerContext` calls `loadCustomerSignals({ ensureFresh: true })`) |
 | Meeting Prep | ✅ Yes | ✅ Implemented (#426) |
 | Email Outreach | ✅ Yes | ❌ **MISSING** — uses stale signals |
 | Account Brief | ✅ Yes (on-demand generation) | ✅ Implemented (on first view) |
-| Account Plan | ✅ Yes | ❌ **MISSING** |
+| Account Plan | ✅ Yes | ✅ via orchestrator (`buildConsumerContext` calls `loadCustomerSignals({ ensureFresh: true })`) |
 
 ## Consumer Output Quality Rule — Business Objective Tie-back (MANDATORY)
 

@@ -849,11 +849,13 @@ All 5 major route files have been extracted into service modules. Route files ar
 
 ## §28. Scheduler Registry (ADR-028, 2026-05-20)
 
+<!-- ASSERTION: grep("schedulerRegistry.register", "src/background-scheduler.ts") -->
+
 `src/scheduler-registry.ts` — centralized scheduler with 4 schedule types (daily, weekly, interval, heartbeat). Modules register their schedule; the registry owns setTimeout lifecycle and status tracking.
 
 Admin endpoint: `GET /api/admin/scheduler-status` — shows all scheduled tasks, next run time, last success/failure.
 
-Phase 1 (infrastructure) shipped. Phases 2-5 (migrating existing schedule functions) in future sessions. See `docs/adr/ADR-028-unified-scheduler-registry.md`.
+All scheduler migrations complete. 11 tasks registered via `schedulerRegistry.register()` in `background-scheduler.ts`. See `docs/adr/ADR-028-unified-scheduler-registry.md`.
 
 ### Refresh functions (hero install, L3 → L2)
 
@@ -1673,6 +1675,9 @@ Page-load and display endpoints use default `ensureFresh: false` — they read c
 3. Done. `loadCustomerSignals({ ensureFresh: true })` will call your `ensureFresh()` automatically.
 
 ## §26. Architecture Compliance Gate (#329, 2026-05-20)
+
+<!-- ASSERTION: file_exists("src/lib/context-orchestrator.ts") -->
+<!-- ASSERTION: count("docs/adr/ADR-*.md") >= 26 -->
 
 Two-layer enforcement of the three-layer architecture (scoring → templates → thin consumers).
 

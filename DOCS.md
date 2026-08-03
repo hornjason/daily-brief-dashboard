@@ -15,6 +15,7 @@ updated: 2026-05-24
 
 | I need to... | Read |
 |---|---|
+| Understand the architecture at a glance | `MODEL.md` (start here) → `ARCHITECTURE.md` for deep detail |
 | Understand data flow end to end | `ARCHITECTURE.md §6` + `docs/DATA-INGESTION-ARCHITECTURE.md` |
 | Understand why something is built a certain way | `ARCHITECTURE.md` — find the section by topic |
 | Operate the L3 sync daemon (start, stop, status) | `ARCHITECTURE.md §3a` |
@@ -48,9 +49,10 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 
 | Doc | Type | What it covers |
 |---|---|---|
+| `MODEL.md` | architecture | Golden state — 12-layer architecture summary, compliance status, module registry, known gaps. **Read this first.** |
 | `ARCHITECTURE.md` | architecture | Intentional design decisions, scraper internals, all "why" |
 | `BACKLOG.md` | backlog | Open items, bugs, in-progress work |
-| `TIMERS.md` | reference | All 33 server timers + 3 sync daemon timers |
+| `TIMERS.md` | reference | All 40 server timers + 5 sync daemon timers |
 | `PROJECT-STATE.md` | reference | Live system state — containers, AE count, endpoints |
 | `CLAUDE.md` | reference | Agent rules, deploy sequence, testing protocol |
 | `docs/HERO-INSTALL.md` | architecture | L3-only install design, NODE_ROLE, sync daemon spec |

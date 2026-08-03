@@ -63,6 +63,24 @@ if [ -n "$LATEST_MARKER" ]; then
     exit 1
   fi
 
+  # TTL check on verify-check.json (4h, matching .ship-active TTL)
+  VERIFY_TTL_SECONDS=14400
+  if [ "$(uname)" = "Darwin" ]; then
+    VERIFY_MTIME=$(stat -f %m "$VERIFY_FILE" 2>/dev/null || echo 0)
+  else
+    VERIFY_MTIME=$(stat -c %Y "$VERIFY_FILE" 2>/dev/null || echo 0)
+  fi
+  VERIFY_AGE=$(( $(date +%s) - VERIFY_MTIME ))
+  if [ "$VERIFY_AGE" -gt "$VERIFY_TTL_SECONDS" ]; then
+    echo "  PRE-PUSH BLOCKED: verify-check.json is stale ($(( VERIFY_AGE / 3600 ))h old, TTL is 4h)."
+    echo ""
+    echo "   File: $VERIFY_FILE"
+    echo "   Re-run the verify gate to get a fresh result."
+    echo "   Skip with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+
   FAIL_COUNT=$(grep -o '"fail"[[:space:]]*:[[:space:]]*[0-9]*' "$VERIFY_FILE" | grep -o '[0-9]*$' || echo "")
   if [ -z "$FAIL_COUNT" ]; then
     echo "  PRE-PUSH BLOCKED: verify-check.json exists but could not parse fail count."
