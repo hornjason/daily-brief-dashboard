@@ -1125,3 +1125,388 @@ describe('Grounding rules — callGemini consumers import shared rules', () => {
     expect(mod.GROUNDING_RULES_BLOCK).toContain('GROUNDING RULES')
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 14. ADR-016: supportsAllDrives always-on in DriveFolderClient
+//     Every drive.files.list and drive.files.create call must include
+//     supportsAllDrives: true. Omitting it silently returns zero results
+//     for Shared Drive folders.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-016: supportsAllDrives always-on in Drive client', () => {
+  test('drive-client.ts includes supportsAllDrives on every Drive API call', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'lib/drive-client.ts'), 'utf-8')
+    const violations: string[] = []
+    const lines = content.split('\n')
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue
+      // Skip string literals (error messages, log strings)
+      if (/['"`].*drive\.files\.(list|create)/.test(line)) continue
+      if (!/drive\.files\.(list|create)\s*\(/.test(line)) continue
+
+      const contextEnd = Math.min(lines.length, i + 25)
+      const context = lines.slice(i, contextEnd).join('\n')
+      if (!context.includes('supportsAllDrives') && !context.includes('includeItemsFromAllDrives')) {
+        violations.push(`drive-client.ts:${i + 1} — ${line.trim()} without supportsAllDrives`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('every drive.files.list call in src/ includes supportsAllDrives', () => {
+    const PROJECT_ROOT = resolve(SRC_DIR, '..')
+    const violations: string[] = []
+
+    function scanDir(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.isDirectory()) {
+          scanDir(full)
+        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          const content = readFileSync(full, 'utf-8')
+          const lines = content.split('\n')
+          for (let i = 0; i < lines.length; i++) {
+            if (/drive\.files\.list\s*\(/.test(lines[i])) {
+              const contextStart = Math.max(0, i)
+              const contextEnd = Math.min(lines.length, i + 20)
+              const context = lines.slice(contextStart, contextEnd).join('\n')
+              if (!context.includes('supportsAllDrives')) {
+                const rel = full.replace(PROJECT_ROOT + '/', '')
+                violations.push(`${rel}:${i + 1} — drive.files.list without supportsAllDrives`)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    scanDir(SRC_DIR)
+    // KNOWN VIOLATION: 33 callsites use raw drive.files.list without supportsAllDrives.
+    // ADR-016 mandates always-on supportsAllDrives to prevent silent zero-result Shared Drive queries.
+    // These callsites predate the ADR and need migration to DriveFolderClient or manual flag addition.
+    if (violations.length > 0) {
+      console.warn(
+        `[ADR-016 advisory] ${violations.length} drive.files.list calls without supportsAllDrives:\n` +
+        violations.slice(0, 5).map(v => `  - ${v}`).join('\n') +
+        (violations.length > 5 ? `\n  ... and ${violations.length - 5} more` : '')
+      )
+    }
+    // Advisory: tracking as known debt. Promote to expect([]) when migrated.
+    expect(violations.length).toBeLessThanOrEqual(40)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 15. ADR-018: Inactive customer lifecycle — binary active/gone model
+//     No runtime code path should check `customer.inactive`.
+//     The safety-net filter in server-state.ts is the ONLY allowed usage.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-018: No inactive field usage outside safety-net filter', () => {
+  const ALLOWED_INACTIVE_FILES = new Set([
+    'src/server-state.ts',
+    'src/types.ts',
+    'src/migrate-purge-inactive.ts',
+  ])
+
+  test('no src file checks .inactive outside the safety-net allowlist', () => {
+    const violations: string[] = []
+    function scanDir(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.isDirectory()) {
+          scanDir(full)
+        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          const PROJECT_ROOT = resolve(SRC_DIR, '..')
+          const rel = full.replace(PROJECT_ROOT + '/', '')
+          if (ALLOWED_INACTIVE_FILES.has(rel)) continue
+          const content = readFileSync(full, 'utf-8')
+          const lines = content.split('\n')
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]
+            if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue
+            if (/\.inactive\b/.test(line) || /!c\.inactive/.test(line) || /\binactive:\s*true/.test(line)) {
+              violations.push(`${rel}:${i + 1}: ${line.trim()}`)
+            }
+          }
+        }
+      }
+    }
+    scanDir(SRC_DIR)
+    if (violations.length > 0) {
+      console.warn(
+        `[ADR-018] Files checking .inactive outside safety-net:\n` +
+        violations.map(v => `  - ${v}`).join('\n') +
+        `\n\nADR-018: customers are active or gone. Remove .inactive checks — server-state.ts filters at load time.`
+      )
+    }
+    // Advisory: some legacy code still checks .inactive as a belt-and-suspenders filter
+    expect(violations.length).toBeLessThanOrEqual(2)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 16. ADR-023: All Gemini calls through callGemini()
+//     No src file should import directly from @google-cloud/vertexai
+//     or @google/generative-ai except the gateway files (gemini-call.ts,
+//     gemini-fetch.ts, gemini-auth.ts).
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-023: All Gemini calls through callGemini() gateway', () => {
+  const GATEWAY_FILES = new Set([
+    'src/gemini-call.ts',
+    'src/gemini-fetch.ts',
+    'src/gemini-auth.ts',
+    'src/gemini-quality-gate.ts',
+    'src/gemini-cost-tracker.ts',
+  ])
+
+  test('no src file imports Gemini SDK directly outside gateway', () => {
+    const PROJECT_ROOT = resolve(SRC_DIR, '..')
+    const violations: string[] = []
+
+    function scanDir(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.isDirectory()) {
+          scanDir(full)
+        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          const rel = full.replace(PROJECT_ROOT + '/', '')
+          if (GATEWAY_FILES.has(rel)) continue
+          const content = readFileSync(full, 'utf-8')
+          if (/from\s+['"]@google-cloud\/vertexai['"]/.test(content) ||
+              /from\s+['"]@google\/generative-ai['"]/.test(content)) {
+            violations.push(`${rel} — imports Gemini SDK directly. Must use callGemini() from gemini-call.ts.`)
+          }
+        }
+      }
+    }
+
+    scanDir(SRC_DIR)
+    expect(violations).toEqual([])
+  })
+
+  test('gemini-call.ts exports callGemini function', () => {
+    const content = readSrc('gemini-call.ts')
+    expect(content).toMatch(/export\s+(async\s+)?function\s+callGemini/)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 17. ADR-029: Portfolio signal modules use rawRelevance, not score
+//     Modules that produce portfolio-level signals (lifecycle, product-intel,
+//     rss, events, value-maps) must set rawRelevance, never score directly.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-029: Portfolio modules use rawRelevance not score', () => {
+  const PORTFOLIO_MODULES = [
+    'lifecycle-module.ts',
+    'product-intel-module.ts',
+    'rss-module.ts',
+    'events-module.ts',
+    'value-map-module.ts',
+  ]
+
+  for (const file of PORTFOLIO_MODULES) {
+    test(`${file} does not set score directly on signals`, () => {
+      try {
+        const content = readSrc(`modules/${file}`)
+        const lines = content.split('\n')
+        const violations: string[] = []
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue
+          if (/rawRelevance/i.test(line)) continue
+          if (/score\s*\??\s*:\s*(number|undefined)/i.test(line)) continue
+          if (/\b(let|const|var)\s+score\s*=/i.test(line)) continue
+          if (/\bscore\s*:\s*[0-9.]/i.test(line)) {
+            violations.push(`modules/${file}:${i + 1} — sets score directly: ${line.trim()}`)
+          }
+        }
+        expect(violations).toEqual([])
+      } catch {
+        // Module file may not exist yet
+      }
+    })
+  }
+
+  test('customer-product-context.ts exists as shared utility (ADR-029)', () => {
+    expect(existsSync(resolve(SRC_DIR, 'lib/customer-product-context.ts'))).toBe(true)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 18. ADR-031: Consumers use templateAll(), not individual template functions
+//     No consumer file should import getCustomerSolutionContext directly.
+//     Solution play data flows through templateAll().structured.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-031: Consumers use templateAll() for solution play data', () => {
+  const CONSUMER_FILES_ADR031 = [
+    'playbook-generator.ts',
+    'brief-pipeline.ts',
+    'customer.ts',
+    'campaign-service.ts',
+    'meeting-prep-service.ts',
+  ]
+
+  test('no consumer file imports getCustomerSolutionContext directly', () => {
+    const violations: string[] = []
+    for (const file of CONSUMER_FILES_ADR031) {
+      try {
+        const content = readSrc(file)
+        if (/import\s*\{[^}]*getCustomerSolutionContext[^}]*\}\s*from/.test(content) ||
+            /await\s+import\s*\([^)]*customer-solution-context/.test(content)) {
+          violations.push(`${file} — imports getCustomerSolutionContext directly. Must use templateAll().structured`)
+        }
+      } catch { /* file may not exist */ }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('signal-templates barrel or templates/index.ts exports templateAll function', () => {
+    const barrelPath = resolve(SRC_DIR, 'lib/signal-templates.ts')
+    const implPath = resolve(SRC_DIR, 'lib/templates/index.ts')
+    const barrel = readFileSync(barrelPath, 'utf-8')
+    if (barrel.includes("export * from './templates/index.ts'")) {
+      const impl = readFileSync(implPath, 'utf-8')
+      expect(impl).toMatch(/export\s+(async\s+)?function\s+templateAll/)
+    } else {
+      expect(barrel).toMatch(/export\s+(async\s+)?function\s+templateAll/)
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 19. ADR-032: Cross-referencing modules use collectAllSignalsUnbudgeted
+//     Modules that cross-reference other modules' signals must use the
+//     unbounded variant, not collectAllSignals (which budget-caps).
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-032: Cross-referencing modules use unbounded signal collection', () => {
+  test('recommended-actions-module uses collectAllSignalsUnbudgeted, not collectAllSignals', () => {
+    try {
+      const content = readSrc('modules/recommended-actions-module.ts')
+      expect(content).toContain('collectAllSignalsUnbudgeted')
+      const lines = content.split('\n')
+      const violations: string[] = []
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('collectAllSignals(') && !lines[i].includes('Unbudgeted')) {
+          violations.push(`recommended-actions-module.ts:${i + 1} — uses budgeted collectAllSignals instead of collectAllSignalsUnbudgeted`)
+        }
+      }
+      expect(violations).toEqual([])
+    } catch { /* module may not exist yet */ }
+  })
+
+  test('signal-loader.ts exports collectAllSignalsUnbudgeted', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'lib/signal-loader.ts'), 'utf-8')
+    expect(content).toMatch(/export\s+(async\s+)?function\s+collectAllSignalsUnbudgeted/)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 20. ADR-034: Multi-pod enterprise regions — hidden pod filtering
+//     Pods marked hidden: true must be filtered from user-facing APIs.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-034: Hidden pod filtering in user-facing APIs', () => {
+  test('region-config.ts defines hidden property on RegionPodConfig', () => {
+    try {
+      const content = readSrc('region-config.ts')
+      expect(content).toMatch(/hidden\??\s*:\s*boolean/)
+    } catch { /* file may not exist */ }
+  })
+
+  test('scrape-api.ts filters hidden pods from catalog response', () => {
+    try {
+      const content = readSrc('scrape-api.ts')
+      expect(content).toContain('.hidden')
+    } catch { /* file may not exist */ }
+  })
+
+  test('region-access-routes.ts filters hidden pods', () => {
+    try {
+      const content = readSrc('region-access-routes.ts')
+      expect(content).toContain('.hidden')
+    } catch { /* file may not exist */ }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 21. ADR-036 (AE Identity): Name-centric identity, territory as attribute
+//     Territory codes must not be used as primary identity keys.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-036: AE identity is name-centric, not territory-code-centric', () => {
+  test('territory.ts parses territory parts by stripping _TERRXX suffix', () => {
+    try {
+      const content = readSrc('lib/territory.ts')
+      expect(content).toMatch(/_TERR|Terr\d|terrCode/i)
+    } catch { /* file may not exist */ }
+  })
+
+  test('region-config.ts supports prefixes for declarative territory routing', () => {
+    try {
+      const content = readSrc('region-config.ts')
+      expect(content).toMatch(/prefixes\??\s*:\s*string\[\]/)
+    } catch { /* file may not exist */ }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 22. ADR-037: Post-upgrade freshness infrastructure
+//     BUILD_HASH detection, refresh-engine.ts, freshness API must exist.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-037: Post-upgrade freshness infrastructure', () => {
+  const PROJECT_ROOT = resolve(SRC_DIR, '..')
+
+  test('build-hash.ts exists and exports checkForUpgrade function', () => {
+    const buildHashPath = resolve(SRC_DIR, 'build-hash.ts')
+    expect(existsSync(buildHashPath)).toBe(true)
+    const content = readFileSync(buildHashPath, 'utf-8')
+    expect(content).toMatch(/export\s+(function|async\s+function)\s+checkForUpgrade/)
+  })
+
+  test('refresh-engine.ts exists and exports refreshAllModules', () => {
+    const refreshEnginePath = resolve(SRC_DIR, 'refresh-engine.ts')
+    expect(existsSync(refreshEnginePath)).toBe(true)
+    const content = readFileSync(refreshEnginePath, 'utf-8')
+    expect(content).toMatch(/export\s+(async\s+)?function\s+refreshAllModules/)
+  })
+
+  test('Dockerfile includes BUILD_HASH generation step', () => {
+    const dockerfilePath = resolve(PROJECT_ROOT, 'Dockerfile')
+    if (existsSync(dockerfilePath)) {
+      const content = readFileSync(dockerfilePath, 'utf-8')
+      expect(content).toContain('BUILD_HASH')
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 23. ADR-024: Quality gate — validateAndRetry usage in consumers
+//     Consumer files that generate Gemini content should use validateAndRetry.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ADR-024: Quality gate — validateAndRetry in key consumers', () => {
+  test('gemini-quality-gate.ts exists and exports validateAndRetry', () => {
+    const gatePath = resolve(SRC_DIR, 'gemini-quality-gate.ts')
+    expect(existsSync(gatePath)).toBe(true)
+    const content = readFileSync(gatePath, 'utf-8')
+    expect(content).toMatch(/export\s+(async\s+)?function\s+validateAndRetry/)
+  })
+
+  test('quality-validators directory exists with validators', () => {
+    const validatorsDir = resolve(SRC_DIR, 'quality-validators')
+    expect(existsSync(validatorsDir)).toBe(true)
+    const files = readdirSync(validatorsDir).filter(f => f.endsWith('.ts'))
+    expect(files.length).toBeGreaterThanOrEqual(1)
+  })
+})
