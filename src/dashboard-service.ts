@@ -32,6 +32,7 @@ import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
 import { validateAndRetry } from './gemini-quality-gate.ts'
 import { morningSummaryValidator } from './quality-validators/morning-summary-validator.ts'
+import { GROUNDING_RULES_BLOCK } from './lib/grounding-rules.ts'
 
 // @consumer-contract v1.0
 
@@ -192,13 +193,7 @@ CRITICAL REQUIREMENTS:
 1. Every pipeline deal and renewal MUST include its dollar value from the signal data. Instead of "high-value pipeline deal", say "pipeline deal worth $X". Instead of "renewal due in 10 days", say "$X renewal due in 10 days".
 2. Every action item MUST name the specific person from the account team data — never use generic titles like "the AE" or "the SA". Use the actual names: Carolanne Farrell, Jason Horn, Gabe Deupree, etc.
 
-## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
-1. Every claim, metric, dollar amount, date, and name MUST come from the provided signal data or account team data.
-2. If the signal data does not contain a specific data point, do not fabricate it — omit or say "data unavailable."
-3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the signals.
-4. Dollar amounts for pipeline deals and renewals MUST match the exact figures in the signal data. Do not round, estimate, or fabricate financial figures.
-5. Team member names MUST come from the account team data. Never invent names or use generic titles.
-6. Generic references ("the team", "key stakeholders", "relevant accounts") are PROHIBITED — use specific names and account names from the data.`
+${GROUNDING_RULES_BLOCK}`
   const templateSection = templateAllContext ? `\n\n<signal_context>\n${templateAllContext}\n</signal_context>` : ''
   const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}${templateSection}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 

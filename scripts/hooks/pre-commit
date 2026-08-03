@@ -1,24 +1,69 @@
 #!/usr/bin/env bash
-# Pre-commit hook: require PROJECT-STATE.md update when new routes or pages are added
-# Installed via: make install-hooks
+# Pre-commit hook: PROJECT-STATE.md check + ship-active enforcement
+# Installed via: make install-hooks / setup-hooks.sh
 # Skip with: git commit --no-verify
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-# Count new route or page files staged for this commit
+PAI_WORK_DIR="${PAI_WORK_DIR:-$HOME/.pai-work}"
+SHIP_ACTIVE_TTL_HOURS=4
+
+# --- Check 1: PROJECT-STATE.md update for new routes/pages ---
+
 NEW_CODE=$(git diff --cached --name-status | grep "^A" | grep -E "src/routes/|dashboard/src/pages/" | wc -l | tr -d ' ')
 
 if [ "$NEW_CODE" -gt "0" ]; then
   STATE_STAGED=$(git diff --cached --name-only | grep -c "PROJECT-STATE.md" || true)
   if [ "$STATE_STAGED" -eq "0" ]; then
     echo ""
-    echo "❌  New route or page files staged — PROJECT-STATE.md not updated."
+    echo "PRE-COMMIT BLOCKED: New route or page files staged — PROJECT-STATE.md not updated."
     echo ""
     git diff --cached --name-status | grep "^A" | grep -E "src/routes/|dashboard/src/pages/"
     echo ""
     echo "   New endpoints and pages require a PROJECT-STATE.md update (CLAUDE.md rule)."
     echo "   Update PROJECT-STATE.md and stage it, or skip with: git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+# --- Check 2: Ship-active enforcement for src/ changes ---
+
+SRC_FILES=$(git diff --cached --name-only | grep -E '^src/' | grep -v -E '\.(test|spec)\.ts$' || true)
+
+if [ -n "$SRC_FILES" ]; then
+  VALID_MARKER=""
+  NOW=$(date +%s)
+  TTL_SECONDS=$((SHIP_ACTIVE_TTL_HOURS * 3600))
+
+  if [ -d "$PAI_WORK_DIR" ]; then
+    for marker in "$PAI_WORK_DIR"/*/.ship-active; do
+      [ -f "$marker" ] || continue
+      if [ "$(uname)" = "Darwin" ]; then
+        MTIME=$(stat -f %m "$marker" 2>/dev/null || echo 0)
+      else
+        MTIME=$(stat -c %Y "$marker" 2>/dev/null || echo 0)
+      fi
+      AGE=$(( NOW - MTIME ))
+      if [ "$AGE" -lt "$TTL_SECONDS" ]; then
+        VALID_MARKER="$marker"
+        break
+      fi
+    done
+  fi
+
+  if [ -z "$VALID_MARKER" ]; then
+    echo ""
+    echo "PRE-COMMIT BLOCKED: src/ files staged but no active .ship-active marker found."
+    echo ""
+    echo "   Staged src/ files:"
+    echo "$SRC_FILES" | sed 's/^/     /'
+    echo ""
+    echo "   Source code commits require an active ship session (ship SCOPE creates .ship-active)."
+    echo "   Marker location: \$PAI_WORK_DIR/*/.ship-active (checked: $PAI_WORK_DIR)"
+    echo "   TTL: ${SHIP_ACTIVE_TTL_HOURS}h — markers older than ${SHIP_ACTIVE_TTL_HOURS}h are expired."
+    echo "   Skip with: git commit --no-verify"
     echo ""
     exit 1
   fi

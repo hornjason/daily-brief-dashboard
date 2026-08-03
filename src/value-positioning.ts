@@ -24,6 +24,7 @@ import { loadCustomerSignals } from './lib/signal-loader.ts'
 import { templateAll } from './lib/signal-templates.ts'
 import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
 import { valuePositioningValidator } from './quality-validators/value-positioning-validator.ts'
+import { GROUNDING_RULES_BLOCK } from './lib/grounding-rules.ts'
 import type { Customer } from './types.ts'
 
 // @consumer-contract v1.0
@@ -219,13 +220,7 @@ Rules:
 - Identify 2-3 stakeholder engagement paths from the account team data. Each path should name a different person with a reason to engage them
 - Output valid JSON matching the schema provided
 
-## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
-1. Every claim, metric, dollar amount, date, case number, and name MUST come from the provided customer intelligence data.
-2. If the intelligence data does not contain a specific data point for a field, set that field to null.
-3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the provided context.
-4. Pipeline dollar figures MUST match the exact amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
-5. Case numbers and case details MUST come from the provided case data. Never invent case references.
-6. Generic references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the provided data or omit the reference.`
+${GROUNDING_RULES_BLOCK}`
 
 export function buildPositioningPrompt(customerName: string, ctx: PositioningContext): string {
   const sections: string[] = [`CUSTOMER: ${customerName}`]

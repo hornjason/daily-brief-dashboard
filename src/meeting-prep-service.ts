@@ -59,6 +59,7 @@ import {
 import { resolveAttendees, type AttendeeProfile } from './lib/attendee-profile-cache.ts'
 import { loadAllEcosystemPartners } from './lib/ecosystem-catalog.ts'
 import { computeEscalation, formatEscalationForPrompt } from './lib/carry-forward.ts'
+import { GROUNDING_RULES_BLOCK } from './lib/grounding-rules.ts'
 
 // @consumer-contract v1.0
 
@@ -344,17 +345,7 @@ const MEETING_PREP_RESPONSE_SCHEMA_7S = {
   required: ['meetingObjective', 'attendees', 'recentInteractions', 'valuePlay', 'discussionQuestions', 'pipelineOpportunities', 'actionItems'],
 }
 
-// ── ADR-040 Grounding Rules Block ────────────────────────────────────────────
-
-const GROUNDING_RULES_BLOCK = `
-## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
-1. Every claim, metric, dollar amount, date, and name MUST come from the provided context data.
-2. If the context does not contain a specific data point for a field, set that field to null.
-3. Never extrapolate, estimate, or generate plausible-sounding data that is not in the context.
-4. When citing a customer win or peer metric, it MUST come from the VERIFIED SOLUTION PLAYS section. Use the EXACT company name and metric.
-5. Generic peer references ("industry peers", "companies like yours", "similar organizations") are PROHIBITED. Either cite a named company from the solution plays data or set peerProof to null.
-6. Pipeline dollar figures MUST match the amounts in the provided pipeline data. Do not round, estimate, or fabricate financial figures.
-`
+// Grounding rules imported from src/lib/grounding-rules.ts
 
 // ── ADR-040 Solution Plays Serializer ────────────────────────────────────────
 

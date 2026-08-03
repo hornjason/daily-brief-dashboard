@@ -1042,3 +1042,86 @@ describe('Layer 3 — React components must not access signal metadata (#779)', 
     expect(violations).toEqual([])
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 13. GROUNDING RULES — callGemini consumers must import shared rules
+//     Prevents hallucination via duplicated/missing grounding prompts.
+//     Exemptions parsed from PRINCIPLES.md "Gemini Callers — Not Consumers".
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Grounding rules — callGemini consumers import shared rules', () => {
+  const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+  const excludedCallers = parseExcludedGeminiCallers()
+  const excludedSet = new Set(excludedCallers)
+
+  const GATEWAY_FILES = new Set([
+    'src/gemini-call.ts',
+    'src/gemini-quality-gate.ts',
+  ])
+
+  // Consumers with inline grounding rules not yet migrated to shared module.
+  // Remove entries as they are migrated — test will enforce the import.
+  const PENDING_MIGRATION = new Set([
+    'src/account-plan.ts',
+    'src/customer.ts',
+    'src/campaign-service.ts',
+    'src/playbook-generator.ts',
+  ])
+
+  test('every callGemini() consumer imports from grounding-rules.ts', () => {
+    const violations: string[] = []
+    const pendingViolations: string[] = []
+
+    function scanDir(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = resolve(dir, entry.name)
+        if (entry.name === 'node_modules' || entry.name === '.git') continue
+        if (entry.isDirectory()) {
+          scanDir(full)
+        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+          const content = readFileSync(full, 'utf-8')
+          if (!content.includes('callGemini(') && !content.includes('callGemini (')) continue
+          const rel = full.replace(PROJECT_ROOT + '/', '')
+          if (GATEWAY_FILES.has(rel)) continue
+          if (excludedSet.has(rel)) continue
+          if (!content.includes('grounding-rules')) {
+            if (PENDING_MIGRATION.has(rel)) {
+              pendingViolations.push(rel)
+            } else {
+              violations.push(rel)
+            }
+          }
+        }
+      }
+    }
+
+    scanDir(resolve(PROJECT_ROOT, 'src'))
+
+    if (pendingViolations.length > 0) {
+      console.warn(
+        `[advisory] ${pendingViolations.length} consumer(s) pending grounding-rules migration:\n` +
+        pendingViolations.map(v => `  ⚠️ ${v}`).join('\n')
+      )
+    }
+
+    if (violations.length > 0) {
+      console.error(
+        'callGemini() consumers missing grounding-rules import:\n' +
+        violations.map(v => `  - ${v}`).join('\n') +
+        '\n\nFix: import { GROUNDING_RULES_BLOCK } from \'./lib/grounding-rules.ts\' and include in prompt.\n' +
+        'Or add to PRINCIPLES.md "Gemini Callers — Not Consumers" table if legitimately exempt.'
+      )
+    }
+
+    expect(violations).toEqual([])
+  })
+
+  test('grounding-rules.ts exports required constants', async () => {
+    const mod = await import('../../src/lib/grounding-rules.ts')
+    expect(mod.GROUNDING_RULES).toBeDefined()
+    expect(Object.keys(mod.GROUNDING_RULES).length).toBeGreaterThanOrEqual(5)
+    expect(mod.GROUNDING_RULES_BLOCK).toBeDefined()
+    expect(mod.GROUNDING_RULES_BLOCK.length).toBeGreaterThan(100)
+    expect(mod.GROUNDING_RULES_BLOCK).toContain('GROUNDING RULES')
+  })
+})

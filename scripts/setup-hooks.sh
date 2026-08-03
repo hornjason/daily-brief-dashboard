@@ -13,14 +13,80 @@ echo "Installing git hooks..."
 
 cat > "$HOOKS_DIR/pre-push" << 'EOF'
 #!/usr/bin/env bash
-# Pre-push hook: Gate 1 — unit tests, type check, hero purity
+# Pre-push hook: verify-gate + Gate 1 (unit tests, type check, hero purity)
 # Skip with: git push --no-verify
 # Quick mode: QUICK_PUSH=1 git push (skips unit tests, keeps typecheck + hero purity)
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+PAI_WORK_DIR="${PAI_WORK_DIR:-$HOME/.pai-work}"
+
 FAILED=0
+
+echo ""
+echo "━━━ Verify Gate: Ship Verification Check ━━━"
+echo ""
+
+# Find most recent .ship-active marker by mtime
+LATEST_MARKER=""
+LATEST_MTIME=0
+
+if [ -d "$PAI_WORK_DIR" ]; then
+  for marker in "$PAI_WORK_DIR"/*/.ship-active; do
+    [ -f "$marker" ] || continue
+    if [ "$(uname)" = "Darwin" ]; then
+      MTIME=$(stat -f %m "$marker" 2>/dev/null || echo 0)
+    else
+      MTIME=$(stat -c %Y "$marker" 2>/dev/null || echo 0)
+    fi
+    if [ "$MTIME" -gt "$LATEST_MTIME" ]; then
+      LATEST_MTIME="$MTIME"
+      LATEST_MARKER="$marker"
+    fi
+  done
+fi
+
+if [ -n "$LATEST_MARKER" ]; then
+  MARKER_DIR="$(dirname "$LATEST_MARKER")"
+  VERIFY_FILE="$MARKER_DIR/verify-check.json"
+
+  if [ ! -f "$VERIFY_FILE" ]; then
+    echo "  PRE-PUSH BLOCKED: .ship-active found but verify-check.json missing."
+    echo ""
+    echo "   Ship marker: $LATEST_MARKER"
+    echo "   Expected:    $VERIFY_FILE"
+    echo ""
+    echo "   Run the verify gate before pushing (ship VERIFY creates verify-check.json)."
+    echo "   Skip with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+
+  FAIL_COUNT=$(grep -o '"fail"[[:space:]]*:[[:space:]]*[0-9]*' "$VERIFY_FILE" | grep -o '[0-9]*$' || echo "")
+  if [ -z "$FAIL_COUNT" ]; then
+    echo "  PRE-PUSH BLOCKED: verify-check.json exists but could not parse fail count."
+    echo ""
+    echo "   File: $VERIFY_FILE"
+    echo "   Skip with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+
+  if [ "$FAIL_COUNT" -gt 0 ]; then
+    echo "  PRE-PUSH BLOCKED: verify-check.json has $FAIL_COUNT failure(s)."
+    echo ""
+    echo "   File: $VERIFY_FILE"
+    echo "   Fix verification failures before pushing."
+    echo "   Skip with: git push --no-verify"
+    echo ""
+    exit 1
+  fi
+
+  echo "  Verify gate passed (0 failures)"
+else
+  echo "  No .ship-active marker found — skipping verify gate (non-ship commit)"
+fi
 
 echo ""
 echo "━━━ Gate 1: Pre-Push Checks ━━━"
