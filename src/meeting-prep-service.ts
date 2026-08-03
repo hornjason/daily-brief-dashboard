@@ -37,7 +37,13 @@ import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
 import { buildEnrichmentPromptContext, buildSalesAlignmentBlock } from './meeting-prep-enrichment.ts'
-import { templateAll } from './lib/signal-templates.ts'
+// templateAll is now called internally by the context orchestrator (#1033)
+import {
+  buildConsumerContext,
+  loadIntelligenceContext,
+  loadDriveDocsContext,
+  type ConsumerContext,
+} from './lib/context-orchestrator.ts'
 import { enrichMeetingSignals } from './lib/meeting-prep-signals.ts'
 import { readPlaybook } from './playbook-generator.ts'
 import { loadAndScoreTactics, formatScoredTacticsForPrompt, formatGraphDiffForPrompt, extractGraphDealSignals } from './lib/meeting-prep-graph-integration.ts'
@@ -1112,7 +1118,7 @@ export async function generateMeetingPrep(
     : ''
 
   // Intelligence cache — generate on-the-fly if missing, then poll until complete
-  let intelligenceContext = buildIntelligenceContext(slug)
+  let intelligenceContext = loadIntelligenceContext(slug)
   if (!intelligenceContext) {
     console.log(`[meeting-prep] Intelligence missing for ${customer.name} — generating on the fly...`)
     try {
@@ -1126,7 +1132,7 @@ export async function generateMeetingPrep(
         const job = getJobStatus(customer.name)
         if (job?.status === 'complete' || job?.status === 'complete_no_drive_folder' || job?.status === 'error') break
       }
-      intelligenceContext = buildIntelligenceContext(slug)
+      intelligenceContext = loadIntelligenceContext(slug)
       console.log(`[meeting-prep] Intelligence generated for ${customer.name} (${intelligenceContext.length} chars)`)
     } catch (e: any) {
       console.warn(`[meeting-prep] Intelligence generation failed for ${customer.name}:`, e?.message ?? e)
@@ -1180,106 +1186,10 @@ export async function generateMeetingPrep(
   let escalationContext = ''
 
   // ── Step 1a-2: Scan customer Drive folder + all-Drive meeting notes (#269, #1016) ──
-  let driveDocsContext = ''
-  let bvaContext = ''
-  try {
-    const customerFolderId = await findCustomerDriveFolder(customer)
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-
-    // Find docs modified since last prep (or last 14 days)
-    const lastPrepHistory = readHistory(slug)
-    const lastPrepDate = lastPrepHistory[0]?.generatedAt
-    const sinceDate = lastPrepDate
-      ? new Date(lastPrepDate)
-      : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
-
-    const recentDocs = await drive.files.list({
-      q: `'${customerFolderId}' in parents and mimeType = 'application/vnd.google-apps.document' and modifiedTime > '${sinceDate.toISOString()}' and trashed = false`,
-      fields: 'files(id,name,modifiedTime,webViewLink)',
-      pageSize: 10,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-
-    // Search ALL Drive for Gemini meeting notes mentioning this customer (transcripts, BVA notes, etc.)
-    // These auto-create in My Drive root, not the customer folder
-    const customerShortName = customer.name.split(/[,.]/, 1)[0].trim()
-    const geminiNotesQuery = `fullText contains '${customerShortName.replace(/'/g, "\\'")}' and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'application/vnd.google-apps.presentation') and (name contains 'Notes by Gemini' or name contains 'Business Value' or name contains 'kick off' or name contains 'transcript') and modifiedTime > '${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()}' and trashed = false`
-    let geminiNotes: any[] = []
-    try {
-      const notesRes = await drive.files.list({
-        q: geminiNotesQuery,
-        fields: 'files(id,name,modifiedTime,webViewLink,mimeType)',
-        pageSize: 10,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      geminiNotes = notesRes.data.files ?? []
-    } catch (e: any) {
-      console.warn(`[meeting-prep] Gemini notes search failed:`, e.message)
-    }
-
-    // Deduplicate by doc ID and merge
-    const seenIds = new Set<string>()
-    const allDocs = [...(recentDocs.data.files ?? []), ...geminiNotes].filter(d => {
-      if (seenIds.has(d.id!)) return false
-      seenIds.add(d.id!)
-      return true
-    })
-
-    if (allDocs.length > 0) {
-      const docTexts: string[] = []
-      const bvaTexts: string[] = []
-      for (const doc of allDocs.slice(0, 12)) {
-        try {
-          let text: string | null = null
-          if (doc.mimeType === 'application/vnd.google-apps.presentation') {
-            try {
-              const exported = await drive.files.export({ fileId: doc.id!, mimeType: 'text/plain' }, { responseType: 'text' })
-              text = typeof exported.data === 'string' ? exported.data : null
-            } catch { /* Slides export failed — skip */ }
-          } else {
-            text = await extractDocTextWithTabs(doc.id!, auth)
-          }
-          if (!text) continue
-          const isGeminiNote = geminiNotes.some(g => g.id === doc.id)
-          const isBVA = /business\s*value|bva|kick\s*off/i.test(doc.name ?? '')
-          let extracted: string
-          if (isGeminiNote) {
-            const summaryMatch = text.match(/Summary\n([\s\S]*?)(?=\n(?:Next steps|Details|Transcript|$))/i)
-            const nextStepsMatch = text.match(/Next steps\n([\s\S]*?)(?=\n(?:Details|Transcript|$))/i)
-            const summary = summaryMatch?.[1]?.trim() || ''
-            const nextSteps = nextStepsMatch?.[1]?.trim() || ''
-            if (summary || nextSteps) {
-              extracted = [summary ? `**Summary:** ${summary}` : '', nextSteps ? `**Next Steps:** ${nextSteps}` : ''].filter(Boolean).join('\n\n')
-            } else {
-              extracted = text.slice(0, 4000)
-            }
-          } else {
-            extracted = text.slice(0, 2000)
-          }
-          const label = isGeminiNote ? '(Gemini meeting notes)' : `(modified ${new Date(doc.modifiedTime!).toLocaleDateString()})`
-          const docEntry = `### ${doc.name} ${label}\n${extracted}`
-          if (isBVA) {
-            bvaTexts.push(docEntry)
-          } else {
-            docTexts.push(docEntry)
-          }
-        } catch { /* skip unreadable docs */ }
-      }
-      if (bvaTexts.length > 0) {
-        bvaContext = `## Business Value Assessment Context (CRITICAL — ground §1 and §4 in this)\n${bvaTexts.join('\n\n')}`
-        console.log(`[meeting-prep] BVA context: ${bvaTexts.length} docs extracted for ${customer.name}`)
-      }
-      if (docTexts.length > 0) {
-        driveDocsContext = `## Account Notes, Meeting Transcripts & Recent Documents\n${docTexts.join('\n\n')}`
-      }
-      console.log(`[meeting-prep] Drive scan: ${docTexts.length + bvaTexts.length} docs (${geminiNotes.length} Gemini notes, ${bvaTexts.length} BVA) for ${customer.name}`)
-    }
-  } catch (e: any) {
-    console.warn(`[meeting-prep] Drive folder scan failed for ${customer.name}:`, e.message)
-  }
+  // Extracted to context-orchestrator.ts — reusable across consumers
+  const driveResult = await loadDriveDocsContext(customer, slug)
+  let driveDocsContext = driveResult.driveDocsContext
+  let bvaContext = driveResult.bvaContext
 
   // ── Step 1b: Load additional data sources ──────────────────────────────
 
@@ -1526,12 +1436,24 @@ export async function generateMeetingPrep(
   // Raw signals pass through to templateAll() for deterministic sections.
   const allSignals = rawSignals
 
-  // Call templateAll — PRINCIPLES.md Layer 3 compliance
-  const templateResult = await templateAll(allSignals, accountTeam, {
-    format: 'meeting-prep',
-    productFilter: productSlugs.length > 0 ? productSlugs : undefined,
-    customerSlug: slug,
+  // Call templateAll via context orchestrator — PRINCIPLES.md Layer 3 compliance
+  // The orchestrator wraps templateAll internally and loads additional context.
+  // Pre-enriched signals + pre-loaded Drive docs are passed to avoid double-loading.
+  const consumerCtx = await buildConsumerContext({
+    customer,
+    consumerType: 'meeting-prep',
+    options: {
+      signals: allSignals,
+      productFilter: productSlugs.length > 0 ? productSlugs : undefined,
+      format: 'meeting-prep',
+      includeEmail: true,
+      includeIntelligence: true,
+      includeEngagementTimeline: true,
+      preloadedDriveDocs: { driveDocsContext, bvaContext },
+      preloadedIntelligence: intelligenceContext,
+    },
   })
+  const templateResult = consumerCtx.templateResult
 
   // ── Step 2d: Build evidence blocks from scored tactics + signals (#643) ──
   const evidenceBlocks = graphScoring.graphLoaded
@@ -1632,8 +1554,8 @@ export async function generateMeetingPrep(
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
-    // ── Build email intelligence — business context from email bodies (#1016) ──
-    const emailIntelligence = buildEmailIntelligence(slug)
+    // ── Email intelligence from orchestrator (#1016) ──
+    const emailIntelligence = consumerCtx.emailContext ?? ''
     if (emailIntelligence) {
       console.log(`[meeting-prep] Email intelligence: extracted business context from email threads`)
     }
@@ -1866,8 +1788,8 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     // ── Build recent interactions context (#426) ──────────────────────
     const recentInteractionsContext = buildRecentInteractionsContext(slug, carryForwardContext, driveDocsContext)
 
-    // ── Build email intelligence — business context from email bodies (#1016) ──
-    const emailIntelligence = buildEmailIntelligence(slug)
+    // ── Email intelligence from orchestrator (#1016) ──
+    const emailIntelligence = consumerCtx.emailContext ?? ''
     if (emailIntelligence) {
       console.log(`[meeting-prep] Email intelligence: extracted business context from email threads`)
     }
@@ -2072,38 +1994,9 @@ ${isRecurring ? `This is a RECURRING meeting (series ID: ${meeting.recurringEven
     }
   }
 
-  // ── Step 4b: Build Engagement Timeline (#1007) ─────────────────────────
-  const engagementTimeline = buildEngagementTimeline(slug)
-
-  // ── Step 4b-2: Extract organizer intent from email cache (#1016, §13.11) ──
-  let organizerIntent = ''
-  try {
-    const emailCachePath = resolve(CACHE_DIR, `${slug}-emails.json`)
-    if (existsSync(emailCachePath)) {
-      const emailData = JSON.parse(readFileSync(emailCachePath, 'utf-8'))
-      const emails = emailData.data || emailData || []
-      if (Array.isArray(emails)) {
-        // Skip calendar invites and auto-generated emails — find actual planning emails
-        const planningEmail = emails.find((e: any) => {
-          const subj = (e.subject || '').toLowerCase()
-          const from = (e.from || '').toLowerCase()
-          const isCalendarInvite = subj.startsWith('invitation:') || subj.startsWith('updated invitation:') || subj.startsWith('canceled event:')
-          const isAutoGenerated = from.includes('calendar-notification') || from.includes('gemini-notes')
-          if (isCalendarInvite || isAutoGenerated) return false
-          return subj.includes('next meeting') || subj.includes('next step') || subj.includes('agenda') || subj.includes('briefing') || subj.includes('planning') || (subj.includes('follow') && (subj.includes('up') || subj.includes('plan')))
-        })
-        if (planningEmail) {
-          let body = (planningEmail.bodyText || planningEmail.body || planningEmail.snippet || '').slice(0, 500)
-          // Strip email signatures and forwarded content
-          body = body.replace(/\n--\s*\n[\s\S]*/m, '').replace(/\nOn .* wrote:\s*\n[\s\S]*/m, '')
-          body = body.replace(/\n(Thanks|Best|Regards|Cheers),?\s*\n[\s\S]*/mi, '')
-          body = body.replace(/<https?:\/\/[^>]+>/g, '').replace(/\s{2,}/g, ' ')
-          const firstPara = body.split(/\n\n/)[0] || body
-          if (firstPara && firstPara.length > 20) organizerIntent = firstPara.replace(/\n+/g, ' ').trim()
-        }
-      }
-    }
-  } catch { /* email cache not available */ }
+  // ── Step 4b: Engagement Timeline + Organizer Intent from orchestrator (#1007, #1016) ──
+  const engagementTimeline = consumerCtx.engagementTimeline ?? []
+  const organizerIntent = consumerCtx.organizerContext ?? ''
 
   // Extract confirmed use cases from meeting-context signals
   const meetingContextSignals = allSignals.filter((s: any) => s.source === 'meeting-context')

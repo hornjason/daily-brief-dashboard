@@ -16,8 +16,7 @@ import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { toSlug } from './cache-layer.ts'
 import { callGemini } from './gemini-call.ts'
-import { getAccountTeam, toPromptContext } from './account-team.ts'
-import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { readSheetCache } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
 import { readProductLifecycleCache } from './product-lifecycle.ts'
@@ -26,7 +25,6 @@ import { getValueMap } from './value-map-loader.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { extractProductProofPoints } from './meeting-prep-enrichment.ts'
-import { templateAll } from './lib/signal-templates.ts'
 
 import type { Customer, SupportCase } from './types.ts'
 import type {
@@ -108,19 +106,26 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
 
   console.log(`[playbook] Generating playbook for ${customer.name} (${slug})`)
 
-  // ── Step 1: Load all data sources ─────────────────────────────────────
+  // ── Step 1: Load context via orchestrator ─────────────────────────────
 
+  const ctx = await buildConsumerContext({
+    customer,
+    consumerType: 'playbook',
+    options: {
+      includeEmail: true,
+      includeIntelligence: true,
+      includeDriveDocs: true,
+    },
+  })
+
+  // Load additional data sources not handled by orchestrator
   const [
-    signalResult,
-    teamMembers,
     subCache,
     allCases,
     lifecycleCache,
     productSummaries,
     expansionOpps,
   ] = await Promise.all([
-    loadCustomerSignals(slug, customer.name, { ensureFresh: true }),
-    Promise.resolve(getAccountTeam(customer)),
     Promise.resolve(readSheetCache(customer.name)),
     fetchCases({ includeAll: false }).catch(() => [] as SupportCase[]),
     Promise.resolve(readProductLifecycleCache()),
@@ -128,20 +133,7 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     Promise.resolve(getCachedExpansionOpportunities(slug)),
   ])
 
-  // Intelligence cache
-  let intelligenceContext = ''
-  try {
-    const intelPath = resolve(DATA_DIR, `cache/intelligence/${slug}.json`)
-    if (existsSync(intelPath)) {
-      const intelData = JSON.parse(readFileSync(intelPath, 'utf-8'))
-      if (intelData.company) intelligenceContext += `Company Intelligence:\n${intelData.company}\n\n`
-      if (intelData.industry) intelligenceContext += `Industry Analysis:\n${intelData.industry}\n\n`
-    }
-  } catch (e: any) {
-    console.warn(`[playbook] Could not load intelligence cache for ${slug}:`, e?.message)
-  }
-
-  // Account plan
+  // Account plan (not yet in orchestrator)
   let accountPlanContext = ''
   try {
     const planPath = resolve(DATA_DIR, `cache/intelligence/${slug}-account-plan.md`)
@@ -150,8 +142,8 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     }
   } catch { /* optional */ }
 
-  // Determine product slugs from subscriptions
-  const productSlugs = getProductSlugsFromSubscriptions(subCache)
+  // Use product slugs from orchestrator
+  const productSlugs = ctx.productSlugs
 
   // Per-product data
   const perProductData: Array<{
@@ -180,7 +172,7 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
 
   // ── Step 2: Build Gemini prompt ───────────────────────────────────────
 
-  const teamContext = toPromptContext(teamMembers)
+  const teamContext = ctx.teamContext
 
   // Load partner data
   const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../data/config')
@@ -198,11 +190,7 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     }
   } catch {}
 
-  const templateResult = await templateAll(signalResult.registrySignals, teamMembers, {
-    format: 'playbook',
-    maxNarrative: 40,
-    customerSlug: slug,
-  })
+  const templateResult = ctx.templateResult
 
   const subscriptionContext = subCache?.rows?.length
     ? subCache.rows.map(r => `${r.productDescription} — qty ${r.quantity}, ${r.status}${r.endDate ? `, ends ${r.endDate}` : ''}`).join('\n')
@@ -299,11 +287,11 @@ ${partnerContext || 'No partner data available.'}
 </partners>
 
 <deterministic_sections>
-${templateResult.deterministic || 'No deterministic signal data available.'}
+${ctx.signalContext || 'No deterministic signal data available.'}
 </deterministic_sections>
 
 <signals>
-${templateResult.narrativeContext || 'No signals available.'}
+${ctx.templateResult.narrativeContext || 'No signals available.'}
 </signals>
 
 <subscriptions>
@@ -323,7 +311,7 @@ ${expansionContext || 'No expansion analysis available.'}
 </expansion_analysis>
 
 <intelligence>
-${intelligenceContext || 'No intelligence cache available.'}
+${ctx.intelligenceContext || 'No intelligence cache available.'}
 </intelligence>
 
 <account_plan>
@@ -458,8 +446,8 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       nextExpected: p.nextExpected ?? undefined,
     }))
 
-  // Solution play snapshots from templateAll() (ADR-031: single data path)
-  const solutionPlaySnapshots = templateResult.structured.solutionPlays
+  // Solution play snapshots from orchestrator (ADR-031: single data path)
+  const solutionPlaySnapshots = ctx.templateResult.structured.solutionPlays
 
   // ── Step 5: Assemble PlaybookState ────────────────────────────────────
 
@@ -515,9 +503,9 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       subscriptions,
       cases,
       lifecycle,
-      teamMembers: teamMembers,
+      teamMembers: ctx.accountTeam,
       solutionPlays: solutionPlaySnapshots,
-      signalIntelligence: templateResult.deterministic || null,
+      signalIntelligence: ctx.signalContext || null,
     },
     sources: [
       {
@@ -875,30 +863,4 @@ For MEDDPICC: if the meeting notes provide evidence for any qualification field,
 }
 
 // ── Private helpers ─────────────────────────────────────────────────────────
-
-/**
- * Extract product slugs from subscription cache.
- * Same logic as getCustomerProductSlugs in meeting-prep-routes.ts.
- */
-function getProductSlugsFromSubscriptions(
-  subCache: { rows: Array<{ productDescription: string; [k: string]: any }> } | null
-): string[] {
-  if (!subCache?.rows) return []
-  try {
-    const nameToSlug: Record<string, string> = {
-      'openshift': 'ocp', 'rhel': 'rhel', 'enterprise linux': 'rhel',
-      'ansible': 'aap', 'satellite': 'satellite', 'quay': 'quay',
-      'openshift ai': 'rhoai', 'developer hub': 'rhdh',
-      'advanced cluster security': 'acs', 'advanced cluster management': 'acm',
-    }
-    const slugs: string[] = []
-    const productNames = [...new Set(subCache.rows.map(r => r.productDescription ?? '').filter(Boolean))]
-    for (const name of productNames) {
-      const lower = name.toLowerCase()
-      for (const [key, val] of Object.entries(nameToSlug)) {
-        if (lower.includes(key)) { slugs.push(val); break }
-      }
-    }
-    return [...new Set(slugs)]
-  } catch { return [] }
-}
+// (removed getProductSlugsFromSubscriptions — now handled by context orchestrator)

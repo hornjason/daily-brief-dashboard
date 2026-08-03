@@ -184,7 +184,7 @@ describe('Module contract compliance', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('Consumer contract compliance', () => {
-  test('all consumers import from signal-templates or signal-loader', () => {
+  test('all consumers import from signal-templates or signal-loader or context-orchestrator', () => {
     const violations: string[] = []
     for (const file of CONSUMER_FILES) {
       try {
@@ -192,9 +192,10 @@ describe('Consumer contract compliance', () => {
         const hasTemplateImport = /signal-templates/m.test(content)
         const hasLoaderImport = /signal-loader|ensureSignalsCurrent/m.test(content)
         const hasServiceImport = /campaign-service|meeting-prep-service/m.test(content)
+        const hasOrchestratorImport = /context-orchestrator/m.test(content)
         // Consumers that delegate to a service module are compliant
-        // Consumers that import signal-templates or signal-loader are compliant
-        if (!hasTemplateImport && !hasLoaderImport && !hasServiceImport) {
+        // Consumers that import signal-templates, signal-loader, or context-orchestrator are compliant
+        if (!hasTemplateImport && !hasLoaderImport && !hasServiceImport && !hasOrchestratorImport) {
           violations.push(file)
         }
       } catch { /* file might not exist */ }
@@ -237,7 +238,7 @@ describe('Consumer contract compliance', () => {
   test('customer.ts imports and calls getAccountTeam', () => {
     const content = readSrc('customer.ts')
     expect(content).toMatch(/import.*getAccountTeam/m)
-    expect(content).toContain('getAccountTeam(')
+    expect(content.includes('getAccountTeam(') || content.includes('buildConsumerContext(')).toBe(true)
   })
 
   test('customer.ts imports and calls validateAndRetry', () => {
@@ -431,6 +432,7 @@ function parseConsumerMapping(): Array<{
   file: string
   requiresTemplateAll: boolean
   templateAllPending: boolean
+  usesOrchestrator: boolean
 }> {
   const PROJECT_ROOT = resolve(import.meta.dir, '../..')
   const principles = readFileSync(resolve(PROJECT_ROOT, 'PRINCIPLES.md'), 'utf-8')
@@ -439,7 +441,7 @@ function parseConsumerMapping(): Array<{
   const tableEnd = principles.indexOf('\n## ', tableStart + 1)
   const section = principles.substring(tableStart, tableEnd > 0 ? tableEnd : undefined)
 
-  const rows: Array<{ name: string; file: string; requiresTemplateAll: boolean; templateAllPending: boolean }> = []
+  const rows: Array<{ name: string; file: string; requiresTemplateAll: boolean; templateAllPending: boolean; usesOrchestrator: boolean }> = []
   for (const line of section.split('\n')) {
     const match = line.match(/^\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/)
     if (!match) continue
@@ -449,11 +451,13 @@ function parseConsumerMapping(): Array<{
     if (name === 'Consumer' || name.startsWith('--')) continue
     if (!file.startsWith('src/')) continue
 
+    const usesOrchestrator = templateCol === 'orchestrator'
     rows.push({
       name,
       file,
       requiresTemplateAll: templateCol === '✅',
       templateAllPending: templateCol.includes('pending'),
+      usesOrchestrator,
     })
   }
   return rows
@@ -511,14 +515,15 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
     const violations: string[] = []
     for (const consumer of consumers) {
       if (!consumer.requiresTemplateAll) continue
+      if (consumer.usesOrchestrator) continue // orchestrator consumers use buildConsumerContext instead
       const filePath = resolve(PROJECT_ROOT, consumer.file)
       if (!existsSync(filePath)) {
         violations.push(`${consumer.name}: file ${consumer.file} not found`)
         continue
       }
       const content = readFileSync(filePath, 'utf-8')
-      if (!content.includes('templateAll')) {
-        violations.push(`${consumer.name} (${consumer.file}) does not call templateAll()`)
+      if (!content.includes('templateAll') && !content.includes('buildConsumerContext')) {
+        violations.push(`${consumer.name} (${consumer.file}) does not call templateAll() or buildConsumerContext()`)
       }
     }
     expect(violations).toEqual([])
@@ -533,6 +538,27 @@ describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
       }
     }
     expect(pending).toHaveLength(0)
+  })
+
+  test('orchestrator consumers call buildConsumerContext()', () => {
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+    const violations: string[] = []
+    for (const consumer of consumers) {
+      if (!consumer.usesOrchestrator) continue
+      const filePath = resolve(PROJECT_ROOT, consumer.file)
+      if (!existsSync(filePath)) {
+        violations.push(`${consumer.name}: file ${consumer.file} not found`)
+        continue
+      }
+      const content = readFileSync(filePath, 'utf-8')
+      if (!content.includes('buildConsumerContext')) {
+        violations.push(`${consumer.name} (${consumer.file}) marked as orchestrator but does not call buildConsumerContext()`)
+      }
+      if (!content.includes("from './lib/context-orchestrator")) {
+        violations.push(`${consumer.name} (${consumer.file}) marked as orchestrator but does not import from context-orchestrator`)
+      }
+    }
+    expect(violations).toEqual([])
   })
 
   test('no consumer imports individual template functions (Layer 3 violation)', () => {
@@ -1508,5 +1534,48 @@ describe('ADR-024: Quality gate — validateAndRetry in key consumers', () => {
     expect(existsSync(validatorsDir)).toBe(true)
     const files = readdirSync(validatorsDir).filter(f => f.endsWith('.ts'))
     expect(files.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 24. Context Orchestrator — buildConsumerContext wraps templateAll (#1033)
+//     Consumers that generate content should import from context-orchestrator,
+//     not directly assemble context from 11+ independent data sources.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Context orchestrator compliance (#1033)', () => {
+  test('context-orchestrator.ts exists and exports buildConsumerContext', () => {
+    const orchestratorPath = resolve(SRC_DIR, 'lib/context-orchestrator.ts')
+    expect(existsSync(orchestratorPath)).toBe(true)
+    const content = readFileSync(orchestratorPath, 'utf-8')
+    expect(content).toMatch(/export\s+async\s+function\s+buildConsumerContext/)
+  })
+
+  test('context-orchestrator.ts calls templateAll internally', () => {
+    const content = readSrc('lib/context-orchestrator.ts')
+    expect(content).toMatch(/templateAll\(/)
+  })
+
+  test('context-orchestrator.ts exports ConsumerContext type', () => {
+    const content = readSrc('lib/context-orchestrator.ts')
+    expect(content).toMatch(/export\s+interface\s+ConsumerContext/)
+  })
+
+  test('context-orchestrator.ts tracks provenance for loaded sources', () => {
+    const content = readSrc('lib/context-orchestrator.ts')
+    expect(content).toMatch(/provenance/)
+    expect(content).toMatch(/tokenEstimate/)
+  })
+
+  test('meeting-prep-service.ts imports from context-orchestrator', () => {
+    const content = readSrc('meeting-prep-service.ts')
+    expect(content).toMatch(/from\s+['"]\.\/lib\/context-orchestrator/)
+    expect(content).toMatch(/buildConsumerContext/)
+  })
+
+  test('meeting-prep-service.ts does NOT directly import templateAll', () => {
+    const content = readSrc('meeting-prep-service.ts')
+    const templateAllImport = content.match(/^import\s+\{[^}]*templateAll[^}]*\}\s+from/m)
+    expect(templateAllImport).toBeNull()
   })
 })

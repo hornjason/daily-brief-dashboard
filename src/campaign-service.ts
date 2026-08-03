@@ -33,7 +33,7 @@ import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts
 import { getAccountTeam } from './account-team.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
-import { templateAll } from './lib/signal-templates.ts'
+import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
@@ -595,11 +595,16 @@ export async function generateCampaign(
   const accountTeam = productFilter && productFilter.length > 0
     ? getAccountTeam(customer, { products: productFilter })
     : getAccountTeam(customer)
-  const templateResult = await templateAll(registrySignals, accountTeam, {
-    format: 'campaign',
-    productFilter: productFilter && productFilter.length > 0 ? productFilter : undefined,
-    customerSlug: slug,
+  // templateAll is now called internally by the context orchestrator (#1033)
+  const ctx = await buildConsumerContext({
+    customer,
+    consumerType: 'campaign',
+    options: {
+      signals: registrySignals,
+      productFilter: productFilter && productFilter.length > 0 ? productFilter : undefined,
+    },
   })
+  const templateResult = ctx.templateResult
 
   // 3b. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
@@ -853,11 +858,16 @@ export async function generateCampaignFromPlay(
   const accountTeam = playContext.products.length > 0
     ? getAccountTeam(customer, { products: playContext.products })
     : getAccountTeam(customer)
-  const templateResult = await templateAll(registrySignals, accountTeam, {
-    format: 'campaign',
-    productFilter: playContext.products.length > 0 ? playContext.products : undefined,
-    customerSlug: slug,
+  // templateAll is now called internally by the context orchestrator (#1033)
+  const ctx = await buildConsumerContext({
+    customer,
+    consumerType: 'campaign',
+    options: {
+      signals: registrySignals,
+      productFilter: playContext.products.length > 0 ? playContext.products : undefined,
+    },
   })
+  const templateResult = ctx.templateResult
 
   // Load voice profile
   let voiceInstruction = config?.style || ''

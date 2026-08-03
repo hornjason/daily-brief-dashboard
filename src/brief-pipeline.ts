@@ -3,8 +3,9 @@
 //
 // R23: The extraction system prompt + schema are identical across all customers.
 
-import { templateAll } from './lib/signal-templates.ts'
 import type { Signal as RegistrySignal } from './feature-module-registry.ts'
+import { buildConsumerContext, type ConsumerContext } from './lib/context-orchestrator.ts'
+import type { Customer } from './types.ts'
 // Gemini context caching would cache these as a cachedContent resource (24h TTL)
 // and reference by name in subsequent calls, reducing token costs 70-85%.
 // Implementation: create cached content via Vertex AI API on server start,
@@ -187,15 +188,29 @@ ITEMS TO SYNTHESIZE (pre-ranked, most important first):
 {ranked_items_json}
 </untrusted>`
 
-export function buildSynthesisPrompt(
+/**
+ * Build synthesis prompt using context orchestrator for Layer 1-3 assembly.
+ * Keeps brief-specific prompt logic for ranked items, meetings, and signal formatting.
+ */
+export async function buildSynthesisPrompt(
+  customer: Customer,
   rankedItems: RankedItem[],
   lastInteractionDate: string,
   dataGaps: string[],
   upcomingMeetings?: { title: string; start: string; attendees?: string[] }[],
-  intelligenceContext?: { company?: string; industry?: string },
   registrySignals?: Signal[],
-): string {
+): Promise<string> {
   const top15 = rankedItems.slice(0, 5)  // AI18-R3b: top 5 only (was 15 — fed too much noise to synthesis)
+
+  // Load context via orchestrator (Layer 1: signals + templateAll, Layer 2: intelligence)
+  const ctx = await buildConsumerContext({
+    customer,
+    consumerType: 'dashboard',
+    options: {
+      includeIntelligence: true,
+      signals: registrySignals,
+    },
+  })
 
   // BKL-AI22: Compute meetings within next 7 days for meeting-prep-first briefs
   const now = Date.now()
@@ -211,33 +226,35 @@ export function buildSynthesisPrompt(
     meetingContext = `\nUPCOMING MEETINGS (next 7 days):\n${meetingList}\n\nIMPORTANT: Lead with ## Meeting Prep (not ## What Changed). For each upcoming meeting, surface: open critical/high support cases to discuss, renewals expiring within 90 days, most recent email thread, at-risk or committed pipeline opportunities. Cross-reference each item from ITEMS TO SYNTHESIZE against these meetings.\n`
   }
 
-  // Intelligence context appended directly — bypasses extraction ranking so strategic
-  // signals (company pivot, leadership changes) always reach synthesis regardless of
-  // whether they ranked in the top 5 operational items.
-  // Cap intelligence for synthesis — extraction uses 3K+2K for delta signals;
-  // synthesis gets more (6K+4K) for background sections (Company Profile, Tech Landscape)
-  // but not the full 25K which overwhelms the model and breaks output.
+  // Intelligence context from orchestrator
   let intelContext = ''
-  if (intelligenceContext?.company || intelligenceContext?.industry) {
-    // Explicitly extend the FORMAT when intelligence is present — the model follows FORMAT
-    // strictly and ignores RULES-only mentions of Company Profile / Tech Landscape.
+  if (ctx.intelligenceContext) {
     intelContext = '\n\nADDITIONAL SECTIONS REQUIRED when ACCOUNT INTELLIGENCE is provided below:'
     intelContext += '\n\n## Company Profile\n- [strategic direction, leadership changes, AI/cloud pivots from intelligence]\n- [key business pressures or opportunities relevant to Red Hat]\n\n## Technology Landscape\n- [current tech stack, Red Hat product alignment]\n- [gaps or expansion opportunities]\n'
-    intelContext += '\n\nACCOUNT INTELLIGENCE (use for the Company Profile and Technology Landscape sections above):'
-    if (intelligenceContext.company) intelContext += `\n\n[Company Intelligence]\n<untrusted>${intelligenceContext.company.slice(0, 6000)}</untrusted>`
-    if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n<untrusted>${intelligenceContext.industry.slice(0, 4000)}</untrusted>`
+    intelContext += `\n\nACCOUNT INTELLIGENCE (use for the Company Profile and Technology Landscape sections above):\n<untrusted>${ctx.intelligenceContext}</untrusted>`
   }
 
-  // GitHub #176: Registry signals from news radar, lifecycle events, RSS
-  // Include top 10 highest-scored signals to supplement extraction items
+  // GitHub #176: Registry signals from context orchestrator
   let signalContext = ''
-  if (registrySignals && registrySignals.length > 0) {
-    const topSignals = registrySignals
+  if (ctx.signals.length > 0) {
+    const topSignals = ctx.signals
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
       .slice(0, 10)
       .map(s => `[${s.type}] ${s.headline} — ${s.detail.slice(0, 150)}${s.url ? ` (${s.url})` : ''}`)
       .join('\n')
     signalContext = `\n\nADDITIONAL INTELLIGENCE SIGNALS (from news radar, lifecycle events, RSS feeds):\n<untrusted>\n${topSignals}\n</untrusted>\n`
+  }
+
+  // Append deterministic sections from templateAll (via orchestrator)
+  let deterministicContext = ''
+  if (ctx.signalContext) {
+    deterministicContext = `\n\nDETERMINISTIC DATA SECTIONS (condense into the brief — do not dump raw):\n<untrusted>\n${ctx.signalContext.slice(0, 8000)}\n</untrusted>`
+  }
+
+  // Append account team context
+  let teamContextSection = ''
+  if (ctx.teamContext) {
+    teamContextSection = `\n\n${ctx.teamContext}`
   }
 
   return SYNTHESIS_PROMPT
@@ -247,4 +264,6 @@ export function buildSynthesisPrompt(
     + meetingContext
     + intelContext
     + signalContext
+    + deterministicContext
+    + teamContextSection
 }

@@ -798,22 +798,8 @@ export async function generateBrief(
       const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
       console.log(`[brief] Registry signals for ${customer.name}: ${registrySignals.length} signals collected`)
 
-      // Consumer contract v1.0: templateAll() BEFORE synthesis (#843)
-      // Deterministic sections passed as context so Gemini can condense them
-      const { templateAll } = await import('./lib/signal-templates.ts')
-      const accountTeam = getAccountTeam(customer)
-      const templateResult = await templateAll(registrySignals, accountTeam, { format: 'brief', customerSlug: toSlug(customer.name) })
-      console.log(`[brief] templateAll for ${customer.name}: ${templateResult.deterministic.length} chars deterministic context`)
-
-      // Build synthesis prompt with deterministic context and account team
-      const accountTeamContext = toPromptContext(accountTeam)
-      let synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext, registrySignals)
-      if (templateResult.deterministic) {
-        synthesisPrompt += `\n\nDETERMINISTIC DATA SECTIONS (condense into the brief — do not dump raw):\n<untrusted>\n${templateResult.deterministic.slice(0, 8000)}\n</untrusted>`
-      }
-      if (accountTeamContext) {
-        synthesisPrompt += `\n\n${accountTeamContext}`
-      }
+      // Build synthesis prompt with context orchestrator (replaces inline templateAll + intelligence loading)
+      let synthesisPrompt = await buildSynthesisPrompt(customer, ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, registrySignals)
 
       const generationStart = Date.now()
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
@@ -1025,15 +1011,14 @@ Keep total brief under 250 words.`
     } catch {
       fallbackBrief = fallbackResult.text // raw text fallback if JSON parse fails
     }
-    // Consumer contract v1.0: templateAll context in fallback path (#843)
-    const { templateAll: templateAllFallback } = await import('./lib/signal-templates.ts')
-    const customerSlugFallback = toSlug(customer.name)
-    const registrySignalsFallback = await FeatureModuleRegistry.collectAllSignals(customerSlugFallback)
-    const accountTeamFallback = getAccountTeam(customer)
-    const templateResultFallback = await templateAllFallback(registrySignalsFallback, accountTeamFallback, { format: 'brief', customerSlug: customerSlugFallback })
-    // Condense deterministic data into brief context instead of raw append
-    if (templateResultFallback.deterministic) {
-      fallbackBrief += `\n\n---\n\n${templateResultFallback.deterministic.slice(0, 4000)}`
+    // Consumer contract v1.0: context orchestrator for fallback path (#843, #1033)
+    const { buildConsumerContext } = await import('./lib/context-orchestrator.ts')
+    const fallbackCtx = await buildConsumerContext({
+      customer,
+      consumerType: 'dashboard',
+    })
+    if (fallbackCtx.signalContext) {
+      fallbackBrief += `\n\n---\n\n${fallbackCtx.signalContext.slice(0, 4000)}`
     }
     // Quality gate on fallback too
     const fallbackQuality = await validateAndRetry(

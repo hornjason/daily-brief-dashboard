@@ -28,8 +28,7 @@ import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { buildTodaysMeetings } from './lib/todays-meetings.ts'
 import { DISPLACEMENT_TARGETS } from './lib/motion-config.ts'
 import { loadGraph } from './lib/intelligence-graph.ts'
-import { loadCustomerSignals } from './lib/signal-loader.ts'
-import { templateAll } from './lib/signal-templates.ts'
+import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { validateAndRetry } from './gemini-quality-gate.ts'
 import { morningSummaryValidator } from './quality-validators/morning-summary-validator.ts'
 import { GROUNDING_RULES_BLOCK } from './lib/grounding-rules.ts'
@@ -641,20 +640,18 @@ export async function buildMorningSummary(customers: Customer[]) {
     ? `All clear across ${customers.length} accounts`
     : `${attentionCount} account${attentionCount !== 1 ? 's' : ''} need attention${criticalCount ? `, ${criticalCount} critical` : ''}`
 
-  // #786: Load templateAll deterministic sections for Gemini synthesis enrichment
+  // #786/#1033: Load signals via context orchestrator for Gemini synthesis enrichment
   let templateAllContext = ''
   try {
     const templateResults = await Promise.all(
       customers.slice(0, 10).map(async (cu) => {
-        const slug = toSlug(cu.name)
-        const { registrySignals } = await loadCustomerSignals(slug, cu.name, { ensureFresh: true })
-        const result = await templateAll(registrySignals, undefined, { format: 'brief' })
-        return result.deterministic ? `### ${cu.name}\n${result.deterministic}` : ''
+        const consumerCtx = await buildConsumerContext({ customer: cu, consumerType: 'dashboard' })
+        return consumerCtx.templateResult.deterministic ? `### ${cu.name}\n${consumerCtx.templateResult.deterministic}` : ''
       })
     )
     templateAllContext = templateResults.filter(Boolean).join('\n\n')
   } catch (e: any) {
-    console.warn('[dashboard-service] templateAll enrichment failed (non-fatal):', e.message)
+    console.warn('[dashboard-service] context orchestrator enrichment failed (non-fatal):', e.message)
   }
 
   // Gemini synthesis layer (BKL-AI27) — 4h cached

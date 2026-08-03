@@ -17,11 +17,10 @@ import { CACHE_DIR } from './lib/paths.ts'
 import { callGemini } from './gemini-call.ts'
 import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
 import { toSlug } from './cache-layer.ts'
-import { getOperatorProfile, getAccountTeam, toPromptContext } from './account-team.ts'
+import { getOperatorProfile } from './account-team.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
-import { loadCustomerSignals } from './lib/signal-loader.ts'
-import { templateAll } from './lib/signal-templates.ts'
+import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { validateAndRetry, formatFailureFeedback } from './gemini-quality-gate.ts'
 import { valuePositioningValidator } from './quality-validators/value-positioning-validator.ts'
 import { GROUNDING_RULES_BLOCK } from './lib/grounding-rules.ts'
@@ -356,22 +355,23 @@ export async function generateValuePositioning(
 
   let userPrompt = buildPositioningPrompt(customer.name, ctx)
 
-  // Account team context (AccountTeam contract — CLAUDE.md mandate)
-  const accountTeam = getAccountTeam(customer)
-  const teamContext = toPromptContext(accountTeam)
-  if (teamContext) {
-    userPrompt += `\n\n${teamContext}`
-  }
-
-  // #786: Supplement with templateAll deterministic sections
+  // Context orchestrator — loads signals, templateAll, account team, intelligence (#1033)
   try {
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
-    const templateResult = await templateAll(registrySignals, undefined, { format: 'brief' })
-    if (templateResult.deterministic) {
-      userPrompt += `\n\n--- Signal Context (structured) ---\n${templateResult.deterministic}`
+    const consumerCtx = await buildConsumerContext({
+      customer,
+      consumerType: 'value-positioning',
+    })
+    if (consumerCtx.teamContext) {
+      userPrompt += `\n\n${consumerCtx.teamContext}`
+    }
+    if (consumerCtx.signalContext) {
+      userPrompt += `\n\n--- Signal Context (structured) ---\n${consumerCtx.signalContext}`
+    }
+    if (consumerCtx.intelligenceContext) {
+      userPrompt += `\n\n--- Intelligence Context ---\n${consumerCtx.intelligenceContext}`
     }
   } catch (e: any) {
-    console.warn(`[value-positioning] templateAll enrichment failed (non-fatal): ${e.message}`)
+    console.warn(`[value-positioning] context orchestrator enrichment failed (non-fatal): ${e.message}`)
   }
 
   const geminiResult = await callGemini(SYSTEM_PROMPT, userPrompt, {

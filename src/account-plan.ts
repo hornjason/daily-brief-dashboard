@@ -21,11 +21,10 @@ import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { customers } from './server-state.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
-import { getOperatorProfile, getAccountTeam } from './account-team.ts'
+import { getOperatorProfile } from './account-team.ts'
 import { CONFIG_DIR } from './lib/paths.ts'
 import { callGemini } from './gemini-call.ts'
-import { loadCustomerSignals } from './lib/signal-loader.ts'
-import { templateAll } from './lib/signal-templates.ts'
+import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveTemplatePath } from './template-sync.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
@@ -533,16 +532,14 @@ export async function generateAccountPlan(
   const aeName = customer.ae ?? 'Account Executive'
   console.log(`[acct-plan] AE for ${customerDisplayName}: ${aeName}`)
 
-  // #786: Load templateAll deterministic sections for signal context enrichment
+  // #786/#1033: Load signals via context orchestrator
   let signalContext = ''
   let solutionPlaysContext = ''
   try {
-    const teamMembers = getAccountTeam(customer)
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
-    const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
+    const consumerCtx = await buildConsumerContext({ customer, consumerType: 'account-plan' })
+    const templateResult = consumerCtx.templateResult
     signalContext = templateResult.deterministic || ''
 
-    // ADR-040: Serialize solutionPlays into VERIFIED SOLUTION PLAYS section for grounding
     const structuredPlays = templateResult.structured?.solutionPlays ?? []
     if (structuredPlays.length > 0) {
       solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
@@ -557,7 +554,7 @@ export async function generateAccountPlan(
       }
     }
   } catch (e: any) {
-    console.warn(`[acct-plan] templateAll enrichment failed (non-fatal): ${e.message}`)
+    console.warn(`[acct-plan] context orchestrator enrichment failed (non-fatal): ${e.message}`)
   }
 
   // Assemble user prompt (same structure as validated in generate-test.ts)
@@ -784,12 +781,10 @@ export async function generateMidyearUpdate(
 
   let signalContext = ''
   try {
-    const teamMembers = getAccountTeam(customer)
-    const { registrySignals } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
-    const templateResult = await templateAll(registrySignals, teamMembers, { format: 'playbook' })
-    signalContext = templateResult.deterministic || ''
+    const consumerCtx = await buildConsumerContext({ customer, consumerType: 'account-plan' })
+    signalContext = consumerCtx.templateResult.deterministic || ''
   } catch (e: any) {
-    console.warn(`[midyear] templateAll enrichment failed (non-fatal): ${e.message}`)
+    console.warn(`[midyear] context orchestrator enrichment failed (non-fatal): ${e.message}`)
   }
 
   const existingPlan = readAccountPlan(slug, cacheDir)
