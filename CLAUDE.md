@@ -78,7 +78,7 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 ## Deploy
 
 - **Always `make rebuild`** — never raw podman/docker commands
-- **Primary DA runs `make rebuild`** from `/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/` after all changes are merged to main. Run it autonomously — do not ask Jason.
+- **Primary DA runs `make rebuild`** from `/Users/jhorn/projects/DailyBriefDashboard/` after all changes are merged to main. Run it autonomously — do not ask Jason.
 - **AGENTS: Never run `make rebuild`** — background/worktree agents verify with `curl` only. Worktree rebuilds use stale data/config and silently destroy in-flight changes. The Makefile enforces this with a worktree guard — `make build` exits 1 from a `.claude/worktrees/` path.
 - **One rebuild, at the end, from project root** — when multiple agents work in parallel, merge all changes to main first, then the primary DA runs one rebuild.
 - **After merging a worktree branch, verify `git status` is clean.** Uncommitted changes after a worktree merge are orphaned work — log as an issue, commit separately with its own scope, or discard. Never let orphaned changes accumulate in the working tree. Never commit orphaned changes mixed with new work.
