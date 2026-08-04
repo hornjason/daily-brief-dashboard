@@ -1,0 +1,59 @@
+name: "Bug Report"
+description: "Report something that isn't working correctly"
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a bug? Help us fix it by describing what happened.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: "What happened?"
+      description: "Describe the bug. What did you see?"
+      placeholder: "e.g., The renewal dates column shows 'undefined' for all accounts in POD 3..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect to happen?"
+      description: "What should it have done instead?"
+      placeholder: "e.g., Renewal dates should show actual dates from Salesforce..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce"
+      description: "How can we recreate the issue?"
+      placeholder: |
+        1. Go to the dashboard
+        2. Click on POD 3 tab
+        3. Look at the Renewals column
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "How bad is it?"
+      options:
+        - "Minor — cosmetic or low-impact"
+        - "Moderate — feature works but incorrectly"
+        - "Severe — feature is broken or unusable"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Screenshots or additional context"
+      description: "Paste screenshots, browser info, or anything else that helps."
+      placeholder: "Optional"
+    validations:
+      required: false

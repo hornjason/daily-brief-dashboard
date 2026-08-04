@@ -1,0 +1,61 @@
+name: "Feature Request"
+description: "Suggest a new feature or improvement for Daily Brief Dashboard"
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a feature! Fill out what you can —
+        the more context, the better, but don't stress about having all the answers.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What problem does this solve?"
+      description: "Describe the pain point or gap. What's frustrating, missing, or slow?"
+      placeholder: "e.g., I have to manually check three different portals to get a complete view of my accounts..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "What would the ideal solution look like?"
+      description: "Describe what you wish existed. Don't worry about technical feasibility."
+      placeholder: "e.g., A single dashboard tab that pulls case data alongside renewal dates..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: who-benefits
+    attributes:
+      label: "Who benefits from this?"
+      options:
+        - "Just me"
+        - "My team / pod"
+        - "All ASAs"
+        - "Customers (indirectly)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "How important is this to your workflow?"
+      options:
+        - "Nice to have — would save minor time"
+        - "Important — I work around this regularly"
+        - "Critical — this blocks or significantly slows my work"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Any additional context?"
+      description: "Screenshots, links, examples, related tools — anything that helps explain the idea."
+      placeholder: "Optional"
+    validations:
+      required: false
