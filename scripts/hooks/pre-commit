@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit hook: PROJECT-STATE.md check + ship-active enforcement
+# Pre-commit hook: PROJECT-STATE.md check + ship-active + sensitive data enforcement
 # Installed via: make install-hooks / setup-hooks.sh
 # Skip with: git commit --no-verify
 
@@ -63,6 +63,37 @@ if [ -n "$SRC_FILES" ]; then
     echo "   Source code commits require an active ship session (ship SCOPE creates .ship-active)."
     echo "   Marker location: \$PAI_WORK_DIR/*/.ship-active (checked: $PAI_WORK_DIR)"
     echo "   TTL: ${SHIP_ACTIVE_TTL_HOURS}h — markers older than ${SHIP_ACTIVE_TTL_HOURS}h are expired."
+    echo "   Skip with: git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+# --- Check 3: Sensitive data patterns in staged files ---
+
+STAGED_SRC=$(git diff --cached --name-only | grep -E '^src/.*\.(ts|tsx)$' | grep -v -E '\.(test|spec)\.(ts|tsx)$' || true)
+
+if [ -n "$STAGED_SRC" ]; then
+  SENSITIVE_RE='redhatcrm\.(lightning\.force|my\.salesforce)\.com|10ay\.online\.tableau\.com|account_number=[0-9]|rhn-gps-[a-z]|jhorn-pai|asa-command-center'
+  VIOLATIONS=""
+
+  while IFS= read -r file; do
+    MATCHES=$(git show ":$file" 2>/dev/null | grep -nE "$SENSITIVE_RE" || true)
+    if [ -n "$MATCHES" ]; then
+      VIOLATIONS="${VIOLATIONS}  ${file}:
+$(echo "$MATCHES" | sed 's/^/    /')
+"
+    fi
+  done <<< "$STAGED_SRC"
+
+  if [ -n "$VIOLATIONS" ]; then
+    echo ""
+    echo "PRE-COMMIT BLOCKED: Sensitive data patterns found in staged files."
+    echo ""
+    echo "$VIOLATIONS"
+    echo "   Pattern categories: org URLs, account IDs, personal usernames, env var fallbacks"
+    echo "   Use environment variables instead of hardcoded values."
+    echo "   Test files (*.test.ts, *.spec.ts) are allowlisted."
     echo "   Skip with: git commit --no-verify"
     echo ""
     exit 1
