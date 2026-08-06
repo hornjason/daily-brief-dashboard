@@ -96,6 +96,28 @@ graph LR
 
 26 route files at `src/*-routes.ts` using Hono framework. Localhost-only, no auth middleware. Each route file uses `createRouter()` and is registered in `server.ts`. See `PROJECT-STATE.md` for full endpoint inventory.
 
+### Data Hygiene
+
+Zero real data in source or committed config (ADR-042). Five zero-rules govern every commit:
+
+| Rule | What it prohibits |
+|------|-------------------|
+| Zero org-specific URLs | Salesforce instance URLs, internal dashboard links, Tableau endpoints |
+| Zero real customer data | Real customer names, account IDs in source or test fixtures |
+| Zero personal identifiers | Real email addresses, team member names, phone numbers |
+| Zero hardcoded credentials | API keys, tokens, passwords, service account paths |
+| Zero infrastructure IDs | Google Drive folder IDs, Slack channel IDs, internal hostnames |
+
+**Enforcement stack:**
+
+| Layer | Mechanism | Trigger |
+|-------|-----------|---------|
+| Pre-commit hook | `scripts/hooks/pre-commit` — scans staged files for sensitive patterns | Every commit |
+| Control Plane scanner | `scanSensitiveData()` — audits full codebase | On demand + scheduled |
+| Architecture compliance | `architecture-compliance.test.ts` — verifies no regressions | Every `bun test` |
+
+**Config pattern:** Real config files are `.gitignore`d. Committed `-example` templates document required fields with placeholder values. Reference: `docs/adr/ADR-042-data-hygiene.md`, `PRINCIPLES.md` Q23.
+
 ---
 
 ## Known Gaps
@@ -132,7 +154,7 @@ graph LR
 | Drive / L3 sync | `ARCHITECTURE.md` §3a, §6, `docs/DATA-INGESTION-ARCHITECTURE.md` |
 | Tests | `docs/TESTING-RUNBOOK.md`, `test/unit/architecture-compliance.test.ts` |
 | Deploy | `CLAUDE.md` (Deploy section), `Makefile` |
-| New feature | `PRINCIPLES.md` (22 pre-flight questions), `docs/MODULE-DEVELOPER-GUIDE.md` |
+| New feature | `PRINCIPLES.md` (23 pre-flight questions), `docs/MODULE-DEVELOPER-GUIDE.md` |
 | ADRs | `docs/adr/`, `PRINCIPLES.md` (ADR → PRINCIPLES enforcement) |
 | UI / React | `PROJECT-STATE.md`, `dashboard/src/` |
 

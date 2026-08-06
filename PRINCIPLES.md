@@ -86,6 +86,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 20. **Does this module use a handcrafted mapping file?** (ADR-038) If yes, verify the same data is available from a dynamic source (product pages, API, scraper). Handcrafted files are fallbacks, not primary sources. New modules MUST NOT introduce new handcrafted mapping files — use dynamic sources from Day 1. Reference: `docs/adr/ADR-038-dynamic-matching-replaces-handcrafted-mappings.md`.
 21. **Does this consumer use responseSchema with strict grounding?** (ADR-040) Every consumer that calls Gemini for content generation MUST use `responseSchema` with `nullable: true` on data-dependent fields, a strict grounding instruction block in the system prompt, and `temperature <= 0.3`. Field descriptions must reference specific data sections in the prompt. Reference: `docs/adr/ADR-040-universal-structured-output.md`.
 22. **Does this module enrich SalesHub documents?** (ADR-041) Every module that enriches SalesHub product documents MUST use the universal `DocumentIntelligence` schema with `responseSchema` (ADR-040). Extraction must populate `productsReferenced`, and at least one of `integrationsReferenced`, `useCases`, `competitorsReferenced`, or `partnerSolutions`. Post-extraction resolution against vocabulary modules (`product-vocabulary.ts`, `competitive-vocabulary.ts`, `ecosystem-catalog.ts`) is mandatory — never ask Gemini to resolve to canonical slugs. Reference: `docs/adr/ADR-041-structured-document-intelligence.md`.
+23. **Does this change introduce any org-specific URLs, real customer data, personal identifiers, or hardcoded credentials?** (ADR-042) Zero real data in source or committed config. All org-specific URLs, customer names, email addresses, API keys, and infrastructure IDs must come from environment variables or `.env` files (`.gitignore`d). Test fixtures use synthetic data only (`acme-corp`, `user@example.com`). Config files with real values are `.gitignore`d; committed `-example` templates document required fields with placeholders. Enforcement: pre-commit hook (`scripts/hooks/pre-commit`), Control Plane scanner (`scanSensitiveData()`), `architecture-compliance.test.ts`. Reference: `docs/adr/ADR-042-data-hygiene.md`.
 
 ## Vocabulary Resolver Rule (MANDATORY)
 
@@ -415,6 +416,7 @@ Every ADR in `docs/adr/` must include these sections:
 | 16 | ADR-035 | Signal routing: every module routes to a named section |
 | 17 | ADR-037 | cacheTtlMs for heartbeat visibility + no empty cache as fresh |
 | 22 | ADR-041 | SalesHub document enrichment uses DocumentIntelligence schema |
+| 23 | ADR-042 | Data hygiene: no org-specific data in source |
 
 ## Signal Scoring Quick Reference (ADR-027)
 
