@@ -68,6 +68,7 @@ graph LR
 ## Module Registry Snapshot
 
 <!-- ASSERTION: grep("schedulerRegistry.register", "src/background-scheduler.ts") -->
+<!-- ASSERTION: count("src/*-routes.ts") == 26 -->
 
 | Category | Count | Location |
 |---|---|---|
@@ -78,6 +79,22 @@ graph LR
 | Consumers | 8 | See `PRINCIPLES.md` Consumer → File table |
 | Grounding rules | 6 | `src/lib/grounding-rules.ts` |
 | Route files | 26 | `src/*-routes.ts` |
+
+### Scheduler Tasks
+
+11 registered tasks via `schedulerRegistry.register()` in `src/background-scheduler.ts`. Each task has a cron expression, handler function, and optional dependencies. Registry contract defined in `src/scheduler-registry.ts` (ADR-028).
+
+### Consumer Context Pipeline
+
+8 consumers use `buildConsumerContext()` from `src/lib/context-orchestrator.ts`. Each consumer calls `templateAll()` for deterministic signal assembly, then passes through quality validators. Consumer defaults defined in `CONSUMER_DEFAULTS` (context-orchestrator.ts). See `PRINCIPLES.md` Consumer table for the full list.
+
+### Quality Validators
+
+16 validators in `src/quality-validators/*.ts`. Each validator runs on consumer output before caching. Validators enforce output quality: section count, content presence, formatting rules, and domain-specific checks (ADR-024).
+
+### Route Files and API Surface
+
+26 route files at `src/*-routes.ts` using Hono framework. Localhost-only, no auth middleware. Each route file uses `createRouter()` and is registered in `server.ts`. See `PROJECT-STATE.md` for full endpoint inventory.
 
 ---
 
