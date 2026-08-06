@@ -1,0 +1,48 @@
+{
+  "scanScope": {
+    "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.json", "**/*.md", "**/*.yaml", "**/*.yml", "**/*.sh", "**/*.env*", "**/Dockerfile*", "**/docker-compose*"],
+    "exclude": ["node_modules", ".git", "dist", "build", "cache", ".claude", ".bun", "test-results", "dashboard/node_modules", "dashboard/dist"]
+  },
+  "blockedUrls": [
+    "redhatcrm.lightning.force.com",
+    "10ay.online.tableau.com",
+    "redhatcrm.my.salesforce.com"
+  ],
+  "blockedNames": [
+    "Carolanne Farrell",
+    "Elmer Alvarez",
+    "Gabe Deupree",
+    "Jeff Winn",
+    "Duy Pham",
+    "Michael Wilson",
+    "rhn-gps-jhorn"
+  ],
+  "blockedIds": [
+    { "pattern": "account_number=901532", "label": "real-account" },
+    { "pattern": "\\b00[A-Z][A-Za-z0-9]{12,15}\\b", "label": "sfdc-record-id" }
+  ],
+  "envFallbackPatterns": [
+    "jhorn-pai",
+    "asa-command-center",
+    "rhn-gps-jhorn"
+  ],
+  "credentialFiles": [
+    "config/gcp-oauth.keys.json",
+    "config/.gdrive-server-credentials.json",
+    "config/.google-token.json",
+    "config/.rh-session.json"
+  ],
+  "internalDomains": [
+    "source.redhat.com",
+    "ecosystems.us",
+    "catalog.demo.redhat.com",
+    "content.redhat.com"
+  ],
+  "vendorResourceIds": [
+    { "name": "google-drive", "pattern": "(?:docs|drive)\\.google\\.com\\/(?:spreadsheets|document|presentation|file|drive)\\/d\\/[A-Za-z0-9_-]{25,}" }
+  ],
+  "configDataFiles": [
+    { "path": "config/customers.json", "realDataPattern": "\\d{5,8}" }
+  ],
+  "allowlist": ["*.test.ts", "*.spec.ts"]
+}
