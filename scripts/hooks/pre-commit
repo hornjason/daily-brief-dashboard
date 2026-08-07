@@ -74,7 +74,7 @@ fi
 STAGED_SRC=$(git diff --cached --name-only | grep -E '^src/.*\.(ts|tsx)$' | grep -v -E '\.(test|spec)\.(ts|tsx)$' || true)
 
 if [ -n "$STAGED_SRC" ]; then
-  SENSITIVE_RE='redhatcrm\.(lightning\.force|my\.salesforce)\.com|10ay\.online\.tableau\.com|account_number=[0-9]|rhn-gps-[a-z]|jhorn-pai|asa-command-center'
+  SENSITIVE_RE='redhatcrm\.(lightning\.force|my\.salesforce)\.com|10ay\.online\.tableau\.com|account_number=[0-9]|rhn-gps-[a-z]|jhorn-pai|asa-command-center|AKIA[0-9A-Z]{16}|(sk-|ghp_|ghs_|xoxb-|xoxp-|sk_live_|rk_live_)[A-Za-z0-9]{10,}|BEGIN.*PRIVATE KEY|(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
   VIOLATIONS=""
 
   while IFS= read -r file; do
@@ -91,7 +91,9 @@ $(echo "$MATCHES" | sed 's/^/    /')
     echo "PRE-COMMIT BLOCKED: Sensitive data patterns found in staged files."
     echo ""
     echo "$VIOLATIONS"
-    echo "   Pattern categories: org URLs, account IDs, personal usernames, env var fallbacks"
+    echo "   Pattern categories: org URLs, account IDs, personal usernames, env var fallbacks,"
+    echo "     AWS access keys (AKIA), provider tokens (sk-/ghp_/xoxb-), private keys,"
+    echo "     connection strings (postgres://), JWT tokens (eyJ)"
     echo "   Use environment variables instead of hardcoded values."
     echo "   Test files (*.test.ts, *.spec.ts) are allowlisted."
     echo "   Skip with: git commit --no-verify"

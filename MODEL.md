@@ -116,6 +116,20 @@ Zero real data in source or committed config (ADR-042). Five zero-rules govern e
 | Control Plane scanner | `scanSensitiveData()` — audits full codebase | On demand + scheduled |
 | Architecture compliance | `architecture-compliance.test.ts` — verifies no regressions | Every `bun test` |
 
+### Universal Check Categories
+
+Beyond the five zero-rules, the enforcement stack detects these universal categories:
+
+| # | Category | Enforcement | Example Pattern |
+|---|----------|-------------|-----------------|
+| 1 | API keys and provider tokens | Hook + Scanner | `AKIA...`, `sk-...`, `ghp_...`, `sk_live_...`, `xoxb-...` |
+| 2 | Private keys and certificates | Hook + Scanner | `BEGIN PRIVATE KEY`, `.pem`, `.p12` |
+| 3 | Database connection strings | Hook + Scanner | `postgres://user:pass@host`, `mongodb://...` |
+| 4 | JWT tokens | Hook + Scanner | `eyJhbG...` (Base64-encoded JSON header) |
+| 5 | Private/internal IP addresses | Scanner only | `10.x.x.x`, `172.16.x.x`, `192.168.x.x` |
+| 6 | Email addresses | Scanner only | Real addresses (non-`@example.com`) |
+| 7 | Internal hostnames | Scanner only | `.internal`, `.local`, `.corp`, `.lan` |
+
 **Config pattern:** Real config files are `.gitignore`d. Committed `-example` templates document required fields with placeholder values. Reference: `docs/adr/ADR-042-data-hygiene.md`, `PRINCIPLES.md` Q23.
 
 ---

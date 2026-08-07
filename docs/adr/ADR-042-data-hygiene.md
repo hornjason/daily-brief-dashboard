@@ -92,6 +92,22 @@ const API_KEY = process.env.API_KEY
 
 No Google Drive folder IDs, Slack channel IDs, internal hostnames, or infrastructure-specific identifiers in source. These go in environment variables or `config-example` files with placeholder values.
 
+### Universal Check Categories
+
+The enforcement stack detects these universal categories of sensitive data across all file types. Each category has patterns in the pre-commit hook and/or the Control Plane scanner.
+
+| # | Category | Examples | Hook Pattern |
+|---|----------|----------|--------------|
+| 1 | API keys and provider tokens | AWS (`AKIA...`), OpenAI (`sk-...`), GitHub (`ghp_...`), Stripe (`sk_live_...`), Slack (`xoxb-...`) | `AKIA[0-9A-Z]{16}`, `(sk-\|ghp_\|xoxb-)...` |
+| 2 | Private keys and certificates | PEM files, PKCS#12, JKS keystores | `BEGIN.*PRIVATE KEY` |
+| 3 | Database connection strings | PostgreSQL, MySQL, MongoDB, Redis URIs with embedded credentials | `(postgres\|mysql\|mongodb\|redis)://user:pass@host` |
+| 4 | JWT tokens | Bearer tokens, session tokens, OAuth access tokens | `eyJ[A-Za-z0-9_-]{10,}\.eyJ...` |
+| 5 | Private/internal IP addresses | RFC 1918 ranges (10.x, 172.16-31.x, 192.168.x) | Scanner pattern — not in hook |
+| 6 | Email addresses | Real addresses (non-`@example.com` domains) | Scanner pattern — not in hook |
+| 7 | Internal hostnames | `.internal`, `.local`, `.corp`, `.lan` suffixes | Scanner pattern — not in hook |
+
+Categories 1-4 are enforced by both the pre-commit hook and the scanner. Categories 5-7 are scanner-only (lower false-positive risk in hook context).
+
 ### Configuration Template Pattern
 
 For config files that require structure but not real values, maintain a `-example` template:

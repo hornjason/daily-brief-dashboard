@@ -76,6 +76,16 @@ data-test/
 # Seed data source (committed — canonical test fixtures)
 # scripts/seed-data/ is intentionally tracked
 
+# Credential files — never commit (ADR-042)
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*credentials*.json
+*secret*.json
+*token*.json
+
 # Build artifacts and test outputs
 demo-image.tar
 demo-export.tar.gz
