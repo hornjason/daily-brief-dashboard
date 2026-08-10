@@ -1776,3 +1776,65 @@ describe('Doc assertions — content matches code reality', () => {
     expect(exitCode).toBe(0)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 28. ENFORCEMENT REGISTRY COMPLIANCE (#175)
+//     Every enforcement component (test, hook, gate, validator) must be
+//     registered in EnforcementRegistry for pattern consistency tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Enforcement registry compliance (#175)', () => {
+  test('EnforcementRegistry exists and has expected component count', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+
+    // Expected: 12+ enforcement components across 5 types (test, hook, gate, lint, validator)
+    expect(components.length).toBeGreaterThanOrEqual(12)
+  })
+
+  test('EnforcementRegistry components have all required fields', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+
+    const violations: string[] = []
+    for (const component of components) {
+      if (!component.name) violations.push(`Component missing name: ${component.filePath}`)
+      if (!component.type) violations.push(`${component.name}: missing type`)
+      if (!component.filePath) violations.push(`${component.name}: missing filePath`)
+      if (!component.description) violations.push(`${component.name}: missing description`)
+      if (!['test', 'hook', 'gate', 'lint', 'validator'].includes(component.type)) {
+        violations.push(`${component.name}: invalid type "${component.type}"`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('EnforcementRegistry components reference existing files', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+
+    const missing: string[] = []
+    for (const component of components) {
+      const fullPath = resolve(PROJECT_ROOT, component.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${component.name}: file not found at ${component.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('EnforcementRegistry has all 5 types represented', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+
+    const testComponents = EnforcementRegistry.byType('test')
+    const hookComponents = EnforcementRegistry.byType('hook')
+    const gateComponents = EnforcementRegistry.byType('gate')
+    const validatorComponents = EnforcementRegistry.byType('validator')
+
+    expect(testComponents.length).toBeGreaterThan(0)
+    expect(hookComponents.length).toBeGreaterThan(0)
+    expect(gateComponents.length).toBeGreaterThan(0)
+    expect(validatorComponents.length).toBeGreaterThan(0)
+  })
+})
