@@ -979,6 +979,104 @@ describe('ADR implementation tracking', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 26. DATA INGESTION REGISTRY COMPLIANCE (#173)
+//     Every data ingestion component (cache, Drive sync, scraper) must be
+//     registered in DataIngestionRegistry for architecture compliance tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Data ingestion registry compliance (#173)', () => {
+  test('DataIngestionRegistry exists and has expected component count', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    // Expected: 32 components across 4 tiers (cache-layer, drive-sync, scraper, bootstrap)
+    expect(components.length).toBeGreaterThanOrEqual(30)
+  })
+
+  test('DataIngestionRegistry matches actual file count', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const registered = DataIngestionRegistry.count()
+
+    // Count actual data ingestion files in src/
+    const ingestionFiles = readdirSync(SRC_DIR)
+      .filter(f =>
+        (f.includes('cache') || f.includes('sync') || f.includes('drive') ||
+         f.includes('scraper') || f.includes('ingest')) &&
+        f.endsWith('.ts') && !f.endsWith('.test.ts')
+      )
+
+    // Count files in lib/ and bootstrap/ subdirs
+    const libIngestionFiles = existsSync(resolve(SRC_DIR, 'lib'))
+      ? readdirSync(resolve(SRC_DIR, 'lib'))
+          .filter(f =>
+            (f.includes('cache') || f.includes('sync') || f.includes('drive')) &&
+            f.endsWith('.ts') && !f.endsWith('.test.ts')
+          )
+      : []
+
+    const bootstrapIngestionFiles = existsSync(resolve(SRC_DIR, 'bootstrap'))
+      ? readdirSync(resolve(SRC_DIR, 'bootstrap'))
+          .filter(f => f.includes('cache') && f.endsWith('.ts'))
+      : []
+
+    const bootstrapStepsIngestionFiles = existsSync(resolve(SRC_DIR, 'bootstrap/steps'))
+      ? readdirSync(resolve(SRC_DIR, 'bootstrap/steps'))
+          .filter(f => f.includes('drive') && f.endsWith('.ts'))
+      : []
+
+    const totalFiles = ingestionFiles.length + libIngestionFiles.length +
+                      bootstrapIngestionFiles.length + bootstrapStepsIngestionFiles.length
+
+    // Registered count should match discovered file count (±2 tolerance for utilities)
+    expect(Math.abs(registered - totalFiles)).toBeLessThanOrEqual(2)
+  })
+
+  test('DataIngestionRegistry components have all required fields', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    const violations: string[] = []
+    for (const component of components) {
+      if (!component.name) violations.push(`Component missing name: ${component.filePath}`)
+      if (!component.tier) violations.push(`${component.name}: missing tier`)
+      if (!component.filePath) violations.push(`${component.name}: missing filePath`)
+      if (!['cache-layer', 'drive-sync', 'scraper', 'bootstrap'].includes(component.tier)) {
+        violations.push(`${component.name}: invalid tier "${component.tier}"`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('DataIngestionRegistry components reference existing files', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    const missing: string[] = []
+    for (const component of components) {
+      const fullPath = resolve(SRC_DIR, component.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${component.name}: file not found at ${component.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('DataIngestionRegistry has all 4 tiers represented', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+
+    const cacheLayerComponents = DataIngestionRegistry.byTier('cache-layer')
+    const driveSyncComponents = DataIngestionRegistry.byTier('drive-sync')
+    const scraperComponents = DataIngestionRegistry.byTier('scraper')
+    const bootstrapComponents = DataIngestionRegistry.byTier('bootstrap')
+
+    expect(cacheLayerComponents.length).toBeGreaterThan(0)
+    expect(driveSyncComponents.length).toBeGreaterThan(0)
+    expect(scraperComponents.length).toBeGreaterThan(0)
+    expect(bootstrapComponents.length).toBeGreaterThan(0)
+  })
+})
+
 // ── ADR Governance: proposed ADR drift detection (#885) ───────────────────────
 // Proposed ADRs older than 30 days must have a GitHub tracking issue.
 // Known-good baseline prevents false positives for tracked ADRs.
