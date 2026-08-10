@@ -17,7 +17,7 @@ Read this file first. Follow doc routing table for deeper detail.
 
 <!-- ASSERTION: count("src/modules/*-module.ts") == 35 -->
 <!-- ASSERTION: count("src/quality-validators/*.ts") == 16 -->
-<!-- ASSERTION: count("docs/adr/ADR-*.md") == 26 -->
+<!-- ASSERTION: count("docs/adr/ADR-*.md") == 27 -->
 <!-- ASSERTION: file_exists("src/lib/context-orchestrator.ts") -->
 <!-- ASSERTION: file_exists("src/lib/grounding-rules.ts") -->
 <!-- ASSERTION: grep("GROUNDING_RULES_BLOCK", "src/lib/grounding-rules.ts") -->
@@ -74,7 +74,7 @@ graph LR
 |---|---|---|
 | Feature modules | 35 | `src/modules/*-module.ts` |
 | Quality validators | 16 | `src/quality-validators/*.ts` |
-| ADRs (active) | 26 | `docs/adr/ADR-*.md` |
+| ADRs (active) | 27 | `docs/adr/ADR-*.md` |
 | Scheduled tasks | 11 | `src/background-scheduler.ts` |
 | Consumers | 8 | See `PRINCIPLES.md` Consumer → File table |
 | Grounding rules | 6 | `src/lib/grounding-rules.ts` |
