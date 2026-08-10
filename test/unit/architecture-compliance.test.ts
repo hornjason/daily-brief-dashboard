@@ -1529,11 +1529,31 @@ describe('ADR-024: Quality gate — validateAndRetry in key consumers', () => {
     expect(content).toMatch(/export\s+(async\s+)?function\s+validateAndRetry/)
   })
 
-  test('quality-validators directory exists with validators', () => {
+  test('quality-validators directory has exact count and barrel exports', () => {
     const validatorsDir = resolve(SRC_DIR, 'quality-validators')
     expect(existsSync(validatorsDir)).toBe(true)
-    const files = readdirSync(validatorsDir).filter(f => f.endsWith('.ts'))
-    expect(files.length).toBeGreaterThanOrEqual(1)
+
+    // Count validator implementation files (exclude index.ts and type files)
+    const validatorFiles = readdirSync(validatorsDir).filter(f =>
+      f.endsWith('-validator.ts')
+    )
+    expect(validatorFiles.length).toBe(16)
+
+    // Verify index.ts exports exactly 19 validators
+    const indexPath = resolve(validatorsDir, 'index.ts')
+    const indexContent = readFileSync(indexPath, 'utf-8')
+    const validatorExports = (indexContent.match(/\w+Validator/g) || []).filter(name =>
+      !name.includes('Quality') // Exclude QualityValidator type
+    )
+    expect(validatorExports.length).toBe(19)
+
+    // Verify each validator export matches QualityValidator interface pattern
+    for (const validatorFile of validatorFiles) {
+      const content = readFileSync(resolve(validatorsDir, validatorFile), 'utf-8')
+      // Each validator file should export function(s) returning QualityValidator
+      expect(content).toMatch(/export\s+(const|function)/)
+      expect(content).toMatch(/QualityValidator/)
+    }
   })
 })
 
