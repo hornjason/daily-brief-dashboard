@@ -1077,6 +1077,62 @@ describe('Data ingestion registry compliance (#173)', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 27. ROUTE REGISTRY COMPLIANCE (#174)
+//     API Surface routes must be registered in RouteRegistry for pattern
+//     consistency enforcement and architecture compliance tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Route registry compliance (#174)', () => {
+  test('RouteRegistry exists and has 26 registered routes', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    expect(routes.length).toBe(26)
+  })
+
+  test('every registered route file exists in src/', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const missing: string[] = []
+
+    for (const route of routes) {
+      const fullPath = resolve(SRC_DIR, route.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${route.name}: file not found at ${route.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('every route file imports from hono framework', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const violations: string[] = []
+
+    for (const route of routes) {
+      const content = readSrc(route.filePath)
+      if (!content.includes("from 'hono'") && !content.includes('from "hono"')) {
+        violations.push(`${route.name} (${route.filePath}) does not import from 'hono'`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('RouteRegistry components have all required fields', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const violations: string[] = []
+
+    for (const route of routes) {
+      if (!route.name) violations.push(`Route missing name: ${route.filePath}`)
+      if (!route.filePath) violations.push(`${route.name}: missing filePath`)
+      if (!route.methods) violations.push(`${route.name}: missing methods`)
+      if (!route.description) violations.push(`${route.name}: missing description`)
+    }
+    expect(violations).toEqual([])
+  })
+})
+
 // ── ADR Governance: proposed ADR drift detection (#885) ───────────────────────
 // Proposed ADRs older than 30 days must have a GitHub tracking issue.
 // Known-good baseline prevents false positives for tracked ADRs.
