@@ -1,6 +1,6 @@
 {
   "name": "daily-brief-dashboard",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "type": "module",
   "scripts": {
     "dev": "bun --watch server.ts",
@@ -20,6 +20,7 @@
     "@langfuse/tracing": "^5.9.1",
     "@opentelemetry/sdk-node": "^0.219.0",
     "fflate": "^0.8.3",
+    "gcp-metadata": "^8.1.4",
     "googleapis": "^144.0.0",
     "hono": "^4.7.0",
     "unpdf": "^1.4.0",
