@@ -178,6 +178,97 @@ describe('refreshAllModules', () => {
     expect(callOrder.indexOf('gemini-mod')).toBe(callOrder.length - 1)
   })
 
+  test('per-module timeout prevents fast-batch hang (#1043)', async () => {
+    const callLog: string[] = []
+    // One module that hangs (never resolves), one that completes quickly
+    const hangingModule: FeatureModule = {
+      name: 'hanging-mod',
+      cachePaths: () => [],
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async () => { await new Promise(() => {}) }, // never resolves
+      scope: 'portfolio',
+    }
+    const fastModule: FeatureModule = {
+      name: 'fast-mod',
+      cachePaths: () => [],
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async () => { callLog.push('fast-mod') },
+      scope: 'portfolio',
+    }
+
+    FeatureModuleRegistry.register(hangingModule)
+    FeatureModuleRegistry.register(fastModule)
+
+    const { refreshAllModules } = await import('../../src/refresh-engine.ts')
+    const manifest = await refreshAllModules('hang-test')
+
+    // Fast module should complete, hanging module should time out (failed)
+    expect(manifest.modules['fast-mod'].status).toBe('done')
+    expect(manifest.modules['hanging-mod'].status).toBe('failed')
+    expect(manifest.modules['hanging-mod'].error).toContain('timeout')
+    expect(callLog).toContain('fast-mod')
+  }, 45_000)
+
+  test('customer-scoped modules are called per-customer when customers exist', async () => {
+    const receivedNames: string[] = []
+    const customerModule: FeatureModule = {
+      name: 'customer-mod',
+      cachePaths: () => [],
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async (name: string) => { receivedNames.push(name) },
+      scope: 'customer',
+    }
+
+    FeatureModuleRegistry.register(customerModule)
+
+    // Temporarily mock customers in server-state
+    const serverState = await import('../../src/server-state.ts')
+    const origCustomers = [...serverState.customers]
+    serverState.customers.length = 0
+    serverState.customers.push(
+      { name: 'TestCo', ae: 'test' } as any,
+      { name: 'AcmeCorp', ae: 'test' } as any,
+    )
+
+    try {
+      const { refreshAllModules, _resetRefreshMutex } = await import('../../src/refresh-engine.ts')
+      _resetRefreshMutex()
+      const manifest = await refreshAllModules('customer-test')
+
+      expect(manifest.modules['customer-mod'].status).toBe('done')
+      expect(receivedNames).toContain('TestCo')
+      expect(receivedNames).toContain('AcmeCorp')
+      expect(receivedNames).not.toContain('')
+    } finally {
+      serverState.customers.length = 0
+      serverState.customers.push(...origCustomers)
+    }
+  })
+
+  test('portfolio-scoped modules are called once with empty string', async () => {
+    const receivedNames: string[] = []
+    const portfolioModule: FeatureModule = {
+      name: 'portfolio-mod',
+      cachePaths: () => [],
+      fetch: async () => {},
+      cleanup: async () => {},
+      syncNow: async (name: string) => { receivedNames.push(name) },
+      scope: 'portfolio',
+    }
+
+    FeatureModuleRegistry.register(portfolioModule)
+
+    const { refreshAllModules, _resetRefreshMutex } = await import('../../src/refresh-engine.ts')
+    _resetRefreshMutex()
+    const manifest = await refreshAllModules('portfolio-test')
+
+    expect(manifest.modules['portfolio-mod'].status).toBe('done')
+    expect(receivedNames).toEqual([''])
+  })
+
   test('manifest has correct schema', async () => {
     FeatureModuleRegistry.register(makeMockModule('subscriptions'))
 

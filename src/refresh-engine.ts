@@ -31,6 +31,7 @@ import { sanitizeErr } from './utils.ts'
 const GEMINI_INTER_CALL_DELAY = 15_000
 const GEMINI_PER_MODULE_TIMEOUT = 60_000
 const GEMINI_TOTAL_CAP = 5 * 60_000
+const FAST_MODULE_TIMEOUT = 30_000
 
 function getManifestPath(): string {
   return resolve(process.env.CACHE_DIR ?? CACHE_DIR, 'refresh-manifest.json')
@@ -90,7 +91,6 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   if (_refreshAllRunning) {
     const existing = getRefreshManifest()
     if (existing) return existing
-    // Fallback: return a minimal in-progress manifest
     return {
       startedAt: new Date().toISOString(),
       trigger,
@@ -108,10 +108,13 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   const startedAt = new Date().toISOString()
 
   const allModules = FeatureModuleRegistry.getRegisteredModules()
+  const customerNames = customers.map(c => c.name)
 
   // Split into fast (non-Gemini) and Gemini queues — registry-driven via usesGemini field
   const fastModules = allModules.filter(m => !m.usesGemini)
   const geminiModules = allModules.filter(m => m.usesGemini)
+
+  console.log(`[refreshAll] starting: ${allModules.length} modules (${fastModules.length} fast, ${geminiModules.length} Gemini), ${customerNames.length} customers, trigger=${trigger}`)
 
   const manifest: RefreshManifest = {
     startedAt,
@@ -124,7 +127,6 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
     modules: {},
   }
 
-  // Initialize all module statuses as pending
   for (const mod of allModules) {
     manifest.modules[mod.name] = { status: 'pending' }
   }
@@ -132,14 +134,38 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   writeManifest(manifest)
 
   // ── Fast batch: parallel via Promise.allSettled ────────────────────────
+  // Each module gets a per-module timeout to prevent one hanging module from
+  // blocking the entire batch (#1043). Customer-scoped modules are called
+  // per-customer; portfolio modules are called once.
 
-  const fastResults = await Promise.allSettled(
+  await Promise.allSettled(
     fastModules.map(async (mod) => {
       const modStart = Date.now()
       manifest.modules[mod.name] = { status: 'in-progress' }
 
       try {
-        await mod.syncNow('')
+        const isCustomerScoped = mod.scope === 'customer' || mod.scope === 'both'
+
+        if (isCustomerScoped && customerNames.length > 0) {
+          for (const name of customerNames) {
+            let timer: ReturnType<typeof setTimeout>
+            await Promise.race([
+              mod.syncNow(name),
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error('timeout')), FAST_MODULE_TIMEOUT)
+              }),
+            ]).finally(() => clearTimeout(timer!))
+          }
+        } else {
+          let timer: ReturnType<typeof setTimeout>
+          await Promise.race([
+            mod.syncNow(''),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error('timeout')), FAST_MODULE_TIMEOUT)
+            }),
+          ]).finally(() => clearTimeout(timer!))
+        }
+
         const durationMs = Date.now() - modStart
         manifest.modules[mod.name] = { status: 'done', durationMs }
         manifest.completed++
@@ -163,7 +189,6 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   let geminiDone = 0
 
   for (const mod of geminiModules) {
-    // Check 5-min total cap
     const totalElapsed = Date.now() - geminiStart
     if (totalElapsed >= GEMINI_TOTAL_CAP) {
       manifest.modules[mod.name] = { status: 'skipped-timeout', reason: '5-min cap reached' }
@@ -176,16 +201,30 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
     writeManifest(manifest)
 
     const modStart = Date.now()
+    const isCustomerScoped = mod.scope === 'customer' || mod.scope === 'both'
 
     try {
-      // Race the module sync against a per-module timeout
-      let timer: ReturnType<typeof setTimeout>
-      await Promise.race([
-        mod.syncNow(''),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('timeout')), GEMINI_PER_MODULE_TIMEOUT)
-        }),
-      ]).finally(() => clearTimeout(timer!))
+      if (isCustomerScoped && customerNames.length > 0) {
+        for (const name of customerNames) {
+          const capRemaining = GEMINI_TOTAL_CAP - (Date.now() - geminiStart)
+          if (capRemaining <= 0) break
+          let timer: ReturnType<typeof setTimeout>
+          await Promise.race([
+            mod.syncNow(name),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error('timeout')), Math.min(GEMINI_PER_MODULE_TIMEOUT, capRemaining))
+            }),
+          ]).finally(() => clearTimeout(timer!))
+        }
+      } else {
+        let timer: ReturnType<typeof setTimeout>
+        await Promise.race([
+          mod.syncNow(''),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('timeout')), GEMINI_PER_MODULE_TIMEOUT)
+          }),
+        ]).finally(() => clearTimeout(timer!))
+      }
 
       const durationMs = Date.now() - modStart
       manifest.modules[mod.name] = { status: 'done', durationMs }
@@ -194,12 +233,11 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
       FeatureModuleRegistry.recordOutcome(mod.name, { success: true })
     } catch (e: any) {
       const durationMs = Date.now() - modStart
-      manifest.modules[mod.name] = { status: 'failed', durationMs, error: e?.message ?? String(e) }
+      manifest.modules[mod.name] = { status: 'failed', durationMs, error: sanitizeErr(e) }
       manifest.failed++
-      FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: e?.message })
+      FeatureModuleRegistry.recordOutcome(mod.name, { success: false, error: sanitizeErr(e) })
     }
 
-    // Inter-call delay (skip after last module)
     if (geminiModules.indexOf(mod) < geminiModules.length - 1) {
       await new Promise(r => setTimeout(r, GEMINI_INTER_CALL_DELAY))
     }
