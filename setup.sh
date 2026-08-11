@@ -15,16 +15,15 @@ set -euo pipefail
 SETUP_SCHEMA_VERSION="1.3.1"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:${IMAGE_TAG}"
-DASHBOARD_URL="http://localhost:${PORT:-7777}/dashboard/setup"
-HEALTH_URL="http://localhost:${PORT:-7777}/api/aes"
+DASHBOARD_URL="http://localhost:7777/dashboard/setup"
+HEALTH_URL="http://localhost:7777/api/aes"
 ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example"
 COMPOSE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose.yml"
 MIN_MACHINE_RAM_MB=4096
 MIN_HOST_RAM_MB=4096
 MIN_DISK_MB=5120
 MIN_CPU_CORES=2
-PORT="${PORT:-7777}"
-CONTAINER_NAME="${CONTAINER_NAME:-${CONTAINER_NAME}}"
+PORT=7777
 
 # Named exit codes (referenced by BATS tests)
 E_OK=0
@@ -98,7 +97,7 @@ preview() {
   fi
   hdr "DailyBriefDashboard setup v${SETUP_SCHEMA_VERSION}"
   say "This will:"
-  say "  1. Check prerequisites (Podman, RAM, disk, port ${PORT})"
+  say "  1. Check prerequisites (Podman, RAM, disk, port 7777)"
   say "  2. Create ./data/config, ./data/cache, ./data/rh-profile"
   say "  3. Copy .env.example to .env (or append new keys if .env exists)"
   say "  4. Pull the container image from GHCR"
@@ -282,7 +281,7 @@ check_port() {
     die "$E_PORT_IN_USE" \
       "✗ Port ${PORT} is already in use." \
       "  Check what's running: lsof -i :${PORT}" \
-      "  If it's a previous dashboard container: podman stop ${CONTAINER_NAME}"
+      "  If it's a previous dashboard container: podman stop pai-dashboard"
   fi
   ok "port ${PORT} is free"
 }
@@ -430,12 +429,12 @@ scaffold_compose() {
 start_container() {
   hdr "Starting container"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    say "(dry-run) would run: podman run -d --name ${CONTAINER_NAME} ..."
+    say "(dry-run) would run: podman run -d --name pai-dashboard ..."
     return 0
   fi
 
   # Remove any existing container with the same name (idempotent rerun).
-  podman rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
+  podman rm -f pai-dashboard >/dev/null 2>&1 || true
 
   # Always use podman run directly — reliable on every platform regardless of
   # compose tool availability. docker-compose.yml is provided for manual
@@ -448,9 +447,9 @@ start_container() {
   fi
 
   podman run -d \
-    --name ${CONTAINER_NAME} \
+    --name pai-dashboard \
     --restart unless-stopped \
-    -p "${PORT}:7777" \
+    -p 7777:7777 \
     -p 127.0.0.1:6080:6080 \
     -v "$vol_flag" \
     -e PORT=7777 \
@@ -479,7 +478,7 @@ wait_healthy() {
     sleep 1
   done
   printf '\n'
-  warn "Dashboard did not respond within 30s — check 'podman logs ${CONTAINER_NAME}'."
+  warn "Dashboard did not respond within 30s — check 'podman logs pai-dashboard'."
   return 1
 }
 
