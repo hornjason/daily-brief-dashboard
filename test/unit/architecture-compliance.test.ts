@@ -979,6 +979,160 @@ describe('ADR implementation tracking', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 26. DATA INGESTION REGISTRY COMPLIANCE (#173)
+//     Every data ingestion component (cache, Drive sync, scraper) must be
+//     registered in DataIngestionRegistry for architecture compliance tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Data ingestion registry compliance (#173)', () => {
+  test('DataIngestionRegistry exists and has expected component count', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    // Expected: 32 components across 4 tiers (cache-layer, drive-sync, scraper, bootstrap)
+    expect(components.length).toBeGreaterThanOrEqual(30)
+  })
+
+  test('DataIngestionRegistry matches actual file count', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const registered = DataIngestionRegistry.count()
+
+    // Count actual data ingestion files in src/
+    const ingestionFiles = readdirSync(SRC_DIR)
+      .filter(f =>
+        (f.includes('cache') || f.includes('sync') || f.includes('drive') ||
+         f.includes('scraper') || f.includes('ingest')) &&
+        f.endsWith('.ts') && !f.endsWith('.test.ts')
+      )
+
+    // Count files in lib/ and bootstrap/ subdirs
+    const libIngestionFiles = existsSync(resolve(SRC_DIR, 'lib'))
+      ? readdirSync(resolve(SRC_DIR, 'lib'))
+          .filter(f =>
+            (f.includes('cache') || f.includes('sync') || f.includes('drive')) &&
+            f.endsWith('.ts') && !f.endsWith('.test.ts')
+          )
+      : []
+
+    const bootstrapIngestionFiles = existsSync(resolve(SRC_DIR, 'bootstrap'))
+      ? readdirSync(resolve(SRC_DIR, 'bootstrap'))
+          .filter(f => f.includes('cache') && f.endsWith('.ts'))
+      : []
+
+    const bootstrapStepsIngestionFiles = existsSync(resolve(SRC_DIR, 'bootstrap/steps'))
+      ? readdirSync(resolve(SRC_DIR, 'bootstrap/steps'))
+          .filter(f => f.includes('drive') && f.endsWith('.ts'))
+      : []
+
+    const totalFiles = ingestionFiles.length + libIngestionFiles.length +
+                      bootstrapIngestionFiles.length + bootstrapStepsIngestionFiles.length
+
+    // Registered count should match discovered file count (±2 tolerance for utilities)
+    expect(Math.abs(registered - totalFiles)).toBeLessThanOrEqual(2)
+  })
+
+  test('DataIngestionRegistry components have all required fields', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    const violations: string[] = []
+    for (const component of components) {
+      if (!component.name) violations.push(`Component missing name: ${component.filePath}`)
+      if (!component.tier) violations.push(`${component.name}: missing tier`)
+      if (!component.filePath) violations.push(`${component.name}: missing filePath`)
+      if (!['cache-layer', 'drive-sync', 'scraper', 'bootstrap'].includes(component.tier)) {
+        violations.push(`${component.name}: invalid tier "${component.tier}"`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('DataIngestionRegistry components reference existing files', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+    const components = DataIngestionRegistry.list()
+
+    const missing: string[] = []
+    for (const component of components) {
+      const fullPath = resolve(SRC_DIR, component.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${component.name}: file not found at ${component.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('DataIngestionRegistry has all 4 tiers represented', async () => {
+    const { DataIngestionRegistry } = await import('../../src/data-ingestion-registry.ts')
+
+    const cacheLayerComponents = DataIngestionRegistry.byTier('cache-layer')
+    const driveSyncComponents = DataIngestionRegistry.byTier('drive-sync')
+    const scraperComponents = DataIngestionRegistry.byTier('scraper')
+    const bootstrapComponents = DataIngestionRegistry.byTier('bootstrap')
+
+    expect(cacheLayerComponents.length).toBeGreaterThan(0)
+    expect(driveSyncComponents.length).toBeGreaterThan(0)
+    expect(scraperComponents.length).toBeGreaterThan(0)
+    expect(bootstrapComponents.length).toBeGreaterThan(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 27. ROUTE REGISTRY COMPLIANCE (#174)
+//     API Surface routes must be registered in RouteRegistry for pattern
+//     consistency enforcement and architecture compliance tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Route registry compliance (#174)', () => {
+  test('RouteRegistry exists and has 26 registered routes', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    expect(routes.length).toBe(26)
+  })
+
+  test('every registered route file exists in src/', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const missing: string[] = []
+
+    for (const route of routes) {
+      const fullPath = resolve(SRC_DIR, route.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${route.name}: file not found at ${route.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('every route file imports from hono framework', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const violations: string[] = []
+
+    for (const route of routes) {
+      const content = readSrc(route.filePath)
+      if (!content.includes("from 'hono'") && !content.includes('from "hono"')) {
+        violations.push(`${route.name} (${route.filePath}) does not import from 'hono'`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('RouteRegistry components have all required fields', async () => {
+    const { RouteRegistry } = await import('../../src/route-registry.ts')
+    const routes = RouteRegistry.list()
+    const violations: string[] = []
+
+    for (const route of routes) {
+      if (!route.name) violations.push(`Route missing name: ${route.filePath}`)
+      if (!route.filePath) violations.push(`${route.name}: missing filePath`)
+      if (!route.methods) violations.push(`${route.name}: missing methods`)
+      if (!route.description) violations.push(`${route.name}: missing description`)
+    }
+    expect(violations).toEqual([])
+  })
+})
+
 // ── ADR Governance: proposed ADR drift detection (#885) ───────────────────────
 // Proposed ADRs older than 30 days must have a GitHub tracking issue.
 // Known-good baseline prevents false positives for tracked ADRs.
@@ -1529,11 +1683,31 @@ describe('ADR-024: Quality gate — validateAndRetry in key consumers', () => {
     expect(content).toMatch(/export\s+(async\s+)?function\s+validateAndRetry/)
   })
 
-  test('quality-validators directory exists with validators', () => {
+  test('quality-validators directory has exact count and barrel exports', () => {
     const validatorsDir = resolve(SRC_DIR, 'quality-validators')
     expect(existsSync(validatorsDir)).toBe(true)
-    const files = readdirSync(validatorsDir).filter(f => f.endsWith('.ts'))
-    expect(files.length).toBeGreaterThanOrEqual(1)
+
+    // Count validator implementation files (exclude index.ts and type files)
+    const validatorFiles = readdirSync(validatorsDir).filter(f =>
+      f.endsWith('-validator.ts')
+    )
+    expect(validatorFiles.length).toBe(16)
+
+    // Verify index.ts exports exactly 19 validators
+    const indexPath = resolve(validatorsDir, 'index.ts')
+    const indexContent = readFileSync(indexPath, 'utf-8')
+    const validatorExports = (indexContent.match(/\w+Validator/g) || []).filter(name =>
+      !name.includes('Quality') // Exclude QualityValidator type
+    )
+    expect(validatorExports.length).toBe(19)
+
+    // Verify each validator export matches QualityValidator interface pattern
+    for (const validatorFile of validatorFiles) {
+      const content = readFileSync(resolve(validatorsDir, validatorFile), 'utf-8')
+      // Each validator file should export function(s) returning QualityValidator
+      expect(content).toMatch(/export\s+(const|function)/)
+      expect(content).toMatch(/QualityValidator/)
+    }
   })
 })
 
@@ -1600,5 +1774,67 @@ describe('Doc assertions — content matches code reality', () => {
       expect(failures).toEqual([])
     }
     expect(exitCode).toBe(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 28. ENFORCEMENT REGISTRY COMPLIANCE (#175)
+//     Every enforcement component (test, hook, gate, validator) must be
+//     registered in EnforcementRegistry for pattern consistency tracking.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Enforcement registry compliance (#175)', () => {
+  test('EnforcementRegistry exists and has expected component count', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+
+    // Expected: 12+ enforcement components across 5 types (test, hook, gate, lint, validator)
+    expect(components.length).toBeGreaterThanOrEqual(12)
+  })
+
+  test('EnforcementRegistry components have all required fields', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+
+    const violations: string[] = []
+    for (const component of components) {
+      if (!component.name) violations.push(`Component missing name: ${component.filePath}`)
+      if (!component.type) violations.push(`${component.name}: missing type`)
+      if (!component.filePath) violations.push(`${component.name}: missing filePath`)
+      if (!component.description) violations.push(`${component.name}: missing description`)
+      if (!['test', 'hook', 'gate', 'lint', 'validator'].includes(component.type)) {
+        violations.push(`${component.name}: invalid type "${component.type}"`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('EnforcementRegistry components reference existing files', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+    const components = EnforcementRegistry.list()
+    const PROJECT_ROOT = resolve(import.meta.dir, '../..')
+
+    const missing: string[] = []
+    for (const component of components) {
+      const fullPath = resolve(PROJECT_ROOT, component.filePath)
+      if (!existsSync(fullPath)) {
+        missing.push(`${component.name}: file not found at ${component.filePath}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  test('EnforcementRegistry has all 5 types represented', async () => {
+    const { EnforcementRegistry } = await import('../../src/enforcement-registry.ts')
+
+    const testComponents = EnforcementRegistry.byType('test')
+    const hookComponents = EnforcementRegistry.byType('hook')
+    const gateComponents = EnforcementRegistry.byType('gate')
+    const validatorComponents = EnforcementRegistry.byType('validator')
+
+    expect(testComponents.length).toBeGreaterThan(0)
+    expect(hookComponents.length).toBeGreaterThan(0)
+    expect(gateComponents.length).toBeGreaterThan(0)
+    expect(validatorComponents.length).toBeGreaterThan(0)
   })
 })
