@@ -242,12 +242,13 @@ jobs:
 
           # Copy hero install files from private repo (checked out in $GITHUB_WORKSPACE)
           cp "$GITHUB_WORKSPACE/scripts/setup.sh" setup.sh
+          cp "$GITHUB_WORKSPACE/scripts/upgrade.sh" upgrade.sh
           cp "$GITHUB_WORKSPACE/.env.example" .env.example
           cp "$GITHUB_WORKSPACE/docker-compose.yml" docker-compose.yml
           cp "$GITHUB_WORKSPACE/README.md" README.md
 
           # Commit and push if changed
-          git add setup.sh .env.example docker-compose.yml README.md
+          git add setup.sh upgrade.sh .env.example docker-compose.yml README.md
           if ! git diff --cached --quiet; then
             git commit -m "Release ${{ steps.version.outputs.tag }}: sync hero install files"
             git push origin main
@@ -317,7 +318,7 @@ jobs:
           UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
 
           # Upload assets
-          for file in scripts/setup.sh .env.example docker-compose.yml; do
+          for file in scripts/setup.sh scripts/upgrade.sh .env.example docker-compose.yml; do
             name=$(basename "$file")
             curl -sf -X POST \
               -H "Authorization: token $DEPLOY_TOKEN" \

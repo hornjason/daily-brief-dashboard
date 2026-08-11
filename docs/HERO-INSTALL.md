@@ -623,101 +623,37 @@ flowchart LR
 
 ---
 
-## Upgrading Your Hero Install
+## Upgrading
 
-**Your data persists across upgrades.** The container image holds code only — all configuration, credentials, cache, and customer data live in mounted volumes (`~/daily-brief-data` or `/data` depending on your install). Stopping and removing the container does **not** delete your data.
-
-### Safe Upgrade Procedure
+Run the upgrade script — your data and settings are preserved:
 
 ```bash
-# 1. Backup your data (recommended, optional)
-cp -r ~/daily-brief-data ~/daily-brief-data.backup-$(date +%Y%m%d)
-
-# 2. Stop and remove the current container
-docker stop pai-dashboard
-docker rm pai-dashboard
-
-# 3. Pull the latest stable image
-docker pull ghcr.io/hornjason/daily-brief-dashboard:stable
-
-# 4. Re-run your original install command
-docker run -d \
-  -p 7777:7777 \
-  -v ~/daily-brief-data:/data:Z \
-  --env-file ~/.daily-brief.env \
-  --shm-size=2g \
-  --memory=8g \
-  --name pai-dashboard \
-  ghcr.io/hornjason/daily-brief-dashboard:stable
-
-# 5. Verify the dashboard loads
-open http://localhost:7777
+curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/upgrade.sh -o upgrade.sh && bash upgrade.sh
 ```
 
-### Image Tags: `:stable` vs `:latest`
-
-- **`:stable`** — Production-ready releases only. Use this for hero installs.
-- **`:latest`** — Bleeding edge. May include experimental features or hotfixes not yet promoted to stable.
-
-**Recommendation:** Always use `:stable` for production hero installs. Only use `:latest` if explicitly instructed for testing a specific fix.
-
-### Before Upgrading
-
-1. **Check the release notes** — [GitHub Releases](https://github.com/hornjason/daily-brief-dashboard/releases) lists changes, breaking changes, and migration steps.
-2. **Review breaking changes** — Most upgrades are drop-in replacements. If a release requires manual migration (e.g., config file changes), the release notes will specify the exact steps.
-3. **Backup first** — While volume mounts protect data across container removal, backups protect against unexpected issues.
-
-### What Survives an Upgrade
-
-✅ **Persists:**
-- All settings (`settings.json`, `data-sources.json`)
-- OAuth credentials (`gcp-oauth.keys.json`, Google token)
-- RH offline token
-- All AE and customer data
-- Cached intelligence, scrape results
-- RH Portal browser session
-
-❌ **Replaced:**
-- Application code (new features, bug fixes)
-- Container-internal logs (use `docker logs` before removing if needed)
-
-### Rollback Procedure
-
-If an upgrade causes issues:
+For manual upgrade:
 
 ```bash
-# 1. Stop the new container
-docker stop pai-dashboard
-docker rm pai-dashboard
-
-# 2. Pull the specific older version (check GitHub releases for tag)
-docker pull ghcr.io/hornjason/daily-brief-dashboard:v1.6.0
-
-# 3. Run with the old image
-docker run -d \
-  -p 7777:7777 \
-  -v ~/daily-brief-data:/data:Z \
-  --env-file ~/.daily-brief.env \
-  --shm-size=2g \
-  --memory=8g \
-  --name pai-dashboard \
-  ghcr.io/hornjason/daily-brief-dashboard:v1.6.0
+podman stop pai-dashboard
+podman rm pai-dashboard
+podman pull ghcr.io/hornjason/daily-brief-dashboard:<version>
+# Re-run your original podman run command (see setup.sh for args)
 ```
 
-### Troubleshooting
+Check [release notes](https://github.com/hornjason/daily-brief-dashboard/releases) before upgrading. Your data persists in the mounted `./data/` volume — only the application code updates.
 
-**Issue: Container won't start after upgrade**
-- Check logs: `docker logs pai-dashboard`
-- Common cause: breaking config change (release notes will document required migration)
-- Restore backup if needed: `rm -rf ~/daily-brief-data && mv ~/daily-brief-data.backup ~/daily-brief-data`
+### Rollback
 
-**Issue: Dashboard loads but data is missing**
-- Verify volume mount in `docker inspect pai-dashboard` — should show `/data` mapped to `~/daily-brief-data`
-- If mount path changed between installs, your data is orphaned — find it with `docker volume ls` and remount
+If an upgrade causes issues, pull the previous version:
 
-**Issue: OAuth re-auth required**
-- Expected on some upgrades — OAuth token format changed
-- Just re-run the Google Auth wizard step — no data loss
+```bash
+podman stop pai-dashboard
+podman rm pai-dashboard
+podman pull ghcr.io/hornjason/daily-brief-dashboard:<previous-version>
+# Re-run your original podman run command (see setup.sh for args)
+```
+
+Check [releases](https://github.com/hornjason/daily-brief-dashboard/releases) for available version tags.
 
 ---
 
