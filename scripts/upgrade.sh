@@ -4,7 +4,7 @@ set -euo pipefail
 # upgrade.sh — Upgrade DailyBriefDashboard to the latest (or specified) release.
 # Usage: bash upgrade.sh [--version=vX.Y.Z] [--dry-run] [--help]
 
-CONTAINER="pai-dashboard"
+CONTAINER="${CONTAINER_NAME:-pai-dashboard}"
 IMAGE="ghcr.io/hornjason/daily-brief-dashboard"
 REPO_API="https://api.github.com/repos/hornjason/daily-brief-dashboard/releases/latest"
 HEALTH_URL="http://localhost:7777/api/admin/health"

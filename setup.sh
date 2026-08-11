@@ -24,6 +24,7 @@ MIN_HOST_RAM_MB=4096
 MIN_DISK_MB=5120
 MIN_CPU_CORES=2
 PORT="${PORT:-7777}"
+CONTAINER_NAME="${CONTAINER_NAME:-${CONTAINER_NAME}}"
 
 # Named exit codes (referenced by BATS tests)
 E_OK=0
@@ -281,7 +282,7 @@ check_port() {
     die "$E_PORT_IN_USE" \
       "✗ Port ${PORT} is already in use." \
       "  Check what's running: lsof -i :${PORT}" \
-      "  If it's a previous dashboard container: podman stop pai-dashboard"
+      "  If it's a previous dashboard container: podman stop ${CONTAINER_NAME}"
   fi
   ok "port ${PORT} is free"
 }
@@ -429,12 +430,12 @@ scaffold_compose() {
 start_container() {
   hdr "Starting container"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    say "(dry-run) would run: podman run -d --name pai-dashboard ..."
+    say "(dry-run) would run: podman run -d --name ${CONTAINER_NAME} ..."
     return 0
   fi
 
   # Remove any existing container with the same name (idempotent rerun).
-  podman rm -f pai-dashboard >/dev/null 2>&1 || true
+  podman rm -f ${CONTAINER_NAME} >/dev/null 2>&1 || true
 
   # Always use podman run directly — reliable on every platform regardless of
   # compose tool availability. docker-compose.yml is provided for manual
@@ -447,7 +448,7 @@ start_container() {
   fi
 
   podman run -d \
-    --name pai-dashboard \
+    --name ${CONTAINER_NAME} \
     --restart unless-stopped \
     -p "${PORT}:7777" \
     -p 127.0.0.1:6080:6080 \
@@ -478,7 +479,7 @@ wait_healthy() {
     sleep 1
   done
   printf '\n'
-  warn "Dashboard did not respond within 30s — check 'podman logs pai-dashboard'."
+  warn "Dashboard did not respond within 30s — check 'podman logs ${CONTAINER_NAME}'."
   return 1
 }
 
