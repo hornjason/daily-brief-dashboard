@@ -22,40 +22,22 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    // Check if banner was previously dismissed
-    const dismissedData = localStorage.getItem(DISMISS_KEY)
-    if (dismissedData) {
-      try {
-        const { version, timestamp } = JSON.parse(dismissedData)
-        const now = Date.now()
-        const expiryMs = DISMISS_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-
-        // If dismissed version matches and not expired, skip fetch
-        if (timestamp && (now - timestamp) < expiryMs) {
-          setDismissed(true)
-          return
-        }
-      } catch {
-        // Invalid data, clear and continue
-        localStorage.removeItem(DISMISS_KEY)
-      }
-    }
-
-    // Fetch update check on mount
     fetch('/api/updates/check')
       .then(res => res.json())
       .then((data: UpdateInfo) => {
         setUpdateInfo(data)
 
-        // If dismissed earlier for this version, respect it
+        const dismissedData = localStorage.getItem(DISMISS_KEY)
         if (dismissedData) {
           try {
-            const { version } = JSON.parse(dismissedData)
-            if (version === data.latestVersion) {
+            const { version, timestamp } = JSON.parse(dismissedData)
+            const now = Date.now()
+            const expiryMs = DISMISS_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+            if (version === data.latestVersion && timestamp && (now - timestamp) < expiryMs) {
               setDismissed(true)
             }
           } catch {
-            // Continue
+            localStorage.removeItem(DISMISS_KEY)
           }
         }
       })

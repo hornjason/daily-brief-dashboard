@@ -59,6 +59,10 @@ interface UpdateCheckResult {
 let updateCheckCache: { result: UpdateCheckResult; timestamp: number } | null = null
 const UPDATE_CHECK_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in ms
 
+export function _resetUpdateCheckCacheForTesting(): void {
+  updateCheckCache = null
+}
+
 // ── APP_VERSION (moved from server.ts) ───────────────────────────────────────
 export const APP_VERSION: string = (() => {
   try {
@@ -95,20 +99,21 @@ export function createAdminRouter(): Hono {
 
   // GET /api/updates/check — check for newer version on GitHub (24h cache)
   r.get('/api/updates/check', async (c) => {
-    // Check cache first
+    const force = c.req.query('force') === 'true'
     const now = Date.now()
-    if (updateCheckCache && (now - updateCheckCache.timestamp) < UPDATE_CHECK_CACHE_TTL) {
+    if (!force && updateCheckCache && (now - updateCheckCache.timestamp) < UPDATE_CHECK_CACHE_TTL) {
       return c.json(updateCheckCache.result)
     }
 
+    // MUST use public repo — no auth token, hero installs are unauthenticated
+    const url = 'https://api.github.com/repos/hornjason/daily-brief-dashboard/releases/latest'
     try {
-      // Fetch latest release from GitHub
-      const res = await fetch('https://api.github.com/repos/hornjason/asaCommandCenter/releases/latest', {
+      const res = await fetch(url, {
         headers: { 'User-Agent': 'DailyBriefDashboard' },
       })
 
       if (!res.ok) {
-        // Graceful degradation: if GitHub API unreachable, return no update
+        console.warn('[update-check] GitHub API returned ' + res.status + ' for ' + url)
         return c.json({
           updateAvailable: false,
           currentVersion: APP_VERSION,
@@ -128,12 +133,11 @@ export function createAdminRouter(): Hono {
         releaseUrl,
       }
 
-      // Update cache
       updateCheckCache = { result, timestamp: now }
 
       return c.json(result)
     } catch (e) {
-      // Graceful degradation: if fetch fails, return no update (no error)
+      console.warn('[update-check] fetch failed:', e)
       return c.json({
         updateAvailable: false,
         currentVersion: APP_VERSION,

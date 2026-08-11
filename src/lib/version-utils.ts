@@ -51,6 +51,21 @@ export function shouldShowUpdate(current: string, latest: string): boolean {
 }
 
 /**
+ * Determines whether to suppress the update banner based on dismiss state.
+ * Returns true if the banner should be hidden (same version dismissed and not expired).
+ */
+export function shouldSuppressBanner(
+  dismissedVersion: string | null,
+  dismissTimestamp: number | null,
+  latestVersion: string,
+  expiryMs: number = 7 * 24 * 60 * 60 * 1000
+): boolean {
+  if (!dismissedVersion || !dismissTimestamp) return false
+  if (dismissedVersion !== latestVersion) return false
+  return (Date.now() - dismissTimestamp) < expiryMs
+}
+
+/**
  * Parse a semantic version string into components.
  */
 function parseVersion(version: string): {
