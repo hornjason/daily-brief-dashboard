@@ -32,6 +32,28 @@ export interface VoiceProfile {
   exampleEmail?: string
   detectedFrom: string  // e.g., "47 emails across 11 customers"
   detectedAt: string
+  // Structured design tokens for two-pass template assembly (ADR-043)
+  formality?: 'casual' | 'professional' | 'formal'
+  wordBudget?: { exec: number; manager: number }
+  assertionLevel?: 'confident' | 'collaborative' | 'deferential'
+}
+
+// ── Voice token resolution ───────────────────────────────────────────────
+
+/**
+ * Resolve voice design tokens with defaults.
+ * Used by the template engine (ADR-043 Pass 2) to shape sentence structure.
+ */
+export function getVoiceTokens(profile: VoiceProfile | null): {
+  formality: 'casual' | 'professional' | 'formal'
+  wordBudget: { exec: number; manager: number }
+  assertionLevel: 'confident' | 'collaborative' | 'deferential'
+} {
+  return {
+    formality: profile?.formality ?? 'professional',
+    wordBudget: profile?.wordBudget ?? { exec: 80, manager: 140 },
+    assertionLevel: profile?.assertionLevel ?? 'collaborative',
+  }
 }
 
 // ── Local cache helpers ───────────────────────────────────────────────────────
