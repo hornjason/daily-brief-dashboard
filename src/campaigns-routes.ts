@@ -62,9 +62,11 @@ export function createCampaignsRouter(): Hono {
     }
 
     // #663: Support play-based generation — playContext takes precedence over materialUrl
+    // #1057: Support emailSubject-based generation
     const hasPlayContext = body.playContext && body.playContext.playName
-    if (!hasPlayContext && (!body.materialUrl || typeof body.materialUrl !== 'string')) {
-      return c.json({ error: 'materialUrl or playContext is required' }, 400)
+    const hasEmailSubject = body.emailSubject && typeof body.emailSubject === 'string'
+    if (!hasPlayContext && !hasEmailSubject && (!body.materialUrl || typeof body.materialUrl !== 'string')) {
+      return c.json({ error: 'materialUrl, playContext, or emailSubject is required' }, 400)
     }
 
     const slug = toSlug(customer.name)
@@ -76,7 +78,7 @@ export function createCampaignsRouter(): Hono {
     try {
       const result = hasPlayContext
         ? await generateCampaignFromPlay(customer, body.playContext!, body)
-        : await generateCampaign(customer, body.materialUrl, body)
+        : await generateCampaign(customer, hasEmailSubject ? '' : body.materialUrl, body)
       return c.json(result)
     } catch (e: any) {
       console.error(`[campaigns] Generation failed for ${customer.name}:`, e.message)

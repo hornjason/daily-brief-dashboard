@@ -22,6 +22,7 @@ import { toSlug } from './cache-layer.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
 import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
+import { extractFromEmail } from './lib/email-extractor.ts'
 import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
@@ -83,6 +84,7 @@ const CAMPAIGN_RESPONSE_SCHEMA = {
 
 export interface CampaignRequest {
   materialUrl: string
+  emailSubject?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   style?: string
   valueProps?: Array<{ id: string; claim: string; detail: string }>
@@ -635,16 +637,39 @@ export async function generateCampaign(
   config?: CampaignRequest,
 ): Promise<CampaignResult> {
   const slug = toSlug(customer.name)
-  console.log(`[campaigns] Generating campaign for ${customer.name} from ${materialUrl}`)
 
-  // 1. Validate and extract material
-  const fileId = extractFileId(materialUrl)
-  if (!fileId) {
-    throw new Error('Invalid materialUrl — expected a Google Docs or Slides link')
+  let materialTitle: string
+  let materialContent: string
+  let referenceMaterialData: Array<{ url: string; title: string; excerpt: string }> = []
+
+  if (config?.emailSubject && !materialUrl) {
+    console.log(`[campaigns] Generating campaign for ${customer.name} from email: "${config.emailSubject}"`)
+    const emailResult = await extractFromEmail(config.emailSubject)
+    materialTitle = emailResult.title
+    materialContent = emailResult.content
+    referenceMaterialData = emailResult.sourceLinks
+    materialUrl = `email:${config.emailSubject}`
+    if (referenceMaterialData.length > 0) {
+      const refSection = referenceMaterialData
+        .filter(l => !l.excerpt.startsWith('['))
+        .map(l => `### ${l.title}\n${l.excerpt}`)
+        .join('\n\n')
+      if (refSection) {
+        materialContent += `\n\n## Referenced Content\n\n${refSection}`
+      }
+    }
+    console.log(`[campaigns] Extracted email: "${materialTitle}" (${materialContent.length} chars, ${referenceMaterialData.length} links)`)
+  } else {
+    console.log(`[campaigns] Generating campaign for ${customer.name} from ${materialUrl}`)
+    const fileId = extractFileId(materialUrl)
+    if (!fileId) {
+      throw new Error('Invalid materialUrl — expected a Google Docs or Slides link')
+    }
+    const extracted = await extractMaterialContent(fileId)
+    materialTitle = extracted.title
+    materialContent = extracted.content
+    console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
   }
-
-  const { title: materialTitle, content: materialContent } = await extractMaterialContent(fileId)
-  console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
 
   // 2. Pre-flight: ensure all intelligence exists and is fresh before loading signals
   const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
@@ -1214,3 +1239,4 @@ export { getVoiceProfile, detectVoiceProfile }
 // ── Material extraction re-exports ──────────────────────────────────────────
 
 export { extractMaterial, deleteMaterialCache }
+export { extractFromEmail } from './lib/email-extractor.ts'

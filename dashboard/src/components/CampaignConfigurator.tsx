@@ -18,6 +18,7 @@ import { getPlayContext, type PlayContext } from '../lib/play-context-store'
 export interface CampaignConfig {
   materialUrl: string
   materialTitle: string
+  freeformContext?: string
   personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
   valueProps: Array<{ id: string; claim: string; detail: string }>
   style: string
@@ -296,6 +297,25 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
     onConfirm(config)
   }
 
+  function handleFreeformGenerate() {
+    const text = campaignDirective.trim()
+    if (!text) return
+    const firstSentenceMatch = text.match(/^[^.!?\n]+[.!?]?/)
+    const firstSentence = firstSentenceMatch?.[0]?.trim()
+    const derivedTitle = firstSentence && firstSentence.length <= 60
+      ? firstSentence
+      : text.substring(0, 60).trim() + (text.length > 60 ? '...' : '')
+    const config: CampaignConfig = {
+      materialUrl: '',
+      materialTitle: derivedTitle,
+      freeformContext: text,
+      personas: [],
+      valueProps: [],
+      style,
+    }
+    onConfirm(config)
+  }
+
   // ── Persona editing ────────────────────────────────────────────────────────
 
   function togglePersona(index: number) {
@@ -424,15 +444,26 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-text-primary">Campaign Context</h3>
+          <h3 className="text-sm font-semibold text-text-primary">
+            Campaign Context
+            {!materialUrl.trim() && <span className="text-warning ml-1">*</span>}
+          </h3>
           <textarea
             value={campaignDirective}
             onChange={e => setCampaignDirective(e.target.value)}
-            placeholder={'Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'}
-            rows={3}
+            placeholder={materialUrl.trim()
+              ? 'Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'
+              : 'Describe the campaign context, e.g. "VMware migration play — customer is evaluating alternatives after Broadcom acquisition. Focus on OpenShift Virtualization as landing zone."'
+            }
+            rows={materialUrl.trim() ? 3 : 5}
             className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
           />
-          <p className="text-xs text-zinc-500">Optional — shapes email messaging angle and fit rationale</p>
+          <p className="text-xs text-zinc-500">
+            {materialUrl.trim()
+              ? 'Optional — shapes email messaging angle and fit rationale'
+              : 'Required when no material URL — used as the campaign source content'
+            }
+          </p>
         </div>
 
         {error && (
@@ -443,13 +474,23 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
         )}
 
         <div className="flex gap-2">
-          <button
-            onClick={handleAnalyze}
-            disabled={!materialUrl.trim()}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Analyze Material
-          </button>
+          {materialUrl.trim() ? (
+            <button
+              onClick={handleAnalyze}
+              disabled={!materialUrl.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Analyze Material
+            </button>
+          ) : (
+            <button
+              onClick={handleFreeformGenerate}
+              disabled={!campaignDirective.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Generate from Context
+            </button>
+          )}
           {onCancel && (
             <button
               onClick={onCancel}
