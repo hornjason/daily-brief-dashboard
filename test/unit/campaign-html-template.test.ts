@@ -141,7 +141,7 @@ Test context.`
     expect(html).toContain('Content Campaign: Test Material')
   })
 
-  it('should include customer context section when present', () => {
+  it('should include fit rationale section when customer context present', () => {
     const markdown = `## Customer Context
 
 Mid-size financial services firm with 800 employees and $200M annual revenue.
@@ -158,8 +158,7 @@ Test positioning.`
       markdown,
     })
 
-    expect(html).toContain('📋 Customer Context')
-    // Context extraction is working (verified in line 28 output: "Mid-si")
+    expect(html).toContain('Why Test Is a Strong Fit')
   })
 
   it('should include positioning summary section header', () => {

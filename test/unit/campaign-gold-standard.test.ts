@@ -175,6 +175,32 @@ describe('campaign template convergence against gold standard', () => {
     generatedDate: '2026-08-10',
     focus: 'SaaS Tax Offset',
     style: 'Executive',
+    contacts: [
+      { name: 'Dhrupad Trivedi', title: 'President & CEO', email: 'dtrivedi@a10networks.com', linkedIn: 'https://linkedin.com/in/dtrivedi', signal: 'Q2 2026: raised revenue guidance' },
+      { name: 'Michelle Caron', title: 'CFO', email: 'mcaron@a10networks.com', linkedIn: 'https://linkedin.com/in/mcaron', signal: 'Q2 2026: $80.1M revenue' },
+      { name: 'Aris Wong', title: 'VP, Worldwide Engineering', email: 'awong@a10networks.com', signal: 'Since 2011; owns engineering tooling decisions' },
+    ],
+    fitRationale: 'HQ: San Jose, California — directly impacted by SB 122.\n0 AAP licenses today — greenfield automation opportunity.\nExisting RHEL foundation — Thunder and Defend products ship on RHEL.',
+    referenceMaterials: [
+      { resource: 'Brad Hinson — SaaS Tax Offset Sales Play', keyTakeaway: 'Deployment eligibility matrix: AAP Self-Managed = exempt.' },
+      { resource: 'Holland & Knight — SB 122 Legal Analysis', url: 'https://example.com/hk', keyTakeaway: 'SB 122 redefines tangible personal property to include remotely accessed software.' },
+    ],
+    referenceMaterialsHeading: 'SB 122 Reference Material',
+    eligibilityTable: [
+      { offering: 'AAP Self-Managed', deployment: 'Customer VPC', status: 'ELIGIBLE FOR EXEMPTION' },
+      { offering: 'AAP on Azure', deployment: 'Customer VNet', status: 'LIKELY ELIGIBLE' },
+      { offering: 'AAP Service on AWS', deployment: 'Red Hat Hosted', status: 'TAXABLE (SaaS)' },
+    ],
+    eligibilityHeading: 'SB 122 Eligibility by AAP Deployment Type',
+    footprint: {
+      current: 'Red Hat Enterprise Linux (embedded in Thunder/Defend products)',
+      expansion: 'AAP (100 nodes in VMware Replace pipeline), OpenShift AI POC',
+    },
+    bvTalkingPoints: [
+      { objective: 'Cost Efficiency', talkingPoints: 'Self-managed AAP eliminates 8-10% SaaS tax.', keyMetrics: 'Amadeus: $5.62M benefits / 257.9% ROI' },
+      { objective: 'Risk Mitigation', talkingPoints: 'Avoid audit risk — self-managed model places compliance on usage location.', keyMetrics: '$5M self-assessment threshold in SB 122' },
+      { objective: 'Revenue Growth', talkingPoints: 'Consolidate siloed SaaS tools — fewer vendors, lower tax surface area.', keyMetrics: 'ARM: 10,000 nodes, $12M MACC' },
+    ],
     markdown: `## Campaign Summary
 SaaS Tax Offset campaign for A10 Networks.
 
@@ -196,7 +222,19 @@ Michelle, California's SB 122 adds tax on SaaS.
 
 ### CEO — Executive Tier
 **Subject:** AI infrastructure tax math
-Dhrupad, A10's AI strategy requires scalable infra.`,
+Dhrupad, A10's AI strategy requires scalable infra.
+
+### Director Finance — Manager Tier
+**Subject:** SaaS tax exposure modeling
+Ryan, every SaaS license picks up a 7.25% floor tax.
+
+### Sr Director Enterprise Info — Manager Tier
+**Subject:** Enterprise app tax burden
+Arvind, SB 122 makes every SaaS tool more expensive.
+
+### Head of IT — Manager Tier
+**Subject:** Vendor consolidation math
+Chris, building out IT while SB 122 adds tax is a squeeze.`,
     signals: {
       intelligence: {
         company: 'A10 Networks reported revenue of $290.6M for FY2025. The company has approximately 575 employees. ## Competitive Landscape\n1. **F5 Networks:** Largest direct ADC rival.\n2. **Radware:** Direct DDoS competitor.',
@@ -206,13 +244,16 @@ Dhrupad, A10's AI strategy requires scalable infra.`,
           { status: 'Active', quantity: 57, productDescription: 'Red Hat Enterprise Linux' },
         ],
       },
+      accountPlan: `## Why Red Hat
+Strategic Objectives:
+**AI-Powered Security Innovation:** Integrating advanced AI/ML into A10 Defend.
+**Hybrid & Multi-Cloud Operations:** Optimizing deployment across public, private, and edge cloud.`,
     },
   })
 
-  it('runs structural diff and reports mismatches', () => {
+  it('structural diff reports ZERO mismatches', () => {
     const result = structuralDiff(generatedHtml, fixtureText)
 
-    // Log mismatches for visibility
     if (result.mismatches.length > 0) {
       console.log('\n=== GOLD STANDARD CONVERGENCE GAP ===')
       console.log(`Total mismatches: ${result.mismatches.length}`)
@@ -222,10 +263,8 @@ Dhrupad, A10's AI strategy requires scalable infra.`,
       console.log('=====================================\n')
     }
 
-    // This test documents the current gap — it passes even with mismatches.
-    // As template work converges (slices 2-8), mismatches should decrease.
-    expect(result.mismatches).toBeDefined()
-    expect(Array.isArray(result.mismatches)).toBe(true)
+    expect(result.mismatches).toHaveLength(0)
+    expect(result.pass).toBe(true)
   })
 
   it('reports fixture sections found in text', () => {
@@ -245,44 +284,45 @@ Dhrupad, A10's AI strategy requires scalable infra.`,
 
   it('generated HTML has guardrail badges', () => {
     const missing = checkGuardrailBadges(generatedHtml)
-    // Current template has NEVER, CAREFUL, SAFE
     expect(missing).toHaveLength(0)
   })
 
-  it('documents missing sections for template convergence', () => {
+  it('all gold standard sections present', () => {
     const result = structuralDiff(generatedHtml, fixtureText)
-    const missingSections = result.mismatches
-      .filter(m => m.type === 'missing-section')
-      .map(m => m.detail)
-
-    // Expected: several sections missing before template unification
-    // This test logs them for tracking convergence progress
-    if (missingSections.length > 0) {
-      console.log('\n=== MISSING SECTIONS (to be added in slices 2-8) ===')
-      for (const s of missingSections) {
-        console.log(`  - ${s}`)
-      }
-      console.log('====================================================\n')
-    }
-
-    // Baseline assertion: we know the current template is incomplete
-    expect(missingSections.length).toBeGreaterThan(0)
+    const missingSections = result.mismatches.filter(m => m.type === 'missing-section')
+    expect(missingSections).toHaveLength(0)
   })
 
-  it('documents contact table column gaps', () => {
+  it('no extra sections beyond gold standard', () => {
+    const result = structuralDiff(generatedHtml, fixtureText)
+    const extraSections = result.mismatches.filter(m => m.type === 'extra-section')
+    expect(extraSections).toHaveLength(0)
+  })
+
+  it('contact table has all 5 columns', () => {
     const missing = checkContactTableColumns(generatedHtml)
-    if (missing.length > 0) {
-      console.log(`\nContact table missing columns: ${missing.join(', ')}`)
-    }
-    // Current template has a 2-column contact table (Name, Title)
-    // Gold standard has 5 columns (Name, Title, Email, LinkedIn, Signal)
-    expect(missing.length).toBeGreaterThan(0)
+    expect(missing).toHaveLength(0)
   })
 
-  it('documents email box count gap', () => {
+  it('has 6+ email boxes (3 exec + 3 manager + section header)', () => {
     const count = countEmailBoxes(generatedHtml)
-    console.log(`\nEmail boxes found: ${count} (gold standard: 6)`)
-    // Current test markdown only has 3 exec emails, no manager emails
-    expect(count).toBeDefined()
+    expect(count).toBeGreaterThanOrEqual(6)
+  })
+
+  it('sections render conditionally — absent when data missing', () => {
+    const minimalHtml = generateCampaignHTML({
+      materialTitle: 'Test',
+      materialUrl: 'https://test.com',
+      customerName: 'Test Corp',
+      aeName: 'Test AE',
+      generatedDate: '2026-08-10',
+      markdown: '## Campaign Summary\nMinimal test.',
+    })
+    expect(minimalHtml).not.toContain('Target Contacts')
+    expect(minimalHtml).not.toContain('BV Talking Points')
+    expect(minimalHtml).not.toContain('Reference Material')
+    expect(minimalHtml).not.toContain('Eligibility')
+    expect(minimalHtml).not.toContain('Existing Red Hat Footprint')
+    expect(minimalHtml).not.toContain('Manager Outreach')
   })
 })

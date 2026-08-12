@@ -2,11 +2,48 @@
  * HTML Template Generator for ContentCampaign
  * Matches the gold standard output from ContentCampaign skill
  *
- * Gold standard: ~/.claude/skills/ContentCampaign/output/a10-networks-campaign-final.html
+ * Gold standard: test/fixtures/campaign-gold-standard.html
+ * Convergence test: test/unit/campaign-gold-standard.test.ts
  */
 
 import type { AccountTeamMember } from './types.ts'
 import { escapeHtml, applyInlineFormatting } from './lib/markdown-to-html.ts'
+
+// ── Exported types for campaign data ──
+
+export interface CampaignContact {
+  name: string
+  title: string
+  email?: string
+  linkedIn?: string
+  signal?: string
+  priority?: string
+}
+
+export interface ReferenceMaterial {
+  resource: string
+  url?: string
+  keyTakeaway: string
+}
+
+export interface EligibilityRow {
+  offering: string
+  deployment: string
+  status: string
+}
+
+export interface BVTalkingPoint {
+  objective: string
+  talkingPoints: string
+  keyMetrics: string
+}
+
+export interface CampaignFootprint {
+  current: string
+  expansion: string
+}
+
+// ── Template options ──
 
 interface CampaignHTMLOptions {
   materialTitle: string
@@ -29,7 +66,17 @@ interface CampaignHTMLOptions {
   }
   markdown: string
   signalsLoaded?: string[]
+  contacts?: CampaignContact[]
+  fitRationale?: string
+  referenceMaterials?: ReferenceMaterial[]
+  referenceMaterialsHeading?: string
+  eligibilityTable?: EligibilityRow[]
+  eligibilityHeading?: string
+  footprint?: CampaignFootprint
+  bvTalkingPoints?: BVTalkingPoint[]
 }
+
+// ── Internal types ──
 
 interface ParsedCampaign {
   summary: string
@@ -46,13 +93,8 @@ interface EmailTemplate {
   body: string
 }
 
-/**
- * Parse Gemini markdown output into structured sections.
- * Handles multiple Gemini output formats:
- * - # or ## for section headers
- * - **Subject:** or Subject: for email subject lines
- * - Body may follow Subject directly (no **Body:** label)
- */
+// ── Markdown parsing ──
+
 function parseCampaignMarkdown(markdown: string): ParsedCampaign {
   const sections: ParsedCampaign = {
     summary: '',
@@ -62,7 +104,6 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
     emailTemplates: [],
   }
 
-  // Split markdown into sections by #, ##, or ### headers
   const sectionBlocks = markdown.split(/\n(?=#{1,3}\s)/)
 
   for (const block of sectionBlocks) {
@@ -80,34 +121,25 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
       const items = content.split(/\n\n+/).filter(p => p.trim().length > 0)
       sections.positioning = items
     } else if (/^email templates$/i.test(header)) {
-      // Parent header — emails are inside as ### sub-headers, handled by the split
       continue
     } else if (/—|–/.test(header) && !/campaign|customer|positioning|email templates/i.test(header)) {
-      // This is an email template: "Account Executive — Executive Tier"
       const tierMatch = header.match(/^(.+?)\s*[—–]\s*(.+)$/)
       if (!tierMatch) continue
 
       const persona = tierMatch[1].trim()
       const tier = tierMatch[2].trim()
 
-      // Extract subject line — handles both **Subject:** and Subject: formats
       const subjectMatch = content.match(/\*?\*?Subject:?\*?\*?\s*(.+)/i)
       const subject = subjectMatch ? subjectMatch[1].trim() : ''
 
-      // Body is everything after the subject line
       let body = content
       if (subjectMatch) {
         const subjectIdx = content.indexOf(subjectMatch[0])
         body = content.slice(subjectIdx + subjectMatch[0].length).trim()
       }
 
-      // Remove **Body:** label if present
       body = body.replace(/^\*?\*?Body:?\*?\*?\s*/i, '').trim()
-
-      // Remove signature patterns
       body = body.replace(/\n*(?:Best regards|Sincerely|Thanks|Regards),?[\s\S]*$/i, '')
-
-      // Remove trailing link placeholders
       body = body.replace(/\n*(?:Link|Peer reference):?\s*\[?[^\]]*\]?\s*$/i, '')
 
       if (persona && (subject || body)) {
@@ -119,10 +151,8 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
   return sections
 }
 
-/**
- * Convert markdown bullets to HTML with campaign-specific styling.
- * Uses shared applyInlineFormatting for inline markup (GitHub Issue #311).
- */
+// ── Utility functions ──
+
 function convertMarkdownBullets(text: string): string {
   const lines = text.split('\n')
   let html = ''
@@ -150,11 +180,6 @@ function convertMarkdownBullets(text: string): string {
   return html
 }
 
-/**
- * Extract metrics from signals (if available).
- * Intelligence cache has: { company: "long text...", industry: "..." }
- * The company text contains revenue, employee count, etc. in prose form.
- */
 function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   revenue: string
   employees: string
@@ -168,22 +193,17 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
     productName: 'Product',
   }
 
-  // Intelligence is the full cache object with { company: string, industry: string }
   const intel = signals?.intelligence
   if (!intel) return defaults
 
-  // The company field is a long markdown string containing all company data
   const companyText = typeof intel === 'string' ? intel : (intel.company || '')
 
-  // Revenue patterns: "$255.4 million", "$9.55B", "revenue of $255.4 million"
   const revenueMatch = companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
     || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK])?)/i)
 
-  // Employee patterns: "804 employees", "had 21,000 employees", "employ approximately 3,000 individuals"
   const employeesMatch = companyText.match(/([\d,]+)\s*employees/i)
     || companyText.match(/employ\w*\s+(?:approximately\s+)?([\d,]+)\s*(?:individuals|people|workers|staff)/i)
 
-  // Product instances from subscriptions — handle both .data[] and .rows[] formats
   let productInstances = defaults.productInstances
   let productName = defaults.productName
   if (signals?.subscriptions) {
@@ -209,40 +229,34 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   }
 }
 
-/**
- * Extract structured intelligence sections for the HTML template.
- * Parses the company intelligence text for initiatives, competitors, and guardrails.
- */
 function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
   initiatives: Array<{ name: string; priority: string; detail: string }>
   competitors: Array<{ name: string; threat: string; advantage: string }>
   guardrails: { never: string[]; careful: string[]; safe: string[] }
+  differentiation?: string
 } {
   const result = {
     initiatives: [] as Array<{ name: string; priority: string; detail: string }>,
     competitors: [] as Array<{ name: string; threat: string; advantage: string }>,
     guardrails: { never: [] as string[], careful: [] as string[], safe: [] as string[] },
+    differentiation: undefined as string | undefined,
   }
 
   const intel = signals?.intelligence
   const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
 
-  // ── Extract competitors from ## Competitive Landscape section ──
   const competitorSection = companyText.match(/## Competitive Landscape[\s\S]*?(?=\n## |$)/i)
   if (competitorSection) {
     const section = competitorSection[0]
 
-    // Extract differentiation paragraph for the advantage column
     const diffMatch = section.match(/differentiates?\s+(?:itself\s+)?(?:through|by|with)\s+([\s\S]*?)(?=\n\n|Switching costs)/i)
     const differentiation = diffMatch?.[1]?.trim().split('.')[0] || ''
 
-    // Format 1: Numbered - 1. **F5, Inc.:** description
     const numberedRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*([\s\S]*?)(?=\n\s*\d+\.\s+\*\*|\n##|$)/gs
     let match
     while ((match = numberedRegex.exec(section)) !== null) {
       const name = match[1].trim().replace(/[,.]$/, '')
       const fullDesc = match[2].trim()
-      // First sentence = threat, look for differentiation/advantage in the rest
       const sentences = fullDesc.split(/\.\s+/)
       const threat = sentences[0]?.trim() || ''
       const advMatch = fullDesc.match(/differenti\w+\s+(?:with|by|through|often\s+lies?\s+in)\s+([^.]+)/i)
@@ -253,9 +267,6 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
       }
     }
 
-    // Format 2: Bullet list - * CompanyName or - CompanyName
-    // For bullet lists, competitors have no individual threat/advantage data
-    // Store differentiation separately, don't duplicate per row
     if (result.competitors.length === 0) {
       const bulletRegex = /[*\-]\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?$/gm
       while ((match = bulletRegex.exec(section)) !== null) {
@@ -265,17 +276,14 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
         }
         if (result.competitors.length >= 5) break
       }
-      // Store differentiation as a separate field for display above the table
       if (differentiation) {
-        (result as any).differentiation = differentiation
+        result.differentiation = differentiation
       }
     }
   }
 
-  // ── Extract strategic initiatives from account plan ──
   const planText = signals?.accountPlan || ''
   if (planText) {
-    // Look for strategic objectives in the account plan
     const objectivesSection = planText.match(/Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
       || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
     if (objectivesSection) {
@@ -290,7 +298,6 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
       }
     }
 
-    // Look for risks to build guardrails
     const risksSection = planText.match(/Account Plan Risks[\s\S]*?(?=\n## |$)/i)
     if (risksSection) {
       const riskItems = risksSection[0].match(/\*\*([^*]+)\*\*:?\s*([^*\n]+)/g)
@@ -305,7 +312,6 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
   }
 
-  // Standard guardrails (always present)
   result.guardrails.never = ['Pipeline opportunities', 'RHEL Private Offer', 'Support cases', 'Subscription counts', 'Layoff numbers']
   if (result.guardrails.careful.length === 0) {
     result.guardrails.careful = ['Leadership changes — frame around strategy, not departures']
@@ -315,22 +321,13 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
   return result
 }
 
-/**
- * Generate rich HTML output matching ContentCampaign skill format
- */
-/**
- * Extract known contacts from intelligence data
- */
 function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name: string; title: string; email?: string }> {
   const contacts: Array<{ name: string; title: string; email?: string }> = []
   const intel = signals?.intelligence
   const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
 
-  // Parse leadership section for named executives
   const leadershipSection = companyText.match(/## Leadership[\s\S]*?(?=\n## |$)/i)
   if (leadershipSection) {
-    // Match patterns like "Scott Thomson, Vice President, Information Technology"
-    // or "* Scott Thomson, VP of IT"
     const contactRegex = /(?:\*\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+),\s*((?:VP|Vice President|SVP|Senior Vice President|President|CEO|CFO|CTO|CIO|COO|CMO|Director|Head of|Chief)[^.\n]*)/gi
     let match
     while ((match = contactRegex.exec(leadershipSection[0])) !== null) {
@@ -342,7 +339,6 @@ function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name
     }
   }
 
-  // Also check account plan for team members or stakeholders
   const planText = signals?.accountPlan || ''
   if (planText) {
     const teamSection = planText.match(/## (?:Key Stakeholders|Team Members)[\s\S]*?(?=\n## |$)/i)
@@ -362,20 +358,144 @@ function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name
   return contacts
 }
 
+// ── Section renderers ──
+
+function renderContactsSection(contacts: CampaignContact[]): string {
+  if (contacts.length === 0) return ''
+  const hasEmail = contacts.some(c => c.email)
+  const hasLinkedIn = contacts.some(c => c.linkedIn)
+  const hasSignal = contacts.some(c => c.signal)
+
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">👥 Target Contacts</h2>
+<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Name</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Title</td>
+    ${hasEmail ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Email</td>' : ''}
+    ${hasLinkedIn ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">LinkedIn</td>' : ''}
+    ${hasSignal ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Signal</td>' : ''}
+  </tr>
+  ${contacts.map(c => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.title)}</td>
+    ${hasEmail ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.email || '—')}</td>` : ''}
+    ${hasLinkedIn ? `<td style="border-bottom: 1px solid #e8eaed;">${c.linkedIn ? `<a href="${escapeHtml(c.linkedIn)}" style="color: #1a73e8;">Profile</a>` : '—'}</td>` : ''}
+    ${hasSignal ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.signal || '—')}</td>` : ''}
+  </tr>`).join('\n')}
+</table>`
+}
+
+function renderFitRationale(customerName: string, content: string): string {
+  return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>
+<div style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${convertMarkdownBullets(content)}</div>`
+}
+
+function renderReferenceMaterials(materials: ReferenceMaterial[], heading: string): string {
+  return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📚 ${escapeHtml(heading)}</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Resource</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Key Takeaway</td>
+  </tr>
+  ${materials.map(m => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${m.url ? `<a href="${escapeHtml(m.url)}" style="color: #1a73e8;">${escapeHtml(m.resource)}</a>` : escapeHtml(m.resource)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway)}</td>
+  </tr>`).join('\n')}
+</table>`
+}
+
+function renderEligibilityTable(rows: EligibilityRow[], heading: string): string {
+  return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚖️ ${escapeHtml(heading)}</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Offering</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Deployment</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Status</td>
+  </tr>
+  ${rows.map(r => {
+    const statusColor = /exempt/i.test(r.status) ? '#137333' : /taxable/i.test(r.status) ? '#c5221f' : '#b45309'
+    const statusBg = /exempt/i.test(r.status) ? '#e6f4ea' : /taxable/i.test(r.status) ? '#fce8e6' : '#fef7e0'
+    return `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(r.offering)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(r.deployment)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;"><span style="background: ${statusBg}; color: ${statusColor}; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(r.status)}</span></td>
+  </tr>`
+  }).join('\n')}
+</table>`
+}
+
+function renderFootprintSection(footprint: CampaignFootprint): string {
+  return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🔵 Existing Red Hat Footprint</h3>
+<div style="font-size: 14px; margin: 0 0 20px 0;">
+  <p style="margin: 4px 0;"><strong>Current:</strong> ${escapeHtml(footprint.current)}</p>
+  <p style="margin: 4px 0;"><strong>Expansion:</strong> ${escapeHtml(footprint.expansion)}</p>
+</div>`
+}
+
+function renderBVTalkingPoints(points: BVTalkingPoint[]): string {
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">💬 BV Talking Points</h2>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Objective</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Talking Points</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Key Metrics</td>
+  </tr>
+  ${points.map(p => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(p.objective)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px;">${escapeHtml(p.talkingPoints)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(p.keyMetrics)}</td>
+  </tr>`).join('\n')}
+</table>`
+}
+
+function renderEmailBox(email: EmailTemplate, aeName: string): string {
+  return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
+  <div style="background: #c41e3a; padding: 12px 20px;">
+    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(email.persona)}</span>
+  </div>
+  <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
+    <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(email.subject)}</strong></p>
+  </div>
+  <div style="padding: 20px;">
+    ${convertMarkdownBullets(email.body)}
+    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
+      <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(aeName)}</p>
+      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: #c41e3a; font-weight: bold;">Red Hat</span></p>
+    </div>
+  </div>
+</div>`
+}
+
+// ── Main export ──
+
 export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   const parsed = parseCampaignMarkdown(options.markdown)
   const metrics = extractMetrics(options.signals)
   const structured = extractStructuredIntel(options.signals)
-  const contacts = extractContacts(options.signals)
 
-  // Build HTML
+  // Resolve contacts: prefer explicit, fall back to extracted
+  const contacts: CampaignContact[] = options.contacts ?? extractContacts(options.signals).map(c => ({
+    name: c.name,
+    title: c.title,
+    email: c.email,
+  }))
+
+  // Split emails by tier
+  const execEmails = parsed.emailTemplates.filter(e => /executive/i.test(e.tier))
+  const managerEmails = parsed.emailTemplates.filter(e => /manager/i.test(e.tier))
+  const otherEmails = parsed.emailTemplates.filter(e => !(/executive/i.test(e.tier) || /manager/i.test(e.tier)))
+  const primaryEmails = execEmails.length > 0 ? execEmails : (managerEmails.length > 0 ? otherEmails : parsed.emailTemplates)
+
+  // Fit rationale: prefer explicit, fall back to parsed customer context
+  const fitContent = options.fitRationale || parsed.customerContext
+
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #202124;">
 
 <h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHtml(options.materialTitle)}</h1>
-<h2 style="font-size: 22px; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</h2>
+<p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</p>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
   options.accountTeam && options.accountTeam.length > 0
     ? options.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHtml(m.name)}`).join(' · ')
@@ -388,18 +508,7 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   </tr>
 </table>
 
-${contacts.length > 0 ? `
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">👥 Target Contacts</h2>
-<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
-  <tr style="background: #f8f9fa;">
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Name</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Title</td>
-  </tr>
-  ${contacts.map(c => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.title)}</td>
-  </tr>`).join('\n')}
-</table>` : ''}
+${renderContactsSection(contacts)}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
@@ -433,13 +542,8 @@ ${contacts.length > 0 ? `
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- CUSTOMER INTELLIGENCE DASHBOARD                -->
-<!-- ═══════════════════════════════════════════════ -->
-
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
 
-<!-- Key Metrics Row -->
 <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
   <tr>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
@@ -457,8 +561,7 @@ ${contacts.length > 0 ? `
   </tr>
 </table>
 
-${parsed.customerContext ? `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Customer Context</h3>
-<p style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${escapeHtml(parsed.customerContext)}</p>` : ''}
+${fitContent ? renderFitRationale(options.customerName, fitContent) : ''}
 
 ${structured.initiatives.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
@@ -477,7 +580,7 @@ ${structured.initiatives.length > 0 ? `
 
 ${structured.competitors.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
-${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml((structured as any).differentiation)}</p>` : ''}
+${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml(structured.differentiation)}</p>` : ''}
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
   <tr style="background: #f8f9fa;">
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
@@ -491,6 +594,12 @@ ${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f63
   </tr>`).join('\n')}
 </table>` : ''}
 
+${options.referenceMaterials && options.referenceMaterials.length > 0 ? renderReferenceMaterials(options.referenceMaterials, options.referenceMaterialsHeading || 'Reference Material') : ''}
+
+${options.eligibilityTable && options.eligibilityTable.length > 0 ? renderEligibilityTable(options.eligibilityTable, options.eligibilityHeading || 'Eligibility') : ''}
+
+${options.footprint ? renderFootprintSection(options.footprint) : ''}
+
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
 <p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
 ${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
@@ -498,37 +607,26 @@ ${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin:
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
-<!-- ═══════════════════════════════════════════════ -->
-<!-- POSITIONING SUMMARY                            -->
-<!-- ═══════════════════════════════════════════════ -->
-
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 20px 0;">Positioning Matches</h2>
+${parsed.positioning.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 20px 0;">Positioning Matches</h2>
 
 ${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid #c41e3a; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
   <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #c41e3a; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
   <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${applyInlineFormatting(escapeHtml(p))}</p>
 </div>`).join('\n')}
 
-<hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
+<hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">` : ''}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">Email Templates by Role</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">Copy each email body and paste into Gmail compose. Rich formatting transfers automatically.</p>
 
-${parsed.emailTemplates.map(email => `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
-  <div style="background: #c41e3a; padding: 12px 20px;">
-    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(email.persona)}</span>
-  </div>
-  <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
-    <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(email.subject)}</strong></p>
-  </div>
-  <div style="padding: 20px;">
-    ${convertMarkdownBullets(email.body)}
-    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
-      <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(options.aeName)}</p>
-      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: #c41e3a; font-weight: bold;">Red Hat</span></p>
-    </div>
-  </div>
-</div>`).join('\n')}
+${primaryEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}
+
+${managerEmails.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
+<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">200-250 words · technical depth. Designed to be forwarded up with "we should look at this."</p>
+
+${managerEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}` : ''}
+
+${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkingPoints(options.bvTalkingPoints) : ''}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
 <p style="text-align: center; font-size: 13px; color: #80868b;">Generated by ContentCampaign · Source: DailyBriefDashboard Intelligence · ${options.generatedDate}</p>
