@@ -15,7 +15,7 @@ import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { callGemini } from './gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
-import { campaignValidator } from './quality-validators/campaign-validator.ts'
+import { campaignValidator, validateCampaignSelection } from './quality-validators/campaign-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { toSlug } from './cache-layer.ts'
@@ -27,7 +27,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
@@ -37,6 +37,9 @@ import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
+
+// ── Feature flag: two-pass structured campaigns (ADR-043) ───────────────────
+const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
 
@@ -75,73 +78,6 @@ const CAMPAIGN_RESPONSE_SCHEMA = {
           },
         },
         required: ['persona', 'tier', 'subject', 'body', 'actionStep'],
-      },
-    },
-  },
-  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
-}
-
-// ── Data selection schema (ADR-043 two-pass) ────────────────────────────────
-
-const CAMPAIGN_SELECTION_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    campaignSummary: {
-      type: 'STRING',
-      description: 'Campaign strategy overview grounded in loaded signals. Include pipeline value if available.',
-    },
-    customerContext: {
-      type: 'STRING',
-      description: 'What is happening NOW with this customer. Reference specific dates, active evaluations, or recent signals.',
-    },
-    positioning: {
-      type: 'STRING',
-      description: 'How Red Hat value props map to customer needs. Include one Challenger Insight that teaches the customer something about their own business.',
-    },
-    emails: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          recipientName: {
-            type: 'STRING',
-            description: 'MUST match exactly one of the resolved contact names provided. Use the exact spelling.',
-          },
-          tier: {
-            type: 'STRING',
-            enum: ['executive', 'manager'],
-          },
-          intent: {
-            type: 'STRING',
-            enum: ['nurture', 'expand', 're-engage'],
-          },
-          subject: {
-            type: 'STRING',
-            description: '2-4 word observation about their world. No product names, no company names.',
-          },
-          signalIndex: {
-            type: 'INTEGER',
-            description: 'Zero-based index into the signals array provided in the prompt.',
-          },
-          featureKeys: {
-            type: 'ARRAY',
-            items: { type: 'STRING' },
-            description: 'Exactly 3 feature keys selected from the provided URL registry enum.',
-          },
-          peerProof: {
-            type: 'OBJECT',
-            nullable: true,
-            properties: {
-              playName: { type: 'STRING', description: 'Name of the solution play from VERIFIED SOLUTION PLAYS.' },
-              exampleIndex: { type: 'INTEGER', description: 'Zero-based index into the play realWorldExamples array.' },
-            },
-          },
-          challengerDataPoint: {
-            type: 'STRING',
-            description: 'One observation selected from the loaded signals that teaches the customer something about their own business they may not know.',
-          },
-        },
-        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint'],
       },
     },
   },
@@ -193,6 +129,7 @@ interface CampaignCacheEntry {
   signalsMissing?: string[]
   qualityScorecard?: QualityScorecard
   campaignDirective?: string
+  generationPath?: 'structured' | 'freeform'
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
@@ -466,118 +403,6 @@ ${personasStr}`
   return markdownParts.join('\n')
 }
 
-// ── Two-pass data selection (ADR-043) ───────────────────────────────────────
-
-const CAMPAIGN_SELECTION_SYSTEM_PROMPT = `You are selecting data points for personalized B2B email campaigns. You are NOT writing emails — you are choosing which data points the template engine should use.
-
-For each resolved contact, select:
-1. The most relevant signal (by index) from the loaded signals
-2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role
-3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
-4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
-
-GROUNDING RULES:
-- recipientName MUST exactly match one of the resolved contact names provided
-- featureKeys MUST be selected from the provided feature key enum — no invented keys
-- signalIndex MUST be a valid zero-based index into the signals array
-- challengerDataPoint MUST reference actual data from the loaded signals — never fabricate
-- peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
-- Do NOT write email body text, CTAs, or prose — the template engine handles all prose generation
-`
-
-export interface CampaignSelectionResult {
-  campaignSummary: string
-  customerContext: string
-  positioning: string
-  emails: Array<{
-    recipientName: string
-    tier: 'executive' | 'manager'
-    intent: 'nurture' | 'expand' | 're-engage'
-    subject: string
-    signalIndex: number
-    featureKeys: string[]
-    peerProof: { playName: string; exampleIndex: number } | null
-    challengerDataPoint: string
-  }>
-}
-
-export async function callGeminiForCampaignSelection(opts: {
-  materialTitle: string
-  materialContent: string
-  customerName: string
-  customerSignals: CustomerSignals
-  registrySignals: Signal[]
-  deterministicContext?: string
-  resolvedContacts: Array<{ name: string; title: string; role: string }>
-  structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
-  campaignDirective?: string
-}): Promise<CampaignSelectionResult> {
-  const featureKeys = getFeatureKeys()
-
-  // Build signals summary for prompt (numbered for index reference)
-  const signalsSummary = opts.registrySignals.length > 0
-    ? opts.registrySignals
-        .slice(0, 30)
-        .map((s, i) => `[${i}] [${s.type}] ${s.headline}${s.detail ? ' — ' + s.detail.substring(0, 200) : ''}`)
-        .join('\n')
-    : 'No signals available.'
-
-  // Build resolved contacts list
-  const contactLines = opts.resolvedContacts.map(c => `- ${c.name}, ${c.title} (role: ${c.role})`).join('\n')
-
-  // Serialize verified solution plays
-  let solutionPlaysContext = ''
-  if (opts.structuredPlays && opts.structuredPlays.length > 0) {
-    solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (cite by playName + exampleIndex)\n\n'
-    for (const play of opts.structuredPlays) {
-      solutionPlaysContext += `### Play: "${play.name}"\n`
-      solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
-      if (play.realWorldExamples?.length) {
-        solutionPlaysContext += `- Real-World Examples:\n`
-        play.realWorldExamples.forEach((ex, i) => {
-          solutionPlaysContext += `  [${i}] ${ex.customer}: ${ex.outcome}\n`
-        })
-      }
-      if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
-      solutionPlaysContext += '\n'
-    }
-  }
-
-  const userPrompt = `## Material: ${opts.materialTitle}
-
-### Material Content (first 8000 chars):
-${opts.materialContent.substring(0, 8000)}
-
-## Customer: ${opts.customerName}
-
-${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}
-
-### Loaded Signals (reference by index number):
-${signalsSummary}
-${solutionPlaysContext}
-${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}
-## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):
-${contactLines}
-
-## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:
-${featureKeys.join(', ')}
-
----
-For each resolved contact, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return structured selections — do NOT write email prose.`
-
-  const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
-    callType: 'campaign-selection',
-    customerName: opts.customerName,
-    temperature: 0.3,
-    responseSchema: CAMPAIGN_SELECTION_SCHEMA,
-  })
-
-  if (!result.text) throw new Error('Gemini returned empty response for campaign selection')
-
-  const parsed: CampaignSelectionResult = JSON.parse(result.text)
-  return parsed
-}
-
 // ── Drive persistence ────────────────────────────────────────────────────────
 
 async function ensureCampaignsSubfolder(customerFolderId: string): Promise<string> {
@@ -612,19 +437,47 @@ async function uploadCampaignToDrive(
   customerFolderId: string,
   customer: Customer,
   materialTitle: string,
-  htmlContent: string,
-  accountTeam: import('./types.ts').AccountTeamMember[],
+  materialUrl: string,
+  markdown: string,
+  aeName: string,
+  signals: CustomerSignals,
+  accountTeamOverride?: import('./types.ts').AccountTeamMember[],
   existingFileIds?: { driveFileId?: string; driveHtmlFileId?: string },
   campaignDirective?: string,
+  prebuiltHtml?: string,
 ): Promise<{ driveUrl: string; htmlUrl: string; driveFileId: string; driveHtmlFileId: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
+  // Use campaign directive for doc name when available, fall back to material title
   const campaignLabel = campaignDirective
-    ? (() => {
-        const raw = campaignDirective.split(/[.!?\n]/)[0].trim()
-        return raw.length <= 80 ? raw : raw.substring(0, raw.lastIndexOf(' ', 80)) || raw.substring(0, 80)
-      })()
+    ? campaignDirective.split(/[.!?\n]/)[0].trim().substring(0, 60)
     : materialTitle
   const docName = `${campaignLabel} - ${customer.name}`
+
+  // Build HTML content first — used for BOTH Google Doc and HTML preview (#1054)
+  // If prebuiltHtml is provided (structured two-pass path), use it directly
+  const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
+  let htmlContent: string
+  if (prebuiltHtml) {
+    htmlContent = prebuiltHtml
+  } else {
+    const timestamp = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    htmlContent = generateCampaignHTML({
+      materialTitle,
+      materialUrl,
+      customerName: customer.name,
+      aeName,
+      generatedDate: timestamp,
+      accountTeam,
+      signals,
+      markdown,
+    })
+  }
 
   // Google Doc: upload HTML (not markdown) so all template sections render (#1054)
   // HTML-to-Google-Doc conversion preserves formatting, tables, and styling
@@ -721,11 +574,11 @@ async function uploadCampaignToDrive(
 
   // Auto-share with AE and SSPs from account team
   if (driveFileId) {
-    const teamToShare = accountTeam.filter(m => m.role === 'ae')
+    const teamToShare = accountTeam.filter(m => ['ae', 'ssp', 'ssa'].includes(m.role))
     for (const member of teamToShare) {
       const nameParts = member.name.toLowerCase().split(/\s+/)
       if (nameParts.length < 2) continue
-      const email = `${nameParts[0][0]}${nameParts[nameParts.length - 1]}@redhat.com`
+      const email = `${nameParts[0]}.${nameParts[nameParts.length - 1]}@redhat.com`
       try {
         await drive.permissions.create({
           fileId: driveFileId,
@@ -846,12 +699,6 @@ export async function generateCampaign(
       }
     }
     console.log(`[campaigns] Extracted email: "${materialTitle}" (${materialContent.length} chars, ${referenceMaterialData.length} links)`)
-  } else if ((config?.campaignDirective || config?.freeformContext) && !materialUrl) {
-    const text = config.freeformContext || config.campaignDirective || ''
-    console.log(`[campaigns] Generating campaign for ${customer.name} from directive (freeform)`)
-    materialTitle = text.split(/[.!?\n]/)[0].trim().substring(0, 100)
-    materialContent = text
-    materialUrl = `directive:${materialTitle}`
   } else {
     console.log(`[campaigns] Generating campaign for ${customer.name} from ${materialUrl}`)
     const fileId = extractFileId(materialUrl)
@@ -931,11 +778,12 @@ export async function generateCampaign(
 
   // 3b. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
+  let voiceProfile: VoiceProfile | null = null
   if (!voiceInstruction && customer.ae) {
-    const voice = await getVoiceProfile(customer.ae)
-    if (voice) {
-      voiceInstruction = `## Voice: ${voice.aeName}\n${voice.promptInstruction}`
-      console.log(`[campaigns] Using voice profile for ${voice.aeName}`)
+    voiceProfile = await getVoiceProfile(customer.ae)
+    if (voiceProfile) {
+      voiceInstruction = `## Voice: ${voiceProfile.aeName}\n${voiceProfile.promptInstruction}`
+      console.log(`[campaigns] Using voice profile for ${voiceProfile.aeName}`)
     }
   }
 
@@ -949,19 +797,18 @@ export async function generateCampaign(
     { role: 'Director of Platform Engineering', enabled: true },
   ]
   let resolvedContactsContext = ''
-  let resolvedExecs: ResolvedExecutive[] = []
   try {
     const rolesToResolve = enabledPersonas
       .filter(p => !p.linkedinUrl && !p.name)
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      resolvedExecs = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
-      if (resolvedExecs.length > 0) {
-        const contactLines = resolvedExecs.map(r =>
-          `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      if (resolved.length > 0) {
+        const contactLines = resolved.map(r =>
+          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
         )
-        resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name in the greeting (e.g., "Hi ${resolvedExecs[0].name},"). NEVER address an email to one person but greet a different person in the body.\n${contactLines.join('\n')}\n\nDo NOT generate emails for anyone not on this list. Do NOT duplicate any person.\n`
-        console.log(`[campaigns] Resolved ${resolvedExecs.length} executives for ${customer.name}`)
+        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
+        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
       }
     }
   } catch (e: any) {
@@ -1004,49 +851,10 @@ export async function generateCampaign(
     talkTrack: sp.talkTrack,
   }))
 
-  // 4b. Generate campaign via Gemini + quality gate (ADR-024)
+  // 4b. Generate campaign — branched by feature flag (ADR-043)
   const augmentedMaterial = materialContent + resolvedContactsContext
-  const rawMarkdown = await callGeminiForCampaign({
-    materialTitle,
-    materialContent: augmentedMaterial,
-    customerName: customer.name,
-    customerSignals: signals,
-    registrySignals,
-    deterministicContext: templateResult.deterministic,
-    voiceInstruction,
-    personas: config?.personas ?? enabledPersonas,
-    emailTemplateContext,
-    structuredPlays,
-    campaignDirective: config?.campaignDirective,
-  })
-
-  const gateResult = await validateAndRetry(
-    rawMarkdown,
-    { validator: campaignValidator },
-    async (failures) => {
-      const feedback = formatFailureFeedback(failures)
-      return callGeminiForCampaign({
-        materialTitle,
-        materialContent: augmentedMaterial + '\n\n' + feedback,
-        customerName: customer.name,
-        customerSignals: signals,
-        registrySignals,
-        deterministicContext: templateResult.deterministic,
-        voiceInstruction,
-        personas: config?.personas ?? enabledPersonas,
-        emailTemplateContext,
-        structuredPlays,
-        campaignDirective: config?.campaignDirective,
-      })
-    }
-  )
-  const markdown = gateResult.output
-  console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
-
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
-
-  // 5. Generate HTML content (for Drive AND cache)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -1055,86 +863,214 @@ export async function generateCampaign(
     minute: '2-digit',
   })
 
-  // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
-  const templateSignals: any = { ...signals }
-  try {
-    const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
-    const { resolve: pathResolve } = await import('path')
-    const intelPath = pathResolve(CACHE_DIR, 'intelligence', `${slug}.json`)
-    if (fsExists(intelPath)) {
-      templateSignals.intelligence = JSON.parse(fsRead(intelPath, 'utf-8'))
-    }
-  } catch { /* silent — template will show dashes */ }
-  // Load account plan for Strategic Initiatives section
-  try {
-    const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
-    const { resolve: pathResolve2 } = await import('path')
-    const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
-    if (fsExists2(accountPlanPath)) {
-      templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
-    }
-  } catch { /* silent */ }
-  const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
-  if (subSignals.length > 0) {
-    templateSignals.subscriptions = subSignals.map(s => ({
-      productName: s.metadata?.product ?? s.headline,
-      quantity: s.metadata?.quantity ?? 1,
-      status: 'Active',
-    }))
-  }
-  const caseSignals = registrySignals.filter(s => s.source === 'cases')
-  if (caseSignals.length > 0) templateSignals.cases = caseSignals
-  const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
-  if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
-
-  const allSignalSources = [...new Set([
-    ...loaded,
-    ...registrySignals.map(s => s.source),
-  ])]
-
-  const htmlContent = generateCampaignHTML({
-    materialTitle,
-    materialUrl,
-    customerName: customer.name,
-    aeName: customer.ae ?? 'Unknown AE',
-    generatedDate: timestamp,
-    accountTeam,
-    signals: templateSignals,
-    signalsLoaded: allSignalSources,
-    markdown,
-    contacts: resolvedExecs.length > 0 ? resolvedExecs.map(r => ({
-      name: r.name,
-      title: r.title,
-      email: r.email,
-      linkedIn: r.linkedinUrl,
-      tier: /Director|Manager|Sr\./i.test(r.role) ? 'Mid-level' as const : 'C-level' as const,
-    })) : undefined,
-  })
-
-  // 6. Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
+  let markdown = ''
+  let htmlContent = ''
+  let qualityScorecard: QualityScorecard | undefined
+  let generationPath: 'structured' | 'freeform' = 'freeform'
   let driveUrl = ''
   let htmlUrl = ''
   let driveFileId = ''
   let driveHtmlFileId = ''
-  const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
-  try {
-    const customerFolderId = await findCustomerDriveFolder(customer)
-    const driveResult = await uploadCampaignToDrive(
-      customerFolderId,
-      customer,
+
+  // Build subscription signals for template data (used by both paths)
+  const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
+
+  if (USE_STRUCTURED_CAMPAIGNS) {
+    // ── Structured two-pass path (ADR-043) ──────────────────────────────────
+    console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
+    generationPath = 'structured'
+
+    // Pass 1: Gemini data selection
+    const selection = await callGeminiForCampaignSelection({
       materialTitle,
-      htmlContent,
-      accountTeam,
-      cachedFileIds ?? undefined,
-      config?.campaignDirective,
+      materialContent: augmentedMaterial,
+      customerName: customer.name,
+      customerSignals: signals,
+      registrySignals,
+      deterministicContext: templateResult.deterministic,
+      resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
+      structuredPlays,
+      campaignDirective: config?.campaignDirective,
+    })
+
+    // Validate selection
+    const validationResult = validateCampaignSelection(
+      selection,
+      resolvedExecs.map(e => e.name),
+      getFeatureKeys(),
+      registrySignals.length,
     )
-    driveUrl = driveResult.driveUrl
-    htmlUrl = driveResult.htmlUrl
-    driveFileId = driveResult.driveFileId
-    driveHtmlFileId = driveResult.driveHtmlFileId
-    console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
-  } catch (e: any) {
-    console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    if (!validationResult.valid) {
+      console.warn(`[campaigns] Selection validation warnings:`, validationResult.reasons)
+    } else {
+      console.log(`[campaigns] Selection validation passed for ${customer.name}`)
+    }
+
+    // Pass 2: Template assembly (deterministic, no LLM)
+    htmlContent = generateCampaignFromStructured(selection, {
+      resolvedExecs: resolvedExecs.map(e => ({
+        name: e.name,
+        title: e.title,
+        email: e.email,
+        linkedIn: e.linkedinUrl,
+      })),
+      signals: registrySignals,
+      voiceProfile,
+      accountTeam,
+      subscriptions: subSignals.map(s => ({
+        product: s.metadata?.product as string ?? s.headline,
+        quantity: s.metadata?.quantity as number ?? 1,
+        status: 'Active',
+      })),
+      structuredPlays,
+      customerName: customer.name,
+      materialTitle,
+      materialUrl,
+      generatedDate: timestamp,
+    })
+
+    // Store selection JSON as markdown equivalent for cache compatibility
+    markdown = JSON.stringify(selection, null, 2)
+    console.log(`[campaigns] Structured campaign generated (${htmlContent.length} chars HTML, ${selection.emails.length} emails)`)
+
+    // Upload to Drive with pre-built HTML
+    const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
+    try {
+      const customerFolderId = await findCustomerDriveFolder(customer)
+      const driveResult = await uploadCampaignToDrive(
+        customerFolderId,
+        customer,
+        materialTitle,
+        materialUrl,
+        markdown,
+        customer.ae ?? 'Unknown AE',
+        signals,
+        accountTeam,
+        cachedFileIds ?? undefined,
+        config?.campaignDirective,
+        htmlContent,  // pre-built HTML — skips internal generateCampaignHTML
+      )
+      driveUrl = driveResult.driveUrl
+      htmlUrl = driveResult.htmlUrl
+      driveFileId = driveResult.driveFileId
+      driveHtmlFileId = driveResult.driveHtmlFileId
+      console.log(`[campaigns] Uploaded structured campaign to Drive: ${driveUrl}`)
+    } catch (e: any) {
+      console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    }
+
+  } else {
+    // ── Freeform path (existing behavior, unchanged) ────────────────────────
+    console.log(`[campaigns] Using FREEFORM generation path for ${customer.name}`)
+    const rawMarkdown = await callGeminiForCampaign({
+      materialTitle,
+      materialContent: augmentedMaterial,
+      customerName: customer.name,
+      customerSignals: signals,
+      registrySignals,
+      deterministicContext: templateResult.deterministic,
+      voiceInstruction,
+      personas: config?.personas ?? enabledPersonas,
+      emailTemplateContext,
+      structuredPlays,
+      campaignDirective: config?.campaignDirective,
+    })
+
+    const gateResult = await validateAndRetry(
+      rawMarkdown,
+      { validator: campaignValidator },
+      async (failures) => {
+        const feedback = formatFailureFeedback(failures)
+        return callGeminiForCampaign({
+          materialTitle,
+          materialContent: augmentedMaterial + '\n\n' + feedback,
+          customerName: customer.name,
+          customerSignals: signals,
+          registrySignals,
+          deterministicContext: templateResult.deterministic,
+          voiceInstruction,
+          personas: config?.personas ?? enabledPersonas,
+          emailTemplateContext,
+          structuredPlays,
+          campaignDirective: config?.campaignDirective,
+        })
+      }
+    )
+    markdown = gateResult.output
+    qualityScorecard = gateResult.scorecard
+    console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
+
+    // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
+    const templateSignals: any = { ...signals }
+    try {
+      const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
+      const { resolve: pathResolve } = await import('path')
+      const intelCachePath = pathResolve(CACHE_DIR, 'intelligence', `${slug}.json`)
+      if (fsExists(intelCachePath)) {
+        templateSignals.intelligence = JSON.parse(fsRead(intelCachePath, 'utf-8'))
+      }
+    } catch { /* silent — template will show dashes */ }
+    try {
+      const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
+      const { resolve: pathResolve2 } = await import('path')
+      const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+      if (fsExists2(accountPlanPath)) {
+        templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
+      }
+    } catch { /* silent */ }
+    if (subSignals.length > 0) {
+      templateSignals.subscriptions = subSignals.map(s => ({
+        productName: s.metadata?.product ?? s.headline,
+        quantity: s.metadata?.quantity ?? 1,
+        status: 'Active',
+      }))
+    }
+    const caseSignals = registrySignals.filter(s => s.source === 'cases')
+    if (caseSignals.length > 0) templateSignals.cases = caseSignals
+    const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
+    if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
+
+    const allSignalSources = [...new Set([
+      ...loaded,
+      ...registrySignals.map(s => s.source),
+    ])]
+
+    htmlContent = generateCampaignHTML({
+      materialTitle,
+      materialUrl,
+      customerName: customer.name,
+      aeName: customer.ae ?? 'Unknown AE',
+      generatedDate: timestamp,
+      accountTeam,
+      signals: templateSignals,
+      signalsLoaded: allSignalSources,
+      markdown,
+    })
+
+    // Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
+    const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
+    try {
+      const customerFolderId = await findCustomerDriveFolder(customer)
+      const driveResult = await uploadCampaignToDrive(
+        customerFolderId,
+        customer,
+        materialTitle,
+        materialUrl,
+        markdown,
+        customer.ae ?? 'Unknown AE',
+        templateSignals,
+        accountTeam,
+        cachedFileIds ?? undefined,
+        config?.campaignDirective,
+      )
+      driveUrl = driveResult.driveUrl
+      htmlUrl = driveResult.htmlUrl
+      driveFileId = driveResult.driveFileId
+      driveHtmlFileId = driveResult.driveHtmlFileId
+      console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
+    } catch (e: any) {
+      console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    }
   }
 
   // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
@@ -1152,8 +1088,9 @@ export async function generateCampaign(
     driveHtmlFileId: driveHtmlFileId || undefined,
     signalsLoaded: loaded,
     signalsMissing: missing,
-    qualityScorecard: gateResult.scorecard,
+    qualityScorecard,
     campaignDirective: config?.campaignDirective,
+    generationPath,
   })
 
   return {
@@ -1309,7 +1246,7 @@ export async function generateCampaignFromPlay(
       .filter(p => !p.linkedinUrl && !p.name)  // Only resolve generic personas
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
       if (resolved.length > 0) {
         const contactLines = resolved.map(r =>
           `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
@@ -1388,8 +1325,9 @@ export async function generateCampaignFromPlay(
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
     const driveResult = await uploadCampaignToDrive(
-      customerFolderId, customer, materialTitle,
-      htmlContent, accountTeam,
+      customerFolderId, customer, materialTitle, playMaterialKey,
+      markdown, customer.ae ?? 'Unknown AE', signals,
+      accountTeam,
       cachedFileIds ?? undefined,
       config?.campaignDirective,
     )
