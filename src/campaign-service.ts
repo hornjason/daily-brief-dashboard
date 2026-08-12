@@ -117,6 +117,8 @@ interface CampaignCacheEntry {
   generatedAt: string
   driveUrl: string
   htmlUrl: string
+  driveFileId?: string
+  driveHtmlFileId?: string
   signalsLoaded?: string[]
   signalsMissing?: string[]
   qualityScorecard?: QualityScorecard
@@ -179,8 +181,8 @@ const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect cre
 
 Every generated email MUST pass ALL of these rules:
 
-1. **Word limits:** Executive tier = 90 words max; Manager tier = 200-250 words
-WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 90 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
+1. **Word limits:** Executive tier = 120 words max; Manager tier = 200-250 words
+WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 120 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
 2. **Technical observations only** — no firmographic facts ("You're a $2B company")
 3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
 4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
@@ -207,7 +209,7 @@ WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 90 words will be reje
 
 ## Two Email Tiers (6 personas total)
 
-### Executive Tier (3 personas, 90 words max each)
+### Executive Tier (3 personas, 120 words max each)
 Purpose: Competitive urgency, strategic. Designed to be forwarded DOWN with "thoughts?"
 Structure: Competitive observation (1 sentence) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 1 sentence) → Peer proof (1 sentence) → ACTION STEP: "[AE name] should [specific ask] by [timeframe]." (1 sentence, MANDATORY — email is incomplete without this)
 
@@ -294,9 +296,12 @@ export async function callGeminiForCampaign(opts: {
 
   // Build persona list (filter to enabled only)
   const enabledPersonas = opts.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
     { role: 'VP Infrastructure', enabled: true },
     { role: 'VP Operations', enabled: true },
-    { role: 'CIO', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
   ]
 
   // Build persona instructions — use LinkedIn URL for targeted individuals, generic role otherwise
@@ -396,6 +401,30 @@ async function ensureCampaignsSubfolder(customerFolderId: string): Promise<strin
   return driveClient.ensureChildFolder(customerFolderId, 'Campaigns')
 }
 
+function findExistingDriveFileIds(
+  customerSlug: string,
+  materialUrl: string,
+): { driveFileId?: string; driveHtmlFileId?: string } | null {
+  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
+  if (!existsSync(campaignsDir)) return null
+
+  const files = readdirSync(campaignsDir).filter(f => f.startsWith(`${customerSlug}-`) && f.endsWith('.json'))
+  let latest: CampaignCacheEntry | null = null
+
+  for (const file of files) {
+    try {
+      const entry: CampaignCacheEntry = JSON.parse(readFileSync(resolve(campaignsDir, file), 'utf-8'))
+      if (entry.materialUrl === materialUrl && (entry.driveFileId || entry.driveHtmlFileId)) {
+        if (!latest || new Date(entry.generatedAt) > new Date(latest.generatedAt)) {
+          latest = entry
+        }
+      }
+    } catch { /* skip corrupt entries */ }
+  }
+
+  return latest ? { driveFileId: latest.driveFileId, driveHtmlFileId: latest.driveHtmlFileId } : null
+}
+
 async function uploadCampaignToDrive(
   customerFolderId: string,
   customer: Customer,
@@ -405,16 +434,17 @@ async function uploadCampaignToDrive(
   aeName: string,
   signals: CustomerSignals,
   accountTeamOverride?: import('./types.ts').AccountTeamMember[],
-): Promise<{ driveUrl: string; htmlUrl: string }> {
+  existingFileIds?: { driveFileId?: string; driveHtmlFileId?: string },
+): Promise<{ driveUrl: string; htmlUrl: string; driveFileId: string; driveHtmlFileId: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
   const docName = `${materialTitle} - Campaign for ${customer.name}`
 
-  // Use driveClient.upsertDoc which creates the doc via Docs API batchUpdate (#314)
-  // instead of uploading HTML. Native formatting — no HTML re-interpretation.
-  const driveUrl = await driveClient.upsertDoc(campaignsFolderId, docName, markdown)
-  console.log(`[campaigns] Created Google Doc via Docs API: ${docName} → ${driveUrl}`)
+  // Google Doc: use rewrite mode to preserve URL on re-runs (#1059)
+  const driveUrl = await driveClient.upsertDoc(campaignsFolderId, docName, markdown, { onConflict: 'rewrite' })
+  const driveFileId = extractFileId(driveUrl) ?? ''
+  console.log(`[campaigns] Upserted Google Doc (rewrite): ${docName} → ${driveUrl}`)
 
-  // HTML file kept for browser preview — still uses generateCampaignHTML
+  // HTML file: PATCH existing if cached ID available, else create (#1059)
   const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -436,23 +466,51 @@ async function uploadCampaignToDrive(
 
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
-  const htmlResponse = await drive.files.create({
-    requestBody: {
-      name: `${docName}.html`,
-      parents: [campaignsFolderId],
-    },
-    media: {
-      mimeType: 'text/html',
-      body: Readable.from(Buffer.from(htmlContent)),
-    },
-    fields: 'id,webViewLink',
-    supportsAllDrives: true,
-  })
+  let htmlFileId = ''
+  let htmlUrl = ''
 
-  const htmlUrl = htmlResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlResponse.data.id}/view`
-  console.log(`[campaigns] Created HTML file: ${docName}.html → ${htmlUrl}`)
+  if (existingFileIds?.driveHtmlFileId) {
+    try {
+      const updateResponse = await drive.files.update({
+        fileId: existingFileIds.driveHtmlFileId,
+        media: {
+          mimeType: 'text/html',
+          body: Readable.from(Buffer.from(htmlContent)),
+        },
+        fields: 'id,webViewLink',
+        supportsAllDrives: true,
+      })
+      htmlFileId = updateResponse.data.id ?? existingFileIds.driveHtmlFileId
+      htmlUrl = updateResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlFileId}/view`
+      console.log(`[campaigns] Updated HTML file in-place (PATCH): ${htmlFileId}`)
+    } catch (e: any) {
+      if (e?.code === 404 || e?.status === 404) {
+        console.warn(`[campaigns] Cached HTML file ${existingFileIds.driveHtmlFileId} not found (404) — creating new`)
+      } else {
+        console.warn(`[campaigns] HTML update failed — creating new:`, e?.message)
+      }
+    }
+  }
 
-  return { driveUrl, htmlUrl }
+  if (!htmlFileId) {
+    const htmlResponse = await drive.files.create({
+      requestBody: {
+        name: `${docName}.html`,
+        parents: [campaignsFolderId],
+      },
+      media: {
+        mimeType: 'text/html',
+        body: Readable.from(Buffer.from(htmlContent)),
+      },
+      fields: 'id,webViewLink',
+      supportsAllDrives: true,
+    })
+    htmlFileId = htmlResponse.data.id ?? ''
+    htmlUrl = htmlResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlFileId}/view`
+    console.log(`[campaigns] Created HTML file: ${docName}.html → ${htmlUrl}`)
+  }
+
+  return { driveUrl, htmlUrl, driveFileId, driveHtmlFileId: htmlFileId }
 }
 
 // ── Cache persistence ────────────────────────────────────────────────────────
@@ -620,6 +678,34 @@ export async function generateCampaign(
     }
   }
 
+  // 3c. Resolve real executives for campaign personas (#1055)
+  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
+    { role: 'VP Infrastructure', enabled: true },
+    { role: 'VP Operations', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
+  ]
+  let resolvedContactsContext = ''
+  try {
+    const rolesToResolve = enabledPersonas
+      .filter(p => !p.linkedinUrl && !p.name)
+      .map(p => p.role)
+    if (rolesToResolve.length > 0) {
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      if (resolved.length > 0) {
+        const contactLines = resolved.map(r =>
+          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
+        )
+        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
+        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
+  }
+
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
   // Uses solution-intelligence signals from loadCustomerSignals() instead of
   // direct module import (PRINCIPLES.md Layer 3 compliance).
@@ -657,15 +743,16 @@ export async function generateCampaign(
   }))
 
   // 4b. Generate campaign via Gemini + quality gate (ADR-024)
+  const augmentedMaterial = materialContent + resolvedContactsContext
   const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
-    materialContent,
+    materialContent: augmentedMaterial,
     customerName: customer.name,
     customerSignals: signals,
     registrySignals,
     deterministicContext: templateResult.deterministic,
     voiceInstruction,
-    personas: config?.personas,
+    personas: config?.personas ?? enabledPersonas,
     emailTemplateContext,
     structuredPlays,
     campaignDirective: config?.campaignDirective,
@@ -678,13 +765,13 @@ export async function generateCampaign(
       const feedback = formatFailureFeedback(failures)
       return callGeminiForCampaign({
         materialTitle,
-        materialContent: materialContent + '\n\n' + feedback,
+        materialContent: augmentedMaterial + '\n\n' + feedback,
         customerName: customer.name,
         customerSignals: signals,
         registrySignals,
         deterministicContext: templateResult.deterministic,
         voiceInstruction,
-        personas: config?.personas,
+        personas: config?.personas ?? enabledPersonas,
         emailTemplateContext,
         structuredPlays,
         campaignDirective: config?.campaignDirective,
@@ -746,9 +833,12 @@ export async function generateCampaign(
     markdown,
   })
 
-  // 6. Upload to Drive (Google Doc + HTML file)
+  // 6. Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
   let driveUrl = ''
   let htmlUrl = ''
+  let driveFileId = ''
+  let driveHtmlFileId = ''
+  const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
     const driveResult = await uploadCampaignToDrive(
@@ -760,16 +850,18 @@ export async function generateCampaign(
       customer.ae ?? 'Unknown AE',
       signals,
       accountTeam,
+      cachedFileIds ?? undefined,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
+    driveFileId = driveResult.driveFileId
+    driveHtmlFileId = driveResult.driveHtmlFileId
     console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
   } catch (e: any) {
     console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
-    // Non-fatal — cached markdown is still available
   }
 
-  // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard)
+  // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
@@ -780,6 +872,8 @@ export async function generateCampaign(
     generatedAt,
     driveUrl,
     htmlUrl,
+    driveFileId: driveFileId || undefined,
+    driveHtmlFileId: driveHtmlFileId || undefined,
     signalsLoaded: loaded,
     signalsMissing: missing,
     qualityScorecard: gateResult.scorecard,
@@ -926,9 +1020,12 @@ export async function generateCampaignFromPlay(
 
   // #670: Resolve real executives for campaign personas
   const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
     { role: 'VP Infrastructure', enabled: true },
     { role: 'VP Operations', enabled: true },
-    { role: 'CIO', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
   ]
   let resolvedContactsContext = ''
   try {
@@ -1005,18 +1102,25 @@ export async function generateCampaignFromPlay(
     markdown,
   })
 
-  // Upload to Drive
+  // Upload to Drive — PATCH existing on re-runs (#1059)
   let driveUrl = ''
   let htmlUrl = ''
+  let driveFileId = ''
+  let driveHtmlFileId = ''
+  const playMaterialKey = `play:${playContext.playName}`
+  const cachedFileIds = findExistingDriveFileIds(slug, playMaterialKey)
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
     const driveResult = await uploadCampaignToDrive(
-      customerFolderId, customer, materialTitle, '',
+      customerFolderId, customer, materialTitle, playMaterialKey,
       markdown, customer.ae ?? 'Unknown AE', signals,
       accountTeam,
+      cachedFileIds ?? undefined,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
+    driveFileId = driveResult.driveFileId
+    driveHtmlFileId = driveResult.driveHtmlFileId
   } catch (e: any) {
     console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
   }
@@ -1025,13 +1129,15 @@ export async function generateCampaignFromPlay(
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
-    materialUrl: '',
+    materialUrl: playMaterialKey,
     customerName: customer.name,
     markdown,
     htmlContent,
     generatedAt,
     driveUrl,
     htmlUrl,
+    driveFileId: driveFileId || undefined,
+    driveHtmlFileId: driveHtmlFileId || undefined,
     signalsLoaded: loaded,
     signalsMissing: missing,
     qualityScorecard: gateResult.scorecard,
