@@ -23,8 +23,8 @@ describe('CAMPAIGN_SYSTEM_PROMPT validation', () => {
 
   systemPrompt = match[1]
 
-  test('contains word limit rule (90 words)', () => {
-    expect(systemPrompt.toLowerCase()).toMatch(/90 words/)
+  test('contains word limit rule (120 words)', () => {
+    expect(systemPrompt.toLowerCase()).toMatch(/120 words/)
   })
 
   test('contains technical observations only rule (no firmographic)', () => {

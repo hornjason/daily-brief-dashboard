@@ -65,6 +65,24 @@ OpenShift integrates:
 - Compliance evidence generation
 
 Context: Mike leads the DevOps team that ran the pilot.
+
+## Sr. Manager Cloud Ops — Manager Tier
+Subject: Hybrid infrastructure visibility gaps multiply at enterprise scale
+
+Hi Rachel,
+
+Your cloud operations team manages workloads across on-premise data centers and AWS and the Kubernetes pilot introduced a third infrastructure paradigm requiring unified observability. Most cloud ops teams discover that existing monitoring tools create blind spots when container workloads interact with traditional VMs and cloud services creating longer incident resolution times and difficulty tracing root causes across infrastructure boundaries that span multiple technology stacks. Manufacturing uptime requirements make these visibility gaps particularly costly when production systems depend on interconnected services. When a containerized quality control application depends on an on-premise database and an AWS message queue a single point of failure cascades across environments. Your team needs correlated telemetry that connects container events to infrastructure metrics to application health in one unified view that operators can navigate quickly during incidents. Red Hat Advanced Cluster Management with OpenShift provides the cross-environment visibility and governance your operations team needs to maintain manufacturing uptime requirements. Unified dashboards spanning containers VMs and cloud infrastructure give operators a single pane of glass for all managed environments. Automated fleet management with policy-based governance ensures consistent configuration across clusters while integrated alerting correlates events across hybrid infrastructure boundaries to surface root causes faster. Rachel should schedule a hybrid infrastructure review by end of month.
+
+Context: Rachel manages cloud operations.
+
+## Director Platform Engineering — Manager Tier
+Subject: Developer self-service eliminates the provisioning queue engineers hate
+
+Hi Sarah,
+
+Your platform engineering team handles provisioning requests from development teams across five locations and the current request-based workflow creates a bottleneck that frustrates developers and overloads your team with repetitive manual configuration work that consumes engineering hours. Each new environment request requires manual review configuration and validation before developers can begin working on their assigned projects. This queue-based provisioning approach made sense with traditional infrastructure but does not scale with container-native development practices that demand rapid iteration cycles and fast feedback loops. The Kubernetes pilot demonstrated that developers are ready for self-service capabilities and will adopt them eagerly. Your team saw three times faster deployments because developers could iterate without waiting in a provisioning queue that averaged two weeks. Scaling that experience enterprise-wide requires guardrails that give developers freedom while maintaining security and compliance boundaries that satisfy governance requirements across all business units. Red Hat Developer Hub combined with OpenShift provides a platform engineering toolkit designed for regulated enterprises that need both speed and control. Golden path templates enforce organizational standards while enabling developer self-service through approved patterns and workflows. The software catalog provides automated documentation and dependency tracking while built-in compliance controls make the secure path the easiest path for every developer. Sarah should set up a platform engineering workshop within two weeks.
+
+Context: Sarah is building the internal developer platform.
 `
 
 function makeCampaign(positioningSection: string): string {

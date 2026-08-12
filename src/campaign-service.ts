@@ -179,8 +179,8 @@ const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect cre
 
 Every generated email MUST pass ALL of these rules:
 
-1. **Word limits:** Executive tier = 90 words max; Manager tier = 200-250 words
-WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 90 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
+1. **Word limits:** Executive tier = 120 words max; Manager tier = 200-250 words
+WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 120 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
 2. **Technical observations only** — no firmographic facts ("You're a $2B company")
 3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
 4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
@@ -207,7 +207,7 @@ WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 90 words will be reje
 
 ## Two Email Tiers (6 personas total)
 
-### Executive Tier (3 personas, 90 words max each)
+### Executive Tier (3 personas, 120 words max each)
 Purpose: Competitive urgency, strategic. Designed to be forwarded DOWN with "thoughts?"
 Structure: Competitive observation (1 sentence) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 1 sentence) → Peer proof (1 sentence) → ACTION STEP: "[AE name] should [specific ask] by [timeframe]." (1 sentence, MANDATORY — email is incomplete without this)
 
@@ -294,9 +294,12 @@ export async function callGeminiForCampaign(opts: {
 
   // Build persona list (filter to enabled only)
   const enabledPersonas = opts.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
     { role: 'VP Infrastructure', enabled: true },
     { role: 'VP Operations', enabled: true },
-    { role: 'CIO', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
   ]
 
   // Build persona instructions — use LinkedIn URL for targeted individuals, generic role otherwise
@@ -620,6 +623,34 @@ export async function generateCampaign(
     }
   }
 
+  // 3c. Resolve real executives for campaign personas (#1055)
+  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
+    { role: 'VP Infrastructure', enabled: true },
+    { role: 'VP Operations', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
+  ]
+  let resolvedContactsContext = ''
+  try {
+    const rolesToResolve = enabledPersonas
+      .filter(p => !p.linkedinUrl && !p.name)
+      .map(p => p.role)
+    if (rolesToResolve.length > 0) {
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      if (resolved.length > 0) {
+        const contactLines = resolved.map(r =>
+          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
+        )
+        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
+        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
+  }
+
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
   // Uses solution-intelligence signals from loadCustomerSignals() instead of
   // direct module import (PRINCIPLES.md Layer 3 compliance).
@@ -657,15 +688,16 @@ export async function generateCampaign(
   }))
 
   // 4b. Generate campaign via Gemini + quality gate (ADR-024)
+  const augmentedMaterial = materialContent + resolvedContactsContext
   const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
-    materialContent,
+    materialContent: augmentedMaterial,
     customerName: customer.name,
     customerSignals: signals,
     registrySignals,
     deterministicContext: templateResult.deterministic,
     voiceInstruction,
-    personas: config?.personas,
+    personas: config?.personas ?? enabledPersonas,
     emailTemplateContext,
     structuredPlays,
     campaignDirective: config?.campaignDirective,
@@ -678,13 +710,13 @@ export async function generateCampaign(
       const feedback = formatFailureFeedback(failures)
       return callGeminiForCampaign({
         materialTitle,
-        materialContent: materialContent + '\n\n' + feedback,
+        materialContent: augmentedMaterial + '\n\n' + feedback,
         customerName: customer.name,
         customerSignals: signals,
         registrySignals,
         deterministicContext: templateResult.deterministic,
         voiceInstruction,
-        personas: config?.personas,
+        personas: config?.personas ?? enabledPersonas,
         emailTemplateContext,
         structuredPlays,
         campaignDirective: config?.campaignDirective,
@@ -926,9 +958,12 @@ export async function generateCampaignFromPlay(
 
   // #670: Resolve real executives for campaign personas
   const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
+    { role: 'CIO', enabled: true },
     { role: 'VP Infrastructure', enabled: true },
     { role: 'VP Operations', enabled: true },
-    { role: 'CIO', enabled: true },
+    { role: 'Director of IT', enabled: true },
+    { role: 'Sr. Manager, Cloud Operations', enabled: true },
+    { role: 'Director of Platform Engineering', enabled: true },
   ]
   let resolvedContactsContext = ''
   try {

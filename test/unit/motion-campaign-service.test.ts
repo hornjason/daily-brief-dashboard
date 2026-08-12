@@ -115,7 +115,7 @@ describe('motion-campaign-service', () => {
     expect(mockCallGemini).toHaveBeenCalledTimes(4)
   })
 
-  it('executive personas get 90-word tier', async () => {
+  it('executive personas get 120-word tier', async () => {
     const motion = makeMotion({
       phases: [
         makePhase({
@@ -135,10 +135,10 @@ describe('motion-campaign-service', () => {
       expect(email.templateTier).toBe('executive')
     }
 
-    // Verify the system prompt mentions 90-word limit for each call
+    // Verify the system prompt mentions 120-word limit for each call
     for (const call of mockCallGemini.mock.calls) {
       const systemPrompt = call[0] as string
-      expect(systemPrompt).toContain('90 words')
+      expect(systemPrompt).toContain('120 words')
     }
   })
 
