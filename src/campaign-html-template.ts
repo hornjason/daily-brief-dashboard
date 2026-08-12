@@ -284,17 +284,24 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
 
   const planText = signals?.accountPlan || ''
   if (planText) {
+    // Match multiple account plan formats:
+    // Format 1: "Strategic Objectives:" section
+    // Format 2: "IT and Modernization Initiatives" with bold bullet items
+    // Format 3: "Why Red Hat?" section with bold items
     const objectivesSection = planText.match(/Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
       || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
+      || planText.match(/Modernization Initiatives[\s\S]*?(?=\n##\s|$)/i)
+      || planText.match(/Why Red Hat\?[\s\S]*?(?=\n##\s|$)/i)
     if (objectivesSection) {
       const objectiveRegex = /\*\*([^*]+)\*\*:?\s*([^*\n]+)/g
       let objMatch
       while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
         const name = objMatch[1].trim()
         const detail = objMatch[2].trim()
-        if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account')) {
+        if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account') && !name.includes('Why Red Hat')) {
           result.initiatives.push({ name, priority: 'HIGH', detail })
         }
+        if (result.initiatives.length >= 5) break
       }
     }
 
