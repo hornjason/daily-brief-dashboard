@@ -899,7 +899,7 @@ export async function generateCampaign(
       materialUrl,
       markdown,
       customer.ae ?? 'Unknown AE',
-      signals,
+      templateSignals,
       accountTeam,
       cachedFileIds ?? undefined,
     )
