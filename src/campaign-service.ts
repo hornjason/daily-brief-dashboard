@@ -560,6 +560,29 @@ async function uploadCampaignToDrive(
     console.log(`[campaigns] Created HTML file: ${docName}.html → ${htmlUrl}`)
   }
 
+  // Auto-share with AE and SSPs from account team
+  if (driveFileId) {
+    const teamToShare = accountTeam.filter(m => ['ae', 'ssp', 'ssa'].includes(m.role))
+    for (const member of teamToShare) {
+      const nameParts = member.name.toLowerCase().split(/\s+/)
+      if (nameParts.length < 2) continue
+      const email = `${nameParts[0]}.${nameParts[nameParts.length - 1]}@redhat.com`
+      try {
+        await drive.permissions.create({
+          fileId: driveFileId,
+          requestBody: { type: 'user', role: 'writer', emailAddress: email },
+          sendNotificationEmail: false,
+          supportsAllDrives: true,
+        } as any)
+      } catch (e: any) {
+        if (!e?.message?.includes('already has access')) {
+          console.warn(`[campaigns] Share failed for ${email}: ${e?.message?.substring(0, 80)}`)
+        }
+      }
+    }
+    console.log(`[campaigns] Shared doc with ${teamToShare.length} team members`)
+  }
+
   return { driveUrl, htmlUrl, driveFileId, driveHtmlFileId: htmlFileId }
 }
 
