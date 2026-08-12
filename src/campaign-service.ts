@@ -438,9 +438,14 @@ async function uploadCampaignToDrive(
   signals: CustomerSignals,
   accountTeamOverride?: import('./types.ts').AccountTeamMember[],
   existingFileIds?: { driveFileId?: string; driveHtmlFileId?: string },
+  campaignDirective?: string,
 ): Promise<{ driveUrl: string; htmlUrl: string; driveFileId: string; driveHtmlFileId: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
-  const docName = `${materialTitle} - Campaign for ${customer.name}`
+  // Use campaign directive for doc name when available, fall back to material title
+  const campaignLabel = campaignDirective
+    ? campaignDirective.split(/[.!?\n]/)[0].trim().substring(0, 60)
+    : materialTitle
+  const docName = `${campaignLabel} - ${customer.name}`
 
   // Build HTML content first — used for BOTH Google Doc and HTML preview (#1054)
   const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
@@ -928,6 +933,7 @@ export async function generateCampaign(
       templateSignals,
       accountTeam,
       cachedFileIds ?? undefined,
+      config?.campaignDirective,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
@@ -1193,6 +1199,7 @@ export async function generateCampaignFromPlay(
       markdown, customer.ae ?? 'Unknown AE', signals,
       accountTeam,
       cachedFileIds ?? undefined,
+      config?.campaignDirective,
     )
     driveUrl = driveResult.driveUrl
     htmlUrl = driveResult.htmlUrl
