@@ -94,11 +94,11 @@ function validateMarkdown(output: string): QualityScorecard {
   // Extract email blocks — they start with ## headers containing persona/tier info
   const emailBlocks = extractEmailBlocks(output)
 
-  // 4. Email templates count — >= 4
+  // 4. Email templates count — >= 6 (3 exec + 3 manager)
   checks.push({
     name: 'email-templates-count',
-    passed: emailBlocks.length >= 4,
-    expected: '>= 4 email templates (exec + manager tiers)',
+    passed: emailBlocks.length >= 6,
+    expected: '>= 6 email templates (3 exec + 3 manager)',
     actual: `${emailBlocks.length} email templates found`,
     severity: 'required',
   })
@@ -281,12 +281,12 @@ function validateStructured(campaign: any): QualityScorecard {
     severity: 'required',
   })
 
-  // Email count
+  // Email count — 6 minimum (3 exec + 3 manager)
   const emails = campaign.emails ?? []
   checks.push({
     name: 'email-templates-count',
-    passed: emails.length >= 4,
-    expected: '>= 4 email templates',
+    passed: emails.length >= 6,
+    expected: '>= 6 email templates (3 exec + 3 manager)',
     actual: `${emails.length} emails`,
     severity: 'required',
   })
@@ -308,6 +308,40 @@ function validateStructured(campaign: any): QualityScorecard {
     passed: emails.length > 0 && withBodies.length === emails.length,
     expected: 'Every email body >= 150 chars',
     actual: `${withBodies.length}/${emails.length} have sufficient bodies`,
+    severity: 'required',
+  })
+
+  // Word count per tier — exec <=120, manager 200-250
+  const execEmails = emails.filter((e: any) => e.tier === 'executive')
+  const mgrEmails = emails.filter((e: any) => e.tier === 'manager')
+  const wordCount = (text: string) => text.split(/\s+/).filter((w: string) => w.length > 0).length
+
+  const execOverLimit = execEmails.filter((e: any) => wordCount(e.body ?? '') > 120)
+  checks.push({
+    name: 'exec-word-count',
+    passed: execEmails.length === 0 || execOverLimit.length === 0,
+    expected: 'Executive emails <= 120 words each',
+    actual: execEmails.length > 0
+      ? (execOverLimit.length === 0
+        ? `all ${execEmails.length} exec emails within limit`
+        : `${execOverLimit.length}/${execEmails.length} exceed 120 words (${execOverLimit.map((e: any) => wordCount(e.body ?? '')).join(', ')} words)`)
+      : 'no executive emails',
+    severity: 'required',
+  })
+
+  const mgrOutOfRange = mgrEmails.filter((e: any) => {
+    const wc = wordCount(e.body ?? '')
+    return wc < 200 || wc > 250
+  })
+  checks.push({
+    name: 'manager-word-count',
+    passed: mgrEmails.length === 0 || mgrOutOfRange.length === 0,
+    expected: 'Manager emails 200-250 words each',
+    actual: mgrEmails.length > 0
+      ? (mgrOutOfRange.length === 0
+        ? `all ${mgrEmails.length} manager emails within range`
+        : `${mgrOutOfRange.length}/${mgrEmails.length} outside 200-250 range (${mgrOutOfRange.map((e: any) => wordCount(e.body ?? '')).join(', ')} words)`)
+      : 'no manager emails',
     severity: 'required',
   })
 
