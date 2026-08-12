@@ -169,6 +169,23 @@ function validateMarkdown(output: string): QualityScorecard {
     severity: 'recommended',
   })
 
+  // 7c. Link diversity — emails should use different URLs, not all generic
+  const allLinks = emailBlocks.flatMap(b => {
+    const linkMatches = b.match(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g) || []
+    return linkMatches.map(m => {
+      const urlMatch = m.match(/\((https?:\/\/[^)]+)\)/)
+      return urlMatch ? urlMatch[1] : null
+    }).filter(Boolean)
+  }) as string[]
+  const uniqueLinks = new Set(allLinks)
+  checks.push({
+    name: 'link-diversity',
+    passed: allLinks.length < 3 || uniqueLinks.size >= Math.min(6, allLinks.length),
+    expected: 'At least 6 unique URLs across all emails (not all generic)',
+    actual: `${uniqueLinks.size} unique URLs across ${allLinks.length} total links`,
+    severity: 'recommended',
+  })
+
   // 8. Relationship context — each email has a relationship context line
   const relationshipCount = emailBlocks.filter(b =>
     /relationship|context|connection|rapport|history/i.test(b)

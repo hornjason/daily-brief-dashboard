@@ -197,7 +197,8 @@ WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 120 words will be rej
    - OpenShift Virtualization: https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization
    - RHEL: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux
    - RHEL AI: https://www.redhat.com/en/products/ai/enterprise-linux-ai
-   IMPORTANT: Each bullet MUST use the most specific URL that matches the feature being described. Do NOT use the generic Ansible page for specific features like AIOps or Event-Driven Ansible.
+   CRITICAL URL RULE: Each of the 3 bullets in each email MUST link to a DIFFERENT, SPECIFIC URL from this list. The generic Ansible page (redhat.com/en/technologies/management/ansible) may be used AT MOST ONCE across all 6 emails. If a bullet mentions AIOps, link to the AIOps URL. If it mentions Event-Driven Ansible, link to the Event-Driven URL. If it mentions Lightspeed, link to the Lightspeed URL. NEVER default all bullets to the generic page.
+   Across all 6 emails, you must use AT LEAST 6 different URLs from this registry.
    Format each bullet as: * [Feature Name](url): description sentence
 5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
 6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
