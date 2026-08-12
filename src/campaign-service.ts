@@ -439,12 +439,7 @@ async function uploadCampaignToDrive(
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
   const docName = `${materialTitle} - Campaign for ${customer.name}`
 
-  // Google Doc: use rewrite mode to preserve URL on re-runs (#1059)
-  const driveUrl = await driveClient.upsertDoc(campaignsFolderId, docName, markdown, { onConflict: 'rewrite' })
-  const driveFileId = extractFileId(driveUrl) ?? ''
-  console.log(`[campaigns] Upserted Google Doc (rewrite): ${docName} → ${driveUrl}`)
-
-  // HTML file: PATCH existing if cached ID available, else create (#1059)
+  // Build HTML content first — used for BOTH Google Doc and HTML preview (#1054)
   const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -464,8 +459,55 @@ async function uploadCampaignToDrive(
     markdown,
   })
 
+  // Google Doc: upload HTML (not markdown) so all template sections render (#1054)
+  // HTML-to-Google-Doc conversion preserves formatting, tables, and styling
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
+
+  let driveFileId = ''
+  let driveUrl = ''
+
+  if (existingFileIds?.driveFileId) {
+    try {
+      await drive.files.update({
+        fileId: existingFileIds.driveFileId,
+        media: {
+          mimeType: 'text/html',
+          body: Readable.from(Buffer.from(htmlContent)),
+        },
+        supportsAllDrives: true,
+      })
+      driveFileId = existingFileIds.driveFileId
+      driveUrl = `https://docs.google.com/document/d/${driveFileId}/edit`
+      console.log(`[campaigns] Updated Google Doc in-place (PATCH): ${driveUrl}`)
+    } catch (e: any) {
+      if (e?.code === 404 || e?.status === 404) {
+        console.warn(`[campaigns] Cached doc ${existingFileIds.driveFileId} not found — creating new`)
+      } else {
+        console.warn(`[campaigns] Doc update failed — creating new:`, e?.message)
+      }
+    }
+  }
+
+  if (!driveFileId) {
+    const docResponse = await drive.files.create({
+      requestBody: {
+        name: docName,
+        mimeType: 'application/vnd.google-apps.document',
+        parents: [campaignsFolderId],
+      },
+      media: {
+        mimeType: 'text/html',
+        body: Readable.from(Buffer.from(htmlContent)),
+      },
+      fields: 'id,webViewLink',
+      supportsAllDrives: true,
+    })
+    driveFileId = docResponse.data.id ?? ''
+    driveUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${driveFileId}/edit`
+    console.log(`[campaigns] Created Google Doc from HTML: ${docName} → ${driveUrl}`)
+  }
+
   let htmlFileId = ''
   let htmlUrl = ''
 
