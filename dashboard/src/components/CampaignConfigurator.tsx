@@ -19,6 +19,7 @@ export interface CampaignConfig {
   materialUrl: string
   materialTitle: string
   freeformContext?: string
+  emailSubject?: string
   personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
   valueProps: Array<{ id: string; claim: string; detail: string }>
   style: string
@@ -57,6 +58,9 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   })
   const [error, setError] = useState<string | null>(null)
   const autoAnalyzeTriggered = useRef(false)
+  // 3-tab input mode selector
+  const [inputMode, setInputMode] = useState<'url' | 'email' | 'freeform'>('url')
+  const [emailSubject, setEmailSubject] = useState('')
   // #663: Play context state for auto-generation from play bridge
   const [playContext, setPlayContext] = useState<PlayContext | null>(null)
   const [playResult, setPlayResult] = useState<{ driveUrl: string; htmlUrl: string } | null>(null)
@@ -87,7 +91,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
 
     // Key rules (always shown)
     lines.push('── Key Rules ──')
-    lines.push('• Executive emails: 90 words max | Manager emails: 200-250 words')
+    lines.push('• Executive emails: 120 words max | Manager emails: 200-250 words')
     lines.push('• No filler phrases ("let me know", "hope this finds you well")')
     lines.push('• Relationship context: ONE sentence about existing Red Hat products')
     lines.push('')
@@ -95,7 +99,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
     if (advanced) {
       // Full 11 rules
       lines.push('── All Email Rules (Council-Validated) ──')
-      lines.push('1. Word limits: Executive = 90 words | Manager = 200-250 words')
+      lines.push('1. Word limits: Executive = 120 words | Manager = 200-250 words')
       lines.push('2. Technical observations only — no firmographic facts')
       lines.push('3. Statements only — no questions anywhere including CTA')
       lines.push('4. Per-bullet links to specific Red Hat product pages')
@@ -316,6 +320,21 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
     onConfirm(config)
   }
 
+  function handleEmailGenerate() {
+    const subject = emailSubject.trim()
+    if (!subject) return
+    const config: CampaignConfig = {
+      materialUrl: '',
+      materialTitle: `Email: ${subject}`,
+      emailSubject: subject,
+      freeformContext: campaignDirective.trim() || undefined,
+      personas: [],
+      valueProps: [],
+      style,
+    }
+    onConfirm(config)
+  }
+
   // ── Persona editing ────────────────────────────────────────────────────────
 
   function togglePersona(index: number) {
@@ -427,44 +446,106 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
     )
   }
 
-  // Input state
+  // Input state — 3-tab mode selector
   if (state === 'input') {
     return (
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
-        <h2 className="text-base font-semibold text-text-primary">Material URL</h2>
-        <div className="space-y-2">
-          <input
-            type="text"
-            value={materialUrl}
-            onChange={e => setMaterialUrl(e.target.value)}
-            placeholder="https://docs.google.com/document/d/..."
-            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-          <p className="text-xs text-zinc-500">Google Doc or Slides link</p>
+        {/* Tab selector */}
+        <div className="flex gap-1 p-1 bg-zinc-900 rounded-lg border border-zinc-800">
+          {([
+            { key: 'url' as const, label: 'Material URL' },
+            { key: 'email' as const, label: 'Email Subject' },
+            { key: 'freeform' as const, label: 'Freeform Context' },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setInputMode(tab.key)}
+              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                inputMode === tab.key
+                  ? 'bg-accent/15 text-accent border border-accent/30'
+                  : 'text-zinc-400 hover:text-zinc-300 border border-transparent'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-text-primary">
-            Campaign Context
-            {!materialUrl.trim() && <span className="text-warning ml-1">*</span>}
-          </h3>
-          <textarea
-            value={campaignDirective}
-            onChange={e => setCampaignDirective(e.target.value)}
-            placeholder={materialUrl.trim()
-              ? 'Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'
-              : 'Describe the campaign context, e.g. "VMware migration play — customer is evaluating alternatives after Broadcom acquisition. Focus on OpenShift Virtualization as landing zone."'
-            }
-            rows={materialUrl.trim() ? 3 : 5}
-            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
-          />
-          <p className="text-xs text-zinc-500">
-            {materialUrl.trim()
-              ? 'Optional — shapes email messaging angle and fit rationale'
-              : 'Required when no material URL — used as the campaign source content'
-            }
-          </p>
-        </div>
+        {/* Tab 1: Material URL */}
+        {inputMode === 'url' && (
+          <>
+            <h2 className="text-base font-semibold text-text-primary">Material URL</h2>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={materialUrl}
+                onChange={e => setMaterialUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/..."
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+              <p className="text-xs text-zinc-500">Google Doc or Slides link</p>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-text-primary">Campaign Context</h3>
+              <textarea
+                value={campaignDirective}
+                onChange={e => setCampaignDirective(e.target.value)}
+                placeholder='Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'
+                rows={3}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
+              />
+              <p className="text-xs text-zinc-500">Optional — shapes email messaging angle and fit rationale</p>
+            </div>
+          </>
+        )}
+
+        {/* Tab 2: Email Subject */}
+        {inputMode === 'email' && (
+          <>
+            <h2 className="text-base font-semibold text-text-primary">Email Subject Search</h2>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+                placeholder='Search email subject, e.g. "SaaS Tax Offset"'
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+              <p className="text-xs text-zinc-500">Searches Gmail for emails matching this subject to extract campaign content</p>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-text-primary">Campaign Context</h3>
+              <textarea
+                value={campaignDirective}
+                onChange={e => setCampaignDirective(e.target.value)}
+                placeholder='Optional — steer the campaign angle based on the email content'
+                rows={3}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
+              />
+              <p className="text-xs text-zinc-500">Optional — shapes email messaging angle and fit rationale</p>
+            </div>
+          </>
+        )}
+
+        {/* Tab 3: Freeform Context */}
+        {inputMode === 'freeform' && (
+          <>
+            <h2 className="text-base font-semibold text-text-primary">Freeform Context</h2>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-text-primary">
+                Campaign Context <span className="text-warning ml-1">*</span>
+              </h3>
+              <textarea
+                value={campaignDirective}
+                onChange={e => setCampaignDirective(e.target.value)}
+                placeholder='Describe the campaign context, e.g. "VMware migration play — customer is evaluating alternatives after Broadcom acquisition. Focus on OpenShift Virtualization as landing zone."'
+                rows={6}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
+              />
+              <p className="text-xs text-zinc-500">Required — used as the campaign source content</p>
+            </div>
+          </>
+        )}
 
         {error && (
           <div className="flex items-center gap-2 text-xs text-warning">
@@ -474,7 +555,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
         )}
 
         <div className="flex gap-2">
-          {materialUrl.trim() ? (
+          {inputMode === 'url' && (
             <button
               onClick={handleAnalyze}
               disabled={!materialUrl.trim()}
@@ -482,7 +563,17 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
             >
               Analyze Material
             </button>
-          ) : (
+          )}
+          {inputMode === 'email' && (
+            <button
+              onClick={handleEmailGenerate}
+              disabled={!emailSubject.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Generate from Email
+            </button>
+          )}
+          {inputMode === 'freeform' && (
             <button
               onClick={handleFreeformGenerate}
               disabled={!campaignDirective.trim()}

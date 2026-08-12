@@ -789,7 +789,7 @@ export async function generateCampaign(
       .filter(p => !p.linkedinUrl && !p.name)
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
       if (resolved.length > 0) {
         const contactLines = resolved.map(r =>
           `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
@@ -1139,7 +1139,7 @@ export async function generateCampaignFromPlay(
       .filter(p => !p.linkedinUrl && !p.name)  // Only resolve generic personas
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
       if (resolved.length > 0) {
         const contactLines = resolved.map(r =>
           `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`

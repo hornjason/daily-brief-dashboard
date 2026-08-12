@@ -19,6 +19,7 @@ export interface ResolvedExecutive {
   role: string        // Original persona role (e.g., "VP Infrastructure")
   name: string        // Found executive name
   title: string       // Actual title at the company
+  email?: string
   linkedinUrl?: string
   resolvedAt: string
 }
@@ -67,78 +68,216 @@ function writeCache(companyName: string, executives: Record<string, ResolvedExec
   writeJsonAtomic(path, cache)
 }
 
+// ── Tier 1: Intelligence Brief Mining ───────────────────────────────────────
+
+/** Fallback roles to try when primary roles return no results */
+const FALLBACK_ROLES = [
+  'IT Operations Manager',
+  'Cloud Architect',
+  'Head of Engineering',
+  'VP Engineering',
+  'Director of Infrastructure',
+  'Engineering Manager',
+]
+
+/**
+ * Extract contacts from cached intelligence brief (Tier 1 — no API calls).
+ * Parses the `## Leadership` section for name + title pairs.
+ */
+export function extractContactsFromIntelligence(companyName: string): ResolvedExecutive[] {
+  const intelPath = resolve(CACHE_DIR, 'intelligence', `${companySlug(companyName)}.json`)
+  if (!existsSync(intelPath)) return []
+
+  try {
+    const data = JSON.parse(readFileSync(intelPath, 'utf-8'))
+    const companyText: string = data.company ?? ''
+    if (!companyText) return []
+
+    // Find Leadership section
+    const leadershipMatch = companyText.match(/##\s*Leadership[\s\S]*?(?=\n##\s|\n#\s|$)/i)
+    if (!leadershipMatch) return []
+    const section = leadershipMatch[0]
+
+    const results: ResolvedExecutive[] = []
+    const excludePatterns = /\b(terminated|departed|former|resigned|left|retired|stepping down)\b/i
+
+    // Pattern 1: "Title Name" — e.g. "President and CEO Dhrupad Trivedi"
+    const titleNamePattern = /(?:^|\n)\s*[-*]?\s*((?:President|CEO|CFO|COO|CTO|CIO|CISO|Chief|SVP|EVP|VP|Vice President|Director|Head of|General Manager|Managing Director)[^,\n]*?)\s+((?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+))/gm
+    let match: RegExpExecArray | null
+    while ((match = titleNamePattern.exec(section)) !== null) {
+      const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
+      if (excludePatterns.test(surroundingText)) continue
+      results.push({
+        role: match[1].trim(),
+        name: match[2].trim(),
+        title: match[1].trim(),
+        resolvedAt: new Date().toISOString(),
+      })
+    }
+
+    // Pattern 2: "Name was appointed Title" — e.g. "Michelle Caron was appointed CFO"
+    const appointedPattern = /((?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+))\s+(?:was appointed|appointed as|named as|became|serves as|is the)\s+((?:President|CEO|CFO|COO|CTO|CIO|CISO|Chief|SVP|EVP|VP|Vice President|Director|Head of|General Manager)[^.;\n]*)/gi
+    while ((match = appointedPattern.exec(section)) !== null) {
+      const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
+      if (excludePatterns.test(surroundingText)) continue
+      results.push({
+        role: match[2].trim(),
+        name: match[1].trim(),
+        title: match[2].trim(),
+        resolvedAt: new Date().toISOString(),
+      })
+    }
+
+    // Pattern 3: **Name**: Title (bold markdown)
+    const boldPattern = /\*\*((?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+))\*\*[:\s]+([^\n]+)/g
+    while ((match = boldPattern.exec(section)) !== null) {
+      const title = match[2].trim()
+      const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
+      if (excludePatterns.test(surroundingText)) continue
+      if (title.length > 5 && title.length < 100) {
+        results.push({
+          role: title,
+          name: match[1].trim(),
+          title,
+          resolvedAt: new Date().toISOString(),
+        })
+      }
+    }
+
+    // Deduplicate by name
+    const seen = new Set<string>()
+    return results.filter(r => {
+      const key = r.name.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  } catch {
+    return []
+  }
+}
+
 // ── Resolution ──────────────────────────────────────────────────────────────
 
 /**
  * Resolve real executives for a list of persona roles at a company.
- * Uses Gemini grounding to search LinkedIn. Caches results.
+ * Three-tier resolution:
+ *   Tier 1: Mine intelligence brief (local, no API calls)
+ *   Tier 2: Gemini grounding search (primary + fallback roles)
+ *   Tier 3: Email enrichment (infer email from company domain)
  *
  * Returns only successfully resolved executives (may be fewer than requested roles).
  */
 export async function resolveExecutivesByRole(
   roles: string[],
   companyName: string,
+  companyDomain?: string,
 ): Promise<ResolvedExecutive[]> {
   if (roles.length === 0) return []
 
-  // Check cache first
+  // ── Tier 1: Mine intelligence brief ────────────────────────────────────
+  const intelContacts = extractContactsFromIntelligence(companyName)
+  const results: ResolvedExecutive[] = [...intelContacts]
+  const seenNames = new Set(results.map(r => r.name.toLowerCase()))
+
+  if (intelContacts.length > 0) {
+    console.log(`[executive-resolver] Tier 1: Found ${intelContacts.length} contacts from intelligence brief for ${companyName}`)
+  }
+
+  // Check cache for remaining roles
   const cached = readCache(companyName)
-  const results: ResolvedExecutive[] = []
   const uncachedRoles: string[] = []
 
   for (const role of roles) {
+    // Skip if Tier 1 already found someone for this role
+    if (results.some(r => r.role.toLowerCase() === role.toLowerCase())) continue
     if (cached?.executives[role]) {
-      results.push(cached.executives[role])
+      const cachedExec = cached.executives[role]
+      if (!seenNames.has(cachedExec.name.toLowerCase())) {
+        results.push(cachedExec)
+        seenNames.add(cachedExec.name.toLowerCase())
+      }
     } else {
       uncachedRoles.push(role)
     }
   }
 
-  // If all roles are cached, return immediately
-  if (uncachedRoles.length === 0) return results
+  // Calculate how many more we need
+  const needed = 6 - results.length
 
-  // Batch resolve uncached roles via Gemini grounding
-  try {
-    const { callGemini } = await import('../gemini-call.ts')
+  // ── Tier 2: Gemini grounding (primary + fallback roles) ────────────────
+  if (needed > 0 && uncachedRoles.length > 0) {
+    try {
+      const { callGemini } = await import('../gemini-call.ts')
 
-    const roleList = uncachedRoles.map(r => `- ${r}`).join('\n')
-    const result = await callGemini(
-      'You are a professional identity researcher. Given a company name and a list of executive roles, find the real people who hold these positions. Search LinkedIn and public sources. Return ONLY a JSON array of objects with fields: role (the requested role), name (person\'s full name), title (their actual title), linkedinUrl (full LinkedIn profile URL). If you cannot find someone for a role with certainty, omit that role from the array. Never guess — only include confirmed matches.',
-      `Find the current executives at "${companyName}" for these roles:\n${roleList}\n\nSearch LinkedIn for each: "{role}" site:linkedin.com/in "${companyName}"\nReturn JSON array: [{"role":"...","name":"...","title":"...","linkedinUrl":"..."}]`,
-      {
-        callType: 'executive-role-resolution',
-        customerName: companyName,
-        grounding: true,
-        timeoutMs: 45_000,
-      }
-    )
+      // Try primary uncached roles first
+      const rolesToSearch = [...uncachedRoles]
 
-    // Parse JSON array from response
-    const jsonMatch = result.text.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      const parsed: Array<{ role: string; name: string; title: string; linkedinUrl?: string }> = JSON.parse(jsonMatch[0])
-      const newExecs: Record<string, ResolvedExecutive> = {}
-
-      for (const entry of parsed) {
-        if (!entry.name || !entry.role) continue
-        const exec: ResolvedExecutive = {
-          role: entry.role,
-          name: entry.name,
-          title: entry.title ?? entry.role,
-          linkedinUrl: entry.linkedinUrl || undefined,
-          resolvedAt: new Date().toISOString(),
+      // Add fallback roles if we still need more
+      if (rolesToSearch.length < needed) {
+        const existingRolesLower = new Set([...roles, ...results.map(r => r.role)].map(r => r.toLowerCase()))
+        for (const fallback of FALLBACK_ROLES) {
+          if (rolesToSearch.length >= needed) break
+          if (!existingRolesLower.has(fallback.toLowerCase())) {
+            rolesToSearch.push(fallback)
+          }
         }
-        newExecs[entry.role] = exec
-        results.push(exec)
       }
 
-      // Merge with existing cache and persist
-      const mergedExecs = { ...(cached?.executives ?? {}), ...newExecs }
-      writeCache(companyName, mergedExecs)
+      const roleList = rolesToSearch.map(r => `- ${r}`).join('\n')
+      const result = await callGemini(
+        'You are a professional identity researcher. Given a company name and a list of executive roles, find the real people who hold these positions. Search LinkedIn and public sources. Return ONLY a JSON array of objects with fields: role (the requested role), name (person\'s full name), title (their actual title), linkedinUrl (full LinkedIn profile URL). If you cannot find someone for a role with certainty, omit that role from the array. Never guess — only include confirmed matches.',
+        `Find the current executives at "${companyName}" for these roles:\n${roleList}\n\nSearch LinkedIn for each: "{role}" site:linkedin.com/in "${companyName}"\nReturn JSON array: [{"role":"...","name":"...","title":"...","linkedinUrl":"..."}]`,
+        {
+          callType: 'executive-role-resolution',
+          customerName: companyName,
+          grounding: true,
+          timeoutMs: 45_000,
+        }
+      )
+
+      // Parse JSON array from response
+      const jsonMatch = result.text.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        const parsed: Array<{ role: string; name: string; title: string; linkedinUrl?: string }> = JSON.parse(jsonMatch[0])
+        const newExecs: Record<string, ResolvedExecutive> = {}
+
+        for (const entry of parsed) {
+          if (!entry.name || !entry.role) continue
+          if (seenNames.has(entry.name.toLowerCase())) continue
+          seenNames.add(entry.name.toLowerCase())
+          const exec: ResolvedExecutive = {
+            role: entry.role,
+            name: entry.name,
+            title: entry.title ?? entry.role,
+            linkedinUrl: entry.linkedinUrl || undefined,
+            resolvedAt: new Date().toISOString(),
+          }
+          newExecs[entry.role] = exec
+          results.push(exec)
+        }
+
+        // Merge with existing cache and persist
+        const mergedExecs = { ...(cached?.executives ?? {}), ...newExecs }
+        writeCache(companyName, mergedExecs)
+      }
+    } catch (e: any) {
+      console.warn(`[executive-resolver] Tier 2 grounding search failed for ${companyName}:`, e?.message ?? e)
     }
-  } catch (e: any) {
-    console.warn(`[executive-resolver] Grounding search failed for ${companyName}:`, e?.message ?? e)
-    // Non-fatal — return whatever we have from cache
+  }
+
+  // ── Tier 3: Email enrichment ───────────────────────────────────────────
+  if (companyDomain) {
+    for (const exec of results) {
+      if (exec.email) continue
+      const nameParts = exec.name.trim().split(/\s+/)
+      if (nameParts.length >= 2) {
+        const firstInitial = nameParts[0][0].toLowerCase()
+        const lastName = nameParts[nameParts.length - 1].toLowerCase()
+        exec.email = `${firstInitial}${lastName}@${companyDomain}`
+      }
+    }
+    console.log(`[executive-resolver] Tier 3: Enriched ${results.filter(r => r.email).length} contacts with inferred emails`)
   }
 
   return results

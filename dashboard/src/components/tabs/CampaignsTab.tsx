@@ -48,6 +48,7 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           materialUrl: config.materialUrl || undefined,
+          emailSubject: config.emailSubject,
           freeformContext: config.freeformContext,
           personas: config.personas.filter(p => p.enabled),
           style: config.style,

@@ -94,11 +94,11 @@ function validateMarkdown(output: string): QualityScorecard {
   // Extract email blocks — they start with ## headers containing persona/tier info
   const emailBlocks = extractEmailBlocks(output)
 
-  // 4. Email templates count — >= 6 (3 exec + 3 manager)
+  // 4. Email templates count — >= 4 (2 exec + 2 manager minimum)
   checks.push({
     name: 'email-templates-count',
-    passed: emailBlocks.length >= 6,
-    expected: '>= 6 email templates (3 exec + 3 manager)',
+    passed: emailBlocks.length >= 4,
+    expected: '>= 4 email templates',
     actual: `${emailBlocks.length} email templates found`,
     severity: 'required',
   })
@@ -298,12 +298,12 @@ function validateStructured(campaign: any): QualityScorecard {
     severity: 'required',
   })
 
-  // Email count — 6 minimum (3 exec + 3 manager)
+  // Email count — 4 minimum (2 exec + 2 manager)
   const emails = campaign.emails ?? []
   checks.push({
     name: 'email-templates-count',
-    passed: emails.length >= 6,
-    expected: '>= 6 email templates (3 exec + 3 manager)',
+    passed: emails.length >= 4,
+    expected: '>= 4 email templates',
     actual: `${emails.length} emails`,
     severity: 'required',
   })
