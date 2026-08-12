@@ -51,6 +51,7 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
           personas: config.personas.filter(p => p.enabled),
           style: config.style,
           valueProps: config.valueProps,
+          campaignDirective: config.campaignDirective,
         }),
       })
 

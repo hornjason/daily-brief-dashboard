@@ -86,6 +86,7 @@ export interface CampaignRequest {
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   style?: string
   valueProps?: Array<{ id: string; claim: string; detail: string }>
+  campaignDirective?: string
 }
 
 export interface CampaignResult {
@@ -119,6 +120,7 @@ interface CampaignCacheEntry {
   signalsLoaded?: string[]
   signalsMissing?: string[]
   qualityScorecard?: QualityScorecard
+  campaignDirective?: string
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
@@ -271,6 +273,7 @@ export async function callGeminiForCampaign(opts: {
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   emailTemplateContext?: string
   structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
+  campaignDirective?: string
 }): Promise<string> {
   // Assemble user prompt with material + signals
   const intelligenceSummary = opts.customerSignals.intelligence?.company
@@ -339,6 +342,7 @@ ${subscriptionsSummary}
 ### Additional Intelligence Signals:
 ${registrySignalsSummary}
 ${solutionPlaysContext}
+${opts.campaignDirective ? `\n## Campaign Directive (User-Provided Context):\n${opts.campaignDirective}\n\nUse this directive to shape the campaign angle, messaging focus, and email tone.\n` : ''}
 ${opts.voiceInstruction ? `\n## Voice Instruction:\n${opts.voiceInstruction}\n` : ''}
 ${opts.emailTemplateContext ?? ''}
 ---
@@ -664,6 +668,7 @@ export async function generateCampaign(
     personas: config?.personas,
     emailTemplateContext,
     structuredPlays,
+    campaignDirective: config?.campaignDirective,
   })
 
   const gateResult = await validateAndRetry(
@@ -682,6 +687,7 @@ export async function generateCampaign(
         personas: config?.personas,
         emailTemplateContext,
         structuredPlays,
+        campaignDirective: config?.campaignDirective,
       })
     }
   )
@@ -777,6 +783,7 @@ export async function generateCampaign(
     signalsLoaded: loaded,
     signalsMissing: missing,
     qualityScorecard: gateResult.scorecard,
+    campaignDirective: config?.campaignDirective,
   })
 
   return {
@@ -955,6 +962,7 @@ export async function generateCampaignFromPlay(
     deterministicContext: templateResult.deterministic,
     voiceInstruction,
     personas: config?.personas as any,
+    campaignDirective: config?.campaignDirective,
   })
 
   const gateResult = await validateAndRetry(
@@ -971,6 +979,7 @@ export async function generateCampaignFromPlay(
         deterministicContext: templateResult.deterministic,
         voiceInstruction,
         personas: config?.personas as any,
+        campaignDirective: config?.campaignDirective,
       })
     }
   )
@@ -1026,6 +1035,7 @@ export async function generateCampaignFromPlay(
     signalsLoaded: loaded,
     signalsMissing: missing,
     qualityScorecard: gateResult.scorecard,
+    campaignDirective: config?.campaignDirective,
   })
 
   return {
