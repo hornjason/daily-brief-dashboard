@@ -529,3 +529,71 @@ export const campaignValidator: QualityValidator = {
   passThreshold: PASS_THRESHOLD,
   validate,
 }
+
+// ── Selection validation (ADR-043 two-pass) ────────────────────────────────
+
+export interface SelectionValidationResult {
+  valid: boolean
+  reasons: string[]
+}
+
+/**
+ * Validate a CampaignSelectionResult from the two-pass pipeline.
+ * Checks recipientName, featureKeys, signalIndex, and duplicate names.
+ */
+export function validateCampaignSelection(
+  selection: {
+    emails: Array<{
+      recipientName: string
+      featureKeys: string[]
+      signalIndex: number
+      peerProof?: { playName: string; exampleIndex: number } | null
+    }>
+  },
+  resolvedContactNames: string[],
+  validFeatureKeys: string[],
+  signalCount: number,
+): SelectionValidationResult {
+  const reasons: string[] = []
+
+  const seenNames = new Set<string>()
+  const featureKeySet = new Set(validFeatureKeys)
+  const contactNameSet = new Set(resolvedContactNames)
+
+  for (let i = 0; i < selection.emails.length; i++) {
+    const email = selection.emails[i]
+
+    // Check recipientName is in resolved contacts
+    if (!contactNameSet.has(email.recipientName)) {
+      reasons.push(`emails[${i}]: recipientName "${email.recipientName}" not in resolved contacts [${resolvedContactNames.join(', ')}]`)
+    }
+
+    // Check duplicate recipientName
+    if (seenNames.has(email.recipientName)) {
+      reasons.push(`emails[${i}]: duplicate recipientName "${email.recipientName}"`)
+    }
+    seenNames.add(email.recipientName)
+
+    // Check featureKeys count
+    if (!Array.isArray(email.featureKeys) || email.featureKeys.length !== 3) {
+      reasons.push(`emails[${i}]: featureKeys must have exactly 3 entries, got ${Array.isArray(email.featureKeys) ? email.featureKeys.length : 'non-array'}`)
+    } else {
+      // Check each featureKey is valid
+      for (const key of email.featureKeys) {
+        if (!featureKeySet.has(key)) {
+          reasons.push(`emails[${i}]: invalid featureKey "${key}"`)
+        }
+      }
+    }
+
+    // Check signalIndex is within bounds
+    if (typeof email.signalIndex !== 'number' || email.signalIndex < 0 || email.signalIndex >= signalCount) {
+      reasons.push(`emails[${i}]: signalIndex ${email.signalIndex} out of bounds (0..${signalCount - 1})`)
+    }
+  }
+
+  return {
+    valid: reasons.length === 0,
+    reasons,
+  }
+}
