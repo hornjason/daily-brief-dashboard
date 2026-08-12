@@ -15,7 +15,7 @@ import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { callGemini } from './gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
-import { campaignValidator } from './quality-validators/campaign-validator.ts'
+import { campaignValidator, validateCampaignSelection } from './quality-validators/campaign-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { toSlug } from './cache-layer.ts'
@@ -27,15 +27,19 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
+import { getFeatureKeys } from './lib/feature-url-registry.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
+
+// ── Feature flag: two-pass structured campaigns (ADR-043) ───────────────────
+const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
 
@@ -125,6 +129,7 @@ interface CampaignCacheEntry {
   signalsMissing?: string[]
   qualityScorecard?: QualityScorecard
   campaignDirective?: string
+  generationPath?: 'structured' | 'freeform'
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
@@ -439,6 +444,7 @@ async function uploadCampaignToDrive(
   accountTeamOverride?: import('./types.ts').AccountTeamMember[],
   existingFileIds?: { driveFileId?: string; driveHtmlFileId?: string },
   campaignDirective?: string,
+  prebuiltHtml?: string,
 ): Promise<{ driveUrl: string; htmlUrl: string; driveFileId: string; driveHtmlFileId: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
   // Use campaign directive for doc name when available, fall back to material title
@@ -448,24 +454,30 @@ async function uploadCampaignToDrive(
   const docName = `${campaignLabel} - ${customer.name}`
 
   // Build HTML content first — used for BOTH Google Doc and HTML preview (#1054)
+  // If prebuiltHtml is provided (structured two-pass path), use it directly
   const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
-  const timestamp = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const htmlContent = generateCampaignHTML({
-    materialTitle,
-    materialUrl,
-    customerName: customer.name,
-    aeName,
-    generatedDate: timestamp,
-    accountTeam,
-    signals,
-    markdown,
-  })
+  let htmlContent: string
+  if (prebuiltHtml) {
+    htmlContent = prebuiltHtml
+  } else {
+    const timestamp = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    htmlContent = generateCampaignHTML({
+      materialTitle,
+      materialUrl,
+      customerName: customer.name,
+      aeName,
+      generatedDate: timestamp,
+      accountTeam,
+      signals,
+      markdown,
+    })
+  }
 
   // Google Doc: upload HTML (not markdown) so all template sections render (#1054)
   // HTML-to-Google-Doc conversion preserves formatting, tables, and styling
@@ -766,11 +778,12 @@ export async function generateCampaign(
 
   // 3b. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
+  let voiceProfile: VoiceProfile | null = null
   if (!voiceInstruction && customer.ae) {
-    const voice = await getVoiceProfile(customer.ae)
-    if (voice) {
-      voiceInstruction = `## Voice: ${voice.aeName}\n${voice.promptInstruction}`
-      console.log(`[campaigns] Using voice profile for ${voice.aeName}`)
+    voiceProfile = await getVoiceProfile(customer.ae)
+    if (voiceProfile) {
+      voiceInstruction = `## Voice: ${voiceProfile.aeName}\n${voiceProfile.promptInstruction}`
+      console.log(`[campaigns] Using voice profile for ${voiceProfile.aeName}`)
     }
   }
 
@@ -838,49 +851,10 @@ export async function generateCampaign(
     talkTrack: sp.talkTrack,
   }))
 
-  // 4b. Generate campaign via Gemini + quality gate (ADR-024)
+  // 4b. Generate campaign — branched by feature flag (ADR-043)
   const augmentedMaterial = materialContent + resolvedContactsContext
-  const rawMarkdown = await callGeminiForCampaign({
-    materialTitle,
-    materialContent: augmentedMaterial,
-    customerName: customer.name,
-    customerSignals: signals,
-    registrySignals,
-    deterministicContext: templateResult.deterministic,
-    voiceInstruction,
-    personas: config?.personas ?? enabledPersonas,
-    emailTemplateContext,
-    structuredPlays,
-    campaignDirective: config?.campaignDirective,
-  })
-
-  const gateResult = await validateAndRetry(
-    rawMarkdown,
-    { validator: campaignValidator },
-    async (failures) => {
-      const feedback = formatFailureFeedback(failures)
-      return callGeminiForCampaign({
-        materialTitle,
-        materialContent: augmentedMaterial + '\n\n' + feedback,
-        customerName: customer.name,
-        customerSignals: signals,
-        registrySignals,
-        deterministicContext: templateResult.deterministic,
-        voiceInstruction,
-        personas: config?.personas ?? enabledPersonas,
-        emailTemplateContext,
-        structuredPlays,
-        campaignDirective: config?.campaignDirective,
-      })
-    }
-  )
-  const markdown = gateResult.output
-  console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
-
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
-
-  // 5. Generate HTML content (for Drive AND cache)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -889,82 +863,214 @@ export async function generateCampaign(
     minute: '2-digit',
   })
 
-  // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
-  const templateSignals: any = { ...signals }
-  try {
-    const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
-    const { resolve: pathResolve } = await import('path')
-    const intelPath = pathResolve(CACHE_DIR, 'intelligence', `${slug}.json`)
-    if (fsExists(intelPath)) {
-      templateSignals.intelligence = JSON.parse(fsRead(intelPath, 'utf-8'))
-    }
-  } catch { /* silent — template will show dashes */ }
-  // Load account plan for Strategic Initiatives section
-  try {
-    const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
-    const { resolve: pathResolve2 } = await import('path')
-    const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
-    if (fsExists2(accountPlanPath)) {
-      templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
-    }
-  } catch { /* silent */ }
-  const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
-  if (subSignals.length > 0) {
-    templateSignals.subscriptions = subSignals.map(s => ({
-      productName: s.metadata?.product ?? s.headline,
-      quantity: s.metadata?.quantity ?? 1,
-      status: 'Active',
-    }))
-  }
-  const caseSignals = registrySignals.filter(s => s.source === 'cases')
-  if (caseSignals.length > 0) templateSignals.cases = caseSignals
-  const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
-  if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
-
-  const allSignalSources = [...new Set([
-    ...loaded,
-    ...registrySignals.map(s => s.source),
-  ])]
-
-  const htmlContent = generateCampaignHTML({
-    materialTitle,
-    materialUrl,
-    customerName: customer.name,
-    aeName: customer.ae ?? 'Unknown AE',
-    generatedDate: timestamp,
-    accountTeam,
-    signals: templateSignals,
-    signalsLoaded: allSignalSources,
-    markdown,
-  })
-
-  // 6. Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
+  let markdown = ''
+  let htmlContent = ''
+  let qualityScorecard: QualityScorecard | undefined
+  let generationPath: 'structured' | 'freeform' = 'freeform'
   let driveUrl = ''
   let htmlUrl = ''
   let driveFileId = ''
   let driveHtmlFileId = ''
-  const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
-  try {
-    const customerFolderId = await findCustomerDriveFolder(customer)
-    const driveResult = await uploadCampaignToDrive(
-      customerFolderId,
-      customer,
+
+  // Build subscription signals for template data (used by both paths)
+  const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
+
+  if (USE_STRUCTURED_CAMPAIGNS) {
+    // ── Structured two-pass path (ADR-043) ──────────────────────────────────
+    console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
+    generationPath = 'structured'
+
+    // Pass 1: Gemini data selection
+    const selection = await callGeminiForCampaignSelection({
+      materialTitle,
+      materialContent: augmentedMaterial,
+      customerName: customer.name,
+      customerSignals: signals,
+      registrySignals,
+      deterministicContext: templateResult.deterministic,
+      resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
+      structuredPlays,
+      campaignDirective: config?.campaignDirective,
+    })
+
+    // Validate selection
+    const validationResult = validateCampaignSelection(
+      selection,
+      resolvedExecs.map(e => e.name),
+      getFeatureKeys(),
+      registrySignals.length,
+    )
+    if (!validationResult.valid) {
+      console.warn(`[campaigns] Selection validation warnings:`, validationResult.reasons)
+    } else {
+      console.log(`[campaigns] Selection validation passed for ${customer.name}`)
+    }
+
+    // Pass 2: Template assembly (deterministic, no LLM)
+    htmlContent = generateCampaignFromStructured(selection, {
+      resolvedExecs: resolvedExecs.map(e => ({
+        name: e.name,
+        title: e.title,
+        email: e.email,
+        linkedIn: e.linkedinUrl,
+      })),
+      signals: registrySignals,
+      voiceProfile,
+      accountTeam,
+      subscriptions: subSignals.map(s => ({
+        product: s.metadata?.product as string ?? s.headline,
+        quantity: s.metadata?.quantity as number ?? 1,
+        status: 'Active',
+      })),
+      structuredPlays,
+      customerName: customer.name,
       materialTitle,
       materialUrl,
-      markdown,
-      customer.ae ?? 'Unknown AE',
-      templateSignals,
-      accountTeam,
-      cachedFileIds ?? undefined,
-      config?.campaignDirective,
+      generatedDate: timestamp,
+    })
+
+    // Store selection JSON as markdown equivalent for cache compatibility
+    markdown = JSON.stringify(selection, null, 2)
+    console.log(`[campaigns] Structured campaign generated (${htmlContent.length} chars HTML, ${selection.emails.length} emails)`)
+
+    // Upload to Drive with pre-built HTML
+    const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
+    try {
+      const customerFolderId = await findCustomerDriveFolder(customer)
+      const driveResult = await uploadCampaignToDrive(
+        customerFolderId,
+        customer,
+        materialTitle,
+        materialUrl,
+        markdown,
+        customer.ae ?? 'Unknown AE',
+        signals,
+        accountTeam,
+        cachedFileIds ?? undefined,
+        config?.campaignDirective,
+        htmlContent,  // pre-built HTML — skips internal generateCampaignHTML
+      )
+      driveUrl = driveResult.driveUrl
+      htmlUrl = driveResult.htmlUrl
+      driveFileId = driveResult.driveFileId
+      driveHtmlFileId = driveResult.driveHtmlFileId
+      console.log(`[campaigns] Uploaded structured campaign to Drive: ${driveUrl}`)
+    } catch (e: any) {
+      console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    }
+
+  } else {
+    // ── Freeform path (existing behavior, unchanged) ────────────────────────
+    console.log(`[campaigns] Using FREEFORM generation path for ${customer.name}`)
+    const rawMarkdown = await callGeminiForCampaign({
+      materialTitle,
+      materialContent: augmentedMaterial,
+      customerName: customer.name,
+      customerSignals: signals,
+      registrySignals,
+      deterministicContext: templateResult.deterministic,
+      voiceInstruction,
+      personas: config?.personas ?? enabledPersonas,
+      emailTemplateContext,
+      structuredPlays,
+      campaignDirective: config?.campaignDirective,
+    })
+
+    const gateResult = await validateAndRetry(
+      rawMarkdown,
+      { validator: campaignValidator },
+      async (failures) => {
+        const feedback = formatFailureFeedback(failures)
+        return callGeminiForCampaign({
+          materialTitle,
+          materialContent: augmentedMaterial + '\n\n' + feedback,
+          customerName: customer.name,
+          customerSignals: signals,
+          registrySignals,
+          deterministicContext: templateResult.deterministic,
+          voiceInstruction,
+          personas: config?.personas ?? enabledPersonas,
+          emailTemplateContext,
+          structuredPlays,
+          campaignDirective: config?.campaignDirective,
+        })
+      }
     )
-    driveUrl = driveResult.driveUrl
-    htmlUrl = driveResult.htmlUrl
-    driveFileId = driveResult.driveFileId
-    driveHtmlFileId = driveResult.driveHtmlFileId
-    console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
-  } catch (e: any) {
-    console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    markdown = gateResult.output
+    qualityScorecard = gateResult.scorecard
+    console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
+
+    // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
+    const templateSignals: any = { ...signals }
+    try {
+      const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
+      const { resolve: pathResolve } = await import('path')
+      const intelCachePath = pathResolve(CACHE_DIR, 'intelligence', `${slug}.json`)
+      if (fsExists(intelCachePath)) {
+        templateSignals.intelligence = JSON.parse(fsRead(intelCachePath, 'utf-8'))
+      }
+    } catch { /* silent — template will show dashes */ }
+    try {
+      const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
+      const { resolve: pathResolve2 } = await import('path')
+      const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+      if (fsExists2(accountPlanPath)) {
+        templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
+      }
+    } catch { /* silent */ }
+    if (subSignals.length > 0) {
+      templateSignals.subscriptions = subSignals.map(s => ({
+        productName: s.metadata?.product ?? s.headline,
+        quantity: s.metadata?.quantity ?? 1,
+        status: 'Active',
+      }))
+    }
+    const caseSignals = registrySignals.filter(s => s.source === 'cases')
+    if (caseSignals.length > 0) templateSignals.cases = caseSignals
+    const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
+    if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
+
+    const allSignalSources = [...new Set([
+      ...loaded,
+      ...registrySignals.map(s => s.source),
+    ])]
+
+    htmlContent = generateCampaignHTML({
+      materialTitle,
+      materialUrl,
+      customerName: customer.name,
+      aeName: customer.ae ?? 'Unknown AE',
+      generatedDate: timestamp,
+      accountTeam,
+      signals: templateSignals,
+      signalsLoaded: allSignalSources,
+      markdown,
+    })
+
+    // Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
+    const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
+    try {
+      const customerFolderId = await findCustomerDriveFolder(customer)
+      const driveResult = await uploadCampaignToDrive(
+        customerFolderId,
+        customer,
+        materialTitle,
+        materialUrl,
+        markdown,
+        customer.ae ?? 'Unknown AE',
+        templateSignals,
+        accountTeam,
+        cachedFileIds ?? undefined,
+        config?.campaignDirective,
+      )
+      driveUrl = driveResult.driveUrl
+      htmlUrl = driveResult.htmlUrl
+      driveFileId = driveResult.driveFileId
+      driveHtmlFileId = driveResult.driveHtmlFileId
+      console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
+    } catch (e: any) {
+      console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
+    }
   }
 
   // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
@@ -982,8 +1088,9 @@ export async function generateCampaign(
     driveHtmlFileId: driveHtmlFileId || undefined,
     signalsLoaded: loaded,
     signalsMissing: missing,
-    qualityScorecard: gateResult.scorecard,
+    qualityScorecard,
     campaignDirective: config?.campaignDirective,
+    generationPath,
   })
 
   return {
