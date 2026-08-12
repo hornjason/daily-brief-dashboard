@@ -845,6 +845,15 @@ export async function generateCampaign(
       templateSignals.intelligence = JSON.parse(fsRead(intelPath, 'utf-8'))
     }
   } catch { /* silent — template will show dashes */ }
+  // Load account plan for Strategic Initiatives section
+  try {
+    const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
+    const { resolve: pathResolve2 } = await import('path')
+    const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+    if (fsExists2(accountPlanPath)) {
+      templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
+    }
+  } catch { /* silent */ }
   const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
   if (subSignals.length > 0) {
     templateSignals.subscriptions = subSignals.map(s => ({
