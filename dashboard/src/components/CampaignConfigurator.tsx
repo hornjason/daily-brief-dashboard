@@ -21,6 +21,7 @@ export interface CampaignConfig {
   personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
   valueProps: Array<{ id: string; claim: string; detail: string }>
   style: string
+  campaignDirective?: string
 }
 
 interface VoiceProfile {
@@ -64,6 +65,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   const [personas, setPersonas] = useState<Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>>([])
   const [valueProps, setValueProps] = useState<Array<{ id: string; claim: string; detail: string }>>([])
   const [style, setStyle] = useState('')
+  const [campaignDirective, setCampaignDirective] = useState('')
 
   // Voice profile state
   const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null)
@@ -289,6 +291,7 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       personas,
       valueProps,
       style,
+      campaignDirective: campaignDirective.trim() || undefined,
     }
     onConfirm(config)
   }
@@ -420,6 +423,18 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
           <p className="text-xs text-zinc-500">Google Doc or Slides link</p>
         </div>
 
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-text-primary">Campaign Context</h3>
+          <textarea
+            value={campaignDirective}
+            onChange={e => setCampaignDirective(e.target.value)}
+            placeholder={'Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'}
+            rows={3}
+            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
+          />
+          <p className="text-xs text-zinc-500">Optional — shapes email messaging angle and fit rationale</p>
+        </div>
+
         {error && (
           <div className="flex items-center gap-2 text-xs text-warning">
             <AlertCircle className="w-3.5 h-3.5" />
@@ -494,6 +509,19 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
         <h2 className="text-base font-semibold text-text-primary">{materialTitle}</h2>
         <p className="text-xs text-zinc-500 mt-1">{materialUrl}</p>
+      </div>
+
+      {/* Campaign Context */}
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-text-primary">Campaign Context</h3>
+        <textarea
+          value={campaignDirective}
+          onChange={e => setCampaignDirective(e.target.value)}
+          placeholder={'Steer the campaign angle, e.g. "Focus on SaaS tax, use SB 122 as hook" or "Emphasize migration from VMware"'}
+          rows={3}
+          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y"
+        />
+        <p className="text-xs text-zinc-500">Optional — shapes email messaging angle and fit rationale</p>
       </div>
 
       {/* Personas */}
