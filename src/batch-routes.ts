@@ -24,6 +24,7 @@ interface BatchExecuteRequest {
   customerNames: string[]
   config?: {
     materialUrl?: string
+    freeformContext?: string
     personas?: Array<{ role: string; relevantVPs: string[]; enabled: boolean; linkedinUrl?: string; name?: string }>
     style?: string
     valueProps?: Array<{ id: string; claim: string; detail: string }>
@@ -103,13 +104,15 @@ export function createBatchRouter(): Hono {
             }
 
             // Generate campaign with config
+            const hasFreeform = config?.freeformContext && !config?.materialUrl
             const campaignConfig: CampaignRequest = {
-              materialUrl: config!.materialUrl!,
+              materialUrl: config?.materialUrl ?? '',
+              freeformContext: config?.freeformContext,
               personas: config?.personas,
               style: config?.style,
               valueProps: config?.valueProps,
             }
-            const result = await generateCampaign(customer, config!.materialUrl!, campaignConfig)
+            const result = await generateCampaign(customer, hasFreeform ? '' : config!.materialUrl!, campaignConfig)
 
             const doneEvent: BatchProgressEvent = {
               customer: name,
