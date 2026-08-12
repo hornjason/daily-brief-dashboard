@@ -1,0 +1,337 @@
+SaaS Tax Offset Campaign: A10 Networks
+________________
+California SB 122 — Ansible Automation Platform
+Generated 2026-08-10 · AE: Carolanne Farrell · ASA: Jason Horn · Focus: SaaS Tax Offset · Style: Executive
+Source Material:
+Brad Hinson — SSP Product and Win Updates: SaaS Tax Offset Sales Play
+Holland & Knight — The Party's Over: California Will Begin Taxing SaaS
+Numeral — SaaS Sales Tax: State-by-State Breakdown
+	👥 Target Contacts
+Email format: flast@a10networks.com (primary, 58% of employees) · Alternative: first.last@a10networks.com
+C-Level / Executive Tier
+	Name
+	Title
+	Email
+	LinkedIn
+	Signal
+	Dhrupad Trivedi
+	President & CEO
+	dtrivedi@a10networks.com [inferred]
+	Profile
+	Q2 2026: raised revenue guidance to 12-14% YoY; expanded Microsoft partnership; TrojAI acquisition
+	Michelle Caron
+	CFO
+	mcaron@a10networks.com [inferred]
+	Profile
+	Q2 2026: $80.1M revenue (+15.5% YoY); Danaher operational discipline background; holds 35K shares
+	Aris Wong
+	VP, Worldwide Engineering
+	awong@a10networks.com [inferred]
+	—
+	Since 2011; 25 years experience; ex-Cisco, F5, Foundry, Brocade — owns engineering tooling decisions
+	
+
+Mid-Level / Operational Tier — SaaS Budget Owners
+	Name
+	Title
+	Email
+	LinkedIn
+	SaaS Tax Relevance
+	Ryan Henderson
+	Director of Finance
+	rhenderson@a10networks.com [inferred]
+	Profile
+	P1 Direct budget/cost analysis owner. Built IR at Informatica; deep SaaS ARR expertise. 11+ years public company finance.
+	Arvind Bhuvaraghan
+	Sr. Director, Enterprise Info Mgmt
+	abhuvaraghan@a10networks.com [inferred]
+	Profile
+	P1 Manages Salesforce, Workday, Oracle stack — tax hits every tool in his portfolio. Reports to CFO. PMP, CISA certified. At A10 since 2014.
+	Chris Wayne
+	Head of IT
+	cwayne@a10networks.com [inferred]
+	Profile
+	P1 Owns IT vendor management and ops tooling. At A10 since 2022. Hiring Director of IT & Infrastructure — team growing. Ex-Yahoo, Verizon, USMC.
+	Hasnain Karampurwala
+	Engineering Director
+	hkarampurwala@a10networks.com [inferred]
+	Profile
+	P2 At A10 since 2012. Influences engineering tooling choices (CI/CD, cloud, testing). Ex-Foundry, Brocade, Lucent.
+	Sean Pike
+	Head of Information Security
+	spike@a10networks.com [inferred]
+	—
+	P2 Security tooling is almost entirely SaaS (SIEM, EDR, SOAR). Former CISO at Business Wire. 25 years cybersecurity. JD from Syracuse.
+	Arvind Prabhudev
+	Sr. Director of Engineering
+	aprabhudev@a10networks.com [inferred]
+	Profile
+	P2 Sr. Director level = more budget authority. Ex-Cisco, Siemens. MS Ohio State.
+	🎯 Generation Config
+Campaign Type
+	SaaS Tax Offset (CA SB 122)
+	AE Voice
+	Carolanne Farrell — strategic, confident, industry-level threats
+	Account Team
+	Carolanne Farrell (AE), Jason Horn (ASA)
+	Email Tier
+	Executive (≤120 words) — 3 emails for C-level + Manager (200–250 words) — 3 emails for mid-level
+	Signals Used
+	Intelligence brief, account plan, pipeline data, support cases, subscriptions, Q2 2026 earnings
+	Source Material
+	Brad Hinson SSP deck + HK Law SB 122 analysis + Numeral state-by-state guide
+	✅ Email Quality Checklist
+☑ Word limits: Executive ≤120 words; Manager 200–250 words
+	☑ Technical observations only — no firmographic facts
+	☑ Statements only — no questions except CTA
+	☑ Per-bullet links to Red Hat product pages
+	☑ Named peer company with concrete metric (Amadeus, ARM)
+	☑ Forward-worthy: exec forwards down with "thoughts?"
+	☑ Competitor-swap test: Red Hat-specific language
+	☑ Creepy line check: no internal data
+	☑ Subject = observation about their world (no product names)
+	☑ No filler phrases
+	☑ Relationship context: existing RHEL foundation noted
+	☑ Executive research: all contacts verified via LinkedIn/public sources
+	________________
+📊 Customer Intelligence Dashboard
+$290.6M
+Annual Revenue (FY2025)
+	~575
+Employees
+	57
+RHEL Embedded Subscriptions
+	📋 Why A10 Networks Is a Strong Fit
+
+
+HQ: San Jose, California — directly impacted by SB 122 starting January 1, 2027.
+0 AAP licenses today — greenfield automation opportunity with $514K VMware Replace pipeline already including 100 AAP managed nodes.
+Existing RHEL foundation — Thunder and Defend products ship on RHEL; AAP deploys natively.
+CFO mandate: 25–30% EBITDA margins — unplanned 8–10% SaaS tax overhead directly conflicts with operational discipline.
+SaaS stack exposure: Salesforce, Workday, Oracle — all managed by Arvind Bhuvaraghan, who reports to CFO.
+Self-managed AAP in A10's VPC = exempt from SB 122's "remotely accessed software" classification.
+🎯 Strategic Initiatives
+Initiative
+	Priority
+	Detail
+	AI-Powered Security Innovation
+	HIGH
+	Integrating advanced AI/ML into A10 Defend and application delivery for preemptive threat detection. Requires MLOps platforms and scalable inference engines — direct fit for OpenShift AI / RHEL AI.
+	Hybrid & Multi-Cloud Operations
+	HIGH
+	Optimizing deployment of A10 solutions across public, private, and edge cloud for availability, performance, and cost efficiency. OpenShift provides consistent platform across all environments.
+	Enterprise Market Expansion
+	MED
+	Q1 2026 enterprise revenue surged while service provider declined. Strategic shift to enterprise markets and AI-infrastructure deployments in the Americas driving growth.
+	Competitive Differentiation
+	MED
+	Maintaining leadership in secure application services via cutting-edge tech and flexible deployment. Open source adoption (Red Hat) accelerates innovation and avoids vendor lock-in.
+	 
+⚔️ Competitive Position
+Competitor
+	Threat
+	A10 Advantage
+	F5 Networks
+	Largest direct ADC rival; dominant market share, strong enterprise presence, breadth of offerings
+	High-performance ACOS architecture; purpose-built for carrier-grade & 5G workloads
+	Radware
+	Direct DDoS and ADC competitor; strong in niche cloud and on-premise DDoS/WAF
+	Integrated Thunder Series platform reduces hardware footprint and operational complexity
+	Fortinet / Palo Alto
+	NGFWs expanding into WAF and L4-L7 services; competing via platform consolidation and aggressive pricing
+	Specialized security focus; AI-driven A10 Defend for advanced DDoS mitigation
+	Akamai / NetScout
+	Cloud-based DDoS leaders using global edge networks; reducing need for on-premise appliances
+	Hybrid deployment flexibility; high switching costs from deep infrastructure integration
+	Citrix / NetScaler
+	Key ADC competitor; strong in VDI and enterprise environments
+	Multi-core ACOS parallel execution delivers superior throughput and efficiency
+	 
+📚 SB 122 Reference Material
+Resource
+	Key Takeaway
+	Brad Hinson — SaaS Tax Offset Sales Play
+	Deployment eligibility matrix: AAP Self-Managed = exempt, AAP Azure Managed App = likely eligible, AAP Service on AWS = taxable. Competitive plays vs. Chef, Puppet, Terraform Cloud, GitHub.
+	Holland & Knight — SB 122 Legal Analysis
+	SB 122 redefines "tangible personal property" to include remotely accessed software. Exemptions: custom software, out-of-state use, IaaS/PaaS. $5M self-assessment threshold. Effective January 1, 2027.
+	Numeral — SaaS Sales Tax State-by-State
+	20+ states already tax SaaS. California joining in 2027. Combined rate: 7.25% state + local = ~8.85% average. Multi-state operations face compounding exposure.
+	Red Hat — Ansible on Cloud Responsibilities
+	Customer vs. provider responsibility matrix for each AAP deployment model. Key reference for tax eligibility discussions.
+	⚖️ SB 122 Eligibility by AAP Deployment Type
+Offering
+	Deployment
+	SB 122 Status
+	AAP Self-Managed
+	Customer VPC (AWS, Azure, GCP)
+	ELIGIBLE FOR EXEMPTION
+	AAP on Azure (Managed App)
+	Customer VNet
+	LIKELY ELIGIBLE
+	AAP Service on AWS
+	Red Hat Hosted
+	TAXABLE (SaaS)
+	🔵 Existing Red Hat Footprint
+
+
+Current: Red Hat Enterprise Linux (embedded in Thunder/Defend products via TD Synnex)
+Expansion: AAP (100 nodes in VMware Replace pipeline), OpenShift AI POC, RHEL Embedded Expansion
+⚠️ Outreach Guardrails
+NEVER Pipeline opportunities, Support cases, Subscription counts, Node counts, SKU codes, Layoff numbers
+CAREFUL Flex pool licensing conflict, CentOS migration timeline, EBITDA margin specifics
+SAFE Public earnings, AI security strategy, SB 122 (public law), Existing RHEL relationship, Multi-cloud architecture
+________________
+Email Templates by Role
+Copy each email body and paste into Gmail compose. Rich formatting transfers automatically.
+
+
+📧 Aris Wong — VP, Worldwide Engineering
+
+
+Subject: Engineering tax exposure
+To: awong@a10networks.com [inferred]
+________________
+
+
+Aris,
+SB 122 takes effect January 1 — every SaaS automation tool your San Jose engineering teams rely on picks up an un-discountable 8–10% tax overhead. For a company shipping products built on Red Hat Enterprise Linux, the fix is straightforward.
+Red Hat's self-managed automation runs on that same RHEL foundation — inside A10's infrastructure, exempt from the SaaS tax trigger.
+•Ansible Automation Platform — self-managed in your VPC, zero SaaS tax exposure on automation workloads
+•Event-Driven Ansible — automated security response for Thunder and Defend without remote-access overhead
+•Execution Environments — portable automation across cloud and on-prem with no SaaS dependency
+For background on the law: Holland & Knight's analysis of SB 122 covers the definitions and exemptions, and Numeral's state-by-state breakdown shows where California fits in the broader landscape.
+Amadeus replaced Chef SaaS with AAP — $5.62M in benefits, 257.9% ROI over three years.
+Would August 19th work for 15 minutes? If that week is buried, August 26th works just as well.
+________________
+
+
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+
+
+📧 Michelle Caron — CFO
+
+
+Subject: Unplanned 2027 overhead
+To: mcaron@a10networks.com [inferred]
+________________
+
+
+Michelle,
+California's SB 122 adds an un-discountable 7.25–10.75% tax on every SaaS tool A10's teams use — effective January 1. For a company driving 25–30% EBITDA margins, that's unplanned overhead on a line item that was previously tax-free.
+A10 already runs on Red Hat Enterprise Linux. Extending to self-managed automation eliminates the SaaS tax trigger entirely — software running in your own infrastructure isn't "remotely accessed."
+•Ansible Automation Platform — self-managed deployment, exempt from SB 122's SaaS classification
+•Automation Mesh — scales automation across A10's multi-cloud footprint without per-resource SaaS billing
+•AIOps + Ansible — consolidates siloed SaaS monitoring tools into one tax-efficient platform
+The legal details are worth sharing with your tax team: Holland & Knight's full breakdown of SB 122 covers exemptions, sourcing rules, and the $5M self-assessment threshold. Numeral's state-by-state SaaS tax guide provides the multi-state context.
+ARM consolidated from community tools to enterprise AAP on Azure — $12M deal with lower TCO than their DIY approach.
+Would August 19th work for 15 minutes on the budget exposure? August 26th works just as well.
+________________
+
+
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+
+
+📧 Dhrupad Trivedi — President & CEO
+
+
+Subject: AI infrastructure tax math
+To: dtrivedi@a10networks.com [inferred]
+________________
+
+
+Dhrupad,
+A10's AI-powered security strategy — Defend, Thunder TPS, the AI Firewall initiatives — requires infrastructure that scales without compounding costs. SB 122 introduces an 8–10% tax on every SaaS tool your California teams use, effective January 2027. The math works against managed services and in favor of self-managed platforms.
+A10's products already ship on Red Hat Enterprise Linux. The same foundation supports self-managed automation and AI infrastructure — inside your environment, exempt from the SaaS trigger.
+•Ansible Automation Platform — self-managed, tax-exempt automation for A10's hybrid cloud operations
+•OpenShift AI — MLOps platform for Defend and Thunder AI models, deployed in your data center
+•Red Hat AI Infrastructure — optimized inferencing for AI-powered security without SaaS overhead
+Two resources worth a look: the legal analysis of SB 122 and the state-by-state SaaS tax landscape.
+ARM chose Red Hat's managed application model for 10,000-node automation — lower TCO than their DIY approach, with enterprise governance built in.
+Would August 19th work for 15 minutes? If that week is buried, August 26th works just as well.
+________________
+
+
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+________________
+📧 Manager Outreach (200–250 words · technical depth)[a]
+Technical, detailed. Designed to be forwarded up with “we should look at this.” Voice: Carolanne Farrell. Each email uses different feature bullets and peer proof.
+📧 Ryan Henderson — Director of Finance
+Subject:  SaaS tax exposure modeling
+To: rhenderson@a10networks.com
+Tier: Manager · ~221 words · Peer: Amadeus · Features: Automation Dashboard, Execution Environments, Self-Service Portal
+________________
+Ryan,
+Every SaaS license in A10’s stack — Salesforce, Workday, Oracle — picks up a 7.25% floor tax under SB 122 starting January 2027. For a finance team managing 25–30% EBITDA targets, that’s unmodeled overhead compounding across every renewal. The forecasting alone — variable local rates up to 10.75% across dozens of contracts — adds weeks of unplanned analysis.
+A10 already runs Red Hat Enterprise Linux across your Thunder and Defend infrastructure — Ansible Automation Platform extends that foundation as self-managed software in your own environment, exempt from SB 122.
+Automation Dashboard  — surfaces automation ROI in real time across business units. Instead of chasing engineering for quarterly cost-avoidance numbers, the dashboard reports time saved, jobs executed, and cost per task — exactly what EBITDA reporting needs.
+Execution Environments  — containerized, versioned runtime packages eliminate dependency drift between dev and prod. Fewer unplanned remediation cycles means the cost predictability your forecasting models require.
+Self-Service Portal  — business units request and run pre-approved automation without filing IT tickets. Routine operational requests shift out of the engineering queue into a governed model — reducing per-ticket overhead you’re already tracking.
+Amadeus replaced their Chef SaaS with Ansible Automation Platform — $5.62M in total benefits, 257.9% ROI, payback in seven months.
+Would August 19th work for 15 minutes to walk through the tax exposure modeling? If that week is buried, August 26th works just as well.
+________________
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+📧 Arvind Bhuvaraghan — Sr. Director, Enterprise Info Mgmt
+Subject:  Enterprise app tax burden
+To: abhuvaraghan@a10networks.com
+Tier: Manager · ~227 words · Peer: ARM · Features: Event-Driven Ansible, Automation Mesh, AIOps
+________________
+Arvind,
+When SB 122 takes effect January 2027, every SaaS tool in your portfolio — Salesforce, Workday, Oracle — becomes 7.25–10.75% more expensive. Managing vendor contracts and compliance across A10’s enterprise application stack, that’s a renegotiation exercise across every active SaaS agreement, with procurement and legal pulling in different directions.
+A10 already runs Red Hat Enterprise Linux embedded in your Thunder and Defend products — Ansible Automation Platform extends that foundation as self-managed infrastructure exempt from SB 122.
+Event-Driven Ansible  — monitors event streams from your enterprise apps and auto-triggers remediation playbooks. Instead of manually responding to Workday sync failures or Oracle integration alerts, rulebooks detect the pattern and execute the fix before a ticket gets filed.
+Automation Mesh  — creates a distributed automation fabric across data centers, cloud VPCs, and remote sites. Jobs route through the most efficient path, and if a node drops, the mesh reroutes automatically — consistent management regardless of where your apps run.
+AIOps  — correlates signals across Salesforce, Workday, and Oracle to surface anomalies before they cascade. Instead of investigating alerts in isolation per platform, AIOps identifies root cause across systems — cutting mean-time-to-resolution from hours to minutes.
+ARM consolidated 10,000 nodes onto Ansible Automation Platform — lower total cost of ownership than their previous DIY toolchain, $12M through Microsoft MACC.
+Would August 19th work for 15 minutes to map this against your application portfolio? If that week is buried, August 26th works just as well.
+________________
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+📧 Chris Wayne — Head of IT
+Subject:  Vendor consolidation math
+To: cwayne@a10networks.com
+Tier: Manager · ~237 words · Peer: Amadeus · Features: Ansible Lightspeed, AI Monitoring Agent, Ansible Automation Platform
+________________
+Chris,
+Building out an IT team while SB 122 adds 7.25–10.75% tax to every SaaS tool is a budget squeeze from both directions — headcount rising and software costs jumping simultaneously. Vendor consolidation becomes less optional when the tax applies per-vendor, per-seat, per-contract.
+A10 already runs Red Hat Enterprise Linux across your Thunder and Defend infrastructure — Ansible Automation Platform extends that foundation as self-managed software in your environment, exempt from SB 122.
+Ansible Lightspeed  — an AI coding assistant purpose-built for automation content. New team members write production-quality playbooks from natural language prompts instead of learning YAML syntax from scratch — cutting onboarding time from weeks to days as you scale the team.
+AI Monitoring Agent  — watches automation jobs in real time and flags failures with root-cause analysis before your team opens the logs. Senior engineers stop spending their first hour triaging overnight failures — the agent surfaces what broke and which playbook to fix.
+Ansible Automation Platform  — consolidates provisioning, configuration, patching, and compliance into a single control plane. Instead of maintaining separate tools for each function — each with its own SaaS tax liability — one self-managed platform replaces the sprawl.
+Amadeus replaced their Chef SaaS deployment with Ansible Automation Platform — $5.62M in benefits and full payback in seven months, with the SaaS dependency eliminated entirely.
+Would August 19th work for 15 minutes on the consolidation math? If that week is buried, August 26th works just as well.
+________________
+Carolanne Farrell
+Enterprise Account Manager · Red Hat
+cfarrell@redhat.com | M: (917) 709-0422
+________________
+💬 BV Talking Points (Call Prep — Not In Emails)
+
+
+Objective
+	Talking Points
+	Key Metrics
+	Cost Efficiency
+	Self-managed AAP eliminates 8–10% SaaS tax. ESP-Lite provides unlimited nodes at fixed price. HCS allows cloud committed spend for on-prem deployment.
+	Amadeus: $5.62M benefits / 257.9% ROI / 7-month payback
+	Risk Mitigation
+	Avoid audit risk — self-managed model places compliance on usage location, not remote access. Out-of-state use exemption for multi-state ops.
+	$5M self-assessment threshold in SB 122
+	Revenue Growth
+	Consolidate siloed SaaS tools → fewer vendors, lower tax surface area. Free-to-Enterprise removes migration cost barrier.
+	ARM: 10,000 nodes, $12M MACC with Microsoft
+	________________
+Generated by PAI ContentCampaign · Source: Brad Hinson SSP Deck + HK Law + Numeral · Red Hat Confidential — Internal Use Only · 2026-08-10
+
+
+[a]@bhinson@redhat.com @cfarrell@redhat.com 
+Here are the manager templates.  if these look ok we can begin,  lmk if you can see any tweaks.
+_Assigned to bhinson@redhat.com_
