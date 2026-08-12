@@ -335,13 +335,30 @@ function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name
 
   const leadershipSection = companyText.match(/## Leadership[\s\S]*?(?=\n## |$)/i)
   if (leadershipSection) {
-    const contactRegex = /(?:\*\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+),\s*((?:VP|Vice President|SVP|Senior Vice President|President|CEO|CFO|CTO|CIO|COO|CMO|Director|Head of|Chief)[^.\n]*)/gi
+    const section = leadershipSection[0]
+    const titleWords = 'President|CEO|CFO|CTO|CIO|COO|CMO|Chief|Executive Vice|EVP|SVP|Senior Vice President|VP|Vice President|Director|Head of'
+    // Pattern 1: "Name, Title" (e.g., "Dhrupad Trivedi, CEO")
+    const p1 = new RegExp(`([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+),\\s*((?:${titleWords})[^.\\n]*)`, 'gi')
+    // Pattern 2: "Title Name" (e.g., "CEO Dhrupad Trivedi" or "President and CEO Dhrupad Trivedi")
+    const p2 = new RegExp(`(?:${titleWords})(?:\\s+(?:and|&)\\s+(?:${titleWords}))*[^A-Z]*([A-Z][a-z]+\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)`, 'g')
+    // Pattern 3: "Name was appointed Title" (e.g., "Michelle Caron was appointed CFO")
+    const p3 = new RegExp(`([A-Z][a-z]+\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)\\s+was\\s+appointed\\s+((?:${titleWords})[^.,]*)`, 'gi')
     let match
-    while ((match = contactRegex.exec(leadershipSection[0])) !== null) {
+    while ((match = p1.exec(section)) !== null) {
       const name = match[1].trim()
       const title = match[2].trim()
+      if (name.length > 3 && !contacts.some(c => c.name === name)) contacts.push({ name, title })
+    }
+    while ((match = p3.exec(section)) !== null) {
+      const name = match[1].trim()
+      const title = match[2].trim()
+      if (name.length > 3 && !contacts.some(c => c.name === name)) contacts.push({ name, title })
+    }
+    while ((match = p2.exec(section)) !== null) {
+      const name = match[1].trim()
       if (name.length > 3 && !contacts.some(c => c.name === name)) {
-        contacts.push({ name, title })
+        const titleMatch = match[0].match(new RegExp(`((?:${titleWords})(?:\\s+(?:and|&)\\s+(?:${titleWords}))*)`, 'i'))
+        contacts.push({ name, title: titleMatch?.[1]?.trim() || '' })
       }
     }
   }
