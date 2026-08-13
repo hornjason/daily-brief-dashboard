@@ -1281,7 +1281,7 @@ The setup wizard (`SetupPage.tsx`) shows the Product Intelligence folder tree on
 | `src/product-release-radar.ts` | Life Cycle API + PDF/HTML scraping + Gemini synthesis per product |
 | `src/product-feature-radar.ts` | Feature extraction from Drive corpus; `getFeatureCache(slug)`, `SECTION_CAP=6000`, `TOTAL_CAP=18000` |
 | `src/product-drive-ingest.ts` | Drive folder listing + Markdown/doc content ingestion per product |
-| `src/product-intelligence.ts` | Q&A chat pipeline (BKL-AI16); separate from release radar |
+| `src/product-intelligence.ts` | Q&A chat pipeline (BKL-AI16); `queryProductIntelligence()` for product docs, `queryCustomerData()` for customer data Q&A (no web grounding) |
 | `src/product-intel-routes.ts` | All `/api/products/*` endpoints; loads feature cache and passes to customer intel |
 | `src/customer-product-intel.ts` | `generateCustomerProductIntel()`; Gemini prompt with feature injection; `featureTalkingPoints` output |
 | `dashboard/src/pages/ProductsPage.tsx` | Products listing (Unified Stream layout: FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel) |
