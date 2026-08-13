@@ -257,6 +257,34 @@ describe('buildPeerPattern — anti-gaming', () => {
   })
 })
 
+// ── Custom content passthrough ──────────────────────────────────────────────
+
+describe('custom content passthrough', () => {
+  it('buildOpener uses customOpener when provided', () => {
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'SB 122 takes effect January 1 — every SaaS tool picks up 8-10% tax')
+    expect(result).toContain('SB 122 takes effect')
+    expect(result).toContain('Dhrupad')
+  })
+
+  it('buildOpener falls back to signal when no customOpener', () => {
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi')
+    expect(result).toContain('Dhrupad')
+    expect(result).not.toContain('SB 122 takes effect')
+  })
+
+  it('buildSignalBridge uses custom bridge when provided', () => {
+    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform'], 'For a company shipping products built on RHEL, the fix is straightforward.')
+    expect(result).toContain('shipping products')
+  })
+
+  it('buildFeatureBullets uses custom applications when provided', () => {
+    const apps = ['self-managed in your VPC, zero SaaS tax exposure', 'automated security response for Thunder and Defend', 'portable automation across cloud and on-prem']
+    const result = buildFeatureBullets(['ansible-automation-platform', 'event-driven-ansible', 'execution-environments'], 'manager', apps)
+    expect(result).toContain('self-managed in your VPC')
+    expect(result).toContain('Thunder and Defend')
+  })
+})
+
 // ── Cross-email anti-gaming ─────────────────────────────────────────────────
 
 describe('cross-email quality properties', () => {

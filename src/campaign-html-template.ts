@@ -678,6 +678,9 @@ export interface StructuredEmailSelection {
   featureKeys: string[]
   peerProof: { playName: string; exampleIndex: number } | null
   challengerDataPoint: string
+  customOpener: string
+  featureApplications: string[]
+  signalBridge: string
 }
 
 export interface StructuredCampaignSelection {
@@ -736,9 +739,13 @@ export function buildOpener(
   signals: Signal[],
   openerVariant: number,
   recipientName: string,
+  customOpener?: string,
 ): string {
+  const firstName = recipientName.split(' ')[0]
+  if (customOpener) return `${firstName}, ${customOpener}`
+
   const signal = signals[signalIndex]
-  if (!signal) return `Hi ${recipientName.split(' ')[0]},`
+  if (!signal) return `Hi ${firstName},`
 
   let observation = signal.headline
   if (observation.includes(' — ')) {
@@ -751,7 +758,6 @@ export function buildOpener(
   if (observation && /^[a-z]/.test(observation)) {
     observation = observation.charAt(0).toUpperCase() + observation.slice(1)
   }
-  const firstName = recipientName.split(' ')[0]
 
   switch (openerVariant) {
     case 0:
@@ -781,7 +787,9 @@ const SIGNAL_BRIDGES: Record<string, string> = {
 export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
+  customBridge?: string,
 ): string {
+  if (customBridge) return customBridge
   if (!signal || featureKeys.length === 0) return ''
 
   const primaryKey = featureKeys[0]
@@ -851,12 +859,14 @@ export function buildRelationshipLine(
 export function buildFeatureBullets(
   featureKeys: string[],
   tier: 'executive' | 'manager',
+  featureApplications?: string[],
 ): string {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
-  for (const key of featureKeys.slice(0, 3)) {
+  for (let i = 0; i < featureKeys.slice(0, 3).length; i++) {
+    const key = featureKeys[i]
     const entry = resolveFeatureEntry(key)
     if (!entry) continue
-    const applicationSentence = getCapabilityDescription(key)
+    const applicationSentence = featureApplications?.[i] || getCapabilityDescription(key)
     bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
@@ -1219,10 +1229,10 @@ export function generateCampaignFromStructured(
     const signal = data.signals[email.signalIndex]
 
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName)
-    const signalBridge = buildSignalBridge(signal, email.featureKeys)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
+    const signalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
     const relationshipLine = buildRelationshipLine(data.subscriptions)
-    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier)
+    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)

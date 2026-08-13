@@ -148,8 +148,21 @@ const CAMPAIGN_SELECTION_SCHEMA = {
           featureKeys: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Exactly 3 keys from URL registry.' },
           peerProof: { type: 'OBJECT', nullable: true, properties: { playName: { type: 'STRING' }, exampleIndex: { type: 'INTEGER' } } },
           challengerDataPoint: { type: 'STRING', description: 'Observation from signals that teaches the customer something.' },
+          customOpener: {
+            type: 'STRING',
+            description: 'One sentence observation about THIS recipient\'s specific situation — what is happening in their world that connects to the campaign theme. Must reference a concrete fact from the loaded signals (a recent event, initiative, or business change). NOT a generic opener. Example: "SB 122 takes effect January 1 — every SaaS automation tool your San Jose engineering teams rely on picks up an 8-10% tax overhead." NOT: "Infrastructure modernization is shaping how your teams operate."',
+          },
+          featureApplications: {
+            type: 'ARRAY',
+            items: { type: 'STRING' },
+            description: 'Exactly 3 sentences, one per featureKey (same order). Each explains why THIS specific feature matters for THIS customer\'s specific situation. Must reference customer context, not generic capability. Example for A10+SaaS tax: "self-managed in your VPC, zero SaaS tax exposure on automation workloads" NOT: "unifies automation across hybrid environments". Keep to 1 sentence each, 10-20 words.',
+          },
+          signalBridge: {
+            type: 'STRING',
+            description: 'One sentence connecting the selected signal to the customer\'s business and the primary Red Hat product. Must be specific to this customer. Example: "For a company shipping products built on Red Hat Enterprise Linux, the fix is straightforward." NOT: "This aligns with how organizations are using Red Hat automation."',
+          },
         },
-        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint'],
+        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge'],
       },
     },
   },
@@ -484,6 +497,11 @@ For each resolved contact, select:
 2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role
 3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
 4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
+5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
+6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
+7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
+
+CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
 GROUNDING RULES:
 - recipientName MUST exactly match one of the resolved contact names provided
@@ -507,6 +525,9 @@ export interface CampaignSelectionResult {
     featureKeys: string[]
     peerProof: { playName: string; exampleIndex: number } | null
     challengerDataPoint: string
+    customOpener: string
+    featureApplications: string[]
+    signalBridge: string
   }>
 }
 
