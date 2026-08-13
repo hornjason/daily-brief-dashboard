@@ -96,6 +96,74 @@ graph LR
 
 26 route files at `src/*-routes.ts` using Hono framework. Localhost-only, no auth middleware. Each route file uses `createRouter()` and is registered in `server.ts`. See `PROJECT-STATE.md` for full endpoint inventory.
 
+### Signal Scoring Components (Layer 2)
+
+6 components compute scoring dimensions for signal prioritization:
+
+| Component | File | Purpose |
+|---|---|---|
+| Attention Score | `src/attention-score.ts` | Computes attention-weighted score for signal ranking |
+| Health Score | `src/health-score.ts` | Account health composite score from multi-source signals |
+| Signal Config Keys | `src/lib/signal-config-keys.ts` | Canonical key registry for signal configuration |
+| Signal Loader | `src/lib/signal-loader.ts` | Loads raw signals from modules into scoring pipeline |
+| Signal Query | `src/lib/signal-query.ts` | Query interface for filtered signal retrieval |
+| Tactic Scorer | `src/lib/tactic-scorer.ts` | Scores tactical recommendations by relevance and urgency |
+
+### Template Engine Components (Layer 3)
+
+19 template files produce deterministic sections from scored signals. All invoked via `templateAll()` (ADR-031):
+
+| Component | File | Purpose |
+|---|---|---|
+| Campaign Html Template | `src/campaign-html-template.ts` | HTML output template for campaign consumer |
+| Cases | `src/lib/templates/cases.ts` | Support case signal template |
+| Cloud | `src/lib/templates/cloud.ts` | Cloud consumption and migration template |
+| Competitive | `src/lib/templates/competitive.ts` | Competitive landscape signal template |
+| Customer Overview Structured | `src/lib/templates/customer-overview-structured.ts` | Structured customer overview for context assembly |
+| Email Template | `src/email-template.ts` | HTML output template for email outreach consumer |
+| Events | `src/lib/templates/events.ts` | Upcoming events and engagement signal template |
+| Index | `src/lib/templates/index.ts` | Template registry index — exports all templates |
+| Meeting Context | `src/lib/templates/meeting-context.ts` | Meeting-specific context assembly template |
+| Meeting Prep Html Template | `src/meeting-prep-html-template.ts` | HTML output template for meeting prep consumer |
+| Recommendations Structured | `src/lib/templates/recommendations-structured.ts` | Structured recommendations for consumer context |
+| Relationships | `src/lib/templates/relationships.ts` | Stakeholder relationship signal template |
+| Renewals | `src/lib/templates/renewals.ts` | Renewal timeline and risk signal template |
+| Route Signal | `src/lib/templates/route-signal.ts` | Signal routing logic for template dispatch |
+| Sales Alignment | `src/lib/templates/sales-alignment.ts` | Sales strategy alignment signal template |
+| Strategic | `src/lib/templates/strategic.ts` | Strategic initiative signal template |
+| Tech | `src/lib/templates/tech.ts` | Technology stack signal template |
+| Tech Structured | `src/lib/templates/tech-structured.ts` | Structured technology data for consumer context |
+| Types | `src/lib/templates/types.ts` | Shared TypeScript types for template system |
+
+### Gemini Call Layer Components (Layer 6)
+
+7 components implement the unified AI call infrastructure. All AI calls route through `callGemini()` (ADR-023):
+
+| Component | File | Purpose |
+|---|---|---|
+| Ai Config | `src/ai-config.ts` | AI model configuration: model selection, temperature, token limits |
+| Ai Events | `src/ai-events.ts` | AI call event tracking and observability |
+| Ai Fingerprint | `src/ai-fingerprint.ts` | Content fingerprinting for delta cache deduplication |
+| Gemini Auth | `src/gemini-auth.ts` | Google AI authentication and credential management |
+| Gemini Cost Tracker | `src/gemini-cost-tracker.ts` | Per-call cost tracking and budget enforcement |
+| Gemini Fetch | `src/gemini-fetch.ts` | Low-level fetch wrapper with retry and timeout tiers |
+| Gemini Quality Gate | `src/gemini-quality-gate.ts` | Pre-cache quality validation of AI-generated output |
+
+### Context Orchestrator Components (Layer 11)
+
+4 components assemble consumer context from scored signals and domain knowledge:
+
+| Component | File | Purpose |
+|---|---|---|
+| Customer Context Loader | `src/lib/customer-context-loader.ts` | Loads full customer context from all signal sources |
+| Customer Product Context | `src/lib/customer-product-context.ts` | Product-specific context: adoption, usage, roadmap alignment |
+| Customer Solution Context | `src/lib/customer-solution-context.ts` | Solution-specific context: architecture, deployment, integrations |
+| Graph Context | `src/lib/graph-context.ts` | Relationship graph context for stakeholder intelligence |
+
+### Enforcement Components (Layer 12)
+
+Gemini Quality Gate (`src/gemini-quality-gate.ts`) also serves as an enforcement component — validates AI output quality before caching, enforcing content standards and format compliance across all consumers.
+
 ### Data Hygiene
 
 Zero real data in source or committed config (ADR-042). Five zero-rules govern every commit:
