@@ -681,6 +681,7 @@ export interface StructuredEmailSelection {
   customOpener: string
   featureApplications: string[]
   signalBridge: string
+  referenceLine?: string
 }
 
 export interface StructuredCampaignSelection {
@@ -1034,6 +1035,7 @@ export function assembleEmail(
     signalBridge: string
     relationshipLine: string
     featureBullets: string
+    referenceLine: string
     peerPattern: string
     challengerFrame: string
     cta: string
@@ -1047,6 +1049,7 @@ export function assembleEmail(
     blocks.signalBridge,
     blocks.relationshipLine,
     blocks.featureBullets,
+    blocks.referenceLine,
     blocks.peerPattern,
     blocks.challengerFrame,
     blocks.cta,
@@ -1223,6 +1226,7 @@ export function generateCampaignFromStructured(
     const signalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications)
+    const referenceLine = email.referenceLine || ''
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
@@ -1230,7 +1234,7 @@ export function generateCampaignFromStructured(
 
     // Assemble with tier-appropriate formatting
     const assembled = assembleEmail(
-      { opener, signalBridge, relationshipLine, featureBullets, peerPattern, challengerFrame, cta, signOff },
+      { opener, signalBridge, relationshipLine, featureBullets, referenceLine, peerPattern, challengerFrame, cta, signOff },
       email.tier,
       voiceTokens,
     )

@@ -161,6 +161,11 @@ const CAMPAIGN_SELECTION_SCHEMA = {
             type: 'STRING',
             description: 'One sentence connecting the selected signal to the customer\'s business and the primary Red Hat product. Must be specific to this customer. Example: "For a company shipping products built on Red Hat Enterprise Linux, the fix is straightforward." NOT: "This aligns with how organizations are using Red Hat automation."',
           },
+          referenceLine: {
+            type: 'STRING',
+            nullable: true,
+            description: 'One sentence pointing the recipient to relevant source documents from the campaign material. Placed after feature bullets, before peer proof. Example: "For background on the law: Holland & Knight\'s analysis of SB 122 covers the definitions and exemptions, and Numeral\'s state-by-state breakdown shows where California fits in the broader landscape." Set to null if no reference docs are relevant to this email.',
+          },
         },
         required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge'],
       },
@@ -500,6 +505,7 @@ For each resolved contact, select:
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
 6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
+8. A reference line (optional): one sentence pointing the recipient to relevant source documents from the campaign material. Placed after feature bullets. Example: "For background on the law: Holland & Knight's analysis of SB 122 covers the definitions and exemptions." Set to null if no reference docs apply.
 
 CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
@@ -528,6 +534,7 @@ export interface CampaignSelectionResult {
     customOpener: string
     featureApplications: string[]
     signalBridge: string
+    referenceLine?: string
   }>
 }
 
