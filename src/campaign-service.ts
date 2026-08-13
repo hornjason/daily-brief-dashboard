@@ -84,6 +84,35 @@ const CAMPAIGN_RESPONSE_SCHEMA = {
   required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
 }
 
+// ── Data selection schema (ADR-043 two-pass) ────────────────────────────────
+
+const CAMPAIGN_SELECTION_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    campaignSummary: { type: 'STRING', description: 'Campaign strategy overview grounded in loaded signals.' },
+    customerContext: { type: 'STRING', description: 'What is happening NOW with this customer.' },
+    positioning: { type: 'STRING', description: 'Red Hat value prop mapping. Include one Challenger Insight.' },
+    emails: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          recipientName: { type: 'STRING', description: 'MUST match exactly one resolved contact name.' },
+          tier: { type: 'STRING', enum: ['executive', 'manager'] },
+          intent: { type: 'STRING', enum: ['nurture', 'expand', 're-engage'] },
+          subject: { type: 'STRING', description: '2-4 word observation, no product/company names.' },
+          signalIndex: { type: 'INTEGER', description: 'Zero-based index into signals array.' },
+          featureKeys: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Exactly 3 keys from URL registry.' },
+          peerProof: { type: 'OBJECT', nullable: true, properties: { playName: { type: 'STRING' }, exampleIndex: { type: 'INTEGER' } } },
+          challengerDataPoint: { type: 'STRING', description: 'Observation from signals that teaches the customer something.' },
+        },
+        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint'],
+      },
+    },
+  },
+  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CampaignRequest {
@@ -403,6 +432,95 @@ ${personasStr}`
   return markdownParts.join('\n')
 }
 
+// ── Campaign selection (ADR-043 two-pass: Pass 1) ────────────────────────────
+
+const CAMPAIGN_SELECTION_SYSTEM_PROMPT = `You are selecting data points for personalized B2B email campaigns. You are NOT writing emails — you are choosing which data points the template engine should use.
+
+For each resolved contact, select:
+1. The most relevant signal (by index) from the loaded signals
+2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role
+3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
+4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
+
+GROUNDING RULES:
+- recipientName MUST exactly match one of the resolved contact names provided
+- featureKeys MUST be selected from the provided feature key enum — no invented keys
+- signalIndex MUST be a valid zero-based index into the signals array
+- challengerDataPoint MUST reference actual data from the loaded signals — never fabricate
+- peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
+- Do NOT write email body text, CTAs, or prose — the template engine handles all prose generation
+`
+
+export interface CampaignSelectionResult {
+  campaignSummary: string
+  customerContext: string
+  positioning: string
+  emails: Array<{
+    recipientName: string
+    tier: 'executive' | 'manager'
+    intent: 'nurture' | 'expand' | 're-engage'
+    subject: string
+    signalIndex: number
+    featureKeys: string[]
+    peerProof: { playName: string; exampleIndex: number } | null
+    challengerDataPoint: string
+  }>
+}
+
+export async function callGeminiForCampaignSelection(opts: {
+  materialTitle: string
+  materialContent: string
+  customerName: string
+  customerSignals: CustomerSignals
+  registrySignals: Signal[]
+  deterministicContext?: string
+  resolvedContacts: Array<{ name: string; title: string; role: string }>
+  structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
+  campaignDirective?: string
+}): Promise<CampaignSelectionResult> {
+  const featureKeys = getFeatureKeys()
+
+  const signalsSummary = opts.registrySignals.length > 0
+    ? opts.registrySignals
+        .slice(0, 30)
+        .map((s, i) => `[${i}] [${s.type}] ${s.headline}${s.detail ? ' — ' + s.detail.substring(0, 200) : ''}`)
+        .join('\n')
+    : 'No signals available.'
+
+  const contactLines = opts.resolvedContacts.map(c => `- ${c.name}, ${c.title} (role: ${c.role})`).join('\n')
+
+  let solutionPlaysContext = ''
+  if (opts.structuredPlays && opts.structuredPlays.length > 0) {
+    solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (cite by playName + exampleIndex)\n\n'
+    for (const play of opts.structuredPlays) {
+      solutionPlaysContext += `### Play: "${play.name}"\n`
+      solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
+      if (play.realWorldExamples?.length) {
+        solutionPlaysContext += `- Real-World Examples:\n`
+        play.realWorldExamples.forEach((ex, i) => {
+          solutionPlaysContext += `  [${i}] ${ex.customer}: ${ex.outcome}\n`
+        })
+      }
+      if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
+      solutionPlaysContext += '\n'
+    }
+  }
+
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor each resolved contact, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return structured selections — do NOT write email prose.`
+
+  const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
+    callType: 'campaign-selection',
+    customerName: opts.customerName,
+    temperature: 0.3,
+    responseSchema: CAMPAIGN_SELECTION_SCHEMA,
+  })
+
+  if (!result.text) throw new Error('Gemini returned empty response for campaign selection')
+
+  const parsed: CampaignSelectionResult = JSON.parse(result.text)
+  return parsed
+}
+
 // ── Drive persistence ────────────────────────────────────────────────────────
 
 async function ensureCampaignsSubfolder(customerFolderId: string): Promise<string> {
@@ -574,11 +692,11 @@ async function uploadCampaignToDrive(
 
   // Auto-share with AE and SSPs from account team
   if (driveFileId) {
-    const teamToShare = accountTeam.filter(m => ['ae', 'ssp', 'ssa'].includes(m.role))
+    const teamToShare = accountTeam.filter(m => m.role === 'ae')
     for (const member of teamToShare) {
       const nameParts = member.name.toLowerCase().split(/\s+/)
       if (nameParts.length < 2) continue
-      const email = `${nameParts[0]}.${nameParts[nameParts.length - 1]}@redhat.com`
+      const email = `${nameParts[0][0]}${nameParts[nameParts.length - 1]}@redhat.com`
       try {
         await drive.permissions.create({
           fileId: driveFileId,
@@ -699,6 +817,12 @@ export async function generateCampaign(
       }
     }
     console.log(`[campaigns] Extracted email: "${materialTitle}" (${materialContent.length} chars, ${referenceMaterialData.length} links)`)
+  } else if (config?.campaignDirective && !materialUrl) {
+    const text = config.campaignDirective
+    console.log(`[campaigns] Generating campaign for ${customer.name} from directive (freeform)`)
+    materialTitle = text.split(/[.!?\n]/)[0].trim().substring(0, 100)
+    materialContent = text
+    materialUrl = `directive:${materialTitle}`
   } else {
     console.log(`[campaigns] Generating campaign for ${customer.name} from ${materialUrl}`)
     const fileId = extractFileId(materialUrl)
@@ -797,18 +921,19 @@ export async function generateCampaign(
     { role: 'Director of Platform Engineering', enabled: true },
   ]
   let resolvedContactsContext = ''
+  let resolvedExecs: ResolvedExecutive[] = []
   try {
     const rolesToResolve = enabledPersonas
       .filter(p => !p.linkedinUrl && !p.name)
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
-      if (resolved.length > 0) {
-        const contactLines = resolved.map(r =>
-          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
+      resolvedExecs = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
+      if (resolvedExecs.length > 0) {
+        const contactLines = resolvedExecs.map(r =>
+          `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
         )
-        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
-        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
+        resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name.\n${contactLines.join('\n')}\n`
+        console.log(`[campaigns] Resolved ${resolvedExecs.length} executives for ${customer.name}`)
       }
     }
   } catch (e: any) {
