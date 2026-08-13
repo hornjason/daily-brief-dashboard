@@ -43,6 +43,34 @@ const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false
 const CAMPAIGN_PARALLEL_VALIDATION = process.env.CAMPAIGN_PARALLEL_VALIDATION === 'true'
 const CAMPAIGN_FREEFORM_REMOVED = process.env.CAMPAIGN_FREEFORM_REMOVED === 'true'
 
+// ── Signal enrichment (loads intelligence + account plan from cache) ────────
+
+async function enrichSignalsFromCache(
+  signals: CustomerSignals,
+  slug: string,
+  subSignals: Signal[],
+  registrySignals: Signal[],
+): Promise<CustomerSignals> {
+  const enriched: any = { ...signals }
+  try {
+    const { existsSync, readFileSync } = await import('fs')
+    const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
+    if (existsSync(intelPath)) enriched.intelligence = JSON.parse(readFileSync(intelPath, 'utf-8'))
+    const planPath = resolve(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+    if (existsSync(planPath)) enriched.accountPlan = readFileSync(planPath, 'utf-8')
+  } catch { /* silent */ }
+  if (subSignals.length > 0) {
+    enriched.subscriptions = subSignals.map(s => ({
+      productName: s.metadata?.product ?? s.headline,
+      quantity: s.metadata?.quantity ?? 1,
+      status: 'Active',
+    }))
+  }
+  const caseSignals = registrySignals.filter(s => s.source === 'cases')
+  if (caseSignals.length > 0) enriched.cases = caseSignals
+  return enriched
+}
+
 // ── Structured HTML quality scoring (parallel validation) ───────────────────
 export function scoreStructuredOutput(html: string): { sections: number; emails: number; words: number } {
   const sections = (html.match(/<h[23][^>]*>/g) || []).length
@@ -1123,7 +1151,7 @@ export async function generateCampaign(
       materialTitle,
       materialUrl,
       generatedDate: timestamp,
-      rawSignals: signals,
+      rawSignals: await enrichSignalsFromCache(signals, slug, subSignals, registrySignals),
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility
