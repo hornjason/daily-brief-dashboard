@@ -32,7 +32,7 @@ import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
-import { getFeatureKeys } from './lib/feature-url-registry.ts'
+import { getFeatureKeys, getFeatureUrlMap } from './lib/feature-url-registry.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
@@ -533,7 +533,7 @@ For each resolved contact, select:
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
 6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
-8. A reference line: one sentence pointing the recipient to relevant source documents from the campaign material. Use markdown links for document names: [Document Title](url). Example: "For background on the law: [Holland & Knight's analysis of SB 122](https://example.com/hk) covers the definitions." Reference lines are REQUIRED when the source material contains external reports, analyses, or documentation the recipient can look up. Only set to null if genuinely no reference docs exist in the material.
+8. A reference line: one sentence pointing the recipient to a relevant Red Hat resource. Use markdown links with URLs ONLY from redhat.com domains (www.redhat.com, access.redhat.com, content.redhat.com, developers.redhat.com). Example: "The [Ansible Automation Platform overview](https://www.redhat.com/en/technologies/management/ansible) covers how self-managed automation works." NEVER invent or guess URLs — use only URLs from the AVAILABLE FEATURE KEYS URLs or from redhat.com pages you know exist. If you cannot provide a verified redhat.com URL, write the reference as plain text without a link.
 
 CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
@@ -610,7 +610,9 @@ export async function callGeminiForCampaignSelection(opts: {
     }
   }
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  const featureUrlMap = getFeatureUrlMap()
+
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',

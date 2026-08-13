@@ -214,3 +214,7 @@ export function resolveFeatureEntry(featureKey: string): FeatureRegistryEntry | 
 export function getFeatureKeys(): string[] {
   return FEATURE_REGISTRY.map(entry => entry.featureKey)
 }
+
+export function getFeatureUrlMap(): string {
+  return FEATURE_REGISTRY.map(e => `${e.featureKey}: [${e.featureName}](${e.url})`).join('\n')
+}
