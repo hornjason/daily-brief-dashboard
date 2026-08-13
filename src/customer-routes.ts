@@ -25,7 +25,7 @@ import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { readAccountPlan, generateAndSaveAccountPlan, generateMidyearUpdate, readMidyearUpdate, generateAccountPlanCY27, readAccountPlanCY27 } from './account-plan.ts'
 import { readCachedPositioning, generateValuePositioning } from './value-positioning.ts'
 import { getAiConfig } from './ai-config.ts'
-import { queryProductIntelligence } from './product-intelligence.ts'
+import { queryProductIntelligence, queryCustomerData } from './product-intelligence.ts'
 import * as CustomerService from './customer-service.ts'
 import { getCustomerProductContext } from './lib/customer-product-context.ts'
 import { structuredTechStack } from './lib/templates/tech-structured.ts'
@@ -998,6 +998,44 @@ export function createCustomerRouter(): Hono {
 
     try {
       const result = await queryProductIntelligence(product, question.trim(), validatedCustomerName)
+      return c.json(result)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── #1069: Customer Data Q&A — all customer data, no web grounding ────────
+
+  router.post('/api/customer-query', async (c) => {
+    let body: any
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400)
+    }
+
+    const { question, customerName } = body as {
+      question: string
+      customerName: string
+    }
+
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      return c.json({ error: 'question is required' }, 400)
+    }
+    if (question.length > 500) {
+      return c.json({ error: 'question must be 500 characters or fewer' }, 400)
+    }
+    if (!customerName || typeof customerName !== 'string') {
+      return c.json({ error: 'customerName is required' }, 400)
+    }
+    // Validate customerName against known customers — exact match required
+    const validCustomer = customers.find(cu => cu.name === customerName)
+    if (!validCustomer) {
+      return c.json({ error: 'Unknown customer name' }, 400)
+    }
+
+    try {
+      const result = await queryCustomerData(question.trim(), validCustomer.name, toSlug(validCustomer.name))
       return c.json(result)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

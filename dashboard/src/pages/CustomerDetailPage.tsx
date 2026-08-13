@@ -40,7 +40,7 @@ import BriefAgePill from '../components/BriefAgePill'
 import { DataQualityBadge } from '../components/DataQualityBadge'
 import { AccountIntelligencePanel } from '../components/AccountIntelligencePanel'
 import { AccountPlanPanel } from '../components/AccountPlanPanel'
-import { ProductQueryPanel } from '../components/ProductQueryPanel'
+import { CustomerQueryPanel } from '../components/CustomerQueryPanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
 import CustomerSignalBanner from '../components/CustomerSignalBanner'
 
@@ -1881,14 +1881,14 @@ export function CustomerDetailPage() {
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-text-primary">Ask about {customerName}</h3>
-                <p className="text-xs text-text-secondary mt-0.5">Grounded Q&A against this customer's product data, subscriptions, and tech stack.</p>
+                <p className="text-xs text-text-secondary mt-0.5">AI-powered Q&amp;A across all account data</p>
               </div>
               <button onClick={() => setWidgetOpen(false)} className="text-text-secondary hover:text-text-primary p-1">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <ProductQueryPanel customerName={customerName} />
+              <CustomerQueryPanel customerName={customerName} />
             </div>
           </div>
         )}

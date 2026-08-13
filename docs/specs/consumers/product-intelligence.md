@@ -59,6 +59,9 @@ Grounded Q&A system for Red Hat products (RHEL, OpenShift, Ansible Automation Pl
 ### Territory Summary
 - `GET /api/products/:slug/territory-summary` — aggregate customer intel across territory
 
+### Customer Data Q&A
+- `POST /api/customer-query` — query all customer data with natural language question
+
 ### Product Configuration
 - `PATCH /api/products/:slug/sources` — update customSources and followLinks
 
@@ -69,6 +72,13 @@ Product Intelligence is API-only and does not generate structured documents. Out
 - Answer text (grounded response)
 - Source citations (title + URL)
 - Confidence level (HIGH/MEDIUM/LOW)
+
+### Customer Data Query (from `product-intelligence.ts`)
+- Answer text (grounded in customer data, not web search)
+- Data sources queried: subscriptions, support cases, docs corpus, pipeline/opportunities, tech stack, account intelligence
+- Grounding: disabled (false) — answers from internal data only
+- Confidence level: based on data section coverage (4+ sections with data = HIGH, 2-3 = MEDIUM, 0-1 = LOW)
+- Sources: internal data section names (not web URLs)
 
 ### Customer Product Intel (from `customer-product-intel.ts`)
 - Customer context (name, subscriptions, support cases)
