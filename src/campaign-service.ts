@@ -38,8 +38,51 @@ import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 
-// ── Feature flag: two-pass structured campaigns (ADR-043) ───────────────────
+// ── Feature flags ───────────────────────────────────────────────────────────
 const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
+const CAMPAIGN_PARALLEL_VALIDATION = process.env.CAMPAIGN_PARALLEL_VALIDATION === 'true'
+const CAMPAIGN_FREEFORM_REMOVED = process.env.CAMPAIGN_FREEFORM_REMOVED === 'true'
+
+// ── Structured HTML quality scoring (parallel validation) ───────────────────
+export function scoreStructuredOutput(html: string): { sections: number; emails: number; words: number } {
+  const sections = (html.match(/<h[23][^>]*>/g) || []).length
+  const emails = (html.match(/📧/g) || []).length
+  const words = html.replace(/<[^>]*>/g, '').split(/\s+/).filter(w => w.length > 0).length
+  return { sections, emails, words }
+}
+
+// ── Convergence tracking (parallel validation) ──────────────────────────────
+interface ConvergenceRecord {
+  timestamp: string
+  customer: string
+  structuredScore: number
+  freeformScore: number
+  winner: 'structured' | 'freeform' | 'tie'
+}
+
+const CONVERGENCE_FILE = resolve(CACHE_DIR, 'campaign-convergence.json')
+
+export function loadConvergenceRecords(): ConvergenceRecord[] {
+  try {
+    if (existsSync(CONVERGENCE_FILE)) {
+      return JSON.parse(readFileSync(CONVERGENCE_FILE, 'utf-8'))
+    }
+  } catch { /* corrupt file — start fresh */ }
+  return []
+}
+
+export function appendConvergenceRecord(record: ConvergenceRecord): void {
+  const records = loadConvergenceRecords()
+  records.push(record)
+  mkdirSync(resolve(CACHE_DIR), { recursive: true })
+  writeFileSync(CONVERGENCE_FILE, JSON.stringify(records, null, 2))
+}
+
+export function checkCutoverReady(records: ConvergenceRecord[]): boolean {
+  if (records.length < 3) return false
+  const last3 = records.slice(-3)
+  return last3.every(r => r.winner === 'structured')
+}
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
 
@@ -1085,7 +1128,75 @@ export async function generateCampaign(
       console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
     }
 
-  } else {
+    // ── Parallel validation: also run freeform for comparison ──────────────
+    if (CAMPAIGN_PARALLEL_VALIDATION) {
+      try {
+        const freeformRaw = await callGeminiForCampaign({
+          materialTitle,
+          materialContent: augmentedMaterial,
+          customerName: customer.name,
+          customerSignals: signals,
+          registrySignals,
+          deterministicContext: templateResult.deterministic,
+          voiceInstruction,
+          personas: config?.personas ?? enabledPersonas,
+          emailTemplateContext,
+          structuredPlays,
+          campaignDirective: config?.campaignDirective,
+        })
+
+        const freeformGate = await validateAndRetry(
+          freeformRaw,
+          { validator: campaignValidator },
+          async (failures) => {
+            const feedback = formatFailureFeedback(failures)
+            return callGeminiForCampaign({
+              materialTitle,
+              materialContent: augmentedMaterial + '\n\n' + feedback,
+              customerName: customer.name,
+              customerSignals: signals,
+              registrySignals,
+              deterministicContext: templateResult.deterministic,
+              voiceInstruction,
+              personas: config?.personas ?? enabledPersonas,
+              emailTemplateContext,
+              structuredPlays,
+              campaignDirective: config?.campaignDirective,
+            })
+          }
+        )
+
+        const structuredMetrics = scoreStructuredOutput(htmlContent)
+        const freeformScore = freeformGate.scorecard.score
+        const freeformThreshold = freeformGate.scorecard.passThreshold
+        const structuredNormalized = Math.min(100, Math.round(
+          (structuredMetrics.sections >= 2 ? 30 : 0) +
+          (structuredMetrics.emails >= 2 ? 40 : 0) +
+          (structuredMetrics.words >= 100 ? 30 : 0)
+        ))
+        const winner = structuredNormalized >= freeformScore ? 'structured' as const
+          : 'freeform' as const
+
+        console.log(`[campaigns] PARALLEL: structured=${structuredMetrics.sections}/${structuredMetrics.emails}/${structuredMetrics.words} freeform=${freeformScore}/${freeformThreshold} delta=${structuredNormalized - freeformScore}`)
+
+        appendConvergenceRecord({
+          timestamp: new Date().toISOString(),
+          customer: customer.name,
+          structuredScore: structuredNormalized,
+          freeformScore,
+          winner,
+        })
+
+        const records = loadConvergenceRecords()
+        if (checkCutoverReady(records)) {
+          console.log(`[campaigns] CUTOVER READY: Structured path has matched or exceeded freeform for 3 consecutive generations`)
+        }
+      } catch (e: any) {
+        console.warn(`[campaigns] Parallel validation failed (non-fatal):`, e.message)
+      }
+    }
+
+  } else if (!CAMPAIGN_FREEFORM_REMOVED) {
     // ── Freeform path (existing behavior, unchanged) ────────────────────────
     console.log(`[campaigns] Using FREEFORM generation path for ${customer.name}`)
     const rawMarkdown = await callGeminiForCampaign({
@@ -1197,6 +1308,8 @@ export async function generateCampaign(
     } catch (e: any) {
       console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
     }
+  } else {
+    console.warn('[campaigns] Freeform path disabled (CAMPAIGN_FREEFORM_REMOVED=true). Using structured only.')
   }
 
   // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
