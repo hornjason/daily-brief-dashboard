@@ -1838,3 +1838,375 @@ describe('Enforcement registry compliance (#175)', () => {
     expect(validatorComponents.length).toBeGreaterThan(0)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 29. LAYER 2 — SIGNAL SCORING COMPLIANCE (#7)
+//     Attention Score, Health Score, Signal Config Keys, Signal Query
+//     must exist, export expected functions, and follow scoring contracts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Layer 2 — Signal Scoring compliance (#7)', () => {
+  // ── Attention Score ──────────────────────────────────────────────────────
+  test('attention-score.ts exists and exports computeAttentionScore', () => {
+    const content = readSrc('attention-score.ts')
+    expect(content).toMatch(/export\s+function\s+computeAttentionScore/)
+  })
+
+  test('attention-score.ts exports computeAllAttentionScores batch function', () => {
+    const content = readSrc('attention-score.ts')
+    expect(content).toMatch(/export\s+function\s+computeAllAttentionScores/)
+  })
+
+  test('attention-score.ts exports AttentionResult interface', () => {
+    const content = readSrc('attention-score.ts')
+    expect(content).toMatch(/export\s+interface\s+AttentionResult/)
+  })
+
+  // ── Health Score ─────────────────────────────────────────────────────────
+  test('health-score.ts exists and exports computeHealthScore', () => {
+    const content = readSrc('health-score.ts')
+    expect(content).toMatch(/export\s+function\s+computeHealthScore/)
+  })
+
+  test('health-score.ts exports computeAllHealthScores batch function', () => {
+    const content = readSrc('health-score.ts')
+    expect(content).toMatch(/export\s+function\s+computeAllHealthScores/)
+  })
+
+  test('health-score.ts exports HealthScore and HealthBreakdown interfaces', () => {
+    const content = readSrc('health-score.ts')
+    expect(content).toMatch(/export\s+interface\s+HealthScore/)
+    expect(content).toMatch(/export\s+interface\s+HealthBreakdown/)
+  })
+
+  // ── Signal Config Keys ───────────────────────────────────────────────────
+  test('lib/signal-config-keys.ts exists and exports getSignalConfigKeys', () => {
+    const content = readSrc('lib/signal-config-keys.ts')
+    expect(content).toMatch(/export\s+function\s+getSignalConfigKeys/)
+  })
+
+  test('signal-config-keys.ts extracts keys from intelligence-graph.ts source', () => {
+    const content = readSrc('lib/signal-config-keys.ts')
+    expect(content).toContain('intelligence-graph.ts')
+    expect(content).toContain('SIGNAL_CONFIGS')
+  })
+
+  // ── Signal Query ─────────────────────────────────────────────────────────
+  test('lib/signal-query.ts exists and exports getRecommendations', () => {
+    const content = readSrc('lib/signal-query.ts')
+    expect(content).toMatch(/export\s+function\s+getRecommendations/)
+  })
+
+  test('signal-query.ts exports RecommendedAction interface', () => {
+    const content = readSrc('lib/signal-query.ts')
+    expect(content).toMatch(/export\s+interface\s+RecommendedAction/)
+  })
+
+  test('signal-query.ts is deterministic (no Gemini calls)', () => {
+    const content = readSrc('lib/signal-query.ts')
+    expect(content).not.toContain('callGemini')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 30. LAYER 3 — TEMPLATE ENGINE COMPLIANCE (#7)
+//     Campaign Html Template, Customer Overview Structured, Email Template,
+//     Meeting Prep Html Template, Recommendations Structured, Route Signal,
+//     Sales Alignment, Tech Structured — all must exist and export expected
+//     functions following Layer 3 contracts.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Layer 3 — Template Engine compliance (#7)', () => {
+  // ── Campaign Html Template ───────────────────────────────────────────────
+  test('campaign-html-template.ts exists and exports generateCampaignHTML', () => {
+    const content = readSrc('campaign-html-template.ts')
+    expect(content).toMatch(/export\s+function\s+generateCampaignHTML/)
+  })
+
+  test('campaign-html-template.ts exports assembleEmail for structured output', () => {
+    const content = readSrc('campaign-html-template.ts')
+    expect(content).toMatch(/export\s+function\s+assembleEmail/)
+  })
+
+  // ── Customer Overview Structured ─────────────────────────────────────────
+  test('lib/templates/customer-overview-structured.ts exists and exports structuredCustomerOverview', () => {
+    const content = readSrc('lib/templates/customer-overview-structured.ts')
+    expect(content).toMatch(/export\s+function\s+structuredCustomerOverview/)
+  })
+
+  test('customer-overview-structured.ts exports CustomerOverviewView interface', () => {
+    const content = readSrc('lib/templates/customer-overview-structured.ts')
+    expect(content).toMatch(/export\s+interface\s+CustomerOverviewView/)
+  })
+
+  // ── Email Template ───────────────────────────────────────────────────────
+  test('email-template.ts exists and exports renderBriefHtml', () => {
+    const content = readSrc('email-template.ts')
+    expect(content).toMatch(/export\s+function\s+renderBriefHtml/)
+  })
+
+  test('email-template.ts exports BriefEmailData interface', () => {
+    const content = readSrc('email-template.ts')
+    expect(content).toMatch(/export\s+interface\s+BriefEmailData/)
+  })
+
+  // ── Meeting Prep Html Template ───────────────────────────────────────────
+  test('meeting-prep-html-template.ts exists and exports generateMeetingPrepHTML', () => {
+    const content = readSrc('meeting-prep-html-template.ts')
+    expect(content).toMatch(/export\s+function\s+generateMeetingPrepHTML/)
+  })
+
+  // ── Recommendations Structured ───────────────────────────────────────────
+  test('lib/templates/recommendations-structured.ts exists and exports structuredRecommendations', () => {
+    const content = readSrc('lib/templates/recommendations-structured.ts')
+    expect(content).toMatch(/export\s+function\s+structuredRecommendations/)
+  })
+
+  test('recommendations-structured.ts exports RecommendationView interface', () => {
+    const content = readSrc('lib/templates/recommendations-structured.ts')
+    expect(content).toMatch(/export\s+interface\s+RecommendationView/)
+  })
+
+  // ── Route Signal ─────────────────────────────────────────────────────────
+  test('lib/templates/route-signal.ts exists and exports routeSignal', () => {
+    const content = readSrc('lib/templates/route-signal.ts')
+    expect(content).toMatch(/export\s+function\s+routeSignal/)
+  })
+
+  test('route-signal.ts returns typed category (not just string)', () => {
+    const content = readSrc('lib/templates/route-signal.ts')
+    // routeSignal should return a union type, not generic string
+    expect(content).toMatch(/routeSignal.*:\s*'product'/)
+  })
+
+  // ── Sales Alignment ─────────────────────────────────────────────────────
+  test('lib/templates/sales-alignment.ts exists and exports templateSalesAlignment', () => {
+    const content = readSrc('lib/templates/sales-alignment.ts')
+    expect(content).toMatch(/export\s+function\s+templateSalesAlignment/)
+  })
+
+  // ── Tech Structured ──────────────────────────────────────────────────────
+  test('lib/templates/tech-structured.ts exists and exports structuredTechStack', () => {
+    const content = readSrc('lib/templates/tech-structured.ts')
+    expect(content).toMatch(/export\s+function\s+structuredTechStack/)
+  })
+
+  test('tech-structured.ts exports TechStackView and TechStackItemView interfaces', () => {
+    const content = readSrc('lib/templates/tech-structured.ts')
+    expect(content).toMatch(/export\s+interface\s+TechStackView/)
+    expect(content).toMatch(/export\s+interface\s+TechStackItemView/)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 31. LAYER 6 — GEMINI CALL LAYER COMPLIANCE (#7)
+//     Ai Config, Ai Events, Ai Fingerprint — configuration, event bus,
+//     and cache fingerprinting for the Gemini intelligence pipeline.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Layer 6 — Gemini Call Layer compliance (#7)', () => {
+  // ── Ai Config ────────────────────────────────────────────────────────────
+  test('ai-config.ts exists and exports AiConfig interface', () => {
+    const content = readSrc('ai-config.ts')
+    expect(content).toMatch(/export\s+interface\s+AiConfig/)
+  })
+
+  test('ai-config.ts exports DEFAULT_AI_CONFIG constant', () => {
+    const content = readSrc('ai-config.ts')
+    expect(content).toMatch(/export\s+const\s+DEFAULT_AI_CONFIG/)
+  })
+
+  test('ai-config.ts exports getAiConfig and getGeminiModel functions', () => {
+    const content = readSrc('ai-config.ts')
+    expect(content).toMatch(/export\s+function\s+getAiConfig/)
+    expect(content).toMatch(/export\s+function\s+getGeminiModel/)
+  })
+
+  // ── Ai Events ────────────────────────────────────────────────────────────
+  test('ai-events.ts exists and exports emitAIEvent function', () => {
+    const content = readSrc('ai-events.ts')
+    expect(content).toMatch(/export\s+function\s+emitAIEvent/)
+  })
+
+  test('ai-events.ts exports onAIEvent and offAIEvent listeners', () => {
+    const content = readSrc('ai-events.ts')
+    expect(content).toMatch(/export\s+const\s+onAIEvent/)
+    expect(content).toMatch(/export\s+const\s+offAIEvent/)
+  })
+
+  test('ai-events.ts exports AIIntelEvent type', () => {
+    const content = readSrc('ai-events.ts')
+    expect(content).toMatch(/export\s+type\s+AIIntelEvent/)
+  })
+
+  // ── Ai Fingerprint ──────────────────────────────────────────────────────
+  test('ai-fingerprint.ts exists and exports computeBriefFingerprint', () => {
+    const content = readSrc('ai-fingerprint.ts')
+    expect(content).toMatch(/export\s+function\s+computeBriefFingerprint/)
+  })
+
+  test('ai-fingerprint.ts exports detectFingerprintDelta for cache invalidation', () => {
+    const content = readSrc('ai-fingerprint.ts')
+    expect(content).toMatch(/export\s+function\s+detectFingerprintDelta/)
+  })
+
+  test('ai-fingerprint.ts exports BriefInputBundle interface', () => {
+    const content = readSrc('ai-fingerprint.ts')
+    expect(content).toMatch(/export\s+interface\s+BriefInputBundle/)
+  })
+
+  test('ai-fingerprint.ts uses SHA-256 for deterministic hashing', () => {
+    const content = readSrc('ai-fingerprint.ts')
+    expect(content).toContain('createHash')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 32. LAYER 9 — DATA INGESTION COMPLIANCE (#7)
+//     Document Sources, Rh Events Fetcher, Rh Rss Fetcher, Scrape State
+//     — data ingestion components must exist, export expected functions,
+//     and use paths.ts for data directories.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Layer 9 — Data Ingestion compliance (#7)', () => {
+  // ── Document Sources ─────────────────────────────────────────────────────
+  test('document-sources.ts exists and exports loadDocumentSources', () => {
+    const content = readSrc('document-sources.ts')
+    expect(content).toMatch(/export\s+function\s+loadDocumentSources/)
+  })
+
+  test('document-sources.ts exports CRUD operations (add, update, remove)', () => {
+    const content = readSrc('document-sources.ts')
+    expect(content).toMatch(/export\s+function\s+addDocumentSource/)
+    expect(content).toMatch(/export\s+function\s+updateDocumentSource/)
+    expect(content).toMatch(/export\s+function\s+removeDocumentSource/)
+  })
+
+  test('document-sources.ts exports DocumentSource interface', () => {
+    const content = readSrc('document-sources.ts')
+    expect(content).toMatch(/export\s+interface\s+DocumentSource/)
+  })
+
+  // ── Rh Events Fetcher ────────────────────────────────────────────────────
+  test('rh-events-fetcher.ts exists and exports fetchRHEvents', () => {
+    const content = readSrc('rh-events-fetcher.ts')
+    expect(content).toMatch(/export\s+async\s+function\s+fetchRHEvents/)
+  })
+
+  test('rh-events-fetcher.ts exports RHEvent interface', () => {
+    const content = readSrc('rh-events-fetcher.ts')
+    expect(content).toMatch(/export\s+interface\s+RHEvent/)
+  })
+
+  test('rh-events-fetcher.ts uses paths.ts for cache directory', () => {
+    const content = readSrc('rh-events-fetcher.ts')
+    expect(content).toContain("from './lib/paths.ts'")
+  })
+
+  // ── Rh Rss Fetcher ──────────────────────────────────────────────────────
+  test('rh-rss-fetcher.ts exists and exports fetchRedHatRSS', () => {
+    const content = readSrc('rh-rss-fetcher.ts')
+    expect(content).toMatch(/export\s+async\s+function\s+fetchRedHatRSS/)
+  })
+
+  test('rh-rss-fetcher.ts exports RSSItem and RSSCache interfaces', () => {
+    const content = readSrc('rh-rss-fetcher.ts')
+    expect(content).toMatch(/export\s+interface\s+RSSItem/)
+    expect(content).toMatch(/export\s+interface\s+RSSCache/)
+  })
+
+  test('rh-rss-fetcher.ts uses paths.ts for cache and config directories', () => {
+    const content = readSrc('rh-rss-fetcher.ts')
+    expect(content).toContain("from './lib/paths.ts'")
+  })
+
+  // ── Scrape State ─────────────────────────────────────────────────────────
+  test('scrape-state.ts exists and exports CircuitBreaker class', () => {
+    const content = readSrc('scrape-state.ts')
+    expect(content).toMatch(/export\s+class\s+CircuitBreaker/)
+  })
+
+  test('scrape-state.ts exports circuit breaker instances', () => {
+    const content = readSrc('scrape-state.ts')
+    expect(content).toMatch(/export\s+const\s+circuitBreakers/)
+  })
+
+  test('scrape-state.ts exports resetAllCircuitBreakers and registerResetAllHook', () => {
+    const content = readSrc('scrape-state.ts')
+    expect(content).toMatch(/export\s+function\s+resetAllCircuitBreakers/)
+    expect(content).toMatch(/export\s+function\s+registerResetAllHook/)
+  })
+
+  test('scrape-state.ts breaks circular import (no scraper-manager import)', () => {
+    const content = readSrc('scrape-state.ts')
+    expect(content).not.toContain("from './scraper-manager")
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 33. LAYER 11 — CONTEXT ORCHESTRATOR COMPLIANCE (#7)
+//     Bootstrap Orchestrator, Brief Orchestrator, Customer Context Loader,
+//     Graph Context — orchestration layer that assembles context for
+//     consumers from multiple data sources.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Layer 11 — Context Orchestrator compliance (#7)', () => {
+  // ── Bootstrap Orchestrator ───────────────────────────────────────────────
+  test('bootstrap-orchestrator.ts exists and exports createBootstrapRouter', () => {
+    const content = readSrc('bootstrap-orchestrator.ts')
+    expect(content).toMatch(/export\s+function\s+createBootstrapRouter/)
+  })
+
+  test('bootstrap-orchestrator.ts exports isBootstrapRunning guard', () => {
+    const content = readSrc('bootstrap-orchestrator.ts')
+    expect(content).toMatch(/export\s+function\s+isBootstrapRunning/)
+  })
+
+  // ── Brief Orchestrator ───────────────────────────────────────────────────
+  test('brief-orchestrator.ts exists and exports assembleBriefContext', () => {
+    const content = readSrc('brief-orchestrator.ts')
+    expect(content).toMatch(/export\s+async\s+function\s+assembleBriefContext/)
+  })
+
+  test('brief-orchestrator.ts exports generateBriefForCustomer', () => {
+    const content = readSrc('brief-orchestrator.ts')
+    expect(content).toMatch(/export\s+async\s+function\s+generateBriefForCustomer/)
+  })
+
+  test('brief-orchestrator.ts exports BriefContext interface', () => {
+    const content = readSrc('brief-orchestrator.ts')
+    expect(content).toMatch(/export\s+interface\s+BriefContext/)
+  })
+
+  // ── Customer Context Loader ──────────────────────────────────────────────
+  test('lib/customer-context-loader.ts exists and exports loadCustomerContext', () => {
+    const content = readSrc('lib/customer-context-loader.ts')
+    expect(content).toMatch(/export\s+function\s+loadCustomerContext/)
+  })
+
+  test('customer-context-loader.ts exports CustomerContext interface', () => {
+    const content = readSrc('lib/customer-context-loader.ts')
+    expect(content).toMatch(/export\s+interface\s+CustomerContext/)
+  })
+
+  test('customer-context-loader.ts exports matchesTechStack helper', () => {
+    const content = readSrc('lib/customer-context-loader.ts')
+    expect(content).toMatch(/export\s+function\s+matchesTechStack/)
+  })
+
+  // ── Graph Context ────────────────────────────────────────────────────────
+  test('lib/graph-context.ts exists and exports buildFullGraphContext', () => {
+    const content = readSrc('lib/graph-context.ts')
+    expect(content).toMatch(/export\s+function\s+buildFullGraphContext/)
+  })
+
+  test('graph-context.ts uses token-efficient serialization (MAX_CHARS limit)', () => {
+    const content = readSrc('lib/graph-context.ts')
+    expect(content).toContain('MAX_CHARS')
+  })
+
+  test('graph-context.ts imports from intelligence-graph-types', () => {
+    const content = readSrc('lib/graph-context.ts')
+    expect(content).toContain('intelligence-graph-types')
+  })
+})
