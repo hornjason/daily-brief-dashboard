@@ -72,9 +72,7 @@ function writeCache(companyName: string, executives: Record<string, ResolvedExec
 
 function cleanTitle(raw: string): string {
   return raw
-    .replace(/,\s*effective\b.*/i, '')
-    .replace(/,\s*replacing\b.*/i, '')
-    .replace(/,\s*succeeding\b.*/i, '')
+    .replace(/,\s*(?:effective|replacing|succeeding)\b.*/i, '')
     .replace(/\s*\(.*?\)\s*/g, '')
     .replace(/,\s*(?:since|from|as of)\b.*/i, '')
     .trim()

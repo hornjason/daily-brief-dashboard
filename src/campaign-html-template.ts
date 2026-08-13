@@ -769,6 +769,15 @@ export function buildOpener(
  * Block 2: One sentence connecting the signal to the primary Red Hat product.
  * Uses the feature's product category (ansible/openshift/rhel) to frame the bridge.
  */
+const SIGNAL_BRIDGES: Record<string, string> = {
+  'ansible-news': "Organizations facing similar shifts are using enterprise automation to respond faster than manual operations allow.",
+  'ansible-default': "Red Hat's automation platform is how organizations are converting this kind of shift into consistent, repeatable operations.",
+  'openshift-news': "The teams moving fastest on this are running hybrid workloads on a platform that handles containers, VMs, and AI inference together.",
+  'openshift-default': "This creates an opportunity to consolidate on a single enterprise platform — from containers to VMs to AI workloads.",
+  'rhel-news': "Teams already running enterprise Linux are finding the fastest path runs through their existing infrastructure.",
+  'rhel-default': "The same enterprise Linux foundation your teams already rely on extends naturally into this space.",
+}
+
 export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
@@ -776,18 +785,14 @@ export function buildSignalBridge(
   if (!signal || featureKeys.length === 0) return ''
 
   const primaryKey = featureKeys[0]
-  const isNews = signal.type === 'news'
-  const isAnsible = primaryKey.includes('ansible')
-  const isOpenshift = primaryKey.includes('openshift')
-  const isRhel = primaryKey.includes('rhel') || primaryKey.includes('enterprise-linux')
+  const product = primaryKey.includes('ansible') ? 'ansible'
+    : primaryKey.includes('openshift') ? 'openshift'
+    : (primaryKey.includes('rhel') || primaryKey.includes('enterprise-linux')) ? 'rhel'
+    : null
+  const signalType = signal.type === 'news' ? 'news' : 'default'
 
-  if (isAnsible && isNews) return "Organizations facing similar shifts are using enterprise automation to respond faster than manual operations allow."
-  if (isAnsible) return "Red Hat's automation platform is how organizations are converting this kind of shift into consistent, repeatable operations."
-  if (isOpenshift && isNews) return "The teams moving fastest on this are running hybrid workloads on a platform that handles containers, VMs, and AI inference together."
-  if (isOpenshift) return "This creates an opportunity to consolidate on a single enterprise platform — from containers to VMs to AI workloads."
-  if (isRhel && isNews) return "Teams already running enterprise Linux are finding the fastest path runs through their existing infrastructure."
-  if (isRhel) return "The same enterprise Linux foundation your teams already rely on extends naturally into this space."
-  return `This aligns with how organizations are using Red Hat infrastructure to turn ${isNews ? 'these shifts' : 'this kind of signal'} into operational advantage.`
+  if (product) return SIGNAL_BRIDGES[`${product}-${signalType}`]
+  return `This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of signal'} into operational advantage.`
 }
 
 /**
@@ -917,20 +922,13 @@ export function buildPeerPattern(
 ): string {
   if (peerProof) {
     const play = structuredPlays.find(p => p.name === peerProof.playName)
-    if (play) {
-      const examples = play.realWorldExamples
-      if (examples && examples.length > 0) {
-        const example = examples[peerProof.exampleIndex]
-        if (example) return `${example.customer} ${example.outcome}`
-      }
-    }
+    const example = play?.realWorldExamples?.[peerProof.exampleIndex]
+    if (example) return `${example.customer} ${example.outcome}`
   }
 
   for (const play of structuredPlays) {
-    if (play.extractedMetrics && play.extractedMetrics.length > 0) {
-      const metric = play.extractedMetrics[0]
-      return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
-    }
+    const metric = play.extractedMetrics?.[0]
+    if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
   }
 
   return ''
@@ -950,15 +948,14 @@ export function buildChallengerFrame(challengerDataPoint: string): string {
 /**
  * Block 7: CTA — AE name from account team, specific dates computed from current date.
  */
-const CTA_DELIVERABLES = [
-  'a focused conversation',
-  'a technical overview',
-  'a TCO analysis',
-  'an architecture review',
-  'a strategy session',
-  'a quick alignment',
+const CTA_OPTIONS = [
+  { deliverable: 'a focused conversation', verb: 'Would' },
+  { deliverable: 'a technical overview', verb: 'Could' },
+  { deliverable: 'a TCO analysis', verb: 'Does' },
+  { deliverable: 'an architecture review', verb: 'Would' },
+  { deliverable: 'a strategy session', verb: 'Could' },
+  { deliverable: 'a quick alignment', verb: 'Does' },
 ]
-const CTA_VERBS = ['Would', 'Could', 'Does']
 
 export function buildCTA(
   aeName: string,
@@ -967,8 +964,7 @@ export function buildCTA(
   emailIndex: number = 0,
 ): string {
   const firstName = recipientName.split(' ')[0]
-  const deliverable = CTA_DELIVERABLES[emailIndex % CTA_DELIVERABLES.length]
-  const verb = CTA_VERBS[emailIndex % CTA_VERBS.length]
+  const { deliverable, verb } = CTA_OPTIONS[emailIndex % CTA_OPTIONS.length]
 
   const now = new Date()
   const daysOut = 7 + emailIndex * 2
@@ -1121,6 +1117,75 @@ function renderStructuredEmailBox(
  * ADR-043 Pass 2: No LLM involved. Gemini selected data in Pass 1,
  * this function assembles emails from composable blocks.
  */
+
+function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals']): string {
+  const metrics = extractMetrics(rawSignals)
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
+<table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
+  <tr>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.revenue}</div>
+      <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
+    </td>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.employees}</div>
+      <div style="font-size: 12px; color: #5f6368;">Employees</div>
+    </td>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.productInstances}</div>
+      <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
+    </td>
+  </tr>
+</table>`
+}
+
+function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals']): string {
+  const structured = extractStructuredIntel(rawSignals)
+  let sections = ''
+
+  if (structured.initiatives.length > 0) {
+    sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Initiative</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0; width: 80px; text-align: center;">Priority</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
+  </tr>
+  ${structured.initiatives.map(i => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(i.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(i.priority)}</span></td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(i.detail)}</td>
+  </tr>`).join('\n')}
+</table>`
+  }
+
+  if (structured.competitors.length > 0) {
+    const hasThreat = structured.competitors.some(c => c.threat)
+    const hasAdvantage = structured.competitors.some(c => c.advantage)
+    sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
+${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml(structured.differentiation)}</p>` : ''}
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
+    ${hasThreat ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>' : ''}
+    ${hasAdvantage ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>' : ''}
+  </tr>
+  ${structured.competitors.map(c => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
+    ${hasThreat ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.threat)}</td>` : ''}
+    ${hasAdvantage ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.advantage)}</td>` : ''}
+  </tr>`).join('\n')}
+</table>`
+  }
+
+  sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
+${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>`
+
+  return sections
+}
+
 export function generateCampaignFromStructured(
   selection: StructuredCampaignSelection,
   data: StructuredCampaignData,
@@ -1245,72 +1310,11 @@ ${renderContactsSection(contacts)}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
-${(() => {
-    const metrics = extractMetrics(data.rawSignals)
-    return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
-<table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
-  <tr>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.revenue}</div>
-      <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
-    </td>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.employees}</div>
-      <div style="font-size: 12px; color: #5f6368;">Employees</div>
-    </td>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.productInstances}</div>
-      <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
-    </td>
-  </tr>
-</table>`
-  })()}
+${renderDashboardMetrics(data.rawSignals)}
 
-${(() => {
-    const fitContent = data.fitRationale || selection.customerContext
-    return fitContent ? renderFitRationale(data.customerName, fitContent) : ''
-  })()}
+${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, data.fitRationale || selection.customerContext) : ''}
 
-${(() => {
-    const structured = extractStructuredIntel(data.rawSignals)
-    let sections = ''
-    if (structured.initiatives.length > 0) {
-      sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
-<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
-  <tr style="background: #f8f9fa;">
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Initiative</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0; width: 80px; text-align: center;">Priority</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
-  </tr>
-  ${structured.initiatives.map(i => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(i.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(i.priority)}</span></td>
-    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(i.detail)}</td>
-  </tr>`).join('\n')}
-</table>`
-    }
-    if (structured.competitors.length > 0) {
-      sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
-${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml(structured.differentiation)}</p>` : ''}
-<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
-  <tr style="background: #f8f9fa;">
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
-    ${structured.competitors.some(c => c.threat) ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>' : ''}
-    ${structured.competitors.some(c => c.advantage) ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>' : ''}
-  </tr>
-  ${structured.competitors.map(c => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
-    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.threat)}</td>` : ''}
-    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.advantage)}</td>` : ''}
-  </tr>`).join('\n')}
-</table>`
-    }
-    sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
-${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>`
-    return sections
-  })()}
+${renderStructuredIntelSections(data.rawSignals)}
 
 ${data.referenceMaterials && data.referenceMaterials.length > 0 ? renderReferenceMaterials(data.referenceMaterials, data.referenceMaterialsHeading || 'Reference Material') : ''}
 
