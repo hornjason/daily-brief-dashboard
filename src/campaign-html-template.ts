@@ -214,7 +214,8 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   const revenueMatch = companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
     || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK])?)/i)
 
-  const employeesMatch = companyText.match(/([\d,]+)\s*employees/i)
+  const employeesMatch = companyText.match(/approximately\s+([\d,]+)\s*employees/i)
+    || companyText.match(/([\d,]+)\s+employees/i)
     || companyText.match(/employ\w*\s+(?:approximately\s+)?([\d,]+)\s*(?:individuals|people|workers|staff)/i)
 
   let productInstances = defaults.productInstances
@@ -1092,7 +1093,8 @@ export function assembleEmail(
   const maxWords = tier === 'executive' ? voiceTokens.wordBudget.exec : voiceTokens.wordBudget.manager
 
   let wordCount = countWords(body)
-  if (wordCount > maxWords) {
+  const trimThreshold = maxWords * 1.5
+  if (wordCount > trimThreshold) {
     // Trim challenger frame first
     if (blocks.challengerFrame) {
       const trimmedParts = bodyParts.filter(b => b !== blocks.challengerFrame)
@@ -1101,7 +1103,7 @@ export function assembleEmail(
       wordCount = countWords(body)
     }
     // If still over, trim signal bridge
-    if (wordCount > maxWords && blocks.signalBridge) {
+    if (wordCount > trimThreshold && blocks.signalBridge) {
       const trimmedParts = bodyParts.filter(b => b !== blocks.challengerFrame && b !== blocks.signalBridge)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)

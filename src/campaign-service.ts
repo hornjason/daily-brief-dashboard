@@ -27,7 +27,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML, generateCampaignFromStructured } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured, type BVTalkingPoint } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
@@ -544,6 +544,8 @@ GROUNDING RULES:
 - challengerDataPoint MUST reference actual data from the loaded signals — never fabricate
 - peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
 - Do NOT write email body text, CTAs, or prose — the template engine handles all prose generation
+
+CRITICAL: You MUST generate one email entry for EVERY resolved contact provided. Do NOT skip any contacts. If 6 contacts are listed, produce exactly 6 email entries.
 `
 
 export interface CampaignSelectionResult {
@@ -605,7 +607,7 @@ export async function callGeminiForCampaignSelection(opts: {
     }
   }
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor each resolved contact, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return structured selections — do NOT write email prose.`
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1130,6 +1132,24 @@ export async function generateCampaign(
       console.log(`[campaigns] Selection validation passed for ${customer.name}`)
     }
 
+    // Derive BV Talking Points from structured plays or selection summary
+    const bvTalkingPoints: BVTalkingPoint[] = []
+    if (structuredPlays && structuredPlays.length > 0) {
+      for (const play of structuredPlays.slice(0, 4)) {
+        bvTalkingPoints.push({
+          objective: play.name,
+          talkingPoints: play.talkTrack || play.realWorldExamples?.[0]?.outcome || '',
+          keyMetrics: play.extractedMetrics?.[0] ? `${play.extractedMetrics[0].value} — ${play.extractedMetrics[0].context}` : '',
+        })
+      }
+    } else if (selection.campaignSummary) {
+      bvTalkingPoints.push({
+        objective: 'Campaign Theme',
+        talkingPoints: selection.campaignSummary,
+        keyMetrics: selection.positioning || '',
+      })
+    }
+
     // Pass 2: Template assembly (deterministic, no LLM)
     htmlContent = generateCampaignFromStructured(selection, {
       resolvedExecs: resolvedExecs.map(e => ({
@@ -1152,6 +1172,7 @@ export async function generateCampaign(
       materialUrl,
       generatedDate: timestamp,
       rawSignals: await enrichSignalsFromCache(signals, slug, subSignals, registrySignals),
+      bvTalkingPoints: bvTalkingPoints.length > 0 ? bvTalkingPoints : undefined,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

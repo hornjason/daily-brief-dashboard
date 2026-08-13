@@ -51,7 +51,7 @@ export function getVoiceTokens(profile: VoiceProfile | null): {
 } {
   return {
     formality: profile?.formality ?? 'professional',
-    wordBudget: profile?.wordBudget ?? { exec: 80, manager: 140 },
+    wordBudget: profile?.wordBudget ?? { exec: 120, manager: 200 },
     assertionLevel: profile?.assertionLevel ?? 'collaborative',
   }
 }
