@@ -872,16 +872,6 @@ export function buildFeatureBullets(
 
   if (bullets.length === 0) return ''
 
-  if (tier === 'executive') {
-    if (bullets.length === 1) {
-      return `[${bullets[0].featureName}](${bullets[0].url}) ${bullets[0].applicationSentence}.`
-    }
-    const last = bullets[bullets.length - 1]
-    const rest = bullets.slice(0, -1)
-    const parts = rest.map(b => `[${b.featureName}](${b.url}) — ${b.applicationSentence.replace(/\.$/, '')}`)
-    return `${parts.join('. ')}. [${last.featureName}](${last.url}) ${last.applicationSentence.replace(/\.$/, '')}.`
-  }
-
   return bullets.map(b =>
     `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
   ).join('\n')
