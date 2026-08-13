@@ -826,6 +826,17 @@ const PRODUCT_DISPLAY_NAMES: Record<string, string> = {
   'smart management': 'Red Hat Smart Management',
 }
 
+const PRODUCT_URLS: Record<string, string> = {
+  'Red Hat Enterprise Linux': 'https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux',
+  'Red Hat OpenShift': 'https://www.redhat.com/en/technologies/cloud-computing/openshift',
+  'Red Hat Ansible Automation Platform': 'https://www.redhat.com/en/technologies/management/ansible',
+  'Red Hat Satellite': 'https://www.redhat.com/en/technologies/management/satellite',
+  'Red Hat Advanced Cluster Management': 'https://www.redhat.com/en/technologies/management/advanced-cluster-management',
+  'Red Hat Advanced Cluster Security': 'https://www.redhat.com/en/technologies/cloud-computing/openshift/advanced-cluster-security-kubernetes',
+  'Red Hat OpenShift AI': 'https://www.redhat.com/en/products/ai/openshift-ai',
+  'Red Hat Developer Hub': 'https://www.redhat.com/en/products/developer-hub',
+}
+
 function resolveProductDisplayName(desc: string): string {
   const stripped = desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').trim()
   const key = stripped.toLowerCase()
@@ -833,6 +844,11 @@ function resolveProductDisplayName(desc: string): string {
     if (key.startsWith(pattern)) return displayName
   }
   return stripped.length > 0 ? `Red Hat ${stripped}` : ''
+}
+
+function linkProductName(displayName: string): string {
+  const url = PRODUCT_URLS[displayName]
+  return url ? `[${displayName}](${url})` : displayName
 }
 
 export function buildRelationshipLine(
@@ -848,8 +864,9 @@ export function buildRelationshipLine(
   const unique = [...new Set(activeProducts)]
   if (unique.length === 0) return ''
 
-  if (unique.length === 1) return `Your teams already rely on ${unique[0]}.`
-  const display = unique.slice(0, 3)
+  const linked = unique.map(linkProductName)
+  if (linked.length === 1) return `Your teams already rely on ${linked[0]}.`
+  const display = linked.slice(0, 3)
   return `Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`
 }
 

@@ -159,12 +159,12 @@ const CAMPAIGN_SELECTION_SCHEMA = {
           },
           signalBridge: {
             type: 'STRING',
-            description: 'One sentence connecting the selected signal to the customer\'s business and the primary Red Hat product. Must be specific to this customer. Example: "For a company shipping products built on Red Hat Enterprise Linux, the fix is straightforward." NOT: "This aligns with how organizations are using Red Hat automation."',
+            description: 'One sentence connecting the selected signal to the customer\'s business and the primary Red Hat product. When mentioning a Red Hat product by name, use a markdown link to its product page from the feature URL registry. Example: "For a company shipping products built on [Red Hat Enterprise Linux](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux), the fix is straightforward." Must be specific to this customer.',
           },
           referenceLine: {
             type: 'STRING',
             nullable: true,
-            description: 'One sentence pointing the recipient to relevant source documents from the campaign material. Placed after feature bullets, before peer proof. Example: "For background on the law: Holland & Knight\'s analysis of SB 122 covers the definitions and exemptions, and Numeral\'s state-by-state breakdown shows where California fits in the broader landscape." Set to null if no reference docs are relevant to this email.',
+            description: 'One sentence pointing the recipient to relevant source documents. Use markdown links for each document name: [Document Title](url). Example: "For background on the law: [Holland & Knight\'s analysis of SB 122](https://example.com/hk) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://example.com/numeral) shows where California fits." URLs must come from the provided material content or reference data. Set to null if no reference docs apply.',
           },
         },
         required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge'],
