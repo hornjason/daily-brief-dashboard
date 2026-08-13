@@ -868,8 +868,8 @@ export function buildFeatureBullets(
     }
     const last = bullets[bullets.length - 1]
     const rest = bullets.slice(0, -1)
-    const parts = rest.map(b => `[${b.featureName}](${b.url}) for ${b.applicationSentence.replace(/\.$/, '')}`)
-    return `Tools like ${parts.join(' and ')} position your team to act on this. [${last.featureName}](${last.url}) ${last.applicationSentence.replace(/\.$/, '')} completes the picture.`
+    const parts = rest.map(b => `[${b.featureName}](${b.url}) — ${b.applicationSentence.replace(/\.$/, '')}`)
+    return `${parts.join('. ')}. [${last.featureName}](${last.url}) ${last.applicationSentence.replace(/\.$/, '')}.`
   }
 
   return bullets.map(b =>
