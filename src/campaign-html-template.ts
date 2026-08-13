@@ -889,6 +889,7 @@ export function buildFeatureBullets(
   featureKeys: string[],
   tier: 'executive' | 'manager',
   featureApplications?: string[],
+  priorText?: string,
 ): string {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
   for (let i = 0; i < featureKeys.slice(0, 3).length; i++) {
@@ -903,9 +904,11 @@ export function buildFeatureBullets(
 
   if (bullets.length === 0) return ''
 
-  return bullets.map(b =>
-    `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
-  ).join('\n')
+  return bullets.map(b => {
+    const alreadyMentioned = priorText && priorText.includes(b.featureName)
+    if (alreadyMentioned) return `• ${b.applicationSentence}`
+    return `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
+  }).join('\n')
 }
 
 /**
@@ -1015,6 +1018,19 @@ export function buildCTA(
  */
 export function buildSignOff(aeName: string): string {
   return `${aeName}\nAccount Executive · Red Hat`
+}
+
+const TRUSTED_URL_DOMAINS = ['redhat.com', 'access.redhat.com', 'content.redhat.com', 'developers.redhat.com', 'docs.google.com', 'drive.google.com']
+
+function sanitizeReferenceLine(line: string): string {
+  if (!line) return ''
+  return line.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_match, text, url) => {
+    try {
+      const host = new URL(url).hostname
+      if (TRUSTED_URL_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return `[${text}](${url})`
+    } catch { /* invalid URL */ }
+    return text
+  })
 }
 
 // ── Assembly ────────────────────────────────────────────────────────────────
@@ -1259,8 +1275,8 @@ export function generateCampaignFromStructured(
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
     const signalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
     const relationshipLine = buildRelationshipLine(data.subscriptions)
-    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications)
-    const referenceLine = email.referenceLine || ''
+    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
+    const referenceLine = sanitizeReferenceLine(email.referenceLine || '')
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
