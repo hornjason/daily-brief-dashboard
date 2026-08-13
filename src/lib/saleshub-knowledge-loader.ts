@@ -204,9 +204,21 @@ function extractVersionId(url: string): string {
 export function getSalesPlayByName(playName: string): SalesPlayNode | undefined {
   const kb = loadKnowledgeBase()
   if (!kb) return undefined
-  return kb.salesPlays.find(sp =>
-    sp.name.toLowerCase() === playName.toLowerCase()
-  )
+  const target = playName.toLowerCase()
+  const exact = kb.salesPlays.find(sp => sp.name.toLowerCase() === target)
+  if (exact) return exact
+  // Fuzzy: stem keywords and find best overlap
+  const stopWords = new Set(['and', 'the', 'with', 'for', 'from', 'into', 'a', 'an', 'of', 'on', 'in', 'to'])
+  const stem = (s: string) => s.toLowerCase().replace(/[^a-z\s-]/g, '').replace(/-/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w)).map(w => w.replace(/(tion|ize|ing|ment|ed|s)$/, ''))
+  const targetStems = stem(playName)
+  let bestMatch: SalesPlayNode | undefined
+  let bestOverlap = 0
+  for (const sp of kb.salesPlays) {
+    const playStems = stem(sp.name)
+    const overlap = targetStems.filter(t => playStems.some(p => t.startsWith(p) || p.startsWith(t))).length
+    if (overlap > bestOverlap) { bestOverlap = overlap; bestMatch = sp }
+  }
+  return bestOverlap >= 1 ? bestMatch : undefined
 }
 
 // ── Coverage Types ─────────────────────────────────────────────────────────

@@ -1070,15 +1070,18 @@ export async function generateCampaign(
     // Solution signals unavailable — proceed without template
   }
 
-  // 4. Map solution plays to structured format for grounding (ADR-040)
-  const structuredPlays = (templateResult.structured?.solutionPlays ?? []).map(sp => ({
-    name: sp.playName,
-    parentTdp: sp.tdp,
-    customerWins: sp.customerWins,
-    realWorldExamples: sp.realWorldExamples,
-    extractedMetrics: sp.extractedMetrics,
-    talkTrack: sp.talkTrack,
-  }))
+  // 4. Map solution plays to structured format, enriched with SalesHub data (ADR-040)
+  const structuredPlays = (templateResult.structured?.solutionPlays ?? []).map(sp => {
+    const salesHubPlay = getSalesPlayByName(sp.playName)
+    return {
+      name: sp.playName,
+      parentTdp: sp.tdp,
+      customerWins: sp.customerWins,
+      realWorldExamples: sp.realWorldExamples ?? salesHubPlay?.realWorldExamples,
+      extractedMetrics: sp.extractedMetrics,
+      talkTrack: sp.talkTrack ?? salesHubPlay?.description,
+    }
+  })
 
   // 4b. Generate campaign — branched by feature flag (ADR-043)
   const augmentedMaterial = materialContent + resolvedContactsContext
