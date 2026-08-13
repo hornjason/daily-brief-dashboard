@@ -330,6 +330,13 @@ describe('Scheduler contract compliance', () => {
     expect(serverContent).not.toContain('scheduleEventsRefresh')
     expect(serverContent).not.toContain('scheduleProductLifecycleRefresh')
   })
+
+  test('background-scheduler.ts registers intelligence-graph-rebuild, kpi-snapshot, proactive-meeting-prep, sf-pipeline, territory-sync', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'background-scheduler.ts'), 'utf-8')
+    for (const task of ['intelligence-graph-rebuild', 'kpi-snapshot', 'proactive-meeting-prep', 'sf-pipeline', 'territory-sync']) {
+      expect(content).toContain(task)
+    }
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -390,6 +397,12 @@ describe('API endpoint regression guard', () => {
 
   test('scheduler-registry import exists', () => {
     expect(routesContent).toContain('scheduler-registry')
+  })
+
+  test('backup, motion-override, node-role, people, restore, setup route files exist', () => {
+    for (const route of ['backup-routes.ts', 'motion-override-routes.ts', 'node-role-routes.ts', 'people-routes.ts', 'restore-routes.ts', 'setup-routes.ts']) {
+      expect(existsSync(resolve(SRC_DIR, route))).toBe(true)
+    }
   })
 })
 
@@ -1708,6 +1721,26 @@ describe('ADR-024: Quality gate — validateAndRetry in key consumers', () => {
       expect(content).toMatch(/export\s+(const|function)/)
       expect(content).toMatch(/QualityValidator/)
     }
+  })
+
+  test('meeting-prep-brief validator exports QualityValidator', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'quality-validators/meeting-prep-brief-validator.ts'), 'utf-8')
+    expect(content).toMatch(/QualityValidator/)
+  })
+
+  test('morning-summary validator exports QualityValidator', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'quality-validators/morning-summary-validator.ts'), 'utf-8')
+    expect(content).toMatch(/QualityValidator/)
+  })
+
+  test('playbook-html validator exports QualityValidator', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'quality-validators/playbook-html-validator.ts'), 'utf-8')
+    expect(content).toMatch(/QualityValidator/)
+  })
+
+  test('product-enrichment validator exports QualityValidator', () => {
+    const content = readFileSync(resolve(SRC_DIR, 'quality-validators/product-enrichment-validator.ts'), 'utf-8')
+    expect(content).toMatch(/QualityValidator/)
   })
 })
 
