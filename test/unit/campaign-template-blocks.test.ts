@@ -243,11 +243,10 @@ describe('buildPeerPattern — anti-gaming', () => {
     expect(result).toContain('$5.62M')
   })
 
-  it('returns fallback from extractedMetrics when peerProof is null', () => {
+  it('returns fallback from realWorldExamples when peerProof is null', () => {
     const result = buildPeerPattern(null, testPlays)
-    // Should fall back to extractedMetrics, not return empty
     expect(result.length).toBeGreaterThan(0)
-    expect(result).toContain('40% reduction')
+    expect(result).toContain('Amadeus')
   })
 
   it('returns empty string when no plays have metrics either', () => {

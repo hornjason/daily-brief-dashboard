@@ -752,7 +752,7 @@ export function buildOpener(
   customOpener?: string,
 ): string {
   const firstName = recipientName.split(' ')[0]
-  if (customOpener) return `${firstName}, ${customOpener}`
+  if (customOpener) return `${firstName}, ${customOpener.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()}`
 
   console.warn(`[template] FALLBACK: buildOpener using generic pattern for ${recipientName} — customOpener not provided`)
   const signal = signals[signalIndex]
@@ -800,7 +800,7 @@ export function buildSignalBridge(
   featureKeys: string[],
   customBridge?: string,
 ): string {
-  if (customBridge) return customBridge
+  if (customBridge) return customBridge.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
   console.warn(`[template] FALLBACK: buildSignalBridge using generic pattern — customBridge not provided`)
   if (!signal || featureKeys.length === 0) return ''
 
@@ -897,7 +897,7 @@ export function buildFeatureBullets(
     if (!entry) continue
     const hasCustom = featureApplications?.[i]
     if (!hasCustom) console.warn(`[template] FALLBACK: buildFeatureBullets using generic description for ${key}`)
-    const applicationSentence = hasCustom || getCapabilityDescription(key)
+    const applicationSentence = (hasCustom || getCapabilityDescription(key)).replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
     bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
@@ -952,12 +952,16 @@ export function buildPeerPattern(
   structuredPlays: StructuredPlay[],
 ): string {
   if (peerProof) {
+    const target = peerProof.playName.toLowerCase()
     const play = structuredPlays.find(p => p.name === peerProof.playName)
+      || structuredPlays.find(p => p.name.toLowerCase().includes(target) || target.includes(p.name.toLowerCase()))
     const example = play?.realWorldExamples?.[peerProof.exampleIndex]
     if (example) return `${example.customer} ${example.outcome}`
+    if (!play) console.warn(`[template] PEER PROOF MISS: play "${peerProof.playName}" not found in ${structuredPlays.map(p => p.name).join(', ')}`)
   }
 
   for (const play of structuredPlays) {
+    if (play.realWorldExamples?.[0]) return `${play.realWorldExamples[0].customer} ${play.realWorldExamples[0].outcome}`
     const metric = play.extractedMetrics?.[0]
     if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
   }
@@ -971,7 +975,7 @@ export function buildPeerPattern(
  */
 export function buildChallengerFrame(challengerDataPoint: string): string {
   if (!challengerDataPoint) return ''
-  const trimmed = challengerDataPoint.trim()
+  const trimmed = challengerDataPoint.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
   if (trimmed.endsWith('.')) return `${trimmed} That distinction creates measurable advantage for organizations that act on it.`
   return `${trimmed}. That distinction creates measurable advantage for organizations that act on it.`
 }

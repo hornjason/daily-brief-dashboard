@@ -544,8 +544,11 @@ GROUNDING RULES:
 - challengerDataPoint MUST reference actual data from the loaded signals — never fabricate
 - peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
 - Do NOT write email body text, CTAs, or prose — the template engine handles all prose generation
+- NEVER include signal index references like "(Signal 6)" or "(Signal 29)" in customOpener, featureApplications, signalBridge, or challengerDataPoint — these are internal identifiers that must not appear in customer-facing text
 
 CRITICAL: You MUST generate one email entry for EVERY resolved contact provided. Do NOT skip any contacts. If 6 contacts are listed, produce exactly 6 email entries.
+
+TIER DISTRIBUTION: Assign exactly 3 contacts as 'executive' tier and 3 as 'manager' tier. C-level officers (CEO, CFO, CTO, CIO) and VPs are executive tier. Directors, Heads, and Sr. Managers are manager tier.
 `
 
 export interface CampaignSelectionResult {
