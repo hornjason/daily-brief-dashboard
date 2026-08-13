@@ -198,6 +198,57 @@ const CAMPAIGN_SELECTION_SCHEMA = {
         required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge'],
       },
     },
+    referenceMaterials: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          resource: { type: 'STRING', description: 'Name of the reference document or source.' },
+          url: { type: 'STRING', nullable: true, description: 'URL if from redhat.com, otherwise null.' },
+          keyTakeaway: { type: 'STRING', description: 'One-sentence summary of what this source covers.' },
+        },
+        required: ['resource', 'keyTakeaway'],
+      },
+      description: 'Extract reference materials/sources from the campaign material. Each entry has resource name, optional URL, and key takeaway. These are external documents cited in the material (legal analyses, reports, sales plays).',
+    },
+    eligibilityTable: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          offering: { type: 'STRING', description: 'Product or offering name.' },
+          deployment: { type: 'STRING', description: 'Deployment model (e.g., Customer VPC, Red Hat Hosted).' },
+          status: { type: 'STRING', description: 'Eligibility status (e.g., ELIGIBLE FOR EXEMPTION, TAXABLE).' },
+        },
+        required: ['offering', 'deployment', 'status'],
+      },
+      description: 'Extract product deployment eligibility information from the material. Each row has offering name, deployment model, and status. Only include if the material discusses deployment-specific eligibility/compliance.',
+    },
+    bvTalkingPoints: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          objective: { type: 'STRING', description: 'Business objective category (e.g., Cost Efficiency, Risk Mitigation, Revenue Growth).' },
+          talkingPoints: { type: 'STRING', description: '1-2 key talking points for this objective.' },
+          keyMetrics: { type: 'STRING', description: 'Specific peer proof metrics from the solution plays.' },
+        },
+        required: ['objective', 'talkingPoints', 'keyMetrics'],
+      },
+      description: 'Extract 3-4 business value talking points organized by objective category. Each has: objective (category name), talkingPoints (1-2 key messages), keyMetrics (specific peer proof metrics). These are for internal call prep, not email content.',
+    },
+    sourceAttributions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING', description: 'Source document title.' },
+          description: { type: 'STRING', description: 'Brief description of what this source covers.' },
+        },
+        required: ['name', 'description'],
+      },
+      description: 'Extract source document titles and brief descriptions from the material content.',
+    },
   },
   required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
 }
@@ -533,7 +584,9 @@ For each resolved contact, select:
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
 6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
-8. A reference line: one sentence pointing the recipient to a relevant Red Hat resource. Use markdown links with URLs ONLY from redhat.com domains (www.redhat.com, access.redhat.com, content.redhat.com, developers.redhat.com). Example: "The [Ansible Automation Platform overview](https://www.redhat.com/en/technologies/management/ansible) covers how self-managed automation works." NEVER invent or guess URLs — use only URLs from the AVAILABLE FEATURE KEYS URLs or from redhat.com pages you know exist. If you cannot provide a verified redhat.com URL, write the reference as plain text without a link.
+8. A reference line: one sentence pointing the recipient to relevant source documents. For Red Hat resources, use markdown links with URLs from redhat.com domains. Reference external documents (legal analyses, third-party reports) by name and describe what they cover — do NOT include URLs for non-redhat.com documents. The text reference is sufficient. Example: "For background on the law: Holland & Knight's analysis of SB 122 covers the definitions and exemptions, and Numeral's state-by-state breakdown shows where California fits in the broader landscape."
+
+When the source material uses specific terminology (e.g., 'remotely accessed software', 'self-managed in your VPC', '8-10% tax overhead'), REUSE those exact phrases in customOpener, signalBridge, and featureApplications. Do not paraphrase established terminology from the campaign material.
 
 CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
@@ -569,6 +622,10 @@ export interface CampaignSelectionResult {
     signalBridge: string
     referenceLine?: string
   }>
+  referenceMaterials?: Array<{ resource: string; url?: string; keyTakeaway: string }>
+  eligibilityTable?: Array<{ offering: string; deployment: string; status: string }>
+  bvTalkingPoints?: Array<{ objective: string; talkingPoints: string; keyMetrics: string }>
+  sourceAttributions?: Array<{ name: string; description: string }>
 }
 
 export async function callGeminiForCampaignSelection(opts: {
@@ -1018,14 +1075,33 @@ export async function generateCampaign(
   }
 
   // 3c. Resolve real executives for campaign personas (#1055)
-  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
-    { role: 'CIO', enabled: true },
-    { role: 'VP Infrastructure', enabled: true },
-    { role: 'VP Operations', enabled: true },
-    { role: 'Director of IT', enabled: true },
-    { role: 'Sr. Manager, Cloud Operations', enabled: true },
-    { role: 'Director of Platform Engineering', enabled: true },
-  ]
+  // Campaign-directive-aware: add finance/procurement roles when directive mentions tax/cost themes
+  const directiveRoleMap: Record<string, string[]> = {
+    'tax': ['Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'VP Finance'],
+    'cost': ['Director of Finance', 'VP Finance', 'Head of Procurement'],
+    'saas': ['Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
+    'security': ['CISO', 'Head of Information Security', 'VP Security'],
+    'compliance': ['Director of Finance', 'Head of Compliance', 'General Counsel'],
+  }
+  let directiveRoles: string[] = []
+  if (config?.campaignDirective) {
+    const directiveLower = config.campaignDirective.toLowerCase()
+    for (const [keyword, roles] of Object.entries(directiveRoleMap)) {
+      if (directiveLower.includes(keyword)) directiveRoles.push(...roles)
+    }
+    directiveRoles = [...new Set(directiveRoles)]
+  }
+  const defaultPersonas: Array<{ role: string; enabled: boolean; linkedinUrl?: string; name?: string }> = directiveRoles.length > 0
+    ? directiveRoles.slice(0, 6).map(r => ({ role: r, enabled: true }))
+    : [
+        { role: 'CIO', enabled: true },
+        { role: 'VP Infrastructure', enabled: true },
+        { role: 'VP Operations', enabled: true },
+        { role: 'Director of IT', enabled: true },
+        { role: 'Sr. Manager, Cloud Operations', enabled: true },
+        { role: 'Director of Platform Engineering', enabled: true },
+      ]
+  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? defaultPersonas
   let resolvedContactsContext = ''
   let resolvedExecs: ResolvedExecutive[] = []
   try {
@@ -1140,9 +1216,15 @@ export async function generateCampaign(
       console.log(`[campaigns] Selection validation passed for ${customer.name}`)
     }
 
-    // Derive BV Talking Points from structured plays or selection summary
-    const bvTalkingPoints: BVTalkingPoint[] = []
-    if (structuredPlays && structuredPlays.length > 0) {
+    // Derive BV Talking Points — prefer Gemini-selected, fall back to play-name derivation
+    let bvTalkingPoints: BVTalkingPoint[] = []
+    if (selection.bvTalkingPoints && selection.bvTalkingPoints.length > 0) {
+      bvTalkingPoints = selection.bvTalkingPoints.map(bp => ({
+        objective: bp.objective,
+        talkingPoints: bp.talkingPoints,
+        keyMetrics: bp.keyMetrics,
+      }))
+    } else if (structuredPlays && structuredPlays.length > 0) {
       for (const play of structuredPlays.slice(0, 4)) {
         bvTalkingPoints.push({
           objective: play.name,
@@ -1157,6 +1239,35 @@ export async function generateCampaign(
         keyMetrics: selection.positioning || '',
       })
     }
+
+    // Derive footprint from subscriptions + intelligence data
+    const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
+    const enrichedSignals = await enrichSignalsFromCache(signals, slug, subSignals, registrySignals)
+    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
+    const footprint = subProducts.length > 0 ? {
+      current: subProducts.join(', '),
+      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
+    } : undefined
+
+    // Derive AE email from name (flast@redhat.com) and parse phone from voice file
+    const aeTeam = accountTeam.find(m => m.role === 'ae')
+    let aeEmail: string | undefined
+    let aePhone: string | undefined
+    if (aeTeam) {
+      const parts = aeTeam.name.trim().split(/\s+/)
+      if (parts.length >= 2) {
+        aeEmail = `${parts[0][0].toLowerCase()}${parts[parts.length - 1].toLowerCase()}@redhat.com`
+      }
+    }
+    try {
+      const voiceSlug = toSlug(customer.ae ?? '')
+      const voicePath = resolve(process.env.HOME ?? '', `.claude/skills/ContentCampaign/voices/${voiceSlug}.md`)
+      if (existsSync(voicePath)) {
+        const voiceMd = readFileSync(voicePath, 'utf-8')
+        const phoneMatch = voiceMd.match(/M:\s*\(?\d{3}\)?\s*\d{3}[-.\s]?\d{4}/)
+        if (phoneMatch) aePhone = phoneMatch[0].replace(/^M:\s*/, '')
+      }
+    } catch { /* no phone available */ }
 
     // Pass 2: Template assembly (deterministic, no LLM)
     htmlContent = generateCampaignFromStructured(selection, {
@@ -1179,8 +1290,24 @@ export async function generateCampaign(
       materialTitle,
       materialUrl,
       generatedDate: timestamp,
-      rawSignals: await enrichSignalsFromCache(signals, slug, subSignals, registrySignals),
+      rawSignals: enrichedSignals,
       bvTalkingPoints: bvTalkingPoints.length > 0 ? bvTalkingPoints : undefined,
+      referenceMaterials: selection.referenceMaterials?.map(rm => ({
+        resource: rm.resource,
+        url: rm.url,
+        keyTakeaway: rm.keyTakeaway,
+      })),
+      referenceMaterialsHeading: 'SB 122 Reference Material',
+      eligibilityTable: selection.eligibilityTable?.map(et => ({
+        offering: et.offering,
+        deployment: et.deployment,
+        status: et.status,
+      })),
+      eligibilityHeading: 'SB 122 Eligibility by AAP Deployment Type',
+      footprint,
+      sourceAttributions: selection.sourceAttributions,
+      aeEmail,
+      aePhone,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

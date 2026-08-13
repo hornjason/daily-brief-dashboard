@@ -736,6 +736,9 @@ export interface StructuredCampaignData {
   footprint?: CampaignFootprint
   bvTalkingPoints?: BVTalkingPoint[]
   signalsLoaded?: string[]
+  sourceAttributions?: Array<{ name: string; description: string }>
+  aeEmail?: string
+  aePhone?: string
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1016,8 +1019,11 @@ export function buildCTA(
 /**
  * Block 8: Sign-off — AE name + title.
  */
-export function buildSignOff(aeName: string): string {
-  return `${aeName}\nAccount Executive · Red Hat`
+export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string): string {
+  let signOff = `${aeName}\nAccount Executive · Red Hat`
+  if (aeEmail) signOff += `\n${aeEmail}`
+  if (aePhone) signOff += ` | M: ${aePhone}`
+  return signOff
 }
 
 const TRUSTED_URL_DOMAINS = ['redhat.com', 'access.redhat.com', 'content.redhat.com', 'developers.redhat.com', 'docs.google.com', 'drive.google.com']
@@ -1029,7 +1035,7 @@ function sanitizeReferenceLine(line: string): string {
       const host = new URL(url).hostname
       if (TRUSTED_URL_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return `[${text}](${url})`
     } catch { /* invalid URL */ }
-    return text
+    return text // Keep the text, strip the URL — named references are valuable unlinked
   })
 }
 
@@ -1142,9 +1148,13 @@ function renderStructuredEmailBox(
   body: string,
   signOffText: string,
   aeName: string,
+  aeEmail?: string,
+  aePhone?: string,
 ): string {
   const tierLabel = tier === 'executive' ? 'Executive' : 'Manager'
   const bodyHtml = convertMarkdownBullets(body)
+
+  const contactLine = [aeEmail, aePhone ? `M: ${aePhone}` : ''].filter(Boolean).join(' | ')
 
   return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
   <div style="background: ${BRAND_RED}; padding: 12px 20px;">
@@ -1158,6 +1168,7 @@ function renderStructuredEmailBox(
     <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid ${BRAND_RED};">
       <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(aeName)}</p>
       <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: ${BRAND_RED}; font-weight: bold;">Red Hat</span></p>
+      ${contactLine ? `<p style="font-size: 13px; color: #5f6368; margin: 2px 0 0 0;">${escapeHtml(contactLine)}</p>` : ''}
     </div>
   </div>
 </div>`
@@ -1280,7 +1291,7 @@ export function generateCampaignFromStructured(
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
-    const signOff = buildSignOff(aeName)
+    const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 
     // Assemble with tier-appropriate formatting
     const assembled = assembleEmail(
@@ -1296,6 +1307,8 @@ export function generateCampaignFromStructured(
       assembled.body,
       assembled.signOff,
       aeName,
+      data.aeEmail,
+      data.aePhone,
     )
 
     if (email.tier === 'executive') {
@@ -1326,7 +1339,11 @@ export function generateCampaignFromStructured(
 
 <table width="100%" cellpadding="10" cellspacing="0" style="background: #f8f9fa; margin-bottom: 24px;">
   <tr>
-    <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHtml(data.materialUrl)}" style="color: #1a73e8;">${escapeHtml(data.materialTitle)}</a></td>
+    <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHtml(data.materialUrl)}" style="color: #1a73e8;">${escapeHtml(data.materialTitle)}</a>${
+      data.sourceAttributions && data.sourceAttributions.length > 0
+        ? '<br>' + data.sourceAttributions.map(sa => `<strong>${escapeHtml(sa.name)}</strong> — ${escapeHtml(sa.description)}`).join('<br>')
+        : ''
+    }</td>
   </tr>
 </table>
 
