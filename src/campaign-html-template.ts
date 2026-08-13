@@ -14,6 +14,14 @@ import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
 
+const BRAND_RED = '#c41e3a'
+
+const DEFAULT_GUARDRAILS = {
+  never: ['Pipeline opportunities', 'RHEL Private Offer', 'Support cases', 'Subscription counts', 'Layoff numbers'],
+  careful: ['Leadership changes — frame around strategy, not departures'],
+  safe: ['Public earnings', 'CTO/CIO appointments', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship'],
+}
+
 // ── Exported types for campaign data ──
 
 export interface CampaignContact {
@@ -170,7 +178,7 @@ function convertMarkdownBullets(text: string): string {
         inBulletList = true
       }
       const bulletText = applyInlineFormatting(bulletMatch[1])
-      html += `<p style="font-size: 15px; padding: 4px 0 4px 24px; margin: 4px 0; position: relative;"><span style="position: absolute; left: 8px; color: #c41e3a; font-size: 18px;">•</span>${bulletText}</p>\n`
+      html += `<p style="font-size: 15px; padding: 4px 0 4px 24px; margin: 4px 0; position: relative;"><span style="position: absolute; left: 8px; color: ${BRAND_RED}; font-size: 18px;">•</span>${bulletText}</p>\n`
     } else {
       if (inBulletList && line.trim() === '') {
         inBulletList = false
@@ -324,11 +332,11 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
   }
 
-  result.guardrails.never = ['Pipeline opportunities', 'RHEL Private Offer', 'Support cases', 'Subscription counts', 'Layoff numbers']
+  result.guardrails.never = [...DEFAULT_GUARDRAILS.never]
   if (result.guardrails.careful.length === 0) {
-    result.guardrails.careful = ['Leadership changes — frame around strategy, not departures']
+    result.guardrails.careful = [...DEFAULT_GUARDRAILS.careful]
   }
-  result.guardrails.safe = ['Public earnings', 'CTO/CIO appointments', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship']
+  result.guardrails.safe = [...DEFAULT_GUARDRAILS.safe]
 
   return result
 }
@@ -395,7 +403,7 @@ function renderContactsSection(contacts: CampaignContact[]): string {
   const hasLinkedIn = contacts.some(c => c.linkedIn)
   const hasSignal = contacts.some(c => c.signal)
 
-  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">👥 Target Contacts</h2>
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">👥 Target Contacts</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
   <tr style="background: #f8f9fa;">
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Name</td>
@@ -462,7 +470,7 @@ function renderFootprintSection(footprint: CampaignFootprint): string {
 }
 
 function renderBVTalkingPoints(points: BVTalkingPoint[]): string {
-  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">💬 BV Talking Points</h2>
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">💬 BV Talking Points</h2>
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
   <tr style="background: #f8f9fa;">
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Objective</td>
@@ -479,7 +487,7 @@ function renderBVTalkingPoints(points: BVTalkingPoint[]): string {
 
 function renderEmailBox(email: EmailTemplate, aeName: string): string {
   return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
-  <div style="background: #c41e3a; padding: 12px 20px;">
+  <div style="background: ${BRAND_RED}; padding: 12px 20px;">
     <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(email.persona)}</span>
   </div>
   <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
@@ -487,9 +495,9 @@ function renderEmailBox(email: EmailTemplate, aeName: string): string {
   </div>
   <div style="padding: 20px;">
     ${convertMarkdownBullets(email.body)}
-    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
+    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid ${BRAND_RED};">
       <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(aeName)}</p>
-      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: #c41e3a; font-weight: bold;">Red Hat</span></p>
+      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: ${BRAND_RED}; font-weight: bold;">Red Hat</span></p>
     </div>
   </div>
 </div>`
@@ -523,7 +531,7 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #202124;">
 
-<h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHtml(options.materialTitle)}</h1>
+<h1 style="font-size: 28px; color: ${BRAND_RED}; margin: 0 0 4px 0; border-bottom: 3px solid ${BRAND_RED}; padding-bottom: 12px;">Content Campaign: ${escapeHtml(options.materialTitle)}</h1>
 <p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</p>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
   options.accountTeam && options.accountTeam.length > 0
@@ -539,7 +547,7 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 
 ${renderContactsSection(contacts)}
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
   <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Gemini 2.5 Pro (Vertex AI)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(options.aeName)}</td></tr>
@@ -554,7 +562,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa;">Council Rules</td><td>11 council-validated email design rules (see checklist below)</td></tr>
 </table>
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
 <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
   <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤120 words | Manager 200-250 words</td></tr>
   <tr><td style="padding: 2px 0;">☐ Technical observations only — no firmographic facts</td></tr>
@@ -571,20 +579,20 @@ ${renderContactsSection(contacts)}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
 
 <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
   <tr>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.revenue}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.revenue}</div>
       <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
     </td>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.employees}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.employees}</div>
       <div style="font-size: 12px; color: #5f6368;">Employees</div>
     </td>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.productInstances}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.productInstances}</div>
       <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
     </td>
   </tr>
@@ -636,21 +644,21 @@ ${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin:
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
-${parsed.positioning.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 20px 0;">Positioning Matches</h2>
+${parsed.positioning.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 20px 0;">Positioning Matches</h2>
 
-${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid #c41e3a; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
-  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #c41e3a; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
+${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid ${BRAND_RED}; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
+  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${BRAND_RED}; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
   <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${applyInlineFormatting(escapeHtml(p))}</p>
 </div>`).join('\n')}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">` : ''}
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">Email Templates by Role</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">Email Templates by Role</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">Copy each email body and paste into Gmail compose. Rich formatting transfers automatically.</p>
 
 ${primaryEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}
 
-${managerEmails.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
+${managerEmails.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">200-250 words · technical depth. Designed to be forwarded up with "we should look at this."</p>
 
 ${managerEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}` : ''}
@@ -745,6 +753,7 @@ export function buildOpener(
   const firstName = recipientName.split(' ')[0]
   if (customOpener) return `${firstName}, ${customOpener}`
 
+  console.warn(`[template] FALLBACK: buildOpener using generic pattern for ${recipientName} — customOpener not provided`)
   const signal = signals[signalIndex]
   if (!signal) return `Hi ${firstName},`
 
@@ -791,6 +800,7 @@ export function buildSignalBridge(
   customBridge?: string,
 ): string {
   if (customBridge) return customBridge
+  console.warn(`[template] FALLBACK: buildSignalBridge using generic pattern — customBridge not provided`)
   if (!signal || featureKeys.length === 0) return ''
 
   const primaryKey = featureKeys[0]
@@ -884,7 +894,9 @@ export function buildFeatureBullets(
     const key = featureKeys[i]
     const entry = resolveFeatureEntry(key)
     if (!entry) continue
-    const applicationSentence = featureApplications?.[i] || getCapabilityDescription(key)
+    const hasCustom = featureApplications?.[i]
+    if (!hasCustom) console.warn(`[template] FALLBACK: buildFeatureBullets using generic description for ${key}`)
+    const applicationSentence = hasCustom || getCapabilityDescription(key)
     bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
@@ -1077,8 +1089,7 @@ export function assembleEmail(
   // Apply voice formality and assertion level
   body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
 
-  // Enforce word budget — exec: 70-90, manager: 120-160
-  const maxWords = tier === 'executive' ? 90 : 160
+  const maxWords = tier === 'executive' ? voiceTokens.wordBudget.exec : voiceTokens.wordBudget.manager
 
   let wordCount = countWords(body)
   if (wordCount > maxWords) {
@@ -1114,7 +1125,7 @@ function renderStructuredEmailBox(
   const bodyHtml = convertMarkdownBullets(body)
 
   return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
-  <div style="background: #c41e3a; padding: 12px 20px;">
+  <div style="background: ${BRAND_RED}; padding: 12px 20px;">
     <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(recipientName)} — ${tierLabel}</span>
   </div>
   <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
@@ -1122,9 +1133,9 @@ function renderStructuredEmailBox(
   </div>
   <div style="padding: 20px;">
     ${bodyHtml}
-    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
+    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid ${BRAND_RED};">
       <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(aeName)}</p>
-      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: #c41e3a; font-weight: bold;">Red Hat</span></p>
+      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: ${BRAND_RED}; font-weight: bold;">Red Hat</span></p>
     </div>
   </div>
 </div>`
@@ -1140,19 +1151,19 @@ function renderStructuredEmailBox(
 
 function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals']): string {
   const metrics = extractMetrics(rawSignals)
-  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
+  return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
 <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
   <tr>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.revenue}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.revenue}</div>
       <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
     </td>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.employees}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.employees}</div>
       <div style="font-size: 12px; color: #5f6368;">Employees</div>
     </td>
     <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.productInstances}</div>
+      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.productInstances}</div>
       <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
     </td>
   </tr>
@@ -1283,7 +1294,7 @@ export function generateCampaignFromStructured(
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #202124;">
 
-<h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHtml(data.materialTitle)}</h1>
+<h1 style="font-size: 28px; color: ${BRAND_RED}; margin: 0 0 4px 0; border-bottom: 3px solid ${BRAND_RED}; padding-bottom: 12px;">Content Campaign: ${escapeHtml(data.materialTitle)}</h1>
 <p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(data.customerName)}</p>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${data.generatedDate} · ${
     data.accountTeam.length > 0
@@ -1299,7 +1310,7 @@ export function generateCampaignFromStructured(
 
 ${renderContactsSection(contacts)}
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
   <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Two-Pass (ADR-043): Gemini selection + deterministic assembly</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(aeName)} (${voiceTokens.formality}, ${voiceTokens.assertionLevel})</td></tr>
@@ -1314,7 +1325,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa;">Assembly</td><td>8-block deterministic template — zero LLM in email body</td></tr>
 </table>
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
 <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
   <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤${voiceTokens.wordBudget.exec} words | Manager ≤${voiceTokens.wordBudget.manager} words</td></tr>
   <tr><td style="padding: 2px 0;">☐ Technical observations only — no firmographic facts</td></tr>
@@ -1350,14 +1361,14 @@ ${data.footprint ? renderFootprintSection(data.footprint) : ''}
   <p style="font-size: 14px; color: #5f6368; margin: 0;">Copy each email body and paste into Gmail compose. Rich formatting and hyperlinks transfer automatically. Personalize the opening line before sending.</p>
 </div>
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">Email Templates by Role</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">Email Templates by Role</h2>
 
-${execEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">📧 Executive Outreach</h2>
+${execEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">📧 Executive Outreach</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.exec} words · colleague's note. Designed to be forwarded down with "thoughts?"</p>
 
 ${execEmailsHtml.join('\n')}` : ''}
 
-${managerEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
+${managerEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.manager} words · technical depth. Designed to be forwarded up with "we should look at this."</p>
 
 ${managerEmailsHtml.join('\n')}` : ''}
