@@ -200,6 +200,14 @@ export function resolveFeatureUrl(featureKey: string): string | null {
 }
 
 /**
+ * Resolve a feature key to its full registry entry.
+ * Returns null if the key is not in the registry.
+ */
+export function resolveFeatureEntry(featureKey: string): FeatureRegistryEntry | null {
+  return keyIndex.get(featureKey) ?? null
+}
+
+/**
  * Return all valid feature keys — used as Gemini enum constraint
  * so the model can only select from verified entries.
  */

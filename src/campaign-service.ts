@@ -1052,6 +1052,7 @@ export async function generateCampaign(
       materialTitle,
       materialUrl,
       generatedDate: timestamp,
+      rawSignals: signals,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

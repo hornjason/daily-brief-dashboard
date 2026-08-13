@@ -8,7 +8,7 @@
 
 import type { AccountTeamMember } from './types.ts'
 import { escapeHtml, applyInlineFormatting } from './lib/markdown-to-html.ts'
-import { resolveFeatureUrl } from './lib/feature-url-registry.ts'
+import { resolveFeatureUrl, resolveFeatureEntry } from './lib/feature-url-registry.ts'
 import type { FeatureRegistryEntry } from './lib/feature-url-registry.ts'
 import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
@@ -221,7 +221,7 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
         productInstances = String(totalQty)
         const firstActive = active[0]
         const desc = firstActive?.productDescription || firstActive?.product || firstActive?.sku || 'Product'
-        productName = desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').split(' ').slice(0, 4).join(' ')
+        productName = resolveProductDisplayName(desc)
       }
     }
   }
@@ -714,6 +714,15 @@ export interface StructuredCampaignData {
   materialTitle: string
   materialUrl: string
   generatedDate: string
+  rawSignals?: { productIntel?: any; intelligence?: any; customerDocs?: any; dailyBrief?: any; subscriptions?: any; emails?: any; cases?: any; accountPlan?: string }
+  fitRationale?: string
+  referenceMaterials?: ReferenceMaterial[]
+  referenceMaterialsHeading?: string
+  eligibilityTable?: EligibilityRow[]
+  eligibilityHeading?: string
+  footprint?: CampaignFootprint
+  bvTalkingPoints?: BVTalkingPoint[]
+  signalsLoaded?: string[]
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -731,7 +740,17 @@ export function buildOpener(
   const signal = signals[signalIndex]
   if (!signal) return `Hi ${recipientName.split(' ')[0]},`
 
-  const observation = signal.headline
+  let observation = signal.headline
+  if (observation.includes(' — ')) {
+    observation = observation.split(' — ')[0]
+  }
+  observation = observation
+    .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  if (observation && /^[a-z]/.test(observation)) {
+    observation = observation.charAt(0).toUpperCase() + observation.slice(1)
+  }
   const firstName = recipientName.split(' ')[0]
 
   switch (openerVariant) {
@@ -756,20 +775,52 @@ export function buildSignalBridge(
 ): string {
   if (!signal || featureKeys.length === 0) return ''
 
-  // Determine primary product from first feature key
   const primaryKey = featureKeys[0]
-  const product = primaryKey.includes('ansible') ? 'automation'
-    : primaryKey.includes('openshift') ? 'container platform'
-    : primaryKey.includes('rhel') ? 'enterprise Linux'
-    : 'infrastructure'
+  const isNews = signal.type === 'news'
+  const isAnsible = primaryKey.includes('ansible')
+  const isOpenshift = primaryKey.includes('openshift')
+  const isRhel = primaryKey.includes('rhel') || primaryKey.includes('enterprise-linux')
 
-  return `This aligns with how organizations are using Red Hat ${product} to turn ${signal.type === 'news' ? 'these shifts' : 'this kind of signal'} into operational advantage.`
+  if (isAnsible && isNews) return "Organizations facing similar shifts are using enterprise automation to respond faster than manual operations allow."
+  if (isAnsible) return "Red Hat's automation platform is how organizations are converting this kind of shift into consistent, repeatable operations."
+  if (isOpenshift && isNews) return "The teams moving fastest on this are running hybrid workloads on a platform that handles containers, VMs, and AI inference together."
+  if (isOpenshift) return "This creates an opportunity to consolidate on a single enterprise platform — from containers to VMs to AI workloads."
+  if (isRhel && isNews) return "Teams already running enterprise Linux are finding the fastest path runs through their existing infrastructure."
+  if (isRhel) return "The same enterprise Linux foundation your teams already rely on extends naturally into this space."
+  return `This aligns with how organizations are using Red Hat infrastructure to turn ${isNews ? 'these shifts' : 'this kind of signal'} into operational advantage.`
 }
 
 /**
  * Block 3: Relationship line from subscription data.
  * Only rendered if subscriptions exist. Product names from subscription data, not hardcoded.
  */
+const PRODUCT_DISPLAY_NAMES: Record<string, string> = {
+  'enterprise linux server': 'Red Hat Enterprise Linux',
+  'enterprise linux': 'Red Hat Enterprise Linux',
+  'enterprise linux for': 'Red Hat Enterprise Linux',
+  'openshift container platform': 'Red Hat OpenShift',
+  'openshift': 'Red Hat OpenShift',
+  'ansible automation platform': 'Red Hat Ansible Automation Platform',
+  'ansible automation': 'Red Hat Ansible Automation Platform',
+  'satellite': 'Red Hat Satellite',
+  'jboss enterprise application platform': 'Red Hat JBoss EAP',
+  'advanced cluster management': 'Red Hat Advanced Cluster Management',
+  'advanced cluster security': 'Red Hat Advanced Cluster Security',
+  'openshift ai': 'Red Hat OpenShift AI',
+  'developer hub': 'Red Hat Developer Hub',
+  'insights': 'Red Hat Insights',
+  'smart management': 'Red Hat Smart Management',
+}
+
+function resolveProductDisplayName(desc: string): string {
+  const stripped = desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').trim()
+  const key = stripped.toLowerCase()
+  for (const [pattern, displayName] of Object.entries(PRODUCT_DISPLAY_NAMES)) {
+    if (key.startsWith(pattern)) return displayName
+  }
+  return stripped.length > 0 ? `Red Hat ${stripped}` : ''
+}
+
 export function buildRelationshipLine(
   subscriptions: Array<{ product?: string; productDescription?: string; sku?: string; status?: string }>,
 ): string {
@@ -777,17 +828,15 @@ export function buildRelationshipLine(
 
   const activeProducts = subscriptions
     .filter(s => s.status === 'Active')
-    .map(s => {
-      const desc = s.productDescription || s.product || s.sku || ''
-      return desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').split(' ').slice(0, 4).join(' ')
-    })
+    .map(s => resolveProductDisplayName(s.productDescription || s.product || s.sku || ''))
     .filter(p => p.length > 0)
 
-  // Deduplicate product names
   const unique = [...new Set(activeProducts)]
   if (unique.length === 0) return ''
 
-  return `Your teams already rely on ${unique.slice(0, 3).join(', ')}.`
+  if (unique.length === 1) return `Your teams already rely on ${unique[0]}.`
+  const display = unique.slice(0, 3)
+  return `Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`
 }
 
 /**
@@ -800,24 +849,24 @@ export function buildFeatureBullets(
 ): string {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
   for (const key of featureKeys.slice(0, 3)) {
-    const url = resolveFeatureUrl(key)
-    if (!url) continue
-    // Derive feature name from key: split on hyphens, capitalize each word
-    const featureName = key.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    const entry = resolveFeatureEntry(key)
+    if (!entry) continue
     const applicationSentence = getCapabilityDescription(key)
-    bullets.push({ featureName, url, applicationSentence })
+    bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
   if (bullets.length === 0) return ''
 
   if (tier === 'executive') {
-    // Exec tier: flowing text, no bullet formatting
-    return bullets.map(b =>
-      `${b.featureName} (${b.url}) ${b.applicationSentence}`
-    ).join('. ') + '.'
+    if (bullets.length === 1) {
+      return `[${bullets[0].featureName}](${bullets[0].url}) ${bullets[0].applicationSentence}.`
+    }
+    const last = bullets[bullets.length - 1]
+    const rest = bullets.slice(0, -1)
+    const parts = rest.map(b => `[${b.featureName}](${b.url}) for ${b.applicationSentence.replace(/\.$/, '')}`)
+    return `Tools like ${parts.join(' and ')} position your team to act on this. [${last.featureName}](${last.url}) ${last.applicationSentence.replace(/\.$/, '')} completes the picture.`
   }
 
-  // Manager tier: bullets OK
   return bullets.map(b =>
     `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
   ).join('\n')
@@ -866,18 +915,25 @@ export function buildPeerPattern(
   peerProof: { playName: string; exampleIndex: number } | null,
   structuredPlays: StructuredPlay[],
 ): string {
-  if (!peerProof) return ''
+  if (peerProof) {
+    const play = structuredPlays.find(p => p.name === peerProof.playName)
+    if (play) {
+      const examples = play.realWorldExamples
+      if (examples && examples.length > 0) {
+        const example = examples[peerProof.exampleIndex]
+        if (example) return `${example.customer} ${example.outcome}`
+      }
+    }
+  }
 
-  const play = structuredPlays.find(p => p.name === peerProof.playName)
-  if (!play) return ''
+  for (const play of structuredPlays) {
+    if (play.extractedMetrics && play.extractedMetrics.length > 0) {
+      const metric = play.extractedMetrics[0]
+      return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
+    }
+  }
 
-  const examples = play.realWorldExamples
-  if (!examples || examples.length === 0) return ''
-
-  const example = examples[peerProof.exampleIndex]
-  if (!example) return ''
-
-  return `${example.customer} ${example.outcome}`
+  return ''
 }
 
 /**
@@ -886,26 +942,41 @@ export function buildPeerPattern(
  */
 export function buildChallengerFrame(challengerDataPoint: string): string {
   if (!challengerDataPoint) return ''
-  return `While many organizations focus on broad digital transformation, ${challengerDataPoint} — and that distinction creates an opportunity few are acting on.`
+  const trimmed = challengerDataPoint.trim()
+  if (trimmed.endsWith('.')) return `${trimmed} That distinction creates measurable advantage for organizations that act on it.`
+  return `${trimmed}. That distinction creates measurable advantage for organizations that act on it.`
 }
 
 /**
  * Block 7: CTA — AE name from account team, specific dates computed from current date.
  */
+const CTA_DELIVERABLES = [
+  'a focused conversation',
+  'a technical overview',
+  'a TCO analysis',
+  'an architecture review',
+  'a strategy session',
+  'a quick alignment',
+]
+const CTA_VERBS = ['Would', 'Could', 'Does']
+
 export function buildCTA(
   aeName: string,
   recipientName: string,
   _customerName: string,
+  emailIndex: number = 0,
 ): string {
   const firstName = recipientName.split(' ')[0]
+  const deliverable = CTA_DELIVERABLES[emailIndex % CTA_DELIVERABLES.length]
+  const verb = CTA_VERBS[emailIndex % CTA_VERBS.length]
 
-  // Compute dates 1-2 weeks out
   const now = new Date()
-  const date1 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const date2 = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const daysOut = 7 + emailIndex * 2
+  const date1 = new Date(now.getTime() + daysOut * 24 * 60 * 60 * 1000)
+  const date2 = new Date(date1.getTime() + 7 * 24 * 60 * 60 * 1000)
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
 
-  return `${aeName} should connect with ${firstName}'s team to explore this further. Would ${fmt(date1)} work for a 30-minute conversation? If that week is tight, ${fmt(date2)} works just as well.`
+  return `${verb} ${fmt(date1)} work for ${deliverable}? If that week is tight, ${fmt(date2)} works just as well.`
 }
 
 /**
@@ -1089,7 +1160,7 @@ export function generateCampaignFromStructured(
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
-    const cta = buildCTA(aeName, email.recipientName, data.customerName)
+    const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName)
 
     // Assemble with tier-appropriate formatting
@@ -1174,8 +1245,87 @@ ${renderContactsSection(contacts)}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
+${(() => {
+    const metrics = extractMetrics(data.rawSignals)
+    return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
+<table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
+  <tr>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.revenue}</div>
+      <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
+    </td>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.employees}</div>
+      <div style="font-size: 12px; color: #5f6368;">Employees</div>
+    </td>
+    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
+      <div style="font-size: 24px; font-weight: bold; color: #c41e3a;">${metrics.productInstances}</div>
+      <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
+    </td>
+  </tr>
+</table>`
+  })()}
+
+${(() => {
+    const fitContent = data.fitRationale || selection.customerContext
+    return fitContent ? renderFitRationale(data.customerName, fitContent) : ''
+  })()}
+
+${(() => {
+    const structured = extractStructuredIntel(data.rawSignals)
+    let sections = ''
+    if (structured.initiatives.length > 0) {
+      sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Initiative</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0; width: 80px; text-align: center;">Priority</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
+  </tr>
+  ${structured.initiatives.map(i => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(i.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(i.priority)}</span></td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(i.detail)}</td>
+  </tr>`).join('\n')}
+</table>`
+    }
+    if (structured.competitors.length > 0) {
+      sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
+${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml(structured.differentiation)}</p>` : ''}
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
+    ${structured.competitors.some(c => c.threat) ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>' : ''}
+    ${structured.competitors.some(c => c.advantage) ? '<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>' : ''}
+  </tr>
+  ${structured.competitors.map(c => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
+    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.threat)}</td>` : ''}
+    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.advantage)}</td>` : ''}
+  </tr>`).join('\n')}
+</table>`
+    }
+    sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
+${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>`
+    return sections
+  })()}
+
+${data.referenceMaterials && data.referenceMaterials.length > 0 ? renderReferenceMaterials(data.referenceMaterials, data.referenceMaterialsHeading || 'Reference Material') : ''}
+
+${data.eligibilityTable && data.eligibilityTable.length > 0 ? renderEligibilityTable(data.eligibilityTable, data.eligibilityHeading || 'Eligibility') : ''}
+
+${data.footprint ? renderFootprintSection(data.footprint) : ''}
+
+<hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
+
+<div style="background: #fef7e0; border-left: 4px solid #f9ab00; padding: 16px 20px; margin: 0 0 24px 0;">
+  <p style="font-size: 14px; font-weight: bold; color: #b45309; margin: 0 0 8px 0;">How to Use This Campaign</p>
+  <p style="font-size: 14px; color: #5f6368; margin: 0;">Copy each email body and paste into Gmail compose. Rich formatting and hyperlinks transfer automatically. Personalize the opening line before sending.</p>
+</div>
+
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">Email Templates by Role</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">Copy each email body and paste into Gmail compose. Rich formatting transfers automatically.</p>
 
 ${execEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 8px 0;">📧 Executive Outreach</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.exec} words · colleague's note. Designed to be forwarded down with "thoughts?"</p>
@@ -1186,6 +1336,8 @@ ${managerEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: up
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.manager} words · technical depth. Designed to be forwarded up with "we should look at this."</p>
 
 ${managerEmailsHtml.join('\n')}` : ''}
+
+${data.bvTalkingPoints && data.bvTalkingPoints.length > 0 ? renderBVTalkingPoints(data.bvTalkingPoints) : ''}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
 <p style="text-align: center; font-size: 13px; color: #80868b;">Generated by ContentCampaign (Two-Pass ADR-043) · Source: DailyBriefDashboard Intelligence · ${data.generatedDate}</p>

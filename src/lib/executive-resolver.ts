@@ -70,6 +70,16 @@ function writeCache(companyName: string, executives: Record<string, ResolvedExec
 
 // ── Tier 1: Intelligence Brief Mining ───────────────────────────────────────
 
+function cleanTitle(raw: string): string {
+  return raw
+    .replace(/,\s*effective\b.*/i, '')
+    .replace(/,\s*replacing\b.*/i, '')
+    .replace(/,\s*succeeding\b.*/i, '')
+    .replace(/\s*\(.*?\)\s*/g, '')
+    .replace(/,\s*(?:since|from|as of)\b.*/i, '')
+    .trim()
+}
+
 /** Fallback roles to try when primary roles return no results */
 const FALLBACK_ROLES = [
   'IT Operations Manager',
@@ -107,10 +117,11 @@ export function extractContactsFromIntelligence(companyName: string): ResolvedEx
     while ((match = titleNamePattern.exec(section)) !== null) {
       const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
       if (excludePatterns.test(surroundingText)) continue
+      const title = cleanTitle(match[1].trim())
       results.push({
-        role: match[1].trim(),
+        role: title,
         name: match[2].trim(),
-        title: match[1].trim(),
+        title,
         resolvedAt: new Date().toISOString(),
       })
     }
@@ -120,10 +131,11 @@ export function extractContactsFromIntelligence(companyName: string): ResolvedEx
     while ((match = appointedPattern.exec(section)) !== null) {
       const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
       if (excludePatterns.test(surroundingText)) continue
+      const title = cleanTitle(match[2].trim())
       results.push({
-        role: match[2].trim(),
+        role: title,
         name: match[1].trim(),
-        title: match[2].trim(),
+        title,
         resolvedAt: new Date().toISOString(),
       })
     }
@@ -131,9 +143,10 @@ export function extractContactsFromIntelligence(companyName: string): ResolvedEx
     // Pattern 3: **Name**: Title (bold markdown)
     const boldPattern = /\*\*((?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+))\*\*[:\s]+([^\n]+)/g
     while ((match = boldPattern.exec(section)) !== null) {
-      const title = match[2].trim()
+      const rawTitle = match[2].trim()
       const surroundingText = section.substring(Math.max(0, match.index - 50), match.index + match[0].length + 50)
       if (excludePatterns.test(surroundingText)) continue
+      const title = cleanTitle(rawTitle)
       if (title.length > 5 && title.length < 100) {
         results.push({
           role: title,
