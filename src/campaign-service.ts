@@ -527,13 +527,13 @@ const CAMPAIGN_SELECTION_SYSTEM_PROMPT = `You are selecting data points for pers
 
 For each resolved contact, select:
 1. The most relevant signal (by index) from the loaded signals
-2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role
+2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role. CRITICAL: Do NOT use the same feature key as the first key in every email. Distribute different lead features across emails — if email 1 leads with ansible-automation-platform, email 2 should lead with a different product. Each email's 3 features should be a unique combination. The same product may appear across emails but should not dominate the first slot.
 3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
 4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
 6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
-8. A reference line (optional): one sentence pointing the recipient to relevant source documents from the campaign material. Placed after feature bullets. Example: "For background on the law: Holland & Knight's analysis of SB 122 covers the definitions and exemptions." Set to null if no reference docs apply.
+8. A reference line: one sentence pointing the recipient to relevant source documents from the campaign material. Use markdown links for document names: [Document Title](url). Example: "For background on the law: [Holland & Knight's analysis of SB 122](https://example.com/hk) covers the definitions." Reference lines are REQUIRED when the source material contains external reports, analyses, or documentation the recipient can look up. Only set to null if genuinely no reference docs exist in the material.
 
 CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
