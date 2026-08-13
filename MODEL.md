@@ -21,6 +21,9 @@ Read this file first. Follow doc routing table for deeper detail.
 <!-- ASSERTION: file_exists("src/lib/context-orchestrator.ts") -->
 <!-- ASSERTION: file_exists("src/lib/grounding-rules.ts") -->
 <!-- ASSERTION: grep("GROUNDING_RULES_BLOCK", "src/lib/grounding-rules.ts") -->
+<!-- ASSERTION: data-ingestion registry count >= 20 -->
+<!-- ASSERTION: enforcement registry validates all module outputs -->
+<!-- ASSERTION: config/*.json files match expected schema -->
 
 | # | Layer | Purpose | Key Contract | Status | Reference |
 |---|---|---|---|---|---|
@@ -163,6 +166,14 @@ graph LR
 ### Enforcement Components (Layer 12)
 
 Gemini Quality Gate (`src/gemini-quality-gate.ts`) also serves as an enforcement component — validates AI output quality before caching, enforcing content standards and format compliance across all consumers.
+
+### Data Ingestion
+
+4-tier cache hierarchy (L1-L4) with Drive sync and scraper pipeline. L4 browser scrapes raw data, pushes to Drive. L3 reads from Drive via CSV discovery (`supportsAllDrives`). L2 in-memory cache serves hot reads. L1 API layer serves consumers. Data ingestion registry (`src/data-ingestion-registry.ts`) tracks all ingestion components by tier with `DataIngestionComponent` interface. See `docs/DATA-INGESTION-ARCHITECTURE.md` for full pipeline documentation.
+
+### Config
+
+Runtime configuration files in `config/*.json`. Schema definition at `config/config-schema.json`. Config files are `.gitignore`d for sensitive values; committed `-example` templates document required fields with placeholders. Key config files: `customers.json`, `settings.json`, `auth.json`, `data-sources.json`, `news-config.json`. Config contract: all JSON files must validate against the schema definition.
 
 ### Data Hygiene
 

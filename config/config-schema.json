@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DailyBriefDashboard Config Schema",
+  "description": "Schema definitions for DDB config/*.json files. Validates structure and required fields.",
+  "type": "object",
+  "definitions": {
+    "customer": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "Customer display name" },
+        "accountNumbers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "RH Portal account numbers"
+        },
+        "segment": { "type": "string", "description": "Customer segment classification" },
+        "region": { "type": "string", "description": "Geographic region" }
+      }
+    },
+    "authConfig": {
+      "type": "object",
+      "properties": {
+        "googleProjectId": { "type": "string" },
+        "salesforceInstanceUrl": { "type": "string", "format": "uri" }
+      }
+    },
+    "settingsConfig": {
+      "type": "object",
+      "properties": {
+        "port": { "type": "integer", "default": 7777 },
+        "refreshIntervalMs": { "type": "integer" },
+        "enableScheduler": { "type": "boolean", "default": true }
+      }
+    },
+    "dataSourceConfig": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["api", "csv", "drive", "scraper"] },
+        "tier": { "type": "string", "enum": ["L1", "L2", "L3", "L4"] }
+      }
+    }
+  }
+}
