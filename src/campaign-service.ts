@@ -579,7 +579,7 @@ const CAMPAIGN_SELECTION_SYSTEM_PROMPT = `You are selecting data points for pers
 
 For each resolved contact, select:
 1. The most relevant signal (by index) from the loaded signals
-2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role. CRITICAL: Do NOT use the same feature key as the first key in every email. Distribute different lead features across emails — if email 1 leads with ansible-automation-platform, email 2 should lead with a different product. Each email's 3 features should be a unique combination. The same product may appear across emails but should not dominate the first slot.
+2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role. CRITICAL DIVERSITY RULE: Do NOT reuse the same feature key in the same position (1st, 2nd, or 3rd) across more than 2 emails. Each email's 3 features should be a unique combination. Distribute ansible-automation-platform across different slots — it should NOT be the 2nd key in every email. Aim for at least 8 distinct feature keys across all 6 emails.
 3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
 4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
@@ -1125,18 +1125,43 @@ export async function generateCampaign(
   let resolvedContactsContext = ''
   let resolvedExecs: ResolvedExecutive[] = []
   try {
+    const namedPersonas = enabledPersonas.filter(p => p.name)
+    for (const p of namedPersonas) {
+      resolvedExecs.push({ name: p.name!, title: p.role, role: p.role, resolvedAt: new Date().toISOString(), ...(p.linkedinUrl ? { linkedinUrl: p.linkedinUrl } : {}) })
+    }
     const rolesToResolve = enabledPersonas
       .filter(p => !p.linkedinUrl && !p.name)
       .map(p => p.role)
     if (rolesToResolve.length > 0) {
-      resolvedExecs = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
-      if (resolvedExecs.length > 0) {
-        const contactLines = resolvedExecs.map(r =>
-          `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
-        )
-        resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name.\n${contactLines.join('\n')}\n`
-        console.log(`[campaigns] Resolved ${resolvedExecs.length} executives for ${customer.name}`)
+      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
+      resolvedExecs.push(...resolved)
+    }
+    if (resolvedExecs.length < 6) {
+      const resolvedRoles = new Set(resolvedExecs.map(r => r.role.toLowerCase()))
+      const paddingRoles = enabledPersonas
+        .map(p => p.role)
+        .filter(r => !resolvedRoles.has(r.toLowerCase()))
+      for (const role of paddingRoles) {
+        if (resolvedExecs.length >= 6) break
+        resolvedExecs.push({ name: `${role} at ${customer.name}`, title: role, role, resolvedAt: new Date().toISOString() })
       }
+      if (resolvedExecs.length < 6) {
+        const fallbackPad = ['VP Engineering', 'Director of Security', 'Head of Cloud Operations', 'CTO', 'Sr. Director IT', 'VP Digital Transformation']
+        for (const role of fallbackPad) {
+          if (resolvedExecs.length >= 6) break
+          if (!resolvedRoles.has(role.toLowerCase())) {
+            resolvedExecs.push({ name: `${role} at ${customer.name}`, title: role, role, resolvedAt: new Date().toISOString() })
+          }
+        }
+      }
+      console.log(`[campaigns] Padded contacts to ${resolvedExecs.length} for ${customer.name}`)
+    }
+    if (resolvedExecs.length > 0) {
+      const contactLines = resolvedExecs.map(r =>
+        `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
+      )
+      resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name.\n${contactLines.join('\n')}\n`
+      console.log(`[campaigns] Resolved ${resolvedExecs.length} executives for ${customer.name}`)
     }
   } catch (e: any) {
     console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
@@ -1299,6 +1324,7 @@ export async function generateCampaign(
 
     // ── Gold-standard validation gate ──
     const goldGaps: string[] = []
+    if (resolvedExecs.length === 0) goldGaps.push('resolvedExecs: 0 contacts')
     if (!selection.referenceMaterials?.length) goldGaps.push('referenceMaterials')
     if (!selection.eligibilityTable?.length) goldGaps.push('eligibilityTable')
     if (!selection.bvTalkingPoints?.length) goldGaps.push('bvTalkingPoints')
