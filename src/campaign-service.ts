@@ -195,7 +195,7 @@ const CAMPAIGN_SELECTION_SCHEMA = {
             description: 'One sentence pointing the recipient to relevant source documents. Use markdown links for each document name: [Document Title](url). Example: "For background on the law: [Holland & Knight\'s analysis of SB 122](https://example.com/hk) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://example.com/numeral) shows where California fits." URLs must come from the provided material content or reference data. Set to null if no reference docs apply.',
           },
         },
-        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge'],
+        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge', 'referenceLine'],
       },
     },
     referenceMaterials: {
@@ -250,7 +250,7 @@ const CAMPAIGN_SELECTION_SCHEMA = {
       description: 'Extract source document titles and brief descriptions from the material content.',
     },
   },
-  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
+  required: ['campaignSummary', 'customerContext', 'positioning', 'emails', 'referenceMaterials', 'eligibilityTable', 'bvTalkingPoints', 'sourceAttributions'],
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -586,6 +586,10 @@ For each resolved contact, select:
 6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
 8. A reference line: one sentence pointing the recipient to relevant source documents. Use markdown links [Document Title](url) for ALL URLs found in the source material content — including external legal analyses and third-party reports. Do NOT invent URLs that aren't in the material. Example: "For background on the law: [Holland & Knight's analysis of SB 122](https://www.hklaw.com/...) covers the definitions, and [Numeral's state-by-state breakdown](https://www.numeral.com/...) shows where California fits."
+9. Reference materials: Extract ALL source documents, legal analyses, reports, and sales plays cited in the material content. Each gets resource name, URL if present in the material, and a one-sentence key takeaway. You MUST extract at least the primary source documents.
+10. Eligibility table: If the material discusses deployment-specific compliance, eligibility, or tax status by deployment model, extract every row with offering name, deployment model, and status (e.g., 'ELIGIBLE FOR EXEMPTION', 'TAXABLE').
+11. BV Talking Points: Extract 3-4 business value talking points organized by business objective category (e.g., 'Cost Efficiency', 'Risk Mitigation', 'Revenue Growth'). Each has talking points and key metrics from the material or verified solution plays.
+12. Source attributions: Extract every source document title referenced in the material with a one-line description. Include the primary campaign material, any legal analyses, tax guides, and supplemental sources.
 
 When the source material uses specific terminology (e.g., 'remotely accessed software', 'self-managed in your VPC', '8-10% tax overhead'), REUSE those exact phrases in customOpener, signalBridge, and featureApplications. Do not paraphrase established terminology from the campaign material.
 
@@ -639,6 +643,7 @@ export async function callGeminiForCampaignSelection(opts: {
   resolvedContacts: Array<{ name: string; title: string; role: string }>
   structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
   campaignDirective?: string
+  temperature?: number
 }): Promise<CampaignSelectionResult> {
   const featureKeys = getFeatureKeys()
 
@@ -675,7 +680,7 @@ export async function callGeminiForCampaignSelection(opts: {
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
     customerName: opts.customerName,
-    temperature: 0.3,
+    temperature: opts.temperature ?? 0.1,
     responseSchema: CAMPAIGN_SELECTION_SCHEMA,
   })
 
@@ -1229,6 +1234,83 @@ export async function generateCampaign(
       console.warn(`[campaigns] Selection validation warnings:`, validationResult.reasons)
     } else {
       console.log(`[campaigns] Selection validation passed for ${customer.name}`)
+    }
+
+    // ── Deterministic fallback: extract URLs from materialContent for backfill ──
+    const materialUrlMap = new Map<string, string>()
+    for (const match of augmentedMaterial.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)) {
+      materialUrlMap.set(match[1], match[2])
+    }
+    for (const match of augmentedMaterial.matchAll(/([\w\s&']+(?:analysis|guide|breakdown|report|study))\s*(?::|—|-)?\s*(https?:\/\/[^\s)"<>]+)/gi)) {
+      materialUrlMap.set(match[1].trim(), match[2])
+    }
+
+    for (const email of selection.emails) {
+      if (!email.referenceLine && materialUrlMap.size > 0) {
+        const externalRefs = [...materialUrlMap.entries()]
+          .filter(([, url]) => !url.includes('redhat.com'))
+          .slice(0, 2)
+        if (externalRefs.length > 0) {
+          email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
+        }
+      }
+    }
+
+    if (!selection.referenceMaterials || selection.referenceMaterials.length === 0) {
+      const refs: Array<{ resource: string; url?: string; keyTakeaway: string }> = []
+      for (const [name, url] of materialUrlMap.entries()) {
+        refs.push({ resource: name, url, keyTakeaway: 'Source document referenced in campaign material.' })
+      }
+      if (refs.length > 0) selection.referenceMaterials = refs
+    }
+
+    if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
+      const attrs: Array<{ name: string; description: string }> = []
+      if (materialTitle) attrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
+      for (const [name] of materialUrlMap.entries()) {
+        if (name !== materialTitle) attrs.push({ name, description: 'Referenced source document.' })
+      }
+      if (attrs.length > (selection.sourceAttributions?.length ?? 0)) {
+        selection.sourceAttributions = attrs
+      }
+    }
+
+    // ── Gold-standard validation gate ──
+    const goldGaps: string[] = []
+    if (!selection.referenceMaterials?.length) goldGaps.push('referenceMaterials')
+    if (!selection.eligibilityTable?.length) goldGaps.push('eligibilityTable')
+    if (!selection.bvTalkingPoints?.length) goldGaps.push('bvTalkingPoints')
+    if (!selection.sourceAttributions?.length) goldGaps.push('sourceAttributions')
+    if (selection.emails.length !== resolvedExecs.length) goldGaps.push(`emails: ${selection.emails.length}/${resolvedExecs.length}`)
+    const nullRefLines = selection.emails.filter(e => !e.referenceLine).length
+    if (nullRefLines > 0) goldGaps.push(`${nullRefLines} null referenceLines`)
+
+    if (goldGaps.length > 0) {
+      console.warn(`[campaigns] Gold standard gaps after fallbacks: ${goldGaps.join(', ')}`)
+    }
+
+    if (selection.emails.length < resolvedExecs.length && selection.emails.length < 6) {
+      console.warn(`[campaigns] Email count ${selection.emails.length}/${resolvedExecs.length} — retrying at temperature 0.05`)
+      try {
+        const retrySelection = await callGeminiForCampaignSelection({
+          materialTitle,
+          materialContent: augmentedMaterial,
+          customerName: customer.name,
+          customerSignals: signals,
+          registrySignals,
+          deterministicContext: templateResult.deterministic,
+          resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
+          structuredPlays,
+          campaignDirective: config?.campaignDirective,
+          temperature: 0.05,
+        })
+        if (retrySelection.emails.length > selection.emails.length) {
+          selection.emails = retrySelection.emails
+          console.log(`[campaigns] Retry produced ${retrySelection.emails.length} emails — using retry`)
+        }
+      } catch (e: any) {
+        console.warn(`[campaigns] Retry failed (using original): ${e?.message}`)
+      }
     }
 
     // Derive BV Talking Points — prefer Gemini-selected, fall back to play-name derivation
