@@ -979,7 +979,7 @@ export async function generateCampaign(
     if (referenceMaterialData.length > 0) {
       const refSection = referenceMaterialData
         .filter(l => !l.excerpt.startsWith('['))
-        .map(l => `### ${l.title}\n${l.excerpt}`)
+        .map(l => `### ${l.title}\n${l.url}\n${l.excerpt}`)
         .join('\n\n')
       if (refSection) {
         materialContent += `\n\n## Referenced Content\n\n${refSection}`
