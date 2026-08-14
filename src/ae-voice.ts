@@ -32,6 +32,8 @@ export interface VoiceProfile {
   exampleEmail?: string
   detectedFrom: string  // e.g., "47 emails across 11 customers"
   detectedAt: string
+  phone?: string
+  email?: string
   // Structured design tokens for two-pass template assembly (ADR-043)
   formality?: 'casual' | 'professional' | 'formal'
   wordBudget?: { exec: number; manager: number }
@@ -119,11 +121,19 @@ function parseSkillVoiceFile(aeSlug: string): VoiceProfile | null {
     const exampleMatch = markdown.match(/## Example Email[^`]*```\n([\s\S]+?)```/)
     const exampleEmail = exampleMatch ? exampleMatch[1].trim() : undefined
 
+    // Extract phone and email from signature block
+    const phoneMatch = markdown.match(/M:\s*\(?\d{3}\)?\s*\d{3}[-.\s]?\d{4}/)
+    const phone = phoneMatch ? phoneMatch[0].replace(/^M:\s*/, '') : undefined
+    const emailMatch = markdown.match(/([a-zA-Z0-9._%+-]+@redhat\.com)/)
+    const email = emailMatch ? emailMatch[1] : undefined
+
     return {
       aeName,
       characteristics,
       promptInstruction,
       exampleEmail,
+      phone,
+      email,
       detectedFrom: 'skill voice file',
       detectedAt: new Date().toISOString(),
     }
