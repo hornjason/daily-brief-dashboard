@@ -739,6 +739,7 @@ export interface StructuredCampaignData {
   sourceAttributions?: Array<{ name: string; description: string }>
   aeEmail?: string
   aePhone?: string
+  sourceUrls?: string[]
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1028,14 +1029,19 @@ export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string)
 
 const TRUSTED_URL_DOMAINS = ['redhat.com', 'access.redhat.com', 'content.redhat.com', 'developers.redhat.com', 'docs.google.com', 'drive.google.com']
 
-function sanitizeReferenceLine(line: string): string {
+function sanitizeReferenceLine(line: string, sourceUrls?: string[]): string {
   if (!line) return ''
+  const sourceDomains = new Set<string>()
+  for (const u of sourceUrls ?? []) {
+    try { sourceDomains.add(new URL(u).hostname) } catch {}
+  }
   return line.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_match, text, url) => {
     try {
       const host = new URL(url).hostname
       if (TRUSTED_URL_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return `[${text}](${url})`
+      if (sourceDomains.has(host)) return `[${text}](${url})`
     } catch { /* invalid URL */ }
-    return text // Keep the text, strip the URL — named references are valuable unlinked
+    return text
   })
 }
 
@@ -1287,7 +1293,7 @@ export function generateCampaignFromStructured(
     const signalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
-    const referenceLine = sanitizeReferenceLine(email.referenceLine || '')
+    const referenceLine = sanitizeReferenceLine(email.referenceLine || '', data.sourceUrls)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)

@@ -1323,6 +1323,7 @@ export async function generateCampaign(
       sourceAttributions: selection.sourceAttributions,
       aeEmail,
       aePhone,
+      sourceUrls: (materialContent.match(/https?:\/\/[^\s)"<>]+/g) || []).filter((u: string) => !u.includes('redhat.com')),
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility
