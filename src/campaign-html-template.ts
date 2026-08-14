@@ -1156,6 +1156,7 @@ function renderStructuredEmailBox(
   aeName: string,
   aeEmail?: string,
   aePhone?: string,
+  recipientEmail?: string,
 ): string {
   const tierLabel = tier === 'executive' ? 'Executive' : 'Manager'
   const bodyHtml = convertMarkdownBullets(body)
@@ -1168,6 +1169,7 @@ function renderStructuredEmailBox(
   </div>
   <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
     <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(subject)}</strong></p>
+    ${recipientEmail ? `<p style="font-size: 14px; color: #5f6368; margin: 4px 0 0 0;">To: <strong style="color: #202124;">${escapeHtml(recipientEmail)}</strong> <span style="color: #9aa0a6;">[inferred]</span></p>` : ''}
   </div>
   <div style="padding: 20px;">
     ${bodyHtml}
@@ -1315,6 +1317,7 @@ export function generateCampaignFromStructured(
       aeName,
       data.aeEmail,
       data.aePhone,
+      contact?.email,
     )
 
     if (email.tier === 'executive') {
