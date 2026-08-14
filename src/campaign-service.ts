@@ -257,6 +257,7 @@ const CAMPAIGN_SELECTION_SCHEMA = {
 
 export interface CampaignRequest {
   materialUrl: string
+  supplementalUrls?: string[]
   emailSubject?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[]; linkedinUrl?: string; name?: string }>
   style?: string
@@ -996,6 +997,20 @@ export async function generateCampaign(
     materialTitle = extracted.title
     materialContent = extracted.content
     console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
+  }
+
+  if (config?.supplementalUrls?.length) {
+    for (const url of config.supplementalUrls) {
+      try {
+        const fileId = extractFileId(url)
+        if (!fileId) continue
+        const supplemental = await extractMaterialContent(fileId)
+        materialContent += `\n\n## Supplemental Source: ${supplemental.title}\n\n${supplemental.content}`
+        console.log(`[campaigns] Appended supplemental: "${supplemental.title}" (${supplemental.content.length} chars)`)
+      } catch (e: any) {
+        console.warn(`[campaigns] Supplemental URL extraction failed (non-fatal): ${url} — ${e?.message}`)
+      }
+    }
   }
 
   // 2. Pre-flight: ensure all intelligence exists and is fresh before loading signals
