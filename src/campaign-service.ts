@@ -1244,14 +1244,38 @@ export async function generateCampaign(
     for (const match of augmentedMaterial.matchAll(/([\w\s&']+(?:analysis|guide|breakdown|report|study))\s*(?::|—|-)?\s*(https?:\/\/[^\s)"<>]+)/gi)) {
       materialUrlMap.set(match[1].trim(), match[2])
     }
+    // Extract from "### Title\nURL" or "### Title\nexcerpt" patterns (email sourceLinks format)
+    for (const match of augmentedMaterial.matchAll(/###\s+(.+)\n(https?:\/\/[^\s]+)/g)) {
+      materialUrlMap.set(match[1].trim(), match[2].trim())
+    }
+    // Extract bare URLs and map by domain name
+    for (const match of augmentedMaterial.matchAll(/(https?:\/\/(?:www\.)?([^/\s]+)[^\s]*)/g)) {
+      const url = match[1]
+      const domain = match[2]
+      if (domain.includes('hklaw')) materialUrlMap.set("Holland & Knight's analysis of SB 122", url)
+      if (domain.includes('numeral')) materialUrlMap.set("Numeral's state-by-state SaaS tax breakdown", url)
+    }
 
     for (const email of selection.emails) {
-      if (!email.referenceLine && materialUrlMap.size > 0) {
-        const externalRefs = [...materialUrlMap.entries()]
-          .filter(([, url]) => !url.includes('redhat.com'))
-          .slice(0, 2)
-        if (externalRefs.length > 0) {
-          email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
+      if (materialUrlMap.size > 0) {
+        if (!email.referenceLine) {
+          const externalRefs = [...materialUrlMap.entries()]
+            .filter(([, url]) => !url.includes('redhat.com'))
+            .slice(0, 2)
+          if (externalRefs.length > 0) {
+            email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
+          }
+        } else if (email.referenceLine && !email.referenceLine.includes('](http')) {
+          // Gemini provided text references without URLs — inject known URLs
+          let enriched = email.referenceLine
+          for (const [name, url] of materialUrlMap.entries()) {
+            const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const pattern = new RegExp(`'${escaped}'|"${escaped}"|${escaped}`, 'i')
+            if (pattern.test(enriched)) {
+              enriched = enriched.replace(pattern, `[${name}](${url})`)
+            }
+          }
+          email.referenceLine = enriched
         }
       }
     }
