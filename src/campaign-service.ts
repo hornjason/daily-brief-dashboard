@@ -183,7 +183,7 @@ const CAMPAIGN_SELECTION_SCHEMA = {
           featureApplications: {
             type: 'ARRAY',
             items: { type: 'STRING' },
-            description: 'Exactly 3 sentences, one per featureKey (same order). Each explains why THIS specific feature matters for THIS customer\'s specific situation. Must reference customer context, not generic capability. Example for A10+SaaS tax: "self-managed in your VPC, zero SaaS tax exposure on automation workloads" NOT: "unifies automation across hybrid environments". Keep to 1 sentence each, 10-20 words.',
+            description: 'Exactly 3 sentences, one per featureKey (same order). Each explains why THIS specific feature matters for THIS customer\'s specific situation. Must reference customer context, not generic capability. Example for A10+SaaS tax: "self-managed in your VPC, zero SaaS tax exposure on automation workloads" NOT: "unifies automation across hybrid environments". Keep to 1 sentence each, 8-12 words. Reference the campaign theme directly. For a SaaS tax campaign: "self-managed in your VPC, zero SaaS tax exposure". NOT generic: "unifies automation across hybrid environments".',
           },
           signalBridge: {
             type: 'STRING',
@@ -583,7 +583,7 @@ For each resolved contact, select:
 3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
 4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
 5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
-6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Reference customer context, not generic capability descriptions.
+6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Keep each to 8-12 words. Reference the campaign theme directly, not generic capability descriptions.
 7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
 8. A reference line: one sentence pointing the recipient to relevant source documents. Use markdown links [Document Title](url) for ALL URLs found in the source material content — including external legal analyses and third-party reports. Do NOT invent URLs that aren't in the material. Example: "For background on the law: [Holland & Knight's analysis of SB 122](https://www.hklaw.com/...) covers the definitions, and [Numeral's state-by-state breakdown](https://www.numeral.com/...) shows where California fits."
 9. Reference materials: Extract ALL source documents, legal analyses, reports, and sales plays cited in the material content. Each gets resource name, URL if present in the material, and a one-sentence key takeaway. You MUST extract at least the primary source documents.
@@ -1074,9 +1074,9 @@ export async function generateCampaign(
   // 3c. Resolve real executives for campaign personas (#1055)
   // Campaign-directive-aware: add finance/procurement roles when directive mentions tax/cost themes
   const directiveRoleMap: Record<string, string[]> = {
-    'tax': ['Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'VP Finance'],
+    'tax': ['CEO', 'CFO', 'VP Engineering', 'Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
     'cost': ['Director of Finance', 'VP Finance', 'Head of Procurement'],
-    'saas': ['Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
+    'saas': ['CEO', 'CFO', 'VP Engineering', 'Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
     'security': ['CISO', 'Head of Information Security', 'VP Security'],
     'compliance': ['Director of Finance', 'Head of Compliance', 'General Counsel'],
   }
@@ -1225,14 +1225,6 @@ export async function generateCampaign(
     for (const match of augmentedMaterial.matchAll(/###\s+(.+)\n(https?:\/\/[^\s]+)/g)) {
       materialUrlMap.set(match[1].trim(), match[2].trim())
     }
-    // Extract bare URLs and map by domain name
-    for (const match of augmentedMaterial.matchAll(/(https?:\/\/(?:www\.)?([^/\s]+)[^\s]*)/g)) {
-      const url = match[1]
-      const domain = match[2]
-      if (domain.includes('hklaw')) materialUrlMap.set("Holland & Knight's analysis of SB 122", url)
-      if (domain.includes('numeral')) materialUrlMap.set("Numeral's state-by-state SaaS tax breakdown", url)
-    }
-
     for (const email of selection.emails) {
       if (materialUrlMap.size > 0) {
         if (!email.referenceLine) {
@@ -1345,7 +1337,7 @@ export async function generateCampaign(
       expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
     } : undefined
 
-    // Derive AE email from name (flast@redhat.com) and parse phone from voice file
+    // Derive AE email from name (flast@redhat.com), use voice profile for phone/email
     const aeTeam = accountTeam.find(m => m.role === 'ae')
     let aeEmail: string | undefined
     let aePhone: string | undefined
@@ -1355,15 +1347,8 @@ export async function generateCampaign(
         aeEmail = `${parts[0][0].toLowerCase()}${parts[parts.length - 1].toLowerCase()}@redhat.com`
       }
     }
-    try {
-      const voiceSlug = toSlug(customer.ae ?? '')
-      const voicePath = resolve(process.env.HOME ?? '', `.claude/skills/ContentCampaign/voices/${voiceSlug}.md`)
-      if (existsSync(voicePath)) {
-        const voiceMd = readFileSync(voicePath, 'utf-8')
-        const phoneMatch = voiceMd.match(/M:\s*\(?\d{3}\)?\s*\d{3}[-.\s]?\d{4}/)
-        if (phoneMatch) aePhone = phoneMatch[0].replace(/^M:\s*/, '')
-      }
-    } catch { /* no phone available */ }
+    aePhone = voiceProfile?.phone
+    if (voiceProfile?.email) aeEmail = voiceProfile.email
 
     // Pass 2: Template assembly (deterministic, no LLM)
     htmlContent = generateCampaignFromStructured(selection, {
