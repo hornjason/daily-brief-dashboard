@@ -1265,27 +1265,15 @@ export async function generateCampaign(
           if (externalRefs.length > 0) {
             email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
           }
-        } else if (email.referenceLine && (!email.referenceLine.includes('](http') || /\]\((?:#[^)]*|)\)/.test(email.referenceLine))) {
-          let enriched = email.referenceLine
-          // Fix empty-URL markdown links [Title]() by matching title keywords to known URLs
-          enriched = enriched.replace(/\[([^\]]+)\]\((?:#[^)]*|)\)/g, (_match, title) => {
-            const t = title.toLowerCase()
-            for (const [, url] of materialUrlMap.entries()) {
-              if ((t.includes('party') || t.includes('holland') || t.includes('taxing saas')) && url.includes('hklaw')) return `[${title}](${url})`
-              if ((t.includes('state-by-state') || t.includes('numeral') || t.includes('saas sales tax')) && url.includes('numeral')) return `[${title}](${url})`
-            }
-            for (const [name, url] of materialUrlMap.entries()) {
-              if (t.includes(name.toLowerCase().split(' ')[0])) return `[${title}](${url})`
-            }
-            return title
-          })
-          // Inject URLs into plain-text document references
-          for (const [name, url] of materialUrlMap.entries()) {
-            const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-            const pattern = new RegExp(`'${escaped}'|"${escaped}"`, 'i')
-            if (pattern.test(enriched)) enriched = enriched.replace(pattern, `[${name}](${url})`)
+        } else if (email.referenceLine && !email.referenceLine.includes('](http')) {
+          // Deterministic URL injection — replace Gemini's reference line entirely
+          // with a properly linked version using known URLs from material
+          const externalUrls = [...materialUrlMap.entries()].filter(([, url]) => !url.includes('redhat.com'))
+          if (externalUrls.length >= 2) {
+            email.referenceLine = `For background on the law: [${externalUrls[0][0]}](${externalUrls[0][1]}) covers the definitions, and [${externalUrls[1][0]}](${externalUrls[1][1]}) provides the broader landscape.`
+          } else if (externalUrls.length === 1) {
+            email.referenceLine = `For background: [${externalUrls[0][0]}](${externalUrls[0][1]}).`
           }
-          email.referenceLine = enriched
         }
       }
     }
