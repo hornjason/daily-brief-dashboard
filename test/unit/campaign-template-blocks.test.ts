@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import type { BusinessObjective } from '../../src/campaign-html-template.ts'
 import {
   buildOpener,
   buildSignalBridge,
@@ -22,6 +23,7 @@ import {
   buildFinancialConflict,
   extractBusinessObjectives,
   buildObjectiveCorrelation,
+  buildObjectiveContext,
 } from '../../src/campaign-html-template.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
@@ -634,5 +636,50 @@ describe('buildObjectiveCorrelation', () => {
     const result = buildObjectiveCorrelation(objectives, 'Security Patch Automation')
     expect(result).toContain('compliance program')
     expect(result).not.toContain('25% margin')
+  })
+})
+
+// ── buildObjectiveContext — financial correlation in email body ─────────────
+
+describe('buildObjectiveContext — financial correlation in email body', () => {
+  it('returns financial context sentence when financial objective exists', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'financial', objective: '12% YoY revenue growth', source: 'Q2 earnings' },
+    ]
+    const result = buildObjectiveContext(objectives, 'SaaS Tax', 0)
+    expect(result).toContain('12% YoY revenue growth')
+    expect(result.length).toBeGreaterThan(20)
+  })
+
+  it('returns security context for security objective', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'security', objective: 'zero-trust security initiative', source: 'Strategic Initiatives' },
+    ]
+    const result = buildObjectiveContext(objectives, 'platform security', 0)
+    expect(result).toContain('zero-trust')
+  })
+
+  it('varies objective selection by email index', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'financial', objective: '12% growth', source: 'earnings' },
+      { category: 'operational', objective: 'automation initiative', source: 'strategy' },
+      { category: 'security', objective: 'breach prevention', source: 'initiatives' },
+    ]
+    const r0 = buildObjectiveContext(objectives, 'SaaS Tax', 0)
+    const r1 = buildObjectiveContext(objectives, 'SaaS Tax', 1)
+    const r2 = buildObjectiveContext(objectives, 'SaaS Tax', 2)
+    expect(new Set([r0, r1, r2]).size).toBeGreaterThanOrEqual(2)
+  })
+
+  it('returns empty string when no objectives exist', () => {
+    expect(buildObjectiveContext([], 'SaaS Tax', 0)).toBe('')
+  })
+
+  it('handles single objective across all email indices', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'financial', objective: '15% margin', source: 'earnings' },
+    ]
+    expect(buildObjectiveContext(objectives, 'cost reduction', 0)).toContain('15% margin')
+    expect(buildObjectiveContext(objectives, 'cost reduction', 5)).toContain('15% margin')
   })
 })

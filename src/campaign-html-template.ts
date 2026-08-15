@@ -916,6 +916,26 @@ export function buildObjectiveCorrelation(objectives: BusinessObjective[], campa
     .replace('{theme}', campaignTheme)
 }
 
+const EMAIL_OBJECTIVE_TEMPLATES: Record<BusinessObjective['category'], string> = {
+  'financial': 'With {objective}, {theme} creates a direct headwind against this trajectory.',
+  'security': '{objective} makes {theme} a strategic priority, not just a cost decision.',
+  'operational': 'Given {objective}, {theme} directly supports this operational initiative.',
+  'innovation': '{objective} depends on infrastructure that {theme} could impact.',
+  'growth': 'With {objective}, {theme} introduces friction against this growth trajectory.',
+}
+
+export function buildObjectiveContext(
+  objectives: BusinessObjective[],
+  campaignTheme: string,
+  emailIndex: number,
+): string {
+  if (objectives.length === 0) return ''
+  const selected = objectives[emailIndex % objectives.length]
+  return EMAIL_OBJECTIVE_TEMPLATES[selected.category]
+    .replace('{objective}', selected.objective)
+    .replace('{theme}', campaignTheme)
+}
+
 const FINANCIAL_TYPE_PRIORITY: FinancialTarget['type'][] = ['margin', 'discipline', 'cost-reduction', 'growth']
 
 export function buildFinancialConflict(targets: FinancialTarget[], campaignTheme: string): string {
@@ -1572,7 +1592,9 @@ export function generateCampaignFromStructured(
 
     // Build all 8 blocks
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
-    const signalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
+    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
+    const objectiveContext = sanitizeCreepyLines(buildObjectiveContext(businessObjectives, cleanCampaignTitle(data.materialTitle) || 'this campaign theme', i))
+    const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
     const referenceLine = sanitizeReferenceLine(email.referenceLine || '', data.sourceUrls)

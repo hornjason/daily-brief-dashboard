@@ -5,12 +5,14 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import type { BusinessObjective } from '../../src/campaign-html-template.ts'
 import {
   cleanCampaignTitle,
   isRealPersonName,
   sanitizeFootprint,
   buildChallengerFrame,
   sanitizeCreepyLines,
+  buildObjectiveContext,
 } from '../../src/campaign-html-template.ts'
 
 // ── 1. Title cleaning ─────────────────────────────────────────────────────
@@ -208,5 +210,30 @@ describe('sanitizeCreepyLines — footprint-specific patterns', () => {
     const result = sanitizeCreepyLines(input)
     expect(result).toContain('$5.62M')
     expect(result).toContain('Amadeus')
+  })
+})
+
+// ── Financial correlation in email body — not just dashboard ──────────────
+
+describe('financial correlation in email body — not just dashboard', () => {
+  it('buildObjectiveContext produces sentence for financial data', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'financial', objective: '12% YoY revenue growth', source: 'Q2 2026 earnings' },
+    ]
+    const result = buildObjectiveContext(objectives, 'Ansible Prospecting and the Upcoming Saas Tax', 0)
+    expect(result).toContain('12% YoY revenue growth')
+    expect(result).not.toBe('')
+  })
+
+  it('sanitizeCreepyLines strips pipeline data when objective context is combined with other text', () => {
+    const objectives: BusinessObjective[] = [
+      { category: 'financial', objective: '$514K pipeline opportunity', source: 'internal' },
+    ]
+    const objCtx = buildObjectiveContext(objectives, 'SaaS Tax', 0)
+    const combined = `Your IaC modernization signal caught our attention. ${objCtx}`
+    const sanitized = sanitizeCreepyLines(combined)
+    expect(sanitized).not.toContain('pipeline')
+    expect(sanitized).not.toContain('$514K')
+    expect(sanitized).toContain('IaC modernization')
   })
 })
