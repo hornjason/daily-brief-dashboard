@@ -1145,17 +1145,32 @@ export async function generateCampaign(
   }
 
   // Backfill inferred emails for any contacts missing them
-  if (customer.domain) {
+  // customer.domain may be undefined at runtime despite being in config — read fresh
+  let emailDomain = customer.domain
+  if (!emailDomain) {
+    try {
+      const cfg = JSON.parse(readFileSync(resolve(CONFIG_DIR, 'customers.json'), 'utf-8'))
+      const lowerName = customer.name.toLowerCase()
+      const cfgCustomer = (cfg.customers ?? []).find((c: any) => c.name?.toLowerCase() === lowerName || c.name?.toLowerCase().includes(lowerName) || lowerName.includes(c.name?.toLowerCase()))
+      emailDomain = cfgCustomer?.domain
+    } catch (e: any) { console.warn(`[campaigns] Domain lookup failed: ${e?.message}`) }
+  }
+  console.log(`[campaigns] Email domain: ${emailDomain ?? 'NONE'}, contacts: ${resolvedExecs.length}, missing email: ${resolvedExecs.filter(e => !e.email).length}`)
+  if (emailDomain) {
     let backfilled = 0
     for (const exec of resolvedExecs) {
       if (exec.email) continue
-      const nameParts = exec.name.replace(/ at .+$/, '').trim().split(/\s+/)
-      if (nameParts.length >= 2 && !nameParts[0].includes('Director') && !nameParts[0].includes('VP') && !nameParts[0].includes('Head') && !nameParts[0].includes('Sr.')) {
-        exec.email = `${nameParts[0][0].toLowerCase()}${nameParts[nameParts.length - 1].toLowerCase()}@${customer.domain}`
+      const realName = exec.name.replace(/ at .+$/, '').trim()
+      const nameParts = realName.split(/\s+/)
+      const isRoleName = /^(VP|Director|Head|Sr\.|Chief|Manager|CIO|CFO|CEO|CTO|CISO)\b/i.test(nameParts[0])
+      if (nameParts.length >= 2 && !isRoleName && /^[A-Za-z]/.test(nameParts[0]) && /^[A-Za-z]/.test(nameParts[nameParts.length - 1])) {
+        const firstInitial = nameParts[0][0].toLowerCase()
+        const lastName = nameParts[nameParts.length - 1].toLowerCase()
+        exec.email = `${firstInitial}${lastName}@${emailDomain}`
         backfilled++
       }
     }
-    if (backfilled > 0) console.log(`[campaigns] Backfilled ${backfilled} inferred emails for ${customer.name}`)
+    console.log(`[campaigns] Email backfill: ${backfilled} new, ${resolvedExecs.filter(e => e.email).length}/${resolvedExecs.length} have email for ${customer.name}`)
   }
 
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
