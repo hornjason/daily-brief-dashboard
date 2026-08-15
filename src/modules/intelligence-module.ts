@@ -18,12 +18,19 @@ export interface ObjectiveEntry {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
 }
 
+export interface ProductFitEntry {
+  product: string
+  businessNeed: string
+  redHatFit: string
+}
+
 export interface CustomerObjectiveProfile {
   financial: ObjectiveEntry[]
   security: ObjectiveEntry[]
   operational: ObjectiveEntry[]
   innovation: ObjectiveEntry[]
   growth: ObjectiveEntry[]
+  productFit?: ProductFitEntry[]
 }
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
@@ -71,18 +78,65 @@ function classifyObjective(text: string): ObjectiveCategory {
 
 function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
   const entries: ObjectiveEntry[] = []
+  const seen = new Set<string>()
+
+  function add(objective: string, metric: string) {
+    const key = `${metric}|${objective.slice(0, 40)}`
+    if (seen.has(key)) return
+    seen.add(key)
+    entries.push({ objective, metric, priority: null, source: 'Financial Health', confidence: 'HIGH' })
+  }
+
   const bullets = sectionText.split(/\n\*\s+/).filter(b => b.trim())
   for (const bullet of bullets) {
     const titleMatch = bullet.match(/\*\*([^*]+)\*\*[:\s]*(.+)/s)
     if (!titleMatch) continue
-    const fullText = titleMatch[2].replace(/\n/g, ' ').trim()
-    entries.push({
-      objective: fullText.slice(0, 200),
-      metric: extractMetric(fullText),
-      priority: null,
-      source: 'Financial Health',
-      confidence: 'HIGH',
-    })
+    const category = titleMatch[1].replace(/:$/, '').trim()
+    const text = titleMatch[2].replace(/\n/g, ' ').trim()
+
+    for (const m of text.matchAll(/(?:revenue of |revenue )\$?([\d,.]+)\s*(million|billion|M|B)/gi)) {
+      const suffix = /^[mb]$/i.test(m[2]) ? m[2].toUpperCase() : (m[2].toLowerCase() === 'million' ? 'M' : 'B')
+      add(`${category}: $${m[1]}${suffix} revenue`, `$${m[1]}${suffix}`)
+    }
+    for (const m of text.matchAll(/(\d+\.?\d*%)\s*(?:increase|growth|YoY|over \d{4})/gi)) {
+      add(`${category}: ${m[1]} growth`, m[1])
+    }
+    for (const m of text.matchAll(/(?:up |of )\$?([\d,.]+)\s*(million|M)\s*\((?:up )?([\d.]+%)\s*YoY\)/gi)) {
+      const suffix = /^m$/i.test(m[2]) ? 'M' : 'M'
+      add(`${category}: $${m[1]}${suffix} (+${m[3]} YoY)`, m[3])
+    }
+    for (const m of text.matchAll(/([\d.]+%)\s*(?:and\s+)?(?:an?\s+)?(?:non-GAAP\s+)?(?:operating|gross|EBITDA|net)\s*margin/gi)) {
+      const kind = m[0].match(/(operating|gross|EBITDA|net)/i)
+      add(`${kind?.[1] || ''} margin of ${m[1]}`.trim(), m[1])
+    }
+    for (const m of text.matchAll(/(?:non-GAAP\s+)?(?:operating|gross|EBITDA|net)\s*margin\s*(?:of\s*)?([\d.]+%)/gi)) {
+      const kind = m[0].match(/(operating|gross|EBITDA|net)/i)
+      add(`${kind?.[1] || ''} margin of ${m[1]}`.trim(), m[1])
+    }
+    for (const m of text.matchAll(/guidance\s+(?:from\s+[\d\-–]+%\s+)?to\s+(\d+[\-–]\d+%)/gi)) {
+      add(`${category}: guidance raised to ${m[1]}`, m[1])
+    }
+    for (const m of text.matchAll(/(?:outlook|guidance)\s+(?:from\s+[\d\-–]+%\s+)?to\s+(\d+[\-–]\d+%)/gi)) {
+      add(`${category}: ${m[1]} outlook`, m[1])
+    }
+    for (const m of text.matchAll(/\$([\d,.]+)\s*(million|billion|M|B)\s*(?:in\s+)?(?:cash|marketable|securities)/gi)) {
+      const suffix = /^[mb]$/i.test(m[2]) ? m[2].toUpperCase() : (m[2].toLowerCase() === 'million' ? 'M' : 'B')
+      add(`${category}: $${m[1]}${suffix} cash position`, `$${m[1]}${suffix}`)
+    }
+    for (const m of text.matchAll(/net income\s+(?:was\s+)?\$([\d,.]+)\s*(million|M)/gi)) {
+      add(`${category}: $${m[1]}M net income`, `$${m[1]}M`)
+    }
+    for (const m of text.matchAll(/free cash flow\s+(?:to\s+)?(?:exceed\s+)?(?:the\s+)?~?\$([\d,.]+)\s*(million|M)/gi)) {
+      add(`${category}: ~$${m[1]}M free cash flow`, `~$${m[1]}M`)
+    }
+    for (const m of text.matchAll(/EPS\s+growth\s+(?:to\s+)?(\d+[\-–]\d+%)/gi)) {
+      add(`EPS growth ${m[1]}`, m[1])
+    }
+    for (const m of text.matchAll(/up\s+([\d.]+%)/gi)) {
+      if (!seen.has(`${m[1]}|${category}`)) {
+        add(`${category}: ${m[1]} growth`, m[1])
+      }
+    }
   }
   return entries
 }
@@ -91,33 +145,36 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
   const entries: ObjectiveEntry[] = []
   const initiatives = sectionText.split(/\n\*\s+\*\*(?=[A-Z])/).filter(b => b.trim())
   for (const init of initiatives) {
-    const titleMatch = init.match(/\*?\*?([^*]+?)(?:\([^)]+\))?:\*\*\s*(.+)/s)
+    const titleMatch = init.match(/\*?\*?([^*]+?)(?:\s*\([^)]+\))?\s*:\*\*\s*(.+)/s)
     if (!titleMatch) {
       const altMatch = init.match(/(.+?):\*\*\s*(.+)/s)
       if (!altMatch) continue
-      const title = altMatch[1].replace(/\*+/g, '').trim()
+      const rawTitle = altMatch[1].replace(/\*+/g, '').trim()
       const body = altMatch[2].replace(/\n/g, ' ').trim()
       const urgency = body.match(/\*\*Buying Urgency:\s*(HIGH|MEDIUM|LOW)\b/i)
       const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
-      const objective = `${title}: ${body.replace(/\*\*Buying Urgency:.*?\*\*[^*]*/g, '').trim()}`.slice(0, 200)
+      const cleanBody = cleanMarkdown(body)
+      const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
+      const objective = shortDesc ? `${rawTitle} — ${shortDesc}`.slice(0, 80) : rawTitle.slice(0, 80)
       entries.push({
         objective,
-        metric: extractMetric(objective),
+        metric: extractMetric(cleanBody),
         priority,
         source: 'Strategic Initiatives',
         confidence: 'HIGH',
       })
       continue
     }
-    const title = titleMatch[1].trim()
+    const rawTitle = titleMatch[1].trim()
     const body = titleMatch[2].replace(/\n/g, ' ').trim()
     const urgency = body.match(/\*\*Buying Urgency:\s*(HIGH|MEDIUM|LOW)\b/i)
     const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
     const cleanBody = cleanMarkdown(body)
-    const objective = `${title}: ${cleanBody}`.slice(0, 200)
+    const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
+    const objective = shortDesc ? `${rawTitle} — ${shortDesc}`.slice(0, 80) : rawTitle.slice(0, 80)
     entries.push({
       objective,
-      metric: extractMetric(objective),
+      metric: extractMetric(cleanBody),
       priority,
       source: 'Strategic Initiatives',
       confidence: 'HIGH',
@@ -164,6 +221,30 @@ function parseFacts(sectionText: string, source: string): ObjectiveEntry[] {
   return entries
 }
 
+function parseProductFit(sections: Record<string, string>): ProductFitEntry[] {
+  const fits: ProductFitEntry[] = []
+  const fitKeys: Array<[string, string]> = [
+    ['RHEL Fit', 'RHEL'],
+    ['OpenShift Fit', 'OpenShift'],
+    ['Ansible Fit', 'Ansible'],
+    ['Red Hat AI Fit', 'Red Hat AI'],
+  ]
+  for (const [sectionName, product] of fitKeys) {
+    const text = sections[sectionName]
+    if (!text) continue
+    const needMatch = text.match(/\*\*Business Need:\*\*\s*(.+?)(?=\n\s*\*\*|\n*$)/s)
+    const fitMatch = text.match(/\*\*Red Hat Fit:\*\*\s*(.+?)(?=\n\s*\*\*|\n*$)/s)
+    if (!needMatch && !fitMatch) continue
+    const firstSentence = (t: string) => (t.split(/\.\s/)[0]?.trim() || t.trim()).replace(/\n/g, ' ')
+    fits.push({
+      product,
+      businessNeed: needMatch ? firstSentence(needMatch[1]) : '',
+      redHatFit: fitMatch ? firstSentence(fitMatch[1]) : '',
+    })
+  }
+  return fits
+}
+
 export function extractObjectiveProfile(companyText: string): CustomerObjectiveProfile {
   const profile: CustomerObjectiveProfile = {
     financial: [],
@@ -205,6 +286,11 @@ export function extractObjectiveProfile(companyText: string): CustomerObjectiveP
       const cat = classifyObjective(entry.objective)
       profile[cat].push(entry)
     }
+  }
+
+  const productFit = parseProductFit(sections)
+  if (productFit.length > 0) {
+    profile.productFit = productFit
   }
 
   return profile

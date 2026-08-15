@@ -14,9 +14,33 @@ const FIXTURE_MARKDOWN = `
 
 A10 Networks demonstrates strong and improving financial health.
 
-*   **Revenue Trajectory:** The company reported record annual revenue of $290.6 million for FY2025, an 11% increase over 2024. This momentum has accelerated into 2026, with Q2 revenue of $80.1 million (up 15.5% YoY).
+*   **Revenue Trajectory:** The company reported record annual revenue of $290.6 million for FY2025, an 11% increase over 2024. This momentum has accelerated into 2026, with Q2 revenue of $80.1 million (up 15.5% YoY) and H1 2026 revenue up 14.5%. Based on this performance, A10 raised its full-year 2026 revenue growth guidance from 10-12% to 12-14%.
 *   **Profitability:** In Q2 2026, it posted a non-GAAP gross margin of 80.3% and an operating margin of 25.5%. Non-GAAP net income was $18.7 million.
 *   **Balance Sheet:** The company is in a strong financial position, with $357.3 million in cash and marketable securities as of June 30, 2026.
+
+## RHEL Fit
+
+*   **Business Need:** A10 needs a stable, secure, and high-performance operating system for both its internal product development and as a foundation for the virtual appliances it deploys to customers.
+*   **Capability Requirement:** A standardized, enterprise-grade Linux platform with long-term support, robust security features (like SELinux), and real-time kernel options for low-latency networking.
+*   **Red Hat Fit:** Red Hat Enterprise Linux (RHEL) provides the hardened, performant, and certifiable OS foundation required for a security and networking vendor. It would allow A10 to standardize the development environment.
+
+## OpenShift Fit
+
+*   **Business Need:** The acquisition of TrojAI and the strategic pivot to AI security creates an urgent need to build, test, and scale container-native applications. A10 is building a unified "A10 Control" platform.
+*   **Capability Requirement:** An enterprise-grade, hybrid-cloud Kubernetes platform to accelerate application development.
+*   **Red Hat Fit:** OpenShift provides the ideal platform for this challenge. It would enable A10's developers to build and deploy the TrojAI microservices at scale.
+
+## Ansible Fit
+
+*   **Business Need:** A10's strategy revolves around simplifying complexity for its customers through a "unified set of tools." Internally, they face the challenge of integrating TrojAI.
+*   **Capability Requirement:** A powerful automation platform that can manage network devices, cloud services, and Kubernetes platforms from a single control plane.
+*   **Red Hat Fit:** Ansible Automation Platform is a perfect fit. It can be used to automate the configuration and deployment of A10's own Thunder appliances.
+
+## Red Hat AI Fit
+
+*   **Business Need:** A10 is now in the business of building AI security models, including "proprietary guardrail models and model intelligence." They need to train, test, and deploy these models efficiently.
+*   **Capability Requirement:** A platform for developing, training, and serving AI/ML models with integrated MLOps capabilities.
+*   **Red Hat Fit:** Red Hat OpenShift AI provides a comprehensive, scalable platform for A10's data scientists and engineers. They could use it to manage the entire lifecycle of the AI models.
 
 ## Strengths (Internal, Positive)
 
@@ -64,30 +88,51 @@ describe('extractObjectiveProfile', () => {
     expect(Array.isArray(profile.growth)).toBe(true)
   })
 
-  it('extracts financial entries from Financial Health section', async () => {
+  it('extracts >= 5 discrete financial metrics from Financial Health (not paragraphs)', async () => {
     const mod = await import('../../src/modules/intelligence-module.ts')
     const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
-    expect(profile.financial.length).toBeGreaterThanOrEqual(3)
-    const revenueEntry = profile.financial.find(e => e.objective.includes('revenue'))
-    expect(revenueEntry).toBeDefined()
-    expect(revenueEntry!.metric).toBeTruthy()
-    expect(revenueEntry!.source).toBe('Financial Health')
+    const fhEntries = profile.financial.filter(e => e.source === 'Financial Health')
+    expect(fhEntries.length).toBeGreaterThanOrEqual(5)
+    for (const entry of fhEntries) {
+      expect(entry.objective.length).toBeLessThan(60)
+      expect(entry.metric).toBeTruthy()
+    }
   })
 
-  it('extracts metrics from financial entries', async () => {
+  it('extracts specific metrics: revenue, growth %, margins, cash', async () => {
     const mod = await import('../../src/modules/intelligence-module.ts')
     const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
-    const margins = profile.financial.find(e => e.objective.toLowerCase().includes('margin'))
-    expect(margins).toBeDefined()
-    expect(margins!.metric).toMatch(/\d+/)
+    const objectives = profile.financial.map(e => e.objective.toLowerCase())
+    const metrics = profile.financial.map(e => e.metric)
+
+    expect(metrics.some(m => m?.includes('$290.6'))).toBe(true)
+    expect(metrics.some(m => m?.includes('11%'))).toBe(true)
+    expect(objectives.some(o => o.includes('margin'))).toBe(true)
+    expect(metrics.some(m => m?.includes('$357.3'))).toBe(true)
+  })
+
+  it('strategic initiatives are clean titles < 80 chars', async () => {
+    const mod = await import('../../src/modules/intelligence-module.ts')
+    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
+    const allEntries = [
+      ...profile.financial,
+      ...profile.security,
+      ...profile.operational,
+      ...profile.innovation,
+      ...profile.growth,
+    ]
+    const initiativeEntries = allEntries.filter(e => e.source === 'Strategic Initiatives')
+    expect(initiativeEntries.length).toBeGreaterThanOrEqual(1)
+    for (const entry of initiativeEntries) {
+      expect(entry.objective.length).toBeLessThanOrEqual(80)
+    }
   })
 
   it('classifies security initiatives correctly', async () => {
     const mod = await import('../../src/modules/intelligence-module.ts')
     const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
-    const securityEntries = profile.security
-    expect(securityEntries.length).toBeGreaterThanOrEqual(1)
-    const trojAi = securityEntries.find(e => e.objective.toLowerCase().includes('security'))
+    expect(profile.security.length).toBeGreaterThanOrEqual(1)
+    const trojAi = profile.security.find(e => e.objective.toLowerCase().includes('security'))
     expect(trojAi).toBeDefined()
   })
 
@@ -145,21 +190,7 @@ describe('extractObjectiveProfile', () => {
     expect(profile.operational).toEqual([])
     expect(profile.innovation).toEqual([])
     expect(profile.growth).toEqual([])
-  })
-
-  it('caps objective text at 200 characters', async () => {
-    const mod = await import('../../src/modules/intelligence-module.ts')
-    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
-    const allEntries = [
-      ...profile.financial,
-      ...profile.security,
-      ...profile.operational,
-      ...profile.innovation,
-      ...profile.growth,
-    ]
-    for (const entry of allEntries) {
-      expect(entry.objective.length).toBeLessThanOrEqual(200)
-    }
+    expect(profile.productFit).toBeUndefined()
   })
 
   it('ObjectiveEntry has required shape', async () => {
@@ -178,6 +209,33 @@ describe('extractObjectiveProfile', () => {
       expect([null, 'HIGH', 'MED', 'LOW']).toContain(entry.priority)
       expect(typeof entry.source).toBe('string')
       expect(['HIGH', 'MEDIUM', 'LOW']).toContain(entry.confidence)
+    }
+  })
+
+  it('extracts productFit for RHEL, OpenShift, Ansible, Red Hat AI', async () => {
+    const mod = await import('../../src/modules/intelligence-module.ts')
+    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
+    expect(profile.productFit).toBeDefined()
+    expect(profile.productFit!.length).toBe(4)
+    const products = profile.productFit!.map(f => f.product)
+    expect(products).toContain('RHEL')
+    expect(products).toContain('OpenShift')
+    expect(products).toContain('Ansible')
+    expect(products).toContain('Red Hat AI')
+    for (const fit of profile.productFit!) {
+      expect(fit.businessNeed.length).toBeGreaterThan(10)
+      expect(fit.redHatFit.length).toBeGreaterThan(10)
+      expect(fit.businessNeed).not.toContain('\n')
+      expect(fit.redHatFit).not.toContain('\n')
+    }
+  })
+
+  it('productFit extracts first sentence only', async () => {
+    const mod = await import('../../src/modules/intelligence-module.ts')
+    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
+    for (const fit of profile.productFit!) {
+      const sentenceCount = fit.businessNeed.split('. ').length
+      expect(sentenceCount).toBeLessThanOrEqual(2)
     }
   })
 })

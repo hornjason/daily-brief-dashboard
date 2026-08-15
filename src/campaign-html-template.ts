@@ -761,6 +761,32 @@ export function sanitizeCreepyLines(text: string): string {
   return result
 }
 
+// ── Metrics Table Rendering (ADR-044 Phase 4) ────────────────────────────
+
+export function renderMetricsTable(profile: CustomerObjectiveProfile | undefined): string {
+  if (!profile) return ''
+  const allEntries = [
+    ...profile.financial.map(e => ({ ...e, category: 'Financial' })),
+    ...profile.security.map(e => ({ ...e, category: 'Security' })),
+    ...profile.operational.map(e => ({ ...e, category: 'Operational' })),
+    ...profile.innovation.map(e => ({ ...e, category: 'Innovation' })),
+    ...profile.growth.map(e => ({ ...e, category: 'Growth' })),
+  ]
+  if (allEntries.length === 0) return ''
+
+  let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
+  html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
+  html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Source</td><td>Priority</td></tr>'
+  for (const e of allEntries) {
+    const priorityBadge = e.priority
+      ? `<span style="background: ${e.priority === 'HIGH' ? '#fce8e6' : '#fef7e0'}; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${escapeHtml(e.priority)}</span>`
+      : '—'
+    html += `<tr><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.objective)}</td><td>${escapeHtml(e.source)}</td><td>${priorityBadge}</td></tr>`
+  }
+  html += '</table>'
+  return html
+}
+
 // ── Objective Block Rendering (ADR-044) ───────────────────────────────────
 
 export function renderObjectiveBlock(
@@ -784,9 +810,10 @@ export function renderObjectiveBlock(
   if (selection.objectiveIndex != null && selection.objectiveIndex < allEntries.length) {
     selected = allEntries[selection.objectiveIndex]
   } else if (selection.objectiveCategory) {
-    const catEntries = profile[selection.objectiveCategory as keyof CustomerObjectiveProfile]
-    selected = catEntries.length > 0
-      ? { ...catEntries[0], category: selection.objectiveCategory as any }
+    const cat = selection.objectiveCategory as 'financial' | 'security' | 'operational' | 'innovation' | 'growth'
+    const catEntries = profile[cat]
+    selected = catEntries && catEntries.length > 0
+      ? { ...catEntries[0], category: cat }
       : allEntries[0]
   } else {
     selected = allEntries[0]
@@ -1564,6 +1591,8 @@ ${renderContactsSection(contacts)}
 ${renderDashboardMetrics(data.rawSignals)}
 
 ${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
+
+${renderMetricsTable(data.objectiveProfile)}
 
 ${renderStructuredIntelSections(data.rawSignals)}
 

@@ -12,6 +12,7 @@ import {
   buildChallengerFrame,
   sanitizeCreepyLines,
   renderObjectiveBlock,
+  renderMetricsTable,
 } from '../../src/campaign-html-template.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -250,5 +251,85 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
     expect(result).toContain('rising breach costs')
     expect(result).toContain('Red Hat security platform')
     expect(result).toContain('strategic exposure')
+  })
+
+  it('renderObjectiveBlock with clean discrete metrics produces readable sentence', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [
+        { objective: 'Revenue Trajectory: $290.6M revenue', metric: '$290.6M', priority: null, source: 'Financial Health', confidence: 'HIGH' },
+        { objective: 'Revenue Trajectory: 11% growth', metric: '11%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
+      ],
+    }
+    const result = renderObjectiveBlock(profile, { objectiveIndex: 0 }, { threat: 'rising costs', solution: 'automation' })
+    expect(result).toContain('$290.6M')
+    expect(result).toContain('protects this trajectory')
+    expect(result.length).toBeLessThan(200)
+  })
+})
+
+// ── renderMetricsTable — ADR-044 Phase 4 ───────────────────────────────────
+
+describe('renderMetricsTable — produces HTML table with rows', () => {
+  const emptyProfile: CustomerObjectiveProfile = { financial: [], security: [], operational: [], innovation: [], growth: [] }
+
+  it('returns empty string for undefined profile', () => {
+    expect(renderMetricsTable(undefined)).toBe('')
+  })
+
+  it('returns empty string for profile with no entries', () => {
+    expect(renderMetricsTable(emptyProfile)).toBe('')
+  })
+
+  it('produces HTML table with correct headers', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [{ objective: '11% growth', metric: '11%', priority: null, source: 'Financial Health', confidence: 'HIGH' }],
+    }
+    const result = renderMetricsTable(profile)
+    expect(result).toContain('<table')
+    expect(result).toContain('Category')
+    expect(result).toContain('Metric')
+    expect(result).toContain('Source')
+    expect(result).toContain('Priority')
+  })
+
+  it('renders rows for each entry with category label', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [
+        { objective: '$290.6M revenue', metric: '$290.6M', priority: null, source: 'Financial Health', confidence: 'HIGH' },
+        { objective: '11% growth', metric: '11%', priority: 'HIGH', source: 'Financial Health', confidence: 'HIGH' },
+      ],
+      security: [
+        { objective: 'zero-trust initiative', metric: null, priority: 'HIGH', source: 'Strategic Initiatives', confidence: 'HIGH' },
+      ],
+    }
+    const result = renderMetricsTable(profile)
+    expect(result).toContain('Financial')
+    expect(result).toContain('Security')
+    expect(result).toContain('$290.6M revenue')
+    expect(result).toContain('zero-trust initiative')
+    const rowCount = (result.match(/<tr/g) || []).length
+    expect(rowCount).toBeGreaterThanOrEqual(4)
+  })
+
+  it('renders priority badge for entries with priority', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [{ objective: 'test', metric: '10%', priority: 'HIGH', source: 'test', confidence: 'HIGH' }],
+    }
+    const result = renderMetricsTable(profile)
+    expect(result).toContain('HIGH')
+    expect(result).toContain('#fce8e6')
+  })
+
+  it('renders dash for entries without priority', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [{ objective: 'test', metric: '10%', priority: null, source: 'test', confidence: 'HIGH' }],
+    }
+    const html = renderMetricsTable(profile)
+    expect(html).toContain('—')
   })
 })
