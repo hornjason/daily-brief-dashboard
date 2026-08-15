@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import type { BusinessObjective } from '../../src/campaign-html-template.ts'
 import {
   buildOpener,
   buildSignalBridge,
@@ -19,12 +18,9 @@ import {
   buildSignOff,
   assembleEmail,
   sanitizeCreepyLines,
-  extractFinancialTargets,
-  buildFinancialConflict,
-  extractBusinessObjectives,
-  buildObjectiveCorrelation,
-  buildObjectiveContext,
+  renderObjectiveBlock,
 } from '../../src/campaign-html-template.ts'
+import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
 
@@ -442,244 +438,122 @@ describe('sanitizeCreepyLines — creepy line sanitizer', () => {
   })
 })
 
-// ── extractFinancialTargets ───────────────────────────────────────────────
+// ── renderObjectiveBlock (ADR-044) ────────────────────────────────────────
 
-describe('extractFinancialTargets', () => {
-  it('finds margin target from signal with "operating margin of 25.5%"', () => {
-    const signals: Signal[] = [
-      makeSignal('Q2 2026 earnings: operating margin of 25.5% reported'),
-    ]
-    const targets = extractFinancialTargets(signals)
-    expect(targets.length).toBeGreaterThanOrEqual(1)
-    expect(targets[0].type).toBe('margin')
-    expect(targets[0].metric).toContain('25.5%')
-    expect(targets[0].source).toContain('Q2 2026 earnings')
+function makeProfile(overrides: Partial<CustomerObjectiveProfile> = {}): CustomerObjectiveProfile {
+  return {
+    financial: [],
+    security: [],
+    operational: [],
+    innovation: [],
+    growth: [],
+    ...overrides,
+  }
+}
+
+function makeEntry(obj: string, opts: { metric?: string | null; category?: string } = {}) {
+  return {
+    objective: obj,
+    metric: opts.metric ?? null,
+    priority: null as 'HIGH' | 'MED' | 'LOW' | null,
+    source: 'test',
+    confidence: 'HIGH' as const,
+  }
+}
+
+const defaultTheme = { threat: 'SaaS tax and vendor lock-in', solution: 'self-managed automation' }
+
+describe('renderObjectiveBlock', () => {
+  it('returns financial sentence with metric and threat', () => {
+    const profile = makeProfile({ financial: [makeEntry('25-30% EBITDA margins target', { metric: '25-30%' })] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('25-30%')
+    expect(result).toContain('SaaS tax and vendor lock-in')
+    expect(result).toContain('self-managed automation')
+    expect(result).toContain('protects this trajectory')
   })
 
-  it('finds growth target from "15.5% YoY revenue growth"', () => {
-    const signals: Signal[] = [
-      makeSignal('Company posts 15.5% YoY revenue growth in latest quarter'),
-    ]
-    const targets = extractFinancialTargets(signals)
-    expect(targets.length).toBeGreaterThanOrEqual(1)
-    const growth = targets.find(t => t.type === 'growth')
-    expect(growth).toBeDefined()
-    expect(growth!.metric).toContain('15.5%')
-  })
-
-  it('returns empty array for signals with no financial data', () => {
-    const signals: Signal[] = [
-      makeSignal('New CTO appointed at Acme Corp'),
-      makeSignal('Cloud migration initiative announced'),
-    ]
-    const targets = extractFinancialTargets(signals)
-    expect(targets).toEqual([])
-  })
-
-  it('finds cost-reduction target', () => {
-    const signals: Signal[] = [
-      makeSignal('CFO announces cost reduction initiative: reduce costs by 15%'),
-    ]
-    const targets = extractFinancialTargets(signals)
-    expect(targets.length).toBeGreaterThanOrEqual(1)
-    expect(targets.some(t => t.type === 'cost-reduction')).toBe(true)
-  })
-
-  it('finds discipline target from EBITDA mention', () => {
-    const signals: Signal[] = [
-      makeSignal('Board sets EBITDA target of $500M for FY2027'),
-    ]
-    const targets = extractFinancialTargets(signals)
-    expect(targets.length).toBeGreaterThanOrEqual(1)
-    expect(targets.some(t => t.type === 'discipline')).toBe(true)
-  })
-})
-
-// ── buildFinancialConflict ────────────────────────────────────────────────
-
-describe('buildFinancialConflict', () => {
-  it('produces conflict sentence for margin target', () => {
-    const targets = [{ type: 'margin' as const, metric: '25.5% operating margin', source: 'Q2 2026 earnings', raw: 'operating margin of 25.5%' }]
-    const result = buildFinancialConflict(targets, 'SaaS Tax Exposure')
-    expect(result).toContain('25.5% operating margin')
-    expect(result).toContain('SaaS Tax Exposure')
-    expect(result).toContain('discipline')
-  })
-
-  it('returns empty string when no targets', () => {
-    const result = buildFinancialConflict([], 'SaaS Tax Exposure')
-    expect(result).toBe('')
-  })
-
-  it('selects most specific target: margin over discipline', () => {
-    const targets = [
-      { type: 'discipline' as const, metric: 'operational discipline', source: 'earnings call', raw: 'operational discipline' },
-      { type: 'margin' as const, metric: '30% gross margin', source: 'Q3 report', raw: 'gross margin of 30%' },
-    ]
-    const result = buildFinancialConflict(targets, 'VMware migration')
-    expect(result).toContain('30% gross margin')
-  })
-})
-
-// ── extractBusinessObjectives ─────────────────────────────────────────────
-
-describe('extractBusinessObjectives', () => {
-  it('extracts financial objectives from margin signals', () => {
-    const signals: Signal[] = [
-      makeSignal('Q2 2026 earnings: operating margin of 25.5% reported'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives.length).toBeGreaterThanOrEqual(1)
-    expect(objectives.some(o => o.category === 'financial')).toBe(true)
-    expect(objectives.find(o => o.category === 'financial')!.objective).toContain('25.5%')
-  })
-
-  it('extracts security initiative from signal', () => {
-    const signals: Signal[] = [
-      makeSignal('CISO launches zero-trust security initiative across all divisions'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives.length).toBeGreaterThanOrEqual(1)
-    expect(objectives.some(o => o.category === 'security')).toBe(true)
-  })
-
-  it('extracts operational initiative from signal', () => {
-    const signals: Signal[] = [
-      makeSignal('CTO announces automation initiative to reduce manual ops by 40%'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives.length).toBeGreaterThanOrEqual(1)
-    expect(objectives.some(o => o.category === 'operational')).toBe(true)
-  })
-
-  it('extracts innovation initiative from signal', () => {
-    const signals: Signal[] = [
-      makeSignal('Board approves AI strategy initiative for FY2027 — HIGH priority'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives.length).toBeGreaterThanOrEqual(1)
-    const innovation = objectives.find(o => o.category === 'innovation')
-    expect(innovation).toBeDefined()
-    expect(innovation!.priority).toBe('HIGH')
-  })
-
-  it('returns empty array for signals with no objectives', () => {
-    const signals: Signal[] = [
-      makeSignal('New office opened in Austin'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives).toEqual([])
-  })
-
-  it('extracts from both financial and initiative patterns in same signal set', () => {
-    const signals: Signal[] = [
-      makeSignal('Q1 earnings: gross margin of 30%'),
-      makeSignal('VP Infra launches modernization initiative for legacy systems'),
-    ]
-    const objectives = extractBusinessObjectives(signals)
-    expect(objectives.some(o => o.category === 'financial')).toBe(true)
-    expect(objectives.some(o => o.category === 'operational')).toBe(true)
-  })
-})
-
-// ── buildObjectiveCorrelation ─────────────────────────────────────────────
-
-describe('buildObjectiveCorrelation', () => {
-  it('produces financial correlation for cost-themed campaign', () => {
-    const objectives = [
-      { category: 'financial' as const, objective: '25.5% operating margin', source: 'Q2 earnings' },
-    ]
-    const result = buildObjectiveCorrelation(objectives, 'SaaS Tax Exposure')
-    expect(result).toContain('25.5% operating margin')
-    expect(result).toContain('SaaS Tax Exposure')
-  })
-
-  it('produces security correlation for security-themed campaign', () => {
-    const objectives = [
-      { category: 'financial' as const, objective: '30% margin', source: 'earnings' },
-      { category: 'security' as const, objective: 'zero-trust security initiative', priority: 'HIGH', source: 'Strategic Initiatives' },
-    ]
-    const result = buildObjectiveCorrelation(objectives, 'Vulnerability Remediation Platform')
+  it('returns security sentence about strategic exposure', () => {
+    const profile = makeProfile({ security: [makeEntry('zero-trust security initiative')] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
     expect(result).toContain('zero-trust security initiative')
-    expect(result).toContain('$4.5M')
-    expect(result).toContain('Vulnerability Remediation Platform')
+    expect(result).toContain('strategic exposure')
+    expect(result).toContain('reduces this surface')
   })
 
-  it('produces operational correlation for automation-themed campaign', () => {
-    const objectives = [
-      { category: 'operational' as const, objective: 'automation initiative', source: 'Strategic Initiatives' },
-    ]
-    const result = buildObjectiveCorrelation(objectives, 'Infrastructure Automation Consolidation')
-    expect(result).toContain('automation initiative')
-    expect(result).toContain('consolidates operational overhead')
+  it('returns operational sentence', () => {
+    const profile = makeProfile({ operational: [makeEntry('modernization initiative')] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('modernization initiative')
+    expect(result).toContain('operational overhead')
+    expect(result).toContain('consolidates this')
   })
 
-  it('produces innovation correlation for AI-themed campaign', () => {
-    const objectives = [
-      { category: 'innovation' as const, objective: 'AI strategy initiative', priority: 'HIGH', source: 'Strategic Initiatives' },
-    ]
-    const result = buildObjectiveCorrelation(objectives, 'OpenShift AI Model Serving')
-    expect(result).toContain('AI strategy initiative')
+  it('returns innovation sentence about roadmap', () => {
+    const profile = makeProfile({ innovation: [makeEntry('AI platform strategy')] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('AI platform strategy')
     expect(result).toContain('accelerates this roadmap')
   })
 
-  it('returns empty string when no objectives', () => {
-    expect(buildObjectiveCorrelation([], 'Any Theme')).toBe('')
+  it('returns growth sentence', () => {
+    const profile = makeProfile({ growth: [makeEntry('15% YoY growth', { metric: '15% YoY growth' })] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('15% YoY growth')
+    expect(result).toContain('removes this barrier')
   })
 
-  it('matches theme to correct category when multiple objectives exist', () => {
-    const objectives = [
-      { category: 'financial' as const, objective: '25% margin', source: 'earnings' },
-      { category: 'security' as const, objective: 'compliance program', priority: 'HIGH', source: 'Strategic Initiatives' },
-      { category: 'operational' as const, objective: 'modernization initiative', source: 'Strategic Initiatives' },
-    ]
-    const result = buildObjectiveCorrelation(objectives, 'Security Patch Automation')
+  it('returns empty string for undefined profile', () => {
+    expect(renderObjectiveBlock(undefined, {}, defaultTheme)).toBe('')
+  })
+
+  it('returns empty string for profile with no entries', () => {
+    const profile = makeProfile()
+    expect(renderObjectiveBlock(profile, {}, defaultTheme)).toBe('')
+  })
+
+  it('objectiveIndex selects specific entry', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('EBITDA target', { metric: '25%' })],
+      security: [makeEntry('breach prevention')],
+    })
+    const r0 = renderObjectiveBlock(profile, { objectiveIndex: 0 }, defaultTheme)
+    const r1 = renderObjectiveBlock(profile, { objectiveIndex: 1 }, defaultTheme)
+    expect(r0).toContain('25%')
+    expect(r0).toContain('protects this trajectory')
+    expect(r1).toContain('breach prevention')
+    expect(r1).toContain('strategic exposure')
+  })
+
+  it('objectiveCategory selects from category', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('margin discipline', { metric: '30%' })],
+      security: [makeEntry('compliance program')],
+    })
+    const result = renderObjectiveBlock(profile, { objectiveCategory: 'security' }, defaultTheme)
     expect(result).toContain('compliance program')
-    expect(result).not.toContain('25% margin')
-  })
-})
-
-// ── buildObjectiveContext — financial correlation in email body ─────────────
-
-describe('buildObjectiveContext — financial correlation in email body', () => {
-  it('returns financial context sentence when financial objective exists', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'financial', objective: '12% YoY revenue growth', source: 'Q2 earnings' },
-    ]
-    const result = buildObjectiveContext(objectives, 'SaaS Tax', 0)
-    expect(result).toContain('12% YoY revenue growth')
-    expect(result.length).toBeGreaterThan(20)
+    expect(result).not.toContain('30%')
   })
 
-  it('returns security context for security objective', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'security', objective: 'zero-trust security initiative', source: 'Strategic Initiatives' },
-    ]
-    const result = buildObjectiveContext(objectives, 'platform security', 0)
-    expect(result).toContain('zero-trust')
+  it('Red Hat products never in threat position — threat is always external', () => {
+    const profile = makeProfile({ financial: [makeEntry('cost discipline', { metric: '20%' })] })
+    const theme = { threat: 'rising SaaS costs', solution: 'Red Hat Ansible Automation Platform' }
+    const result = renderObjectiveBlock(profile, {}, theme)
+    expect(result).toContain('rising SaaS costs')
+    expect(result).toContain('Red Hat Ansible Automation Platform')
+    expect(result).not.toMatch(/Red Hat.*creates direct headwind/)
+    expect(result).toMatch(/Red Hat.*protects this trajectory/)
   })
 
-  it('varies objective selection by email index', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'financial', objective: '12% growth', source: 'earnings' },
-      { category: 'operational', objective: 'automation initiative', source: 'strategy' },
-      { category: 'security', objective: 'breach prevention', source: 'initiatives' },
-    ]
-    const r0 = buildObjectiveContext(objectives, 'SaaS Tax', 0)
-    const r1 = buildObjectiveContext(objectives, 'SaaS Tax', 1)
-    const r2 = buildObjectiveContext(objectives, 'SaaS Tax', 2)
-    expect(new Set([r0, r1, r2]).size).toBeGreaterThanOrEqual(2)
+  it('falls back to first entry when objectiveIndex exceeds bounds', () => {
+    const profile = makeProfile({ financial: [makeEntry('only entry', { metric: '10%' })] })
+    const result = renderObjectiveBlock(profile, { objectiveIndex: 99 }, defaultTheme)
+    expect(result).toContain('10%')
   })
 
-  it('returns empty string when no objectives exist', () => {
-    expect(buildObjectiveContext([], 'SaaS Tax', 0)).toBe('')
-  })
-
-  it('handles single objective across all email indices', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'financial', objective: '15% margin', source: 'earnings' },
-    ]
-    expect(buildObjectiveContext(objectives, 'cost reduction', 0)).toContain('15% margin')
-    expect(buildObjectiveContext(objectives, 'cost reduction', 5)).toContain('15% margin')
+  it('uses objective text as metric fallback when metric is null', () => {
+    const profile = makeProfile({ operational: [makeEntry('modernize legacy stack')] })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('modernize legacy stack')
   })
 })

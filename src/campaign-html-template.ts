@@ -761,194 +761,49 @@ export function sanitizeCreepyLines(text: string): string {
   return result
 }
 
-// ── Business Objective Correlation ─────────────────────────────────────────
+// ── Objective Block Rendering (ADR-044) ───────────────────────────────────
 
-export interface FinancialTarget {
-  type: 'margin' | 'cost-reduction' | 'growth' | 'discipline'
-  metric: string
-  source: string
-  raw: string
-}
-
-export interface BusinessObjective {
-  category: 'financial' | 'security' | 'operational' | 'innovation' | 'growth'
-  objective: string
-  priority?: string
-  source: string
-}
-
-const FINANCIAL_PATTERNS: Array<{ type: FinancialTarget['type']; pattern: RegExp }> = [
-  { type: 'margin', pattern: /(?:operating margin of |gross margin of |EBITDA margin of |(\d+(?:\.\d+)?%)\s+(?:operating |gross |EBITDA )?margin)/i },
-  { type: 'cost-reduction', pattern: /(?:cost reduction|reduce costs by \d+(?:\.\d+)?%|efficiency target|TCO reduction)/i },
-  { type: 'growth', pattern: /(?:raised.*?guidance to \d+(?:\.\d+)?%|revenue growth of \d+(?:\.\d+)?%|\d+(?:\.\d+)?%\s+YoY (?:revenue )?growth)/i },
-  { type: 'discipline', pattern: /(?:operational discipline|EBITDA target|profitability target)/i },
-]
-
-const INITIATIVE_PATTERNS: Array<{ category: BusinessObjective['category']; pattern: RegExp }> = [
-  { category: 'security', pattern: /\b(?:security\s+(?:initiative|strategy|priority|program)|zero[- ]trust\s+security\s+initiative|breach\s+prevention|vulnerability\s+remediation|compliance\s+(?:initiative|program))\b/i },
-  { category: 'operational', pattern: /\b(?:(?:automation|modernization|consolidation|migration|efficiency)\s+(?:initiative|strategy|priority|program)|operational\s+(?:excellence|transformation))\b/i },
-  { category: 'innovation', pattern: /\b(?:(?:AI|ML|artificial intelligence|machine learning|platform)\s+(?:initiative|strategy|priority|program|innovation)|digital\s+transformation)\b/i },
-  { category: 'growth', pattern: /\b(?:(?:expansion|scale|growth|market)\s+(?:initiative|strategy|priority|program)|revenue\s+acceleration)\b/i },
-]
-
-const PRIORITY_PATTERN = /\b(HIGH|MED|MEDIUM|LOW|CRITICAL)\b/i
-
-export function extractFinancialTargets(signals: Signal[]): FinancialTarget[] {
-  const targets: FinancialTarget[] = []
-
-  for (const signal of signals) {
-    const textsToScan = [signal.headline]
-    if (signal.metadata?.company && typeof signal.metadata.company === 'string') {
-      textsToScan.push(signal.metadata.company)
-    }
-
-    for (const text of textsToScan) {
-      for (const { type, pattern } of FINANCIAL_PATTERNS) {
-        const match = pattern.exec(text)
-        if (!match) continue
-
-        const raw = match[0]
-        const pctMatch = text.match(/(\d+(?:\.\d+)?%)/)
-        const metricFragment = pctMatch ? pctMatch[1] : raw
-
-        let metric: string
-        switch (type) {
-          case 'margin': {
-            const kindMatch = raw.match(/(operating|gross|EBITDA)\s+margin/i)
-            metric = `${metricFragment} ${kindMatch ? kindMatch[1].toLowerCase() : ''} margin`.replace(/\s+/g, ' ').trim()
-            break
-          }
-          case 'cost-reduction':
-            metric = pctMatch ? `reduce costs by ${metricFragment}` : raw
-            break
-          case 'growth':
-            metric = pctMatch ? `${metricFragment} YoY revenue growth` : raw
-            break
-          case 'discipline':
-            metric = raw
-            break
-        }
-
-        const sourceMatch = text.match(/(Q[1-4]\s+\d{4}\s+earnings|FY\d{4}|latest quarter|earnings call)/i)
-        const source = sourceMatch ? sourceMatch[1] : signal.headline.slice(0, 60)
-
-        targets.push({ type, metric, source, raw })
-      }
-    }
-  }
-
-  return targets
-}
-
-export function extractBusinessObjectives(signals: Signal[]): BusinessObjective[] {
-  const objectives: BusinessObjective[] = []
-
-  const financialTargets = extractFinancialTargets(signals)
-  for (const ft of financialTargets) {
-    objectives.push({ category: 'financial', objective: ft.metric, source: ft.source })
-  }
-
-  for (const signal of signals) {
-    const textsToScan = [signal.headline]
-    if (signal.metadata?.company && typeof signal.metadata.company === 'string') {
-      textsToScan.push(signal.metadata.company)
-    }
-
-    for (const text of textsToScan) {
-      for (const { category, pattern } of INITIATIVE_PATTERNS) {
-        const match = pattern.exec(text)
-        if (!match) continue
-
-        const priorityMatch = text.match(PRIORITY_PATTERN)
-        const priority = priorityMatch ? priorityMatch[1].toUpperCase() : undefined
-
-        const objective = match[0].trim()
-        const source = signal.source === 'intelligence' ? 'Strategic Initiatives' : signal.headline.slice(0, 60)
-
-        if (!objectives.some(o => o.category === category && o.objective === objective)) {
-          objectives.push({ category, objective, priority, source })
-        }
-      }
-    }
-  }
-
-  return objectives
-}
-
-const THEME_CATEGORIES: Record<BusinessObjective['category'], string[]> = {
-  'financial': ['tax', 'cost', 'budget', 'saas tax', 'tco', 'savings'],
-  'security': ['security', 'breach', 'patch', 'vulnerability', 'compliance', 'remediation'],
-  'operational': ['automation', 'efficiency', 'consolidation', 'migration', 'modernization'],
-  'innovation': ['ai', 'ml', 'platform', 'lightspeed', 'openshift ai', 'rhel ai'],
-  'growth': ['expand', 'scale', 'growth', 'revenue', 'market'],
-}
-
-const CORRELATION_TEMPLATES: Record<BusinessObjective['category'], string> = {
-  'financial': '{objective} — {theme} directly conflicts with this discipline.',
-  'security': '{objective}{priorityTag} — average enterprise breach costs $4.5M (IBM 2024). {theme} reduces this exposure.',
-  'operational': '{objective} — {theme} consolidates operational overhead, supporting this initiative.',
-  'innovation': '{objective}{priorityTag} — {theme} accelerates this roadmap.',
-  'growth': '{objective} — {theme} removes friction from this growth trajectory.',
-}
-
-function matchThemeCategory(campaignTheme: string): BusinessObjective['category'] | null {
-  const lower = campaignTheme.toLowerCase()
-  for (const [category, keywords] of Object.entries(THEME_CATEGORIES) as [BusinessObjective['category'], string[]][]) {
-    if (keywords.some(kw => lower.includes(kw))) return category
-  }
-  return null
-}
-
-export function buildObjectiveCorrelation(objectives: BusinessObjective[], campaignTheme: string): string {
-  if (objectives.length === 0) return ''
-
-  const themeCategory = matchThemeCategory(campaignTheme)
-
-  let best: BusinessObjective | undefined
-  if (themeCategory) {
-    best = objectives.find(o => o.category === themeCategory)
-  }
-  if (!best) best = objectives[0]
-
-  const priorityTag = best.priority ? ` (priority: ${best.priority})` : ''
-  return CORRELATION_TEMPLATES[best.category]
-    .replace('{objective}', best.objective)
-    .replace('{priorityTag}', priorityTag)
-    .replace('{theme}', campaignTheme)
-}
-
-const EMAIL_OBJECTIVE_TEMPLATES: Record<BusinessObjective['category'], string> = {
-  'financial': 'With {objective}, {theme} creates a direct headwind against this trajectory.',
-  'security': '{objective} makes {theme} a strategic priority, not just a cost decision.',
-  'operational': 'Given {objective}, {theme} directly supports this operational initiative.',
-  'innovation': '{objective} depends on infrastructure that {theme} could impact.',
-  'growth': 'With {objective}, {theme} introduces friction against this growth trajectory.',
-}
-
-export function buildObjectiveContext(
-  objectives: BusinessObjective[],
-  campaignTheme: string,
-  emailIndex: number,
+export function renderObjectiveBlock(
+  profile: CustomerObjectiveProfile | undefined,
+  selection: { objectiveIndex?: number | null; objectiveCategory?: string | null },
+  campaignTheme: { threat: string; solution: string },
 ): string {
-  if (objectives.length === 0) return ''
-  const selected = objectives[emailIndex % objectives.length]
-  return EMAIL_OBJECTIVE_TEMPLATES[selected.category]
-    .replace('{objective}', selected.objective)
-    .replace('{theme}', campaignTheme)
-}
+  if (!profile) return ''
 
-const FINANCIAL_TYPE_PRIORITY: FinancialTarget['type'][] = ['margin', 'discipline', 'cost-reduction', 'growth']
+  const allEntries = [
+    ...profile.financial.map(e => ({ ...e, category: 'financial' as const })),
+    ...profile.security.map(e => ({ ...e, category: 'security' as const })),
+    ...profile.operational.map(e => ({ ...e, category: 'operational' as const })),
+    ...profile.innovation.map(e => ({ ...e, category: 'innovation' as const })),
+    ...profile.growth.map(e => ({ ...e, category: 'growth' as const })),
+  ]
 
-export function buildFinancialConflict(targets: FinancialTarget[], campaignTheme: string): string {
-  if (targets.length === 0) return ''
+  if (allEntries.length === 0) return ''
 
-  const best = FINANCIAL_TYPE_PRIORITY.reduce<FinancialTarget | null>((winner, type) => {
-    if (winner) return winner
-    return targets.find(t => t.type === type) ?? null
-  }, null) ?? targets[0]
+  let selected: typeof allEntries[0]
+  if (selection.objectiveIndex != null && selection.objectiveIndex < allEntries.length) {
+    selected = allEntries[selection.objectiveIndex]
+  } else if (selection.objectiveCategory) {
+    const catEntries = profile[selection.objectiveCategory as keyof CustomerObjectiveProfile]
+    selected = catEntries.length > 0
+      ? { ...catEntries[0], category: selection.objectiveCategory as any }
+      : allEntries[0]
+  } else {
+    selected = allEntries[0]
+  }
 
-  const objectives: BusinessObjective[] = [{ category: 'financial', objective: best.metric, source: best.source }]
-  return buildObjectiveCorrelation(objectives, campaignTheme)
+  const metric = selected.metric || selected.objective
+  const { threat, solution } = campaignTheme
+
+  const templates: Record<string, string> = {
+    financial: `${metric} discipline means ${threat} creates direct headwind — ${solution} protects this trajectory.`,
+    security: `${selected.objective} makes ${threat} a strategic exposure — ${solution} reduces this surface.`,
+    operational: `Given ${selected.objective}, ${threat} adds operational overhead — ${solution} consolidates this.`,
+    innovation: `${selected.objective} depends on infrastructure that ${threat} could constrain — ${solution} accelerates this roadmap.`,
+    growth: `With ${metric}, ${threat} introduces friction — ${solution} removes this barrier.`,
+  }
+
+  return templates[selected.category] || ''
 }
 
 // ── Two-Pass Template Engine (ADR-043) ──────────────────────────────────────
@@ -1566,9 +1421,12 @@ export function generateCampaignFromStructured(
     if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
   }
 
-  // Extract business objective correlation — use cleaned title for theme matching
-  const businessObjectives = extractBusinessObjectives(data.signals)
-  const objectiveCorrelation = buildObjectiveCorrelation(businessObjectives, cleanCampaignTitle(data.materialTitle) || 'this campaign theme')
+  // Use objective profile from intelligence cache (ADR-044) instead of regex extraction
+  const campaignTheme = {
+    threat: data.campaignThreat || 'rising infrastructure costs',
+    solution: data.campaignSolution || 'consolidated infrastructure',
+  }
+  const objectiveCorrelation = renderObjectiveBlock(data.objectiveProfile, { objectiveIndex: 0, objectiveCategory: null }, campaignTheme)
 
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
@@ -1599,7 +1457,11 @@ export function generateCampaignFromStructured(
     // Build all 8 blocks
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
-    const objectiveContext = sanitizeCreepyLines(buildObjectiveContext(businessObjectives, cleanCampaignTitle(data.materialTitle) || 'this campaign theme', i))
+    const objectiveContext = sanitizeCreepyLines(renderObjectiveBlock(
+      data.objectiveProfile,
+      { objectiveIndex: email.objectiveIndex, objectiveCategory: email.objectiveCategory },
+      campaignTheme,
+    ))
     const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)

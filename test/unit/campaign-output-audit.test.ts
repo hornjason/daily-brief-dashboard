@@ -5,15 +5,15 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import type { BusinessObjective } from '../../src/campaign-html-template.ts'
 import {
   cleanCampaignTitle,
   isRealPersonName,
   sanitizeFootprint,
   buildChallengerFrame,
   sanitizeCreepyLines,
-  buildObjectiveContext,
+  renderObjectiveBlock,
 } from '../../src/campaign-html-template.ts'
+import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
 // ── 1. Title cleaning ─────────────────────────────────────────────────────
 
@@ -213,27 +213,42 @@ describe('sanitizeCreepyLines — footprint-specific patterns', () => {
   })
 })
 
-// ── Financial correlation in email body — not just dashboard ──────────────
+// ── renderObjectiveBlock in email body — ADR-044 ─────────────────────────
 
-describe('financial correlation in email body — not just dashboard', () => {
-  it('buildObjectiveContext produces sentence for financial data', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'financial', objective: '12% YoY revenue growth', source: 'Q2 2026 earnings' },
-    ]
-    const result = buildObjectiveContext(objectives, 'Ansible Prospecting and the Upcoming Saas Tax', 0)
-    expect(result).toContain('12% YoY revenue growth')
+describe('renderObjectiveBlock in email body — ADR-044', () => {
+  const emptyProfile: CustomerObjectiveProfile = { financial: [], security: [], operational: [], innovation: [], growth: [] }
+
+  it('renderObjectiveBlock produces sentence for financial profile', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [{ objective: '12% YoY revenue growth', metric: '12%', priority: null, source: 'Q2 2026 earnings', confidence: 'HIGH' }],
+    }
+    const result = renderObjectiveBlock(profile, {}, { threat: 'SaaS tax', solution: 'self-managed automation' })
+    expect(result).toContain('12%')
     expect(result).not.toBe('')
   })
 
-  it('sanitizeCreepyLines strips pipeline data when objective context is combined with other text', () => {
-    const objectives: BusinessObjective[] = [
-      { category: 'financial', objective: '$514K pipeline opportunity', source: 'internal' },
-    ]
-    const objCtx = buildObjectiveContext(objectives, 'SaaS Tax', 0)
+  it('sanitizeCreepyLines still strips pipeline data from rendered block', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [{ objective: '$514K pipeline opportunity', metric: '$514K pipeline opportunity', priority: null, source: 'internal', confidence: 'HIGH' }],
+    }
+    const objCtx = renderObjectiveBlock(profile, {}, { threat: 'SaaS tax', solution: 'automation' })
     const combined = `Your IaC modernization signal caught our attention. ${objCtx}`
     const sanitized = sanitizeCreepyLines(combined)
     expect(sanitized).not.toContain('pipeline')
     expect(sanitized).not.toContain('$514K')
     expect(sanitized).toContain('IaC modernization')
+  })
+
+  it('renderObjectiveBlock with threat/solution produces correct framing', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      security: [{ objective: 'zero-trust initiative', metric: null, priority: 'HIGH', source: 'strategy', confidence: 'HIGH' }],
+    }
+    const result = renderObjectiveBlock(profile, {}, { threat: 'rising breach costs', solution: 'Red Hat security platform' })
+    expect(result).toContain('rising breach costs')
+    expect(result).toContain('Red Hat security platform')
+    expect(result).toContain('strategic exposure')
   })
 })
