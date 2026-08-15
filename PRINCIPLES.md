@@ -375,6 +375,7 @@ Consumers select which section groups they need via options. They MUST NOT:
 - ❌ Extracting SalesHub documents into type-specific schemas without content classification (ADR-041) — type-specific extraction (content kit vs battlecard) tells the system WHAT the document IS but not what it is ABOUT. Every extraction must include structured classification fields (`integrationsReferenced`, `competitorsReferenced`, `partnerSolutions`, `useCases`) so the signal pipeline can match documents to customers by technology overlap.
 - ❌ Caching empty extraction results as "fresh" (ADR-037) — when Gemini extraction returns 0 items (timeout, API error, org policy block), do NOT write `technologies: []` or `clouds: []` to cache with a valid `cachedAt` timestamp. Empty results with valid timestamps look "fresh" to `ensureFresh()`, preventing re-extraction indefinitely. Either skip the write entirely, or mark the cache as `status: 'error'` so the next ensureFresh retries.
 - ❌ Registering a module without `cacheTtlMs` (ADR-037) — invisible to heartbeat staleness monitoring. Data can go stale for weeks without any admin panel indicator. Every cached module MUST declare its TTL.
+- ❌ Hardcoded financial/initiative pattern regexes for objective extraction (ADR-044) — use `CustomerObjectiveProfile` from intelligence cache. Hardcoded patterns miss format variations, require code changes for new patterns, and can't differentiate objectives by persona category.
 
 ## ADR → PRINCIPLES.md Enforcement (MANDATORY)
 
