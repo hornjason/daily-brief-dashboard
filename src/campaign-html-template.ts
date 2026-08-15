@@ -908,11 +908,9 @@ export function buildFeatureBullets(
 
   if (bullets.length === 0) return ''
 
-  return bullets.map(b => {
-    const alreadyMentioned = priorText && priorText.includes(b.featureName)
-    if (alreadyMentioned) return `• ${b.applicationSentence}`
-    return `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
-  }).join('\n')
+  return bullets.map(b =>
+    `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
+  ).join('\n')
 }
 
 /**
@@ -1157,15 +1155,17 @@ function renderStructuredEmailBox(
   aeEmail?: string,
   aePhone?: string,
   recipientEmail?: string,
+  recipientTitle?: string,
 ): string {
   const tierLabel = tier === 'executive' ? 'Executive' : 'Manager'
+  const headerTitle = recipientTitle || tierLabel
   const bodyHtml = convertMarkdownBullets(body)
 
   const contactLine = [aeEmail, aePhone ? `M: ${aePhone}` : ''].filter(Boolean).join(' | ')
 
   return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
   <div style="background: ${BRAND_RED}; padding: 12px 20px;">
-    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(recipientName)} — ${tierLabel}</span>
+    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(recipientName)} — ${headerTitle}</span>
   </div>
   <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
     <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(subject)}</strong></p>
@@ -1318,6 +1318,7 @@ export function generateCampaignFromStructured(
       data.aeEmail,
       data.aePhone,
       contact?.email,
+      contact?.title,
     )
 
     if (email.tier === 'executive') {

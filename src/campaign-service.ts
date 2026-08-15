@@ -1144,6 +1144,20 @@ export async function generateCampaign(
     console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
   }
 
+  // Backfill inferred emails for any contacts missing them
+  if (customer.domain) {
+    let backfilled = 0
+    for (const exec of resolvedExecs) {
+      if (exec.email) continue
+      const nameParts = exec.name.replace(/ at .+$/, '').trim().split(/\s+/)
+      if (nameParts.length >= 2 && !nameParts[0].includes('Director') && !nameParts[0].includes('VP') && !nameParts[0].includes('Head') && !nameParts[0].includes('Sr.')) {
+        exec.email = `${nameParts[0][0].toLowerCase()}${nameParts[nameParts.length - 1].toLowerCase()}@${customer.domain}`
+        backfilled++
+      }
+    }
+    if (backfilled > 0) console.log(`[campaigns] Backfilled ${backfilled} inferred emails for ${customer.name}`)
+  }
+
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
   // Uses solution-intelligence signals from loadCustomerSignals() instead of
   // direct module import (PRINCIPLES.md Layer 3 compliance).

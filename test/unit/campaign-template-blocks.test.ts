@@ -286,21 +286,19 @@ describe('custom content passthrough', () => {
 
 // ── Product name dedup ─────────────────────────────────────────────────────
 
-describe('buildFeatureBullets — dedup against prior text', () => {
+describe('buildFeatureBullets — every bullet always linked', () => {
   const featureKeys = ['ansible-automation-platform', 'event-driven-ansible', 'openshift-ai']
 
-  it('omits linked product name when already mentioned in opener/bridge', () => {
+  it('links all products even when mentioned in prior text', () => {
     const priorText = 'switching to Red Hat Ansible Automation Platform avoids the SaaS tax'
     const result = buildFeatureBullets(featureKeys, 'manager', undefined, priorText)
     const lines = result.split('\n')
-    // First bullet (AAP) should NOT have the linked name since it's in priorText
-    expect(lines[0]).not.toContain('[Ansible Automation Platform]')
-    // But second and third bullets should still have linked names
+    expect(lines[0]).toContain('[Ansible Automation Platform]')
     expect(lines[1]).toContain('[Event-Driven Ansible]')
     expect(lines[2]).toContain('[OpenShift AI]')
   })
 
-  it('keeps all linked names when none appear in prior text', () => {
+  it('links all products when none appear in prior text', () => {
     const priorText = 'Your teams are evaluating cloud infrastructure options'
     const result = buildFeatureBullets(featureKeys, 'manager', undefined, priorText)
     expect(result).toContain('[Ansible Automation Platform]')
