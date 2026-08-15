@@ -17,6 +17,7 @@ import {
   buildCTA,
   buildSignOff,
   assembleEmail,
+  sanitizeCreepyLines,
 } from '../../src/campaign-html-template.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
@@ -320,5 +321,117 @@ describe('cross-email quality properties', () => {
     const rhTerms = ['Red Hat', 'Ansible', 'OpenShift', 'RHEL', 'automation platform']
     const hasRhTerm = rhTerms.some(term => combined.includes(term))
     expect(hasRhTerm).toBe(true)
+  })
+})
+
+// ── sanitizeCreepyLines ────────────────────────────────────────────────────
+
+describe('sanitizeCreepyLines — creepy line sanitizer', () => {
+  it('strips sentences with pipeline opportunity data', () => {
+    const input = 'Acme is modernizing their infrastructure. They have a $139k VMware replacement pipeline opportunity. This creates alignment with automation.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('$139k')
+    expect(result).not.toContain('pipeline opportunity')
+    expect(result).toContain('Acme is modernizing')
+    expect(result).toContain('This creates alignment')
+  })
+
+  it('strips sentences with support case references', () => {
+    const input = 'Their platform team is expanding. There is an open support case #12345 about RHEL upgrades. The CTO wants to consolidate tooling.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('support case')
+    expect(result).not.toContain('#12345')
+    expect(result).toContain('platform team')
+    expect(result).toContain('CTO wants')
+  })
+
+  it('strips sentences with subscription/node counts', () => {
+    const input = 'They run OpenShift in production. They have 57 RHEL subscriptions across three data centers. Cloud migration is a priority.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('57 RHEL subscriptions')
+    expect(result).toContain('OpenShift in production')
+    expect(result).toContain('Cloud migration')
+  })
+
+  it('strips SKU codes but preserves surrounding text', () => {
+    const input = 'Their deployment includes MCT3691 and standard enterprise components.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('MCT3691')
+  })
+
+  it('strips sentences with layoff/headcount reduction data', () => {
+    const input = 'The company is restructuring. They laid off 200 employees last quarter. New leadership is focused on automation.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('laid off')
+    expect(result).not.toContain('200 employees')
+    expect(result).toContain('restructuring')
+    expect(result).toContain('New leadership')
+  })
+
+  it('strips sentences with renewal amounts', () => {
+    const input = 'They are a long-standing customer. Their $450k renewal is coming up in Q4. This is an expansion opportunity.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('$450k renewal')
+    expect(result).toContain('long-standing customer')
+    expect(result).toContain('expansion opportunity')
+  })
+
+  it('preserves normal business text unchanged', () => {
+    const input = 'Acme is investing in cloud-native infrastructure. Their CTO recently spoke about AI-first strategy at KubeCon. Red Hat OpenShift aligns with their containerization goals.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).toBe(input)
+  })
+
+  it('preserves peer proof dollar amounts (not internal data)', () => {
+    const input = 'Amadeus replaced Chef SaaS with AAP — $5.62M in benefits, 257.9% ROI.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).toContain('$5.62M in benefits')
+    expect(result).toContain('Amadeus')
+  })
+
+  it('handles newline-separated sentences', () => {
+    const input = 'Strong cloud-native adoption\nThey have a $200k pipeline opportunity with VMware\nLeadership is aligned on modernization'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('pipeline opportunity')
+    expect(result).toContain('cloud-native adoption')
+    expect(result).toContain('Leadership is aligned')
+  })
+
+  it('returns empty string for empty input', () => {
+    expect(sanitizeCreepyLines('')).toBe('')
+  })
+
+  it('strips $NNM deal pattern', () => {
+    const input = 'We see strong momentum. This is a $2M deal in the pipeline. Their team is growing.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('$2M deal')
+  })
+
+  it('strips pending dollar amounts', () => {
+    const input = 'Good engagement so far. Pending $500k from the automation expansion. Next step is a technical review.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('pending $')
+    expect(result).not.toContain('$500k')
+  })
+
+  it('strips support ticket references', () => {
+    const input = 'They had a support ticket about kernel upgrades. Their team prefers RHEL for stability.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('support ticket')
+    expect(result).toContain('RHEL for stability')
+  })
+
+  it('strips instance count references', () => {
+    const input = 'Running 150 instances in production. They need better observability.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('150 instances')
+    expect(result).toContain('better observability')
+  })
+
+  it('strips workforce reduction references', () => {
+    const input = 'After the workforce reduction, they are doing more with less. Automation is critical.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('workforce reduction')
+    expect(result).toContain('Automation is critical')
   })
 })

@@ -673,6 +673,51 @@ ${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkin
   return html
 }
 
+// ── Creepy-Line Sanitizer ──────────────────────────────────────────────────
+// Strips NEVER-category internal data from customer-facing text.
+// Operates at sentence level: if a sentence matches, the whole sentence is removed.
+
+const CREEPY_SENTENCE_PATTERNS = [
+  /pipeline\s+opportunit/i,
+  /pipeline\s+value/i,
+  /\$\d[\d,.]*[kKmMbB]?\s+pipeline/i,
+  /\$\d[\d,.]*[kKmMbB]?\s+deal/i,
+  /pending\s+\$/i,
+  /support\s+case/i,
+  /support\s+ticket/i,
+  /case\s+#\d/i,
+  /ticket\s+#\d/i,
+  /\d+\s+(?:RHEL\s+)?subscriptions?\b/i,
+  /\d+\s+nodes?\b/i,
+  /\d+\s+instances?\b/i,
+  /subscription\s+count/i,
+  /laid\s+off\s+\d/i,
+  /headcount\s+reduction/i,
+  /workforce\s+reduction/i,
+  /\$\d[\d,.]*[kKmMbB]?\s+renewal/i,
+  /renewal\s+of\s+\$/i,
+]
+
+const SKU_PATTERN = /\b[A-Z]{2,4}\d{4,6}\b/g
+
+export function sanitizeCreepyLines(text: string): string {
+  if (!text) return ''
+
+  const sentences = text.split(/(?<=\.)\s+|\n/)
+  const cleaned = sentences
+    .filter(sentence => !CREEPY_SENTENCE_PATTERNS.some(p => p.test(sentence)))
+    .map(sentence => sentence.replace(SKU_PATTERN, '').replace(/\s{2,}/g, ' ').trim())
+    .filter(s => s.length > 0)
+
+  if (cleaned.length === 0) return text.replace(SKU_PATTERN, '').trim()
+
+  let result = cleaned.join(' ')
+  result = result.replace(/\.\s*\./g, '.')
+  // Preserve trailing period if original had one
+  if (text.trimEnd().endsWith('.') && !result.trimEnd().endsWith('.')) result += '.'
+  return result
+}
+
 // ── Two-Pass Template Engine (ADR-043) ──────────────────────────────────────
 // Pass 2: Deterministic email assembly from Gemini's data selections.
 // No LLM involved — pure functions compose 8 blocks into emails.
@@ -1263,6 +1308,17 @@ export function generateCampaignFromStructured(
   data: StructuredCampaignData,
 ): string {
   const voiceTokens = getVoiceTokens(data.voiceProfile)
+
+  // Sanitize customer-facing fields from Gemini selection output
+  selection.customerContext = sanitizeCreepyLines(selection.customerContext)
+  selection.positioning = sanitizeCreepyLines(selection.positioning)
+  for (const email of selection.emails) {
+    email.customOpener = sanitizeCreepyLines(email.customOpener)
+    email.signalBridge = sanitizeCreepyLines(email.signalBridge)
+    email.challengerDataPoint = sanitizeCreepyLines(email.challengerDataPoint)
+    email.featureApplications = email.featureApplications.map(fa => sanitizeCreepyLines(fa))
+    if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
+  }
 
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
