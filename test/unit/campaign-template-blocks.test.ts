@@ -18,6 +18,8 @@ import {
   buildSignOff,
   assembleEmail,
   sanitizeCreepyLines,
+  extractFinancialTargets,
+  buildFinancialConflict,
 } from '../../src/campaign-html-template.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
@@ -433,5 +435,84 @@ describe('sanitizeCreepyLines — creepy line sanitizer', () => {
     const result = sanitizeCreepyLines(input)
     expect(result).not.toContain('workforce reduction')
     expect(result).toContain('Automation is critical')
+  })
+})
+
+// ── extractFinancialTargets ───────────────────────────────────────────────
+
+describe('extractFinancialTargets', () => {
+  it('finds margin target from signal with "operating margin of 25.5%"', () => {
+    const signals: Signal[] = [
+      makeSignal('Q2 2026 earnings: operating margin of 25.5% reported'),
+    ]
+    const targets = extractFinancialTargets(signals)
+    expect(targets.length).toBeGreaterThanOrEqual(1)
+    expect(targets[0].type).toBe('margin')
+    expect(targets[0].metric).toContain('25.5%')
+    expect(targets[0].source).toContain('Q2 2026 earnings')
+  })
+
+  it('finds growth target from "15.5% YoY revenue growth"', () => {
+    const signals: Signal[] = [
+      makeSignal('Company posts 15.5% YoY revenue growth in latest quarter'),
+    ]
+    const targets = extractFinancialTargets(signals)
+    expect(targets.length).toBeGreaterThanOrEqual(1)
+    const growth = targets.find(t => t.type === 'growth')
+    expect(growth).toBeDefined()
+    expect(growth!.metric).toContain('15.5%')
+  })
+
+  it('returns empty array for signals with no financial data', () => {
+    const signals: Signal[] = [
+      makeSignal('New CTO appointed at Acme Corp'),
+      makeSignal('Cloud migration initiative announced'),
+    ]
+    const targets = extractFinancialTargets(signals)
+    expect(targets).toEqual([])
+  })
+
+  it('finds cost-reduction target', () => {
+    const signals: Signal[] = [
+      makeSignal('CFO announces cost reduction initiative: reduce costs by 15%'),
+    ]
+    const targets = extractFinancialTargets(signals)
+    expect(targets.length).toBeGreaterThanOrEqual(1)
+    expect(targets.some(t => t.type === 'cost-reduction')).toBe(true)
+  })
+
+  it('finds discipline target from EBITDA mention', () => {
+    const signals: Signal[] = [
+      makeSignal('Board sets EBITDA target of $500M for FY2027'),
+    ]
+    const targets = extractFinancialTargets(signals)
+    expect(targets.length).toBeGreaterThanOrEqual(1)
+    expect(targets.some(t => t.type === 'discipline')).toBe(true)
+  })
+})
+
+// ── buildFinancialConflict ────────────────────────────────────────────────
+
+describe('buildFinancialConflict', () => {
+  it('produces conflict sentence for margin target', () => {
+    const targets = [{ type: 'margin' as const, metric: '25.5% operating margin', source: 'Q2 2026 earnings', raw: 'operating margin of 25.5%' }]
+    const result = buildFinancialConflict(targets, 'SaaS Tax Exposure')
+    expect(result).toContain('25.5% operating margin')
+    expect(result).toContain('SaaS Tax Exposure')
+    expect(result).toContain('discipline')
+  })
+
+  it('returns empty string when no targets', () => {
+    const result = buildFinancialConflict([], 'SaaS Tax Exposure')
+    expect(result).toBe('')
+  })
+
+  it('selects most specific target: margin over discipline', () => {
+    const targets = [
+      { type: 'discipline' as const, metric: 'operational discipline', source: 'earnings call', raw: 'operational discipline' },
+      { type: 'margin' as const, metric: '30% gross margin', source: 'Q3 report', raw: 'gross margin of 30%' },
+    ]
+    const result = buildFinancialConflict(targets, 'VMware migration')
+    expect(result).toContain('30% gross margin')
   })
 })

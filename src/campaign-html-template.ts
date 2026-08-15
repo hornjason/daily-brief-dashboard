@@ -718,6 +718,91 @@ export function sanitizeCreepyLines(text: string): string {
   return result
 }
 
+// ── Financial Conflict Correlation ─────────────────────────────────────────
+
+export interface FinancialTarget {
+  type: 'margin' | 'cost-reduction' | 'growth' | 'discipline'
+  metric: string
+  source: string
+  raw: string
+}
+
+const FINANCIAL_PATTERNS: Array<{ type: FinancialTarget['type']; pattern: RegExp }> = [
+  { type: 'margin', pattern: /(?:operating margin of |gross margin of |EBITDA margin of |(\d+(?:\.\d+)?%)\s+(?:operating |gross |EBITDA )?margin)/i },
+  { type: 'cost-reduction', pattern: /(?:cost reduction|reduce costs by \d+(?:\.\d+)?%|efficiency target|TCO reduction)/i },
+  { type: 'growth', pattern: /(?:raised.*?guidance to \d+(?:\.\d+)?%|revenue growth of \d+(?:\.\d+)?%|\d+(?:\.\d+)?%\s+YoY (?:revenue )?growth)/i },
+  { type: 'discipline', pattern: /(?:operational discipline|EBITDA target|profitability target)/i },
+]
+
+export function extractFinancialTargets(signals: Signal[]): FinancialTarget[] {
+  const targets: FinancialTarget[] = []
+
+  for (const signal of signals) {
+    const textsToScan = [signal.headline]
+    if (signal.metadata?.company && typeof signal.metadata.company === 'string') {
+      textsToScan.push(signal.metadata.company)
+    }
+
+    for (const text of textsToScan) {
+      for (const { type, pattern } of FINANCIAL_PATTERNS) {
+        const match = pattern.exec(text)
+        if (!match) continue
+
+        const raw = match[0]
+        const pctMatch = text.match(/(\d+(?:\.\d+)?%)/)
+        const metricFragment = pctMatch ? pctMatch[1] : raw
+
+        let metric: string
+        switch (type) {
+          case 'margin': {
+            const kindMatch = raw.match(/(operating|gross|EBITDA)\s+margin/i)
+            metric = `${metricFragment} ${kindMatch ? kindMatch[1].toLowerCase() : ''} margin`.replace(/\s+/g, ' ').trim()
+            break
+          }
+          case 'cost-reduction':
+            metric = pctMatch ? `reduce costs by ${metricFragment}` : raw
+            break
+          case 'growth':
+            metric = pctMatch ? `${metricFragment} YoY revenue growth` : raw
+            break
+          case 'discipline':
+            metric = raw
+            break
+        }
+
+        const sourceMatch = text.match(/(Q[1-4]\s+\d{4}\s+earnings|FY\d{4}|latest quarter|earnings call)/i)
+        const source = sourceMatch ? sourceMatch[1] : signal.headline.slice(0, 60)
+
+        targets.push({ type, metric, source, raw })
+      }
+    }
+  }
+
+  return targets
+}
+
+const FINANCIAL_CONFLICT_TEMPLATES: Record<FinancialTarget['type'], string> = {
+  'margin': '{metric} — {theme} directly conflicts with maintaining this discipline.',
+  'cost-reduction': 'Active cost reduction initiative ({metric}) — {theme} adds unplanned overhead that works against this goal.',
+  'growth': '{metric} — {theme} creates headwind against this trajectory unless addressed.',
+  'discipline': '{metric} — {theme} introduces unbudgeted overhead that undermines this mandate.',
+}
+
+const TYPE_PRIORITY: FinancialTarget['type'][] = ['margin', 'discipline', 'cost-reduction', 'growth']
+
+export function buildFinancialConflict(targets: FinancialTarget[], campaignTheme: string): string {
+  if (targets.length === 0) return ''
+
+  const best = TYPE_PRIORITY.reduce<FinancialTarget | null>((winner, type) => {
+    if (winner) return winner
+    return targets.find(t => t.type === type) ?? null
+  }, null) ?? targets[0]
+
+  return FINANCIAL_CONFLICT_TEMPLATES[best.type]
+    .replace('{metric}', best.metric)
+    .replace('{theme}', campaignTheme)
+}
+
 // ── Two-Pass Template Engine (ADR-043) ──────────────────────────────────────
 // Pass 2: Deterministic email assembly from Gemini's data selections.
 // No LLM involved — pure functions compose 8 blocks into emails.
@@ -1320,6 +1405,10 @@ export function generateCampaignFromStructured(
     if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
   }
 
+  // Extract financial conflict correlation
+  const financialTargets = extractFinancialTargets(data.signals)
+  const financialConflict = buildFinancialConflict(financialTargets, data.materialTitle || 'this campaign theme')
+
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
   const aeName = aeTeamMember?.name ?? 'Account Executive'
@@ -1449,7 +1538,7 @@ ${renderContactsSection(contacts)}
 
 ${renderDashboardMetrics(data.rawSignals)}
 
-${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, data.fitRationale || selection.customerContext) : ''}
+${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (financialConflict ? '\n' + financialConflict : '')) : ''}
 
 ${renderStructuredIntelSections(data.rawSignals)}
 
