@@ -81,9 +81,8 @@ function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
   const seen = new Set<string>()
 
   function add(objective: string, metric: string) {
-    const key = `${metric}|${objective.slice(0, 40)}`
-    if (seen.has(key)) return
-    seen.add(key)
+    if (seen.has(metric)) return
+    seen.add(metric)
     entries.push({ objective, metric, priority: null, source: 'Financial Health', confidence: 'HIGH' })
   }
 
@@ -105,20 +104,13 @@ function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
       const suffix = /^m$/i.test(m[2]) ? 'M' : 'M'
       add(`${category}: $${m[1]}${suffix} (+${m[3]} YoY)`, m[3])
     }
-    for (const m of text.matchAll(/([\d.]+%)\s*(?:and\s+)?(?:an?\s+)?(?:non-GAAP\s+)?(?:operating|gross|EBITDA|net)\s*margin/gi)) {
-      const kind = m[0].match(/(operating|gross|EBITDA|net)/i)
-      add(`${kind?.[1] || ''} margin of ${m[1]}`.trim(), m[1])
-    }
-    for (const m of text.matchAll(/(?:non-GAAP\s+)?(?:operating|gross|EBITDA|net)\s*margin\s*(?:of\s*)?([\d.]+%)/gi)) {
-      const kind = m[0].match(/(operating|gross|EBITDA|net)/i)
-      add(`${kind?.[1] || ''} margin of ${m[1]}`.trim(), m[1])
+    for (const m of text.matchAll(/(?:non-GAAP\s+)?(operating|gross|EBITDA|net)\s*margin\s*(?:of\s*)?([\d.]+%)/gi)) {
+      add(`${m[1]} margin of ${m[2]}`, m[2])
     }
     for (const m of text.matchAll(/guidance\s+(?:from\s+[\d\-–]+%\s+)?to\s+(\d+[\-–]\d+%)/gi)) {
       add(`${category}: guidance raised to ${m[1]}`, m[1])
     }
-    for (const m of text.matchAll(/(?:outlook|guidance)\s+(?:from\s+[\d\-–]+%\s+)?to\s+(\d+[\-–]\d+%)/gi)) {
-      add(`${category}: ${m[1]} outlook`, m[1])
-    }
+    // outlook pattern removed — guidance pattern above already captures this
     for (const m of text.matchAll(/\$([\d,.]+)\s*(million|billion|M|B)\s*(?:in\s+)?(?:cash|marketable|securities)/gi)) {
       const suffix = /^[mb]$/i.test(m[2]) ? m[2].toUpperCase() : (m[2].toLowerCase() === 'million' ? 'M' : 'B')
       add(`${category}: $${m[1]}${suffix} cash position`, `$${m[1]}${suffix}`)

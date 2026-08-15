@@ -778,10 +778,18 @@ export function renderMetricsTable(profile: CustomerObjectiveProfile | undefined
   ]
   if (allEntries.length === 0) return ''
 
+  const seen = new Set<string>()
+  const deduped = allEntries.filter(e => {
+    const key = e.metric || e.objective
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
   let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
   html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
   html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Source</td><td>Priority</td></tr>'
-  for (const e of allEntries) {
+  for (const e of deduped) {
     const priorityBadge = e.priority
       ? `<span style="background: ${e.priority === 'HIGH' ? '#fce8e6' : '#fef7e0'}; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${escapeHtml(e.priority)}</span>`
       : '—'
