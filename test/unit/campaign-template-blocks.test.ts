@@ -20,6 +20,8 @@ import {
   sanitizeCreepyLines,
   extractFinancialTargets,
   buildFinancialConflict,
+  extractBusinessObjectives,
+  buildObjectiveCorrelation,
 } from '../../src/campaign-html-template.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
@@ -514,5 +516,123 @@ describe('buildFinancialConflict', () => {
     ]
     const result = buildFinancialConflict(targets, 'VMware migration')
     expect(result).toContain('30% gross margin')
+  })
+})
+
+// ── extractBusinessObjectives ─────────────────────────────────────────────
+
+describe('extractBusinessObjectives', () => {
+  it('extracts financial objectives from margin signals', () => {
+    const signals: Signal[] = [
+      makeSignal('Q2 2026 earnings: operating margin of 25.5% reported'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives.length).toBeGreaterThanOrEqual(1)
+    expect(objectives.some(o => o.category === 'financial')).toBe(true)
+    expect(objectives.find(o => o.category === 'financial')!.objective).toContain('25.5%')
+  })
+
+  it('extracts security initiative from signal', () => {
+    const signals: Signal[] = [
+      makeSignal('CISO launches zero-trust security initiative across all divisions'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives.length).toBeGreaterThanOrEqual(1)
+    expect(objectives.some(o => o.category === 'security')).toBe(true)
+  })
+
+  it('extracts operational initiative from signal', () => {
+    const signals: Signal[] = [
+      makeSignal('CTO announces automation initiative to reduce manual ops by 40%'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives.length).toBeGreaterThanOrEqual(1)
+    expect(objectives.some(o => o.category === 'operational')).toBe(true)
+  })
+
+  it('extracts innovation initiative from signal', () => {
+    const signals: Signal[] = [
+      makeSignal('Board approves AI strategy initiative for FY2027 — HIGH priority'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives.length).toBeGreaterThanOrEqual(1)
+    const innovation = objectives.find(o => o.category === 'innovation')
+    expect(innovation).toBeDefined()
+    expect(innovation!.priority).toBe('HIGH')
+  })
+
+  it('returns empty array for signals with no objectives', () => {
+    const signals: Signal[] = [
+      makeSignal('New office opened in Austin'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives).toEqual([])
+  })
+
+  it('extracts from both financial and initiative patterns in same signal set', () => {
+    const signals: Signal[] = [
+      makeSignal('Q1 earnings: gross margin of 30%'),
+      makeSignal('VP Infra launches modernization initiative for legacy systems'),
+    ]
+    const objectives = extractBusinessObjectives(signals)
+    expect(objectives.some(o => o.category === 'financial')).toBe(true)
+    expect(objectives.some(o => o.category === 'operational')).toBe(true)
+  })
+})
+
+// ── buildObjectiveCorrelation ─────────────────────────────────────────────
+
+describe('buildObjectiveCorrelation', () => {
+  it('produces financial correlation for cost-themed campaign', () => {
+    const objectives = [
+      { category: 'financial' as const, objective: '25.5% operating margin', source: 'Q2 earnings' },
+    ]
+    const result = buildObjectiveCorrelation(objectives, 'SaaS Tax Exposure')
+    expect(result).toContain('25.5% operating margin')
+    expect(result).toContain('SaaS Tax Exposure')
+  })
+
+  it('produces security correlation for security-themed campaign', () => {
+    const objectives = [
+      { category: 'financial' as const, objective: '30% margin', source: 'earnings' },
+      { category: 'security' as const, objective: 'zero-trust security initiative', priority: 'HIGH', source: 'Strategic Initiatives' },
+    ]
+    const result = buildObjectiveCorrelation(objectives, 'Vulnerability Remediation Platform')
+    expect(result).toContain('zero-trust security initiative')
+    expect(result).toContain('$4.5M')
+    expect(result).toContain('Vulnerability Remediation Platform')
+  })
+
+  it('produces operational correlation for automation-themed campaign', () => {
+    const objectives = [
+      { category: 'operational' as const, objective: 'automation initiative', source: 'Strategic Initiatives' },
+    ]
+    const result = buildObjectiveCorrelation(objectives, 'Infrastructure Automation Consolidation')
+    expect(result).toContain('automation initiative')
+    expect(result).toContain('consolidates operational overhead')
+  })
+
+  it('produces innovation correlation for AI-themed campaign', () => {
+    const objectives = [
+      { category: 'innovation' as const, objective: 'AI strategy initiative', priority: 'HIGH', source: 'Strategic Initiatives' },
+    ]
+    const result = buildObjectiveCorrelation(objectives, 'OpenShift AI Model Serving')
+    expect(result).toContain('AI strategy initiative')
+    expect(result).toContain('accelerates this roadmap')
+  })
+
+  it('returns empty string when no objectives', () => {
+    expect(buildObjectiveCorrelation([], 'Any Theme')).toBe('')
+  })
+
+  it('matches theme to correct category when multiple objectives exist', () => {
+    const objectives = [
+      { category: 'financial' as const, objective: '25% margin', source: 'earnings' },
+      { category: 'security' as const, objective: 'compliance program', priority: 'HIGH', source: 'Strategic Initiatives' },
+      { category: 'operational' as const, objective: 'modernization initiative', source: 'Strategic Initiatives' },
+    ]
+    const result = buildObjectiveCorrelation(objectives, 'Security Patch Automation')
+    expect(result).toContain('compliance program')
+    expect(result).not.toContain('25% margin')
   })
 })

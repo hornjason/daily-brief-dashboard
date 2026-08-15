@@ -718,7 +718,7 @@ export function sanitizeCreepyLines(text: string): string {
   return result
 }
 
-// ── Financial Conflict Correlation ─────────────────────────────────────────
+// ── Business Objective Correlation ─────────────────────────────────────────
 
 export interface FinancialTarget {
   type: 'margin' | 'cost-reduction' | 'growth' | 'discipline'
@@ -727,12 +727,28 @@ export interface FinancialTarget {
   raw: string
 }
 
+export interface BusinessObjective {
+  category: 'financial' | 'security' | 'operational' | 'innovation' | 'growth'
+  objective: string
+  priority?: string
+  source: string
+}
+
 const FINANCIAL_PATTERNS: Array<{ type: FinancialTarget['type']; pattern: RegExp }> = [
   { type: 'margin', pattern: /(?:operating margin of |gross margin of |EBITDA margin of |(\d+(?:\.\d+)?%)\s+(?:operating |gross |EBITDA )?margin)/i },
   { type: 'cost-reduction', pattern: /(?:cost reduction|reduce costs by \d+(?:\.\d+)?%|efficiency target|TCO reduction)/i },
   { type: 'growth', pattern: /(?:raised.*?guidance to \d+(?:\.\d+)?%|revenue growth of \d+(?:\.\d+)?%|\d+(?:\.\d+)?%\s+YoY (?:revenue )?growth)/i },
   { type: 'discipline', pattern: /(?:operational discipline|EBITDA target|profitability target)/i },
 ]
+
+const INITIATIVE_PATTERNS: Array<{ category: BusinessObjective['category']; pattern: RegExp }> = [
+  { category: 'security', pattern: /\b(?:security\s+(?:initiative|strategy|priority|program)|zero[- ]trust\s+security\s+initiative|breach\s+prevention|vulnerability\s+remediation|compliance\s+(?:initiative|program))\b/i },
+  { category: 'operational', pattern: /\b(?:(?:automation|modernization|consolidation|migration|efficiency)\s+(?:initiative|strategy|priority|program)|operational\s+(?:excellence|transformation))\b/i },
+  { category: 'innovation', pattern: /\b(?:(?:AI|ML|artificial intelligence|machine learning|platform)\s+(?:initiative|strategy|priority|program|innovation)|digital\s+transformation)\b/i },
+  { category: 'growth', pattern: /\b(?:(?:expansion|scale|growth|market)\s+(?:initiative|strategy|priority|program)|revenue\s+acceleration)\b/i },
+]
+
+const PRIORITY_PATTERN = /\b(HIGH|MED|MEDIUM|LOW|CRITICAL)\b/i
 
 export function extractFinancialTargets(signals: Signal[]): FinancialTarget[] {
   const targets: FinancialTarget[] = []
@@ -781,26 +797,95 @@ export function extractFinancialTargets(signals: Signal[]): FinancialTarget[] {
   return targets
 }
 
-const FINANCIAL_CONFLICT_TEMPLATES: Record<FinancialTarget['type'], string> = {
-  'margin': '{metric} — {theme} directly conflicts with maintaining this discipline.',
-  'cost-reduction': 'Active cost reduction initiative ({metric}) — {theme} adds unplanned overhead that works against this goal.',
-  'growth': '{metric} — {theme} creates headwind against this trajectory unless addressed.',
-  'discipline': '{metric} — {theme} introduces unbudgeted overhead that undermines this mandate.',
+export function extractBusinessObjectives(signals: Signal[]): BusinessObjective[] {
+  const objectives: BusinessObjective[] = []
+
+  const financialTargets = extractFinancialTargets(signals)
+  for (const ft of financialTargets) {
+    objectives.push({ category: 'financial', objective: ft.metric, source: ft.source })
+  }
+
+  for (const signal of signals) {
+    const textsToScan = [signal.headline]
+    if (signal.metadata?.company && typeof signal.metadata.company === 'string') {
+      textsToScan.push(signal.metadata.company)
+    }
+
+    for (const text of textsToScan) {
+      for (const { category, pattern } of INITIATIVE_PATTERNS) {
+        const match = pattern.exec(text)
+        if (!match) continue
+
+        const priorityMatch = text.match(PRIORITY_PATTERN)
+        const priority = priorityMatch ? priorityMatch[1].toUpperCase() : undefined
+
+        const objective = match[0].trim()
+        const source = signal.source === 'intelligence' ? 'Strategic Initiatives' : signal.headline.slice(0, 60)
+
+        if (!objectives.some(o => o.category === category && o.objective === objective)) {
+          objectives.push({ category, objective, priority, source })
+        }
+      }
+    }
+  }
+
+  return objectives
 }
 
-const TYPE_PRIORITY: FinancialTarget['type'][] = ['margin', 'discipline', 'cost-reduction', 'growth']
+const THEME_CATEGORIES: Record<BusinessObjective['category'], string[]> = {
+  'financial': ['tax', 'cost', 'budget', 'saas tax', 'tco', 'savings'],
+  'security': ['security', 'breach', 'patch', 'vulnerability', 'compliance', 'remediation'],
+  'operational': ['automation', 'efficiency', 'consolidation', 'migration', 'modernization'],
+  'innovation': ['ai', 'ml', 'platform', 'lightspeed', 'openshift ai', 'rhel ai'],
+  'growth': ['expand', 'scale', 'growth', 'revenue', 'market'],
+}
+
+const CORRELATION_TEMPLATES: Record<BusinessObjective['category'], string> = {
+  'financial': '{objective} — {theme} directly conflicts with this discipline.',
+  'security': '{objective}{priorityTag} — average enterprise breach costs $4.5M (IBM 2024). {theme} reduces this exposure.',
+  'operational': '{objective} — {theme} consolidates operational overhead, supporting this initiative.',
+  'innovation': '{objective}{priorityTag} — {theme} accelerates this roadmap.',
+  'growth': '{objective} — {theme} removes friction from this growth trajectory.',
+}
+
+function matchThemeCategory(campaignTheme: string): BusinessObjective['category'] | null {
+  const lower = campaignTheme.toLowerCase()
+  for (const [category, keywords] of Object.entries(THEME_CATEGORIES) as [BusinessObjective['category'], string[]][]) {
+    if (keywords.some(kw => lower.includes(kw))) return category
+  }
+  return null
+}
+
+export function buildObjectiveCorrelation(objectives: BusinessObjective[], campaignTheme: string): string {
+  if (objectives.length === 0) return ''
+
+  const themeCategory = matchThemeCategory(campaignTheme)
+
+  let best: BusinessObjective | undefined
+  if (themeCategory) {
+    best = objectives.find(o => o.category === themeCategory)
+  }
+  if (!best) best = objectives[0]
+
+  const priorityTag = best.priority ? ` (priority: ${best.priority})` : ''
+  return CORRELATION_TEMPLATES[best.category]
+    .replace('{objective}', best.objective)
+    .replace('{priorityTag}', priorityTag)
+    .replace('{theme}', campaignTheme)
+}
+
+const FINANCIAL_TYPE_PRIORITY: FinancialTarget['type'][] = ['margin', 'discipline', 'cost-reduction', 'growth']
 
 export function buildFinancialConflict(targets: FinancialTarget[], campaignTheme: string): string {
   if (targets.length === 0) return ''
 
-  const best = TYPE_PRIORITY.reduce<FinancialTarget | null>((winner, type) => {
+  const best = FINANCIAL_TYPE_PRIORITY.reduce<FinancialTarget | null>((winner, type) => {
     if (winner) return winner
     return targets.find(t => t.type === type) ?? null
   }, null) ?? targets[0]
 
-  return FINANCIAL_CONFLICT_TEMPLATES[best.type]
-    .replace('{metric}', best.metric)
-    .replace('{theme}', campaignTheme)
+  const objectives: BusinessObjective[] = [{ category: 'financial', objective: best.metric, source: best.source }]
+  return buildObjectiveCorrelation(objectives, campaignTheme)
 }
 
 // ── Two-Pass Template Engine (ADR-043) ──────────────────────────────────────
@@ -1405,9 +1490,9 @@ export function generateCampaignFromStructured(
     if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
   }
 
-  // Extract financial conflict correlation
-  const financialTargets = extractFinancialTargets(data.signals)
-  const financialConflict = buildFinancialConflict(financialTargets, data.materialTitle || 'this campaign theme')
+  // Extract business objective correlation
+  const businessObjectives = extractBusinessObjectives(data.signals)
+  const objectiveCorrelation = buildObjectiveCorrelation(businessObjectives, data.materialTitle || 'this campaign theme')
 
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
@@ -1538,7 +1623,7 @@ ${renderContactsSection(contacts)}
 
 ${renderDashboardMetrics(data.rawSignals)}
 
-${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (financialConflict ? '\n' + financialConflict : '')) : ''}
+${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
 
 ${renderStructuredIntelSections(data.rawSignals)}
 
