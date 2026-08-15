@@ -37,6 +37,35 @@ import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
+import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
+
+// ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
+
+const THREAT_PATTERNS: Array<{ pattern: RegExp; threat: string }> = [
+  { pattern: /saas tax|sb 122|sales tax/, threat: 'the SaaS tax' },
+  { pattern: /security breach|data breach|cyber attack/, threat: 'security breach exposure' },
+  { pattern: /vendor lock-in|vmware|broadcom/, threat: 'vendor lock-in and rising licensing costs' },
+  { pattern: /cloud cost|cloud spend|cloud migration/, threat: 'uncontrolled cloud costs' },
+  { pattern: /compliance|regulation|audit/, threat: 'compliance requirements' },
+  { pattern: /technical debt|legacy|moderniz/, threat: 'technical debt' },
+]
+
+const SOLUTION_PATTERNS: Array<{ pattern: RegExp; solution: string }> = [
+  { pattern: /ansible|automation/, solution: 'self-managed automation' },
+  { pattern: /openshift|container|kubernetes/, solution: 'a unified container platform' },
+  { pattern: /rhel|enterprise linux/, solution: 'a standardized enterprise Linux foundation' },
+  { pattern: /security|acs|stackrox/, solution: 'integrated security across the stack' },
+  { pattern: /ai|ml|model/, solution: 'an enterprise AI platform' },
+]
+
+export function deriveThreatSolution(materialTitle: string, materialContent: string): { threat: string; solution: string } {
+  const lower = (materialTitle + ' ' + materialContent).toLowerCase()
+  const matched = THREAT_PATTERNS.find(tp => tp.pattern.test(lower))
+  const threat = matched?.threat || 'rising infrastructure costs'
+  const solMatched = SOLUTION_PATTERNS.find(sp => sp.pattern.test(lower))
+  const solution = solMatched?.solution || 'consolidated infrastructure'
+  return { threat, solution }
+}
 
 // ── Feature flags ───────────────────────────────────────────────────────────
 const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
@@ -193,6 +222,17 @@ const CAMPAIGN_SELECTION_SCHEMA = {
             type: 'STRING',
             nullable: true,
             description: 'One sentence pointing the recipient to relevant source documents. Use markdown links for each document name: [Document Title](url). Example: "For background on the law: [Holland & Knight\'s analysis of SB 122](https://example.com/hk) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://example.com/numeral) shows where California fits." URLs must come from the provided material content or reference data. Set to null if no reference docs apply.',
+          },
+          objectiveIndex: {
+            type: 'INTEGER',
+            nullable: true,
+            description: 'Index into the flattened CustomerObjectiveProfile (0-based). Select the most relevant objective for this recipient based on their role.',
+          },
+          objectiveCategory: {
+            type: 'STRING',
+            nullable: true,
+            enum: ['financial', 'security', 'operational', 'innovation', 'growth'],
+            description: 'Category of the selected objective. CFO/Finance roles map to financial, CISO/Security to security, VP Engineering/IT to operational or innovation, CEO to growth or financial.',
           },
         },
         required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge', 'referenceLine'],
@@ -607,6 +647,12 @@ GROUNDING RULES:
 CRITICAL: You MUST generate one email entry for EVERY resolved contact provided. Do NOT skip any contacts. If 6 contacts are listed, produce exactly 6 email entries.
 
 TIER DISTRIBUTION: Assign exactly 3 contacts as 'executive' tier and 3 as 'manager' tier. C-level officers (CEO, CFO, CTO, CIO) and VPs are executive tier. Directors, Heads, and Sr. Managers are manager tier.
+
+OBJECTIVE SELECTION (ADR-044): For each email, if a CustomerObjectiveProfile is provided, select the most relevant objective for the recipient:
+- objectiveIndex: the index of the best-fit objective from the flattened profile (0-based)
+- objectiveCategory: the category of the selected objective
+Select based on recipient title: CFO/Finance roles map to financial, CISO/Security to security, VP Engineering/IT to operational or innovation, CEO to growth or financial.
+If no profile is provided, set both to null.
 `
 
 export interface CampaignSelectionResult {
@@ -626,6 +672,8 @@ export interface CampaignSelectionResult {
     featureApplications: string[]
     signalBridge: string
     referenceLine?: string
+    objectiveIndex?: number | null
+    objectiveCategory?: 'financial' | 'security' | 'operational' | 'innovation' | 'growth' | null
   }>
   referenceMaterials?: Array<{ resource: string; url?: string; keyTakeaway: string }>
   eligibilityTable?: Array<{ offering: string; deployment: string; status: string }>
@@ -644,6 +692,7 @@ export async function callGeminiForCampaignSelection(opts: {
   structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
   campaignDirective?: string
   temperature?: number
+  objectiveProfile?: CustomerObjectiveProfile
 }): Promise<CampaignSelectionResult> {
   const featureKeys = getFeatureKeys()
 
@@ -675,7 +724,21 @@ export async function callGeminiForCampaignSelection(opts: {
 
   const featureUrlMap = getFeatureUrlMap()
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  let objectiveProfileContext = ''
+  if (opts.objectiveProfile) {
+    const categories = ['financial', 'security', 'operational', 'innovation', 'growth'] as const
+    const flattened: string[] = []
+    for (const cat of categories) {
+      for (const entry of opts.objectiveProfile[cat] ?? []) {
+        flattened.push(`[${flattened.length}] (${cat}) ${entry.objective}${entry.metric ? ' — ' + entry.metric : ''}`)
+      }
+    }
+    if (flattened.length > 0) {
+      objectiveProfileContext = `\n## CUSTOMER OBJECTIVE PROFILE (select objectiveIndex + objectiveCategory per email):\n${flattened.join('\n')}\n`
+    }
+  }
+
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${objectiveProfileContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1041,6 +1104,18 @@ export async function generateCampaign(
   const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
+  // 3-obj. Load objective profile from intelligence cache (ADR-044 Phase 2)
+  let objectiveProfile: CustomerObjectiveProfile | undefined
+  try {
+    const profilePath = resolve(CACHE_DIR, 'intelligence', `${slug}-objectives.json`)
+    if (existsSync(profilePath)) {
+      objectiveProfile = JSON.parse(readFileSync(profilePath, 'utf-8'))
+      console.log(`[campaigns] Loaded objective profile for ${customer.name}`)
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Failed to load objective profile: ${e?.message}`)
+  }
+
   // 3a. Build deterministic intelligence context from signals (PRINCIPLES.md Layer 2)
   // #668: Filter account team to AE + product-relevant SSP/SSA only
   const productFilter = config?.valueProps
@@ -1257,6 +1332,7 @@ export async function generateCampaign(
       resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
       structuredPlays,
       campaignDirective: config?.campaignDirective,
+      objectiveProfile,
     })
 
     // Validate selection
@@ -1410,6 +1486,9 @@ export async function generateCampaign(
     aePhone = voiceProfile?.phone
     if (voiceProfile?.email) aeEmail = voiceProfile.email
 
+    // Derive threat/solution from campaign material (ADR-044 Phase 2)
+    const { threat, solution } = deriveThreatSolution(materialTitle, materialContent)
+
     // Pass 2: Template assembly (deterministic, no LLM)
     htmlContent = generateCampaignFromStructured(selection, {
       resolvedExecs: resolvedExecs.map(e => ({
@@ -1450,6 +1529,9 @@ export async function generateCampaign(
       aeEmail,
       aePhone,
       sourceUrls: (materialContent.match(/https?:\/\/[^\s)"<>]+/g) || []).filter((u: string) => !u.includes('redhat.com')),
+      campaignThreat: threat,
+      campaignSolution: solution,
+      objectiveProfile,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

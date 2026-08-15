@@ -13,6 +13,7 @@ import type { FeatureRegistryEntry } from './lib/feature-url-registry.ts'
 import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
+import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 
 const BRAND_RED = '#c41e3a'
 
@@ -968,6 +969,8 @@ export interface StructuredEmailSelection {
   featureApplications: string[]
   signalBridge: string
   referenceLine?: string
+  objectiveIndex?: number | null
+  objectiveCategory?: 'financial' | 'security' | 'operational' | 'innovation' | 'growth' | null
 }
 
 export interface StructuredCampaignSelection {
@@ -1017,6 +1020,9 @@ export interface StructuredCampaignData {
   aeEmail?: string
   aePhone?: string
   sourceUrls?: string[]
+  campaignThreat?: string
+  campaignSolution?: string
+  objectiveProfile?: CustomerObjectiveProfile
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
