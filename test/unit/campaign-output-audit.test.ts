@@ -23,7 +23,7 @@ describe('cleanCampaignTitle — strips email prefixes and title-cases', () => {
     const result = cleanCampaignTitle('[nwcorporate] Re: Ansible prospecting and the upcoming SaaS tax')
     expect(result).not.toContain('[nwcorporate]')
     expect(result).not.toContain('Re:')
-    expect(result).toBe('Ansible Prospecting and the Upcoming Saas Tax')
+    expect(result).toBe('Ansible Prospecting and the Upcoming SaaS Tax')
   })
 
   it('strips multiple prefixes: [EXTERNAL] Fwd: Re:', () => {
@@ -37,18 +37,30 @@ describe('cleanCampaignTitle — strips email prefixes and title-cases', () => {
   it('strips FW: prefix', () => {
     const result = cleanCampaignTitle('FW: SaaS tax strategy document')
     expect(result).not.toContain('FW:')
-    expect(result).toContain('Saas Tax Strategy Document')
+    expect(result).toContain('SaaS Tax Strategy Document')
   })
 
   it('title-cases the result with minor word handling', () => {
     const result = cleanCampaignTitle('ansible prospecting and the upcoming saas tax')
-    expect(result).toBe('Ansible Prospecting and the Upcoming Saas Tax')
+    expect(result).toBe('Ansible Prospecting and the Upcoming SaaS Tax')
   })
 
   it('preserves already clean titles', () => {
     const result = cleanCampaignTitle('SaaS Tax Offset Sales Play')
     expect(result.length).toBeGreaterThan(0)
     expect(result).not.toContain('[')
+  })
+
+  it('preserves AI acronym in title', () => {
+    const result = cleanCampaignTitle('AI infrastructure modernization strategy')
+    expect(result).toBe('AI Infrastructure Modernization Strategy')
+  })
+
+  it('preserves multiple acronyms in title', () => {
+    const result = cleanCampaignTitle('RHEL and openshift TCO analysis')
+    expect(result).toContain('RHEL')
+    expect(result).toContain('OpenShift')
+    expect(result).toContain('TCO')
   })
 
   it('returns empty string for empty input', () => {
@@ -219,13 +231,14 @@ describe('sanitizeCreepyLines — footprint-specific patterns', () => {
 describe('renderObjectiveBlock in email body — ADR-044', () => {
   const emptyProfile: CustomerObjectiveProfile = { financial: [], security: [], operational: [], innovation: [], growth: [] }
 
-  it('renderObjectiveBlock produces sentence for financial profile', () => {
+  it('renderObjectiveBlock produces sentence for financial profile with objective context', () => {
     const profile: CustomerObjectiveProfile = {
       ...emptyProfile,
       financial: [{ objective: '12% YoY revenue growth', metric: '12%', priority: null, source: 'Q2 2026 earnings', confidence: 'HIGH' }],
     }
     const result = renderObjectiveBlock(profile, {}, { threat: 'SaaS tax', solution: 'self-managed automation' })
-    expect(result).toContain('12%')
+    expect(result).toContain('12% YoY revenue growth')
+    expect(result).toStartWith('With ')
     expect(result).not.toBe('')
   })
 

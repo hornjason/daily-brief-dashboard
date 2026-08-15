@@ -464,13 +464,14 @@ function makeEntry(obj: string, opts: { metric?: string | null; category?: strin
 const defaultTheme = { threat: 'SaaS tax and vendor lock-in', solution: 'self-managed automation' }
 
 describe('renderObjectiveBlock', () => {
-  it('returns financial sentence with metric and threat', () => {
+  it('returns financial sentence with objective context and threat', () => {
     const profile = makeProfile({ financial: [makeEntry('25-30% EBITDA margins target', { metric: '25-30%' })] })
     const result = renderObjectiveBlock(profile, {}, defaultTheme)
-    expect(result).toContain('25-30%')
+    expect(result).toContain('25-30% EBITDA margins target')
     expect(result).toContain('SaaS tax and vendor lock-in')
     expect(result).toContain('self-managed automation')
     expect(result).toContain('protects this trajectory')
+    expect(result).toStartWith('With ')
   })
 
   it('returns security sentence about strategic exposure', () => {
@@ -479,6 +480,7 @@ describe('renderObjectiveBlock', () => {
     expect(result).toContain('zero-trust security initiative')
     expect(result).toContain('strategic exposure')
     expect(result).toContain('reduces this surface')
+    expect(result).toStartWith('Given ')
   })
 
   it('returns operational sentence', () => {
@@ -489,11 +491,12 @@ describe('renderObjectiveBlock', () => {
     expect(result).toContain('consolidates this')
   })
 
-  it('returns innovation sentence about roadmap', () => {
+  it('returns innovation sentence about progress', () => {
     const profile = makeProfile({ innovation: [makeEntry('AI platform strategy')] })
     const result = renderObjectiveBlock(profile, {}, defaultTheme)
     expect(result).toContain('AI platform strategy')
-    expect(result).toContain('accelerates this roadmap')
+    expect(result).toContain('keeps this on track')
+    expect(result).toStartWith('As ')
   })
 
   it('returns growth sentence', () => {
@@ -519,7 +522,7 @@ describe('renderObjectiveBlock', () => {
     })
     const r0 = renderObjectiveBlock(profile, { objectiveIndex: 0 }, defaultTheme)
     const r1 = renderObjectiveBlock(profile, { objectiveIndex: 1 }, defaultTheme)
-    expect(r0).toContain('25%')
+    expect(r0).toContain('EBITDA target')
     expect(r0).toContain('protects this trajectory')
     expect(r1).toContain('breach prevention')
     expect(r1).toContain('strategic exposure')
@@ -541,14 +544,14 @@ describe('renderObjectiveBlock', () => {
     const result = renderObjectiveBlock(profile, {}, theme)
     expect(result).toContain('rising SaaS costs')
     expect(result).toContain('Red Hat Ansible Automation Platform')
-    expect(result).not.toMatch(/Red Hat.*creates direct headwind/)
+    expect(result).not.toMatch(/Red Hat.*creates a direct headwind/)
     expect(result).toMatch(/Red Hat.*protects this trajectory/)
   })
 
   it('falls back to first entry when objectiveIndex exceeds bounds', () => {
     const profile = makeProfile({ financial: [makeEntry('only entry', { metric: '10%' })] })
     const result = renderObjectiveBlock(profile, { objectiveIndex: 99 }, defaultTheme)
-    expect(result).toContain('10%')
+    expect(result).toContain('only entry')
   })
 
   it('uses objective text as metric fallback when metric is null', () => {

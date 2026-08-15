@@ -683,7 +683,11 @@ export function cleanCampaignTitle(rawTitle: string): string {
   let cleaned = rawTitle.replace(EMAIL_PREFIX_PATTERN, '').trim()
   if (!cleaned) return rawTitle.trim()
   const minorWords = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'in', 'of', 'with', 'as', 'is', 'vs'])
+  const PRESERVED_ACRONYMS = new Set(['SaaS', 'AI', 'API', 'AAP', 'TCO', 'ROI', 'RHEL', 'AWS', 'GCP', 'VMware', 'IaC', 'DDoS', 'EBITDA', 'EPS', 'YoY', 'CI', 'CD', 'DevOps', 'MLOps', 'AIOps', 'OpenShift', 'CISO', 'CTO', 'CFO', 'CEO', 'CIO'])
+  const acronymLookup = new Map([...PRESERVED_ACRONYMS].map(a => [a.toLowerCase(), a]))
   cleaned = cleaned.replace(/\b\w+/g, (word, index) => {
+    const preserved = acronymLookup.get(word.toLowerCase())
+    if (preserved) return preserved
     if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     if (minorWords.has(word.toLowerCase())) return word.toLowerCase()
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
@@ -819,15 +823,17 @@ export function renderObjectiveBlock(
     selected = allEntries[0]
   }
 
-  const metric = selected.metric || selected.objective
+  const objText = selected.objective.length > 80
+    ? (selected.objective.split(/[.;]/)[0]?.trim() || selected.objective.slice(0, 80))
+    : selected.objective
   const { threat, solution } = campaignTheme
 
   const templates: Record<string, string> = {
-    financial: `${metric} discipline means ${threat} creates direct headwind — ${solution} protects this trajectory.`,
-    security: `${selected.objective} makes ${threat} a strategic exposure — ${solution} reduces this surface.`,
-    operational: `Given ${selected.objective}, ${threat} adds operational overhead — ${solution} consolidates this.`,
-    innovation: `${selected.objective} depends on infrastructure that ${threat} could constrain — ${solution} accelerates this roadmap.`,
-    growth: `With ${metric}, ${threat} introduces friction — ${solution} removes this barrier.`,
+    financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
+    security: `Given ${objText}, ${threat} becomes a strategic exposure — ${solution} reduces this surface.`,
+    operational: `With ${objText} underway, ${threat} adds operational overhead — ${solution} consolidates this.`,
+    innovation: `As ${objText} accelerates, ${threat} could constrain progress — ${solution} keeps this on track.`,
+    growth: `With ${objText}, ${threat} introduces friction — ${solution} removes this barrier.`,
   }
 
   return templates[selected.category] || ''
