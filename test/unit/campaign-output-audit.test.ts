@@ -337,6 +337,19 @@ describe('renderMetricsTable — produces HTML table with rows', () => {
     expect(result).toContain('#fce8e6')
   })
 
+  it('deduplicates entries with same metric value', () => {
+    const profile: CustomerObjectiveProfile = {
+      ...emptyProfile,
+      financial: [
+        { objective: '15.5% growth', metric: '15.5%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
+        { objective: '$80.1M (+15.5% YoY)', metric: '15.5%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
+      ],
+    }
+    const result = renderMetricsTable(profile)
+    const rowCount = (result.match(/<tr/g) || []).length
+    expect(rowCount).toBe(2)
+  })
+
   it('renders dash for entries without priority', () => {
     const profile: CustomerObjectiveProfile = {
       ...emptyProfile,

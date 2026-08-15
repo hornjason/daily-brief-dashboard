@@ -81,7 +81,11 @@ function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
   const seen = new Set<string>()
 
   function add(objective: string, metric: string) {
-    if (seen.has(metric)) return
+    if (seen.has(metric)) {
+      const existing = entries.find(e => e.metric === metric)
+      if (existing && objective.length > existing.objective.length) existing.objective = objective
+      return
+    }
     seen.add(metric)
     entries.push({ objective, metric, priority: null, source: 'Financial Health', confidence: 'HIGH' })
   }

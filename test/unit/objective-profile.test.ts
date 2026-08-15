@@ -182,6 +182,28 @@ describe('extractObjectiveProfile', () => {
     expect(withConfidence.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('labels gross margin and operating margin correctly from same sentence', async () => {
+    const mod = await import('../../src/modules/intelligence-module.ts')
+    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
+    const marginEntries = profile.financial.filter(e => e.objective.toLowerCase().includes('margin'))
+    const grossMargin = marginEntries.find(e => e.metric === '80.3%')
+    const opMargin = marginEntries.find(e => e.metric === '25.5%')
+    expect(grossMargin).toBeDefined()
+    expect(grossMargin!.objective).toContain('gross')
+    expect(grossMargin!.objective).not.toContain('operating')
+    expect(opMargin).toBeDefined()
+    expect(opMargin!.objective).toContain('operating')
+    expect(opMargin!.objective).not.toContain('gross')
+  })
+
+  it('deduplicates metrics with same value, keeping more descriptive objective', async () => {
+    const mod = await import('../../src/modules/intelligence-module.ts')
+    const profile = mod.extractObjectiveProfile(FIXTURE_MARKDOWN)
+    const metrics = profile.financial.map(e => e.metric)
+    const uniqueMetrics = new Set(metrics)
+    expect(uniqueMetrics.size).toBe(metrics.length)
+  })
+
   it('returns empty arrays on empty input', async () => {
     const mod = await import('../../src/modules/intelligence-module.ts')
     const profile = mod.extractObjectiveProfile('')
