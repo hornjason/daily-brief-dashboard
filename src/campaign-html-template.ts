@@ -465,8 +465,8 @@ function renderEligibilityTable(rows: EligibilityRow[], heading: string): string
 function renderFootprintSection(footprint: CampaignFootprint): string {
   return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🔵 Existing Red Hat Footprint</h3>
 <div style="font-size: 14px; margin: 0 0 20px 0;">
-  <p style="margin: 4px 0;"><strong>Current:</strong> ${escapeHtml(footprint.current)}</p>
-  <p style="margin: 4px 0;"><strong>Expansion:</strong> ${escapeHtml(footprint.expansion)}</p>
+  <p style="margin: 4px 0;"><strong>Current:</strong> ${escapeHtml(sanitizeFootprint(footprint.current))}</p>
+  <p style="margin: 4px 0;"><strong>Expansion:</strong> ${escapeHtml(sanitizeFootprint(footprint.expansion))}</p>
 </div>`
 }
 
@@ -671,6 +671,48 @@ ${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkin
 </body></html>`
 
   return html
+}
+
+// ── Campaign Title Cleaner ─────────────────────────────────────────────────
+
+const EMAIL_PREFIX_PATTERN = /^\s*(?:\[[^\]]+\]\s*)*(?:(?:Re|Fwd|FW|Fw):\s*)*/gi
+
+export function cleanCampaignTitle(rawTitle: string): string {
+  if (!rawTitle) return ''
+  let cleaned = rawTitle.replace(EMAIL_PREFIX_PATTERN, '').trim()
+  if (!cleaned) return rawTitle.trim()
+  const minorWords = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'in', 'of', 'with', 'as', 'is', 'vs'])
+  cleaned = cleaned.replace(/\b\w+/g, (word, index) => {
+    if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    if (minorWords.has(word.toLowerCase())) return word.toLowerCase()
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  })
+  return cleaned
+}
+
+// ── Contact Quality Check ─────────────────────────────────────────────────
+
+const ROLE_PREFIXES = /^(VP|Director|Head|Sr\.|Sr|Chief|Manager|CIO|CTO|CFO|COO|CMO|CISO|SVP|EVP|President|Executive)\b/i
+
+export function isRealPersonName(name: string): boolean {
+  if (!name || name.trim().length < 4) return false
+  const trimmed = name.trim()
+  if (/\bat\b/i.test(trimmed)) return false
+  if (ROLE_PREFIXES.test(trimmed)) return false
+  return true
+}
+
+// ── Footprint Sanitizer ───────────────────────────────────────────────────
+
+export function sanitizeFootprint(text: string): string {
+  if (!text) return ''
+  return text
+    .replace(/\bNN-/g, '')
+    .replace(/\s*—\s*Pipeline\b/gi, '')
+    .replace(/Company intelligence for [^,;.]+[,;.]?\s*/gi, '')
+    .replace(/Industry analysis:\s*[^,;.]+[,;.]?\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 // ── Creepy-Line Sanitizer ──────────────────────────────────────────────────
@@ -1193,11 +1235,19 @@ export function buildPeerPattern(
  * Block 6: Challenger frame — wraps the Gemini-selected data point.
  * Fixed framing structure, selected data fills in.
  */
-export function buildChallengerFrame(challengerDataPoint: string): string {
+const CHALLENGER_CLOSERS = [
+  'That distinction creates measurable advantage for organizations that act on it.',
+  'This creates a clear window for organizations that move first.',
+  'Companies that recognize this early gain a structural cost advantage.',
+  'The organizations that address this proactively will carry a permanent cost advantage.',
+]
+
+export function buildChallengerFrame(challengerDataPoint: string, emailIndex: number = 0): string {
   if (!challengerDataPoint) return ''
   const trimmed = challengerDataPoint.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
-  if (trimmed.endsWith('.')) return `${trimmed} That distinction creates measurable advantage for organizations that act on it.`
-  return `${trimmed}. That distinction creates measurable advantage for organizations that act on it.`
+  const closer = CHALLENGER_CLOSERS[emailIndex % CHALLENGER_CLOSERS.length]
+  if (trimmed.endsWith('.')) return `${trimmed} ${closer}`
+  return `${trimmed}. ${closer}`
 }
 
 /**
@@ -1490,9 +1540,9 @@ export function generateCampaignFromStructured(
     if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
   }
 
-  // Extract business objective correlation
+  // Extract business objective correlation — use cleaned title for theme matching
   const businessObjectives = extractBusinessObjectives(data.signals)
-  const objectiveCorrelation = buildObjectiveCorrelation(businessObjectives, data.materialTitle || 'this campaign theme')
+  const objectiveCorrelation = buildObjectiveCorrelation(businessObjectives, cleanCampaignTitle(data.materialTitle) || 'this campaign theme')
 
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
@@ -1527,7 +1577,7 @@ export function generateCampaignFromStructured(
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
     const referenceLine = sanitizeReferenceLine(email.referenceLine || '', data.sourceUrls)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
-    const challengerFrame = buildChallengerFrame(email.challengerDataPoint)
+    const challengerFrame = buildChallengerFrame(email.challengerDataPoint, i)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 

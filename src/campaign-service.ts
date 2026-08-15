@@ -27,7 +27,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML, generateCampaignFromStructured, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, type BVTalkingPoint } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
@@ -949,7 +949,7 @@ export async function generateCampaign(
   if (config?.emailSubject && !materialUrl) {
     console.log(`[campaigns] Generating campaign for ${customer.name} from email: "${config.emailSubject}"`)
     const emailResult = await extractFromEmail(config.emailSubject)
-    materialTitle = emailResult.title
+    materialTitle = cleanCampaignTitle(emailResult.title)
     materialContent = emailResult.content
     referenceMaterialData = emailResult.sourceLinks
     materialUrl = `email:${config.emailSubject}`
@@ -966,7 +966,7 @@ export async function generateCampaign(
   } else if (config?.campaignDirective && !materialUrl) {
     const text = config.campaignDirective
     console.log(`[campaigns] Generating campaign for ${customer.name} from directive (freeform)`)
-    materialTitle = text.split(/[.!?\n]/)[0].trim().substring(0, 100)
+    materialTitle = cleanCampaignTitle(text.split(/[.!?\n]/)[0].trim().substring(0, 100))
     materialContent = text
     materialUrl = `directive:${materialTitle}`
   } else {
@@ -1132,6 +1132,11 @@ export async function generateCampaign(
         }
       }
       console.log(`[campaigns] Padded contacts to ${resolvedExecs.length} for ${customer.name}`)
+    }
+    const prePadCount = resolvedExecs.length
+    resolvedExecs = resolvedExecs.filter(e => isRealPersonName(e.name))
+    if (resolvedExecs.length < prePadCount) {
+      console.log(`[campaigns] Filtered ${prePadCount - resolvedExecs.length} placeholder contacts for ${customer.name}`)
     }
     if (resolvedExecs.length > 0) {
       const contactLines = resolvedExecs.map(r =>
