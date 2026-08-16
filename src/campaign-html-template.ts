@@ -284,16 +284,51 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
 
     if (result.competitors.length === 0) {
-      const bulletRegex = /[*\-]\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?$/gm
-      while ((match = bulletRegex.exec(section)) !== null) {
-        const name = match[1].trim()
-        if (name.length > 1 && name.length < 50 && !name.match(/^(switching|integrated|specialized|established|market)/i)) {
-          result.competitors.push({ name, threat: '', advantage: '' })
+      const boldBulletRegex = /[*\-]\s+\*\*([^*]+?)\*\*:?\s*(.*)/gm
+      while ((match = boldBulletRegex.exec(section)) !== null) {
+        const name = match[1].trim().replace(/:$/, '')
+        const fullDesc = match[2].trim()
+        const sentences = fullDesc.split(/\.\s+/)
+        const threat = sentences[0]?.trim() || ''
+        const advMatch = fullDesc.match(/differenti\w+\s+(?:with|by|through|often\s+lies?\s+in)\s+([^.]+)/i)
+          || fullDesc.match(/(?:advantage|strength|known for)\s+(?:is|lies in|with)\s+([^.]+)/i)
+        const advantage = advMatch?.[1]?.trim() || (sentences.length > 1 ? sentences[1]?.trim() : '')
+        if (name.length > 1 && name.length < 50 && !name.match(/^(switching|integrated|specialized|established|market|competitive)/i)) {
+          result.competitors.push({ name, threat, advantage })
         }
         if (result.competitors.length >= 5) break
       }
+      if (result.competitors.length === 0) {
+        const plainBulletRegex = /[*\-]\s+([^*\n]{2,49})$/gm
+        while ((match = plainBulletRegex.exec(section)) !== null) {
+          const name = match[1].trim()
+          if (!name.match(/^(switching|integrated|specialized|established|market)/i)) {
+            result.competitors.push({ name, threat: '', advantage: '' })
+          }
+          if (result.competitors.length >= 5) break
+        }
+      }
       if (differentiation) {
         result.differentiation = differentiation
+      }
+    }
+  }
+
+  // Extract initiatives from intelligence company text ("## Strategic Initiatives")
+  if (result.initiatives.length === 0) {
+    const intelInitSection = companyText.match(/## Strategic Initiatives[\s\S]*?(?=\n## |$)/i)
+    if (intelInitSection) {
+      const boldItemRegex = /[*\-]\s+\*\*([^*]+?)\*\*:?\s*(.*)/gm
+      let iiMatch
+      while ((iiMatch = boldItemRegex.exec(intelInitSection[0])) !== null) {
+        const name = iiMatch[1].trim().replace(/:$/, '')
+        const detail = iiMatch[2].trim().split(/\.\s+/)[0] || ''
+        if (name.length > 5 && name.length < 80 && !name.match(/buying urgency|confidence/i)) {
+          const urgencyMatch = iiMatch[2].match(/Buying Urgency:\s*(HIGH|MEDIUM|MED|LOW)/i)
+          const priority = urgencyMatch ? (urgencyMatch[1].toUpperCase().startsWith('H') ? 'HIGH' : 'MED') : 'HIGH'
+          result.initiatives.push({ name, priority, detail })
+        }
+        if (result.initiatives.length >= 5) break
       }
     }
   }
@@ -308,7 +343,7 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
       || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
       || planText.match(/Modernization Initiatives[\s\S]*?(?=\n##\s|$)/i)
       || planText.match(/Why Red Hat\?[\s\S]*?(?=\n##\s|$)/i)
-    if (objectivesSection) {
+    if (objectivesSection && result.initiatives.length === 0) {
       const objectiveRegex = /\*\*([^*]+)\*\*:?\s*([^*\n]+)/g
       let objMatch
       while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
@@ -1492,6 +1527,14 @@ export function generateCampaignFromStructured(
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
   const aeName = aeTeamMember?.name ?? 'Account Executive'
+
+  // Derive AE email from name if not provided (flast@redhat.com)
+  if (!data.aeEmail && aeName !== 'Account Executive') {
+    const parts = aeName.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      data.aeEmail = `${parts[0][0].toLowerCase()}${parts[parts.length - 1].toLowerCase()}@redhat.com`
+    }
+  }
 
   // Build contacts table from resolved execs
   const contacts: CampaignContact[] = data.resolvedExecs.map(e => ({

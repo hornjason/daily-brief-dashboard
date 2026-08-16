@@ -69,7 +69,9 @@ export function preMatchPeerProofs(
         bestCat = cat
       }
     }
-    if (/\$[\d,.]+|ROI|cost|TCO|payback|benefit/i.test(proof.outcome)) {
+    const hasFinancialSignal = /\$[\d,.]+|ROI|cost|TCO|payback|benefit/i.test(proof.outcome)
+    const hasOperationalSignal = /\bnodes?\b|deploy|infrastructure|managed\s+app|fleet|scale|provisioning|cluster/i.test(proof.outcome)
+    if (hasFinancialSignal && !hasOperationalSignal) {
       bestCat = 'financial'
     }
     return { proof, category: bestCat }

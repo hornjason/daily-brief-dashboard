@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { classifyPersona, preMatchObjectives, type ContactContext } from '../../src/lib/persona-classifier.ts'
+import { classifyPersona, preMatchObjectives, preMatchPeerProofs, type ContactContext } from '../../src/lib/persona-classifier.ts'
 import type { CustomerObjectiveProfile, ObjectiveEntry } from '../../src/modules/intelligence-module.ts'
 
 const makeEntry = (objective: string, overrides: Partial<ObjectiveEntry> = {}): ObjectiveEntry => ({
@@ -163,5 +163,61 @@ describe('preMatchObjectives', () => {
     )
     expect(results.length).toBe(1)
     expect(results[0].category).toBe('operational')
+  })
+})
+
+// ── preMatchPeerProofs (#1087) ──────────────────────────────────────────
+
+describe('preMatchPeerProofs — ARM/Amadeus distribution (#1087)', () => {
+  const amadeus = { customer: 'Amadeus', outcome: 'replaced Chef SaaS with AAP — $5.62M in benefits, 257.9% ROI' }
+  const arm = { customer: 'ARM', outcome: 'consolidated 10,000 nodes onto AAP — $12M deal, managed app deployment' }
+
+  const contacts = [
+    { name: 'Ryan Henderson', title: 'Director of Finance' },
+    { name: 'Michelle Caron', title: 'CFO' },
+    { name: 'Dhrupad Trivedi', title: 'President and CEO' },
+    { name: 'Sean Pike', title: 'Head of IT Security' },
+    { name: 'Arvind Bhuvaraghan', title: 'Sr. Director, Enterprise Info Mgmt' },
+  ]
+
+  it('classifies Amadeus as financial ($ + ROI, no operational keywords)', () => {
+    const results = preMatchPeerProofs([{ name: 'Test', title: 'CFO' }], [amadeus])
+    expect(results[0].category).toBe('financial')
+  })
+
+  it('classifies ARM as operational (nodes + managed app override $ signal)', () => {
+    const results = preMatchPeerProofs([{ name: 'Test', title: 'VP Eng' }], [arm])
+    expect(results[0].category).not.toBe('financial')
+  })
+
+  it('distributes both proofs across 5 contacts', () => {
+    const results = preMatchPeerProofs(contacts, [amadeus, arm])
+    const amadeusCt = results.filter(r => r.proof.customer === 'Amadeus').length
+    const armCt = results.filter(r => r.proof.customer === 'ARM').length
+    expect(amadeusCt).toBeGreaterThan(0)
+    expect(armCt).toBeGreaterThan(0)
+    expect(amadeusCt + armCt).toBe(5)
+  })
+
+  it('CFO persona gets Amadeus (financial match)', () => {
+    const results = preMatchPeerProofs(contacts, [amadeus, arm])
+    const michelleMatch = results.find(r => r.recipientName === 'Michelle Caron')!
+    expect(michelleMatch.proof.customer).toBe('Amadeus')
+  })
+
+  it('operational persona gets ARM (operational match)', () => {
+    const results = preMatchPeerProofs(contacts, [amadeus, arm])
+    const ryanMatch = results.find(r => r.recipientName === 'Ryan Henderson')!
+    expect(ryanMatch.proof.customer).toBe('ARM')
+  })
+
+  it('without fix, both proofs would be financial — regression guard', () => {
+    const pureFinancialProof = { customer: 'FinCo', outcome: '$10M in savings, 300% ROI' }
+    const results = preMatchPeerProofs([{ name: 'Test', title: 'CFO' }], [pureFinancialProof])
+    expect(results[0].category).toBe('financial')
+
+    const opProof = { customer: 'OpCo', outcome: '$8M infrastructure deployment across 5,000 nodes' }
+    const results2 = preMatchPeerProofs([{ name: 'Test', title: 'CFO' }], [opProof])
+    expect(results2[0].category).not.toBe('financial')
   })
 })
