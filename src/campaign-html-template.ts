@@ -15,6 +15,7 @@ import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
 import type { CustomerObjectiveProfile, ObjectiveCategory } from './modules/intelligence-module.ts'
 import { classifyPersona } from './lib/persona-classifier.ts'
+import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 
 const BRAND_RED = '#c41e3a'
 
@@ -566,6 +567,18 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   // Fit rationale: prefer explicit, fall back to parsed customer context
   const fitContent = options.fitRationale || parsed.customerContext
 
+  // Run quality checks against parsed emails
+  const defaultWordBudget = { exec: 120, manager: 200 }
+  const markdownQualityResults: EmailQualityResult[] = parsed.emailTemplates.map(email => {
+    const tier: 'executive' | 'manager' = /executive/i.test(email.tier) ? 'executive' : 'manager'
+    return runEmailQualityCheck({
+      body: email.body,
+      subject: email.subject,
+      tier,
+      wordBudget: defaultWordBudget,
+    })
+  })
+
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -604,17 +617,7 @@ ${renderContactsSection(contacts)}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
 <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
-  <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤120 words | Manager 200-250 words</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Technical observations only — no firmographic facts</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Statements only — no questions anywhere</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Per-bullet links to Red Hat product pages</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Named peer company with concrete metric</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Forward-worthy: exec forwards down, manager forwards up</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Competitor-swap test: product name swap shouldn't work</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Creepy line check: no internal data the recipient wouldn't expect</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Subject = observation about their world (no product names)</td></tr>
-  <tr><td style="padding: 2px 0;">☐ No filler phrases</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Relationship context: ONE sentence about existing Red Hat products</td></tr>
+${renderQualityChecklist(markdownQualityResults, defaultWordBudget)}
 </table>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
@@ -1555,6 +1558,9 @@ export function generateCampaignFromStructured(
   // Track which objectives are actually used in emails
   const usedObjectives: UsedObjective[] = []
 
+  // Track quality check results for dynamic checklist
+  const qualityResults: EmailQualityResult[] = []
+
   // Build per-email HTML
   const execEmailsHtml: string[] = []
   const managerEmailsHtml: string[] = []
@@ -1622,6 +1628,15 @@ export function generateCampaignFromStructured(
       email.tier,
       voiceTokens,
     )
+
+    // Run quality checks on assembled email
+    const qualityInput: EmailCheckInput = {
+      body: assembled.body,
+      subject: email.subject,
+      tier: email.tier,
+      wordBudget: voiceTokens.wordBudget,
+    }
+    qualityResults.push(runEmailQualityCheck(qualityInput))
 
     const emailHtml = renderStructuredEmailBox(
       email.recipientName,
@@ -1691,17 +1706,7 @@ ${renderContactsSection(contacts)}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
 <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
-  <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤${voiceTokens.wordBudget.exec} words | Manager ≤${voiceTokens.wordBudget.manager} words</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Technical observations only — no firmographic facts</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Statements only — no questions anywhere</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Per-bullet links to Red Hat product pages</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Named peer company with concrete metric</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Forward-worthy: exec forwards down, manager forwards up</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Competitor-swap test: product name swap shouldn't work</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Creepy line check: no internal data the recipient wouldn't expect</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Subject = observation about their world (no product names)</td></tr>
-  <tr><td style="padding: 2px 0;">☐ No filler phrases</td></tr>
-  <tr><td style="padding: 2px 0;">☐ Relationship context: ONE sentence about existing Red Hat products</td></tr>
+${renderQualityChecklist(qualityResults, voiceTokens.wordBudget)}
 </table>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
