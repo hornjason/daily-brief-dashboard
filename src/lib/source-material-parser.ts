@@ -57,16 +57,37 @@ export function extractPeerProofsFromMaterial(content: string): MaterialPeerProo
     const customer = rawName.trim().replace(/['',]$/, '').replace(/'s?\s*mission$/, '')
     if (!isValidCustomerName(customer)) continue
     if (seen.has(customer.toLowerCase())) continue
-    const window = lines.slice(i, Math.min(i + 40, lines.length)).join(' ')
-    const metrics: string[] = []
+    const windowLines = lines.slice(i, Math.min(i + 40, lines.length))
+    const window = windowLines.join(' ')
     const metricRe = new RegExp(METRIC_PATTERN.source, METRIC_PATTERN.flags)
-    let mm: RegExpExecArray | null
-    while ((mm = metricRe.exec(window)) !== null) {
-      metrics.push(mm[0])
+    if (!metricRe.test(window)) continue
+    metricRe.lastIndex = 0
+
+    // Collect lines that contain metrics — preserve narrative context
+    const metricLines: { line: string; score: number }[] = []
+    for (const line of windowLines) {
+      const trimLine = line.trim()
+      if (trimLine.length < 10) continue
+      const lineMetricRe = new RegExp(METRIC_PATTERN.source, METRIC_PATTERN.flags)
+      const lineMetrics: string[] = []
+      let lm: RegExpExecArray | null
+      while ((lm = lineMetricRe.exec(trimLine)) !== null) lineMetrics.push(lm[0])
+      if (lineMetrics.length === 0) continue
+      // Score: prefer lines with $ amounts and % figures
+      let score = lineMetrics.length
+      if (lineMetrics.some(m => m.startsWith('$'))) score += 3
+      if (lineMetrics.some(m => m.includes('%'))) score += 2
+      metricLines.push({ line: trimLine.replace(/^[-•*]\s*/, ''), score })
     }
-    if (metrics.length === 0) continue
+    if (metricLines.length === 0) continue
+
+    metricLines.sort((a, b) => b.score - a.score)
+    const topLines = metricLines.slice(0, 3)
+    let outcome = topLines.map(l => l.line).join('; ')
+    if (outcome.length > 150) outcome = outcome.slice(0, 147) + '...'
+
     seen.add(customer.toLowerCase())
-    results.push({ customer, outcome: metrics.join(', ') })
+    results.push({ customer, outcome })
   }
 
   return results

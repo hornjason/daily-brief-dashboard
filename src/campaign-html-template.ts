@@ -817,9 +817,14 @@ export function renderObjectiveBlock(
   preMatch?: import('./lib/persona-classifier.ts').PreMatchedMetric,
 ): string {
   const renderTemplate = (category: string, objective: string) => {
-    const objText = objective.length > 80
-      ? (objective.split(/[.;]/)[0]?.trim() || objective.slice(0, 80))
-      : objective
+    const cleanObj = objective
+      .replace(/^(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook|Reiterated[^:]*?)[:\s]+/i, '')
+      .replace(/^(?:Acquisition of|Major|New|Strong)[^—–]+?\s[—–]\s*/i, '')
+      .replace(/^(?:Raised|Lowered|Maintained|Updated|Revised)[^—–]+?\s[—–]\s*/i, '')
+      .trim()
+    const objText = cleanObj.length > 80
+      ? (cleanObj.split(/[.;]/)[0]?.trim() || cleanObj.slice(0, 80))
+      : cleanObj
     const { threat, solution } = campaignTheme
     const templates: Record<string, string> = {
       financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
@@ -1152,17 +1157,20 @@ function getCapabilityDescription(featureKey: string): string {
   return descriptions[featureKey] || 'delivers enterprise-grade capabilities for modern infrastructure'
 }
 
-/**
- * Block 5: Peer pattern — customer win from solution plays.
- * Resolves from solution plays by playName + exampleIndex.
- */
+const VERB_PATTERN = /\b(?:replaced|consolidated|migrated|deployed|reduced|saved|achieved|realized|delivered|generated|gained|eliminated|standardized|chose|selected|adopted|cut|lowered|scaled|automated|runs?|saw)\b/i
+
+function formatPeerProofLine(customer: string, outcome: string): string {
+  if (VERB_PATTERN.test(outcome)) return `${customer} ${outcome}`
+  return `${customer} → ${outcome}`
+}
+
 export function buildPeerPattern(
   peerProof: { playName: string; exampleIndex: number } | null,
   structuredPlays: StructuredPlay[],
   preMatchedProof?: { proof: { customer: string; outcome: string } },
 ): string {
   if (preMatchedProof) {
-    return `${preMatchedProof.proof.customer} ${preMatchedProof.proof.outcome}`
+    return formatPeerProofLine(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
   }
 
   if (peerProof) {
@@ -1170,12 +1178,12 @@ export function buildPeerPattern(
     const play = structuredPlays.find(p => p.name === peerProof.playName)
       || structuredPlays.find(p => p.name.toLowerCase().includes(target) || target.includes(p.name.toLowerCase()))
     const example = play?.realWorldExamples?.[peerProof.exampleIndex]
-    if (example) return `${example.customer} ${example.outcome}`
+    if (example) return formatPeerProofLine(example.customer, example.outcome)
     if (!play) console.warn(`[template] PEER PROOF MISS: play "${peerProof.playName}" not found in ${structuredPlays.map(p => p.name).join(', ')}`)
   }
 
   for (const play of structuredPlays) {
-    if (play.realWorldExamples?.[0]) return `${play.realWorldExamples[0].customer} ${play.realWorldExamples[0].outcome}`
+    if (play.realWorldExamples?.[0]) return formatPeerProofLine(play.realWorldExamples[0].customer, play.realWorldExamples[0].outcome)
     const metric = play.extractedMetrics?.[0]
     if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
   }

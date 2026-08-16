@@ -468,6 +468,110 @@ function validateStructured(campaign: any): QualityScorecard {
     severity: 'required',
   })
 
+  // ── Content quality checks (#1093, #1095) ──────────────────────────────────
+
+  // Peer proof should read as a natural sentence, not a raw metrics dump
+  const peerProofChecks = emails.map((e: any, i: number) => {
+    const proof = (e.peerProof ?? '').toString()
+    if (!proof || proof.length < 5) return { idx: i, natural: true, text: proof }
+    const hasVerb = /\b(?:replaced|consolidated|migrated|deployed|reduced|saved|achieved|realized|delivered|generated|gained|eliminated|standardized|chose|selected|adopted|cut|lowered|scaled|automated|runs?|saw|→)\b/i.test(proof)
+    const isMetricDump = /^[\w\s]+(?:\d|[$%])/.test(proof) && !hasVerb
+    return { idx: i, natural: !isMetricDump, text: proof }
+  })
+  const unnatPeer = peerProofChecks.filter(c => !c.natural)
+  checks.push({
+    name: 'peer-proof-natural-sentence',
+    passed: unnatPeer.length === 0,
+    expected: 'Peer proof reads as natural sentence with company + context',
+    actual: unnatPeer.length === 0
+      ? 'all peer proofs are natural sentences'
+      : `${unnatPeer.length} raw metric dumps: ${unnatPeer[0]?.text?.substring(0, 80)}`,
+    severity: 'required',
+  })
+
+  // Objective text should not contain raw category prefixes
+  const RAW_PREFIX_RE = /(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook):/i
+  const bodiesWithPrefix = emails.filter((e: any) => RAW_PREFIX_RE.test(e.body ?? ''))
+  checks.push({
+    name: 'objective-no-raw-prefix',
+    passed: bodiesWithPrefix.length === 0,
+    expected: 'No raw category prefixes in email body',
+    actual: bodiesWithPrefix.length === 0
+      ? 'clean'
+      : `${bodiesWithPrefix.length} emails contain raw category prefixes`,
+    severity: 'required',
+  })
+
+  // Reference URL should relate to the cited title
+  const refMismatches: string[] = []
+  for (const email of emails) {
+    const ref = email.referenceLine ?? ''
+    const urlMatch = ref.match(/\((https?:\/\/[^)]+)\)/)?.[1] ?? ''
+    const titleMatch = ref.match(/\[([^\]]+)\]/)?.[1] ?? ''
+    if (urlMatch && titleMatch) {
+      try {
+        const host = new URL(urlMatch).hostname.replace('www.', '')
+        const isRedHat = host.includes('redhat.com')
+        const titleLower = titleMatch.toLowerCase()
+        const titleSuggestsRedHat = /red hat|ansible|openshift|rhel/i.test(titleLower)
+        if (isRedHat && !titleSuggestsRedHat) refMismatches.push(`"${titleMatch}" → ${host}`)
+      } catch { /* skip malformed URLs */ }
+    }
+  }
+  checks.push({
+    name: 'reference-url-matches-title',
+    passed: refMismatches.length === 0,
+    expected: 'Reference URL hostname relates to cited title',
+    actual: refMismatches.length === 0 ? 'all references match' : `mismatches: ${refMismatches.join('; ')}`,
+    severity: 'required',
+  })
+
+  // AE signoff completeness — name, email, phone
+  const signoffMissing: number[] = []
+  for (let i = 0; i < emails.length; i++) {
+    const body = emails[i].body ?? ''
+    const hasAeEmail = /@redhat\.com/i.test(body)
+    const hasPhone = /\(\d{3}\)\s*\d{3}[.-]?\d{4}|\d{3}[.-]\d{3}[.-]\d{4}/i.test(body)
+    if (!hasAeEmail || !hasPhone) signoffMissing.push(i)
+  }
+  checks.push({
+    name: 'ae-signoff-complete',
+    passed: signoffMissing.length === 0,
+    expected: 'Every email has AE name + email + phone in signoff',
+    actual: signoffMissing.length === 0
+      ? 'all signoffs complete'
+      : `${signoffMissing.length} emails missing signoff elements`,
+    severity: 'required',
+  })
+
+  // No internal URLs in email body (docs.google.com, access.redhat.com)
+  const INTERNAL_URL_RE = /\b(?:docs\.google\.com|access\.redhat\.com)\b/i
+  const internalUrlLeaks = emails.filter((e: any) => INTERNAL_URL_RE.test(e.body ?? ''))
+  checks.push({
+    name: 'no-internal-urls',
+    passed: internalUrlLeaks.length === 0,
+    expected: 'No docs.google.com or access.redhat.com in email body',
+    actual: internalUrlLeaks.length === 0
+      ? 'clean'
+      : `${internalUrlLeaks.length} emails contain internal URLs`,
+    severity: 'required',
+  })
+
+  // Revenue figures should use annual/FY figure, not quarterly
+  const quarterlyRevMatches = emails.filter((e: any) => {
+    const body = (e.body ?? '') as string
+    return /\bQ[1-4]\s+(?:20\d{2}\s+)?revenue\b/i.test(body) && /\$[\d,.]+[MBK]?\s*(?:revenue|rev)/i.test(body)
+  })
+  checks.push({
+    name: 'revenue-is-annual',
+    passed: quarterlyRevMatches.length === 0,
+    expected: 'Revenue references use FY/annual figure, not quarterly',
+    actual: quarterlyRevMatches.length === 0
+      ? 'no quarterly revenue references'
+      : `${quarterlyRevMatches.length} emails reference quarterly revenue`,
+    severity: 'required',
+  })
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 
