@@ -15,6 +15,7 @@ export interface EmailQualityResult {
   subjectClean: boolean
   noFiller: boolean
   relationshipContext: boolean
+  referenceLineAccurate: boolean
 }
 
 export interface EmailCheckInput {
@@ -53,6 +54,8 @@ const CREEPY_PATTERNS = [
 
 const RELATIONSHIP_PRODUCT_PATTERN = /Red Hat Enterprise Linux|Red Hat OpenShift|Red Hat Ansible|RHEL|OpenShift|Ansible Automation Platform/i
 const RELATIONSHIP_CONTEXT_PATTERN = /already rely on|already use|existing|foundation|ship on|run on|built on/i
+
+const GENERIC_TAGLINE_PATTERN = /We make|The world's|Leading provider|Official site|Home page/i
 
 function countWords(text: string): number {
   return text.split(/\s+/).filter(w => w.length > 0).length
@@ -102,6 +105,18 @@ export function runEmailQualityCheck(input: EmailCheckInput): EmailQualityResult
   // 10. Relationship context — mentions existing RH products with relationship language
   const relationshipContext = RELATIONSHIP_PRODUCT_PATTERN.test(plainBody) && RELATIONSHIP_CONTEXT_PATTERN.test(plainBody)
 
+  // 11. Reference line accurate — linked URLs are real articles, not homepages; link text is not a generic tagline
+  let referenceLineAccurate = true
+  const refLineMatch = input.body.match(/For (?:background|context|additional context)[^<]*(?:<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>)/i)
+  if (refLineMatch) {
+    const [, refUrl, linkText] = refLineMatch
+    try {
+      const path = new URL(refUrl).pathname.replace(/\/$/, '')
+      if (path.length < 5 || path === '/en') referenceLineAccurate = false
+    } catch { referenceLineAccurate = false }
+    if (GENERIC_TAGLINE_PATTERN.test(linkText)) referenceLineAccurate = false
+  }
+
   return {
     wordLimit,
     techObservations,
@@ -113,6 +128,7 @@ export function runEmailQualityCheck(input: EmailCheckInput): EmailQualityResult
     subjectClean,
     noFiller,
     relationshipContext,
+    referenceLineAccurate,
   }
 }
 
@@ -132,6 +148,7 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
   { key: 'subjectClean', label: 'Subject = observation about their world (no product names)' },
   { key: 'noFiller', label: 'No filler phrases' },
   { key: 'relationshipContext', label: 'Relationship context: ONE sentence about existing Red Hat products' },
+  { key: 'referenceLineAccurate', label: 'Reference line URLs are real articles, not homepages' },
 ]
 
 export function toQualityChecks(results: EmailQualityResult[]): Array<{ name: string; passed: boolean; expected: string; actual: string; severity: 'required' | 'recommended' }> {

@@ -27,7 +27,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, isHomepageUrl, type BVTalkingPoint } from './campaign-html-template.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
@@ -1002,6 +1002,7 @@ export async function generateCampaign(
     if (referenceMaterialData.length > 0) {
       const refSection = referenceMaterialData
         .filter(l => !l.excerpt.startsWith('['))
+        .filter(l => !isHomepageUrl(l.url))
         .map(l => `### ${l.title}\n${l.url}\n${l.excerpt}`)
         .join('\n\n')
       if (refSection) {
@@ -1379,9 +1380,9 @@ export async function generateCampaign(
     for (const match of augmentedMaterial.matchAll(/###\s+(.+)\n(https?:\/\/[^\s]+)/g)) {
       materialUrlMap.set(match[1].trim(), match[2].trim())
     }
-    // Filter internal URLs from materialUrlMap before using for reference lines
+    // Filter internal URLs and homepage/generic URLs from materialUrlMap
     for (const [name, url] of materialUrlMap.entries()) {
-      if (isInternalUrl(url)) materialUrlMap.delete(name)
+      if (isInternalUrl(url) || isHomepageUrl(url)) materialUrlMap.delete(name)
     }
     for (const email of selection.emails) {
       if (materialUrlMap.size > 0) {

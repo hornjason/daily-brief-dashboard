@@ -1271,6 +1271,16 @@ export function isInternalUrl(url: string): boolean {
   return INTERNAL_URL_PATTERNS.some(p => p.test(url))
 }
 
+export function isHomepageUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const path = u.pathname.replace(/\/$/, '')
+    return path.length < 5 || path === '/en'
+  } catch {
+    return true
+  }
+}
+
 function sanitizeReferenceLine(line: string, sourceUrls?: string[]): string {
   if (!line) return ''
   const sourceDomains = new Set<string>()
