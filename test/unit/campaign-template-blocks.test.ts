@@ -636,3 +636,70 @@ describe('renderObjectiveBlock — persona fallback', () => {
     expect(result).not.toContain('termination')
   })
 })
+
+// ── renderObjectiveBlock — preMatch (ADR-045) ─────────────────────────────
+
+describe('renderObjectiveBlock — preMatch priority', () => {
+  it('preMatch bypasses profile selection entirely', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('EBITDA margins target')],
+      security: [makeEntry('zero-trust initiative')],
+    })
+    const preMatch = {
+      recipientName: 'Sean Pike',
+      recipientTitle: 'Head of Information Security',
+      category: 'security' as const,
+      confidence: 0.9,
+      entry: makeEntry('zero-trust architecture initiative'),
+    }
+    const result = renderObjectiveBlock(profile, {}, defaultTheme, undefined, preMatch)
+    expect(result).toContain('zero-trust architecture initiative')
+    expect(result).toContain('strategic exposure')
+    expect(result).not.toContain('EBITDA')
+  })
+
+  it('preMatch works without profile', () => {
+    const preMatch = {
+      recipientName: 'Ryan Henderson',
+      recipientTitle: 'Director of Finance',
+      category: 'financial' as const,
+      confidence: 0.7,
+      entry: makeEntry('25-30% EBITDA margins target', { metric: '25-30%' }),
+    }
+    const result = renderObjectiveBlock(undefined, {}, defaultTheme, undefined, preMatch)
+    expect(result).toContain('25-30% EBITDA margins target')
+    expect(result).toContain('protects this trajectory')
+  })
+
+  it('preMatch innovation category uses correct template', () => {
+    const preMatch = {
+      recipientName: 'Dhrupad Trivedi',
+      recipientTitle: 'President and CEO',
+      category: 'innovation' as const,
+      confidence: 0.5,
+      entry: makeEntry('AI platform modernization'),
+    }
+    const result = renderObjectiveBlock(undefined, {}, defaultTheme, undefined, preMatch)
+    expect(result).toContain('AI platform modernization')
+    expect(result).toContain('keeps this on track')
+    expect(result).toStartWith('As ')
+  })
+
+  it('preMatch takes priority over objectiveIndex', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('EBITDA target')],
+      security: [makeEntry('breach prevention')],
+    })
+    const preMatch = {
+      recipientName: 'Test',
+      recipientTitle: 'CISO',
+      category: 'security' as const,
+      confidence: 0.8,
+      entry: makeEntry('breach prevention'),
+    }
+    const result = renderObjectiveBlock(profile, { objectiveIndex: 0 }, defaultTheme, undefined, preMatch)
+    expect(result).toContain('breach prevention')
+    expect(result).toContain('strategic exposure')
+    expect(result).not.toContain('EBITDA')
+  })
+})

@@ -22,6 +22,7 @@ export interface ResolvedExecutive {
   email?: string
   linkedinUrl?: string
   resolvedAt: string
+  leadershipContext?: string  // Excerpt from intelligence Leadership section
 }
 
 interface ExecutiveCache {
@@ -76,6 +77,33 @@ function cleanTitle(raw: string): string {
     .replace(/\s*\(.*?\)\s*/g, '')
     .replace(/,\s*(?:since|from|as of)\b.*/i, '')
     .trim()
+}
+
+/**
+ * Extract per-contact context from the Leadership section of the intelligence brief.
+ * Returns paragraph(s) mentioning the contact by name (up to 500 chars).
+ */
+export function extractContactContext(companyName: string, contactName: string): string | null {
+  const intelPath = resolve(CACHE_DIR, 'intelligence', `${companySlug(companyName)}.json`)
+  if (!existsSync(intelPath)) return null
+
+  try {
+    const data = JSON.parse(readFileSync(intelPath, 'utf-8'))
+    const companyText: string = data.company ?? ''
+
+    const leadershipMatch = companyText.match(/##\s*Leadership[\s\S]*?(?=\n##\s|\n#\s|$)/i)
+    if (!leadershipMatch) return null
+    const section = leadershipMatch[0]
+
+    const lastName = contactName.split(/\s+/).pop() ?? contactName
+    const paragraphs = section.split(/\n\n+/)
+    const relevant = paragraphs.filter(p => p.includes(contactName) || p.includes(lastName))
+
+    if (relevant.length === 0) return null
+    return relevant.join(' ').replace(/\*+/g, '').replace(/\s+/g, ' ').trim().slice(0, 500)
+  } catch {
+    return null
+  }
 }
 
 /** Fallback roles to try when primary roles return no results */
@@ -155,14 +183,17 @@ export function extractContactsFromIntelligence(companyName: string): ResolvedEx
       }
     }
 
-    // Deduplicate by name
+    // Deduplicate by name, enrich with leadership context
     const seen = new Set<string>()
     return results.filter(r => {
       const key = r.name.toLowerCase()
       if (seen.has(key)) return false
       seen.add(key)
       return true
-    })
+    }).map(r => ({
+      ...r,
+      leadershipContext: extractContactContext(companyName, r.name) ?? undefined,
+    }))
   } catch {
     return []
   }

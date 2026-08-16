@@ -778,7 +778,27 @@ export function renderObjectiveBlock(
   selection: { objectiveIndex?: number | null; objectiveCategory?: string | null },
   campaignTheme: { threat: string; solution: string },
   recipientTitle?: string,
+  preMatch?: import('./lib/persona-classifier.ts').PreMatchedMetric,
 ): string {
+  const renderTemplate = (category: string, objective: string) => {
+    const objText = objective.length > 80
+      ? (objective.split(/[.;]/)[0]?.trim() || objective.slice(0, 80))
+      : objective
+    const { threat, solution } = campaignTheme
+    const templates: Record<string, string> = {
+      financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
+      security: `Given ${objText}, ${threat} becomes a strategic exposure — ${solution} reduces this surface.`,
+      operational: `With ${objText} underway, ${threat} adds operational overhead — ${solution} consolidates this.`,
+      innovation: `As ${objText} accelerates, ${threat} could constrain progress — ${solution} keeps this on track.`,
+      growth: `With ${objText}, ${threat} introduces friction — ${solution} removes this barrier.`,
+    }
+    return templates[category] || ''
+  }
+
+  if (preMatch) {
+    return renderTemplate(preMatch.category, preMatch.entry.objective)
+  }
+
   if (!profile) return ''
 
   const filterUsable = (entries: typeof allEntries) =>
@@ -821,20 +841,7 @@ export function renderObjectiveBlock(
     selected = usable.length > 0 ? usable[0] : allEntries[0]
   }
 
-  const objText = selected.objective.length > 80
-    ? (selected.objective.split(/[.;]/)[0]?.trim() || selected.objective.slice(0, 80))
-    : selected.objective
-  const { threat, solution } = campaignTheme
-
-  const templates: Record<string, string> = {
-    financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
-    security: `Given ${objText}, ${threat} becomes a strategic exposure — ${solution} reduces this surface.`,
-    operational: `With ${objText} underway, ${threat} adds operational overhead — ${solution} consolidates this.`,
-    innovation: `As ${objText} accelerates, ${threat} could constrain progress — ${solution} keeps this on track.`,
-    growth: `With ${objText}, ${threat} introduces friction — ${solution} removes this barrier.`,
-  }
-
-  return templates[selected.category] || ''
+  return renderTemplate(selected.category, selected.objective)
 }
 
 // ── Two-Pass Template Engine (ADR-043) ──────────────────────────────────────
@@ -855,8 +862,6 @@ export interface StructuredEmailSelection {
   featureApplications: string[]
   signalBridge: string
   referenceLine?: string
-  objectiveIndex?: number | null
-  objectiveCategory?: 'financial' | 'security' | 'operational' | 'innovation' | 'growth' | null
 }
 
 export interface StructuredCampaignSelection {
@@ -909,6 +914,7 @@ export interface StructuredCampaignData {
   campaignThreat?: string
   campaignSolution?: string
   objectiveProfile?: CustomerObjectiveProfile
+  preMatchedMetrics?: import('./lib/persona-classifier.ts').PreMatchedMetric[]
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1493,13 +1499,22 @@ export function generateCampaignFromStructured(
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
+    const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
     const objectiveContext = sanitizeCreepyLines(renderObjectiveBlock(
       data.objectiveProfile,
-      { objectiveIndex: email.objectiveIndex, objectiveCategory: email.objectiveCategory },
+      {},
       campaignTheme,
       recipientTitle,
+      preMatch,
     ))
-    if (objectiveContext && data.objectiveProfile) {
+    if (preMatch) {
+      usedObjectives.push({
+        objective: preMatch.entry.objective,
+        metric: preMatch.entry.metric,
+        category: preMatch.category.charAt(0).toUpperCase() + preMatch.category.slice(1),
+        usedIn: `${email.recipientName} (${email.tier})`,
+      })
+    } else if (objectiveContext && data.objectiveProfile) {
       const catEntries = [
         ...data.objectiveProfile.financial.map(e => ({ ...e, category: 'Financial' })),
         ...data.objectiveProfile.security.map(e => ({ ...e, category: 'Security' })),

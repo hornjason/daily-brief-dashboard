@@ -37,6 +37,7 @@ import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
+import { preMatchObjectives, type PreMatchedMetric } from './lib/persona-classifier.ts'
 import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
@@ -222,17 +223,6 @@ const CAMPAIGN_SELECTION_SCHEMA = {
             type: 'STRING',
             nullable: true,
             description: 'One sentence pointing the recipient to relevant source documents. Use markdown links for each document name: [Document Title](url). Example: "For background on the law: [Holland & Knight\'s analysis of SB 122](https://example.com/hk) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://example.com/numeral) shows where California fits." URLs must come from the provided material content or reference data. Set to null if no reference docs apply.',
-          },
-          objectiveIndex: {
-            type: 'INTEGER',
-            nullable: true,
-            description: 'Index into the flattened CustomerObjectiveProfile (0-based). Select the most relevant objective for this recipient based on their role.',
-          },
-          objectiveCategory: {
-            type: 'STRING',
-            nullable: true,
-            enum: ['financial', 'security', 'operational', 'innovation', 'growth'],
-            description: 'Category of the selected objective. CFO/Finance roles map to financial, CISO/Security to security, VP Engineering/IT to operational or innovation, CEO to growth or financial.',
           },
         },
         required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge', 'referenceLine'],
@@ -648,11 +638,7 @@ CRITICAL: You MUST generate one email entry for EVERY resolved contact provided.
 
 TIER DISTRIBUTION: Assign exactly 3 contacts as 'executive' tier and 3 as 'manager' tier. C-level officers (CEO, CFO, CTO, CIO) and VPs are executive tier. Directors, Heads, and Sr. Managers are manager tier.
 
-OBJECTIVE SELECTION (ADR-044): For each email, if a CustomerObjectiveProfile is provided, select the most relevant objective for the recipient:
-- objectiveIndex: the index of the best-fit objective from the flattened profile (0-based)
-- objectiveCategory: the category of the selected objective
-Select based on recipient title: CFO/Finance roles map to financial, CISO/Security to security, VP Engineering/IT to operational or innovation, CEO to growth or financial.
-If no profile is provided, set both to null.
+
 `
 
 export interface CampaignSelectionResult {
@@ -672,8 +658,6 @@ export interface CampaignSelectionResult {
     featureApplications: string[]
     signalBridge: string
     referenceLine?: string
-    objectiveIndex?: number | null
-    objectiveCategory?: 'financial' | 'security' | 'operational' | 'innovation' | 'growth' | null
   }>
   referenceMaterials?: Array<{ resource: string; url?: string; keyTakeaway: string }>
   eligibilityTable?: Array<{ offering: string; deployment: string; status: string }>
@@ -693,6 +677,7 @@ export async function callGeminiForCampaignSelection(opts: {
   campaignDirective?: string
   temperature?: number
   objectiveProfile?: CustomerObjectiveProfile
+  preMatchedMetrics?: PreMatchedMetric[]
 }): Promise<CampaignSelectionResult> {
   const featureKeys = getFeatureKeys()
 
@@ -724,21 +709,16 @@ export async function callGeminiForCampaignSelection(opts: {
 
   const featureUrlMap = getFeatureUrlMap()
 
-  let objectiveProfileContext = ''
-  if (opts.objectiveProfile) {
-    const categories = ['financial', 'security', 'operational', 'innovation', 'growth'] as const
-    const flattened: string[] = []
-    for (const cat of categories) {
-      for (const entry of opts.objectiveProfile[cat] ?? []) {
-        flattened.push(`[${flattened.length}] (${cat}) ${entry.objective}${entry.metric ? ' — ' + entry.metric : ''}`)
-      }
+  let preMatchContext = ''
+  if (opts.preMatchedMetrics && opts.preMatchedMetrics.length > 0) {
+    preMatchContext = '\n## PRE-MATCHED BUSINESS METRICS (use these data points in the emails — DO NOT select different ones)\n\n'
+    for (const pm of opts.preMatchedMetrics) {
+      preMatchContext += `- ${pm.recipientName} (${pm.recipientTitle}): USE THIS DATA POINT: "${pm.entry.objective}" [${pm.category}]\n`
     }
-    if (flattened.length > 0) {
-      objectiveProfileContext = `\n## CUSTOMER OBJECTIVE PROFILE (select objectiveIndex + objectiveCategory per email):\n${flattened.join('\n')}\n`
-    }
+    preMatchContext += '\nWeave each recipient\'s pre-matched data point into their email\'s signalBridge or customOpener. The data point should appear naturally in the email body.\n'
   }
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${objectiveProfileContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1321,6 +1301,17 @@ export async function generateCampaign(
     console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
     generationPath = 'structured'
 
+    // Pre-match objectives deterministically (ADR-045 Phase 4)
+    const preMatchedMetrics = objectiveProfile
+      ? preMatchObjectives(
+          resolvedExecs.map(e => ({ name: e.name, title: e.title, leadershipContext: e.leadershipContext })),
+          objectiveProfile,
+        )
+      : []
+    if (preMatchedMetrics.length > 0) {
+      console.log(`[campaigns] Pre-matched ${preMatchedMetrics.length} objectives for ${customer.name}`)
+    }
+
     // Pass 1: Gemini data selection
     const selection = await callGeminiForCampaignSelection({
       materialTitle,
@@ -1333,6 +1324,7 @@ export async function generateCampaign(
       structuredPlays,
       campaignDirective: config?.campaignDirective,
       objectiveProfile,
+      preMatchedMetrics,
     })
 
     // Validate selection
@@ -1532,6 +1524,7 @@ export async function generateCampaign(
       campaignThreat: threat,
       campaignSolution: solution,
       objectiveProfile,
+      preMatchedMetrics,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility
