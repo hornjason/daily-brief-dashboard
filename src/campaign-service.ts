@@ -489,9 +489,21 @@ export async function callGeminiForCampaign(opts: {
   const personasStr = personaLines.join('\n')
 
   // Serialize verified solution plays for peer proof grounding (ADR-040)
-  let solutionPlaysContext = ''
+  let solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
+
+  // Source material customer wins go FIRST
+  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
+  if (materialPeerProofs.length > 0) {
+    solutionPlaysContext += `### Play: "Source Material Customer Wins" ⭐ USE THESE FIRST\n`
+    solutionPlaysContext += `- TDP: Campaign Source Material\n`
+    solutionPlaysContext += `- Real-World Examples:\n`
+    materialPeerProofs.forEach((proof, i) => {
+      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
+    })
+    solutionPlaysContext += '\n'
+  }
+
   if (opts.structuredPlays && opts.structuredPlays.length > 0) {
-    solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (Source: SalesHub — cite these for peer proof, do not fabricate alternatives)\n\n'
     for (const play of opts.structuredPlays) {
       solutionPlaysContext += `### Play: "${play.name}"\n`
       solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
@@ -501,17 +513,6 @@ export async function callGeminiForCampaign(opts: {
       if (play.talkTrack) solutionPlaysContext += `- Talk Track: ${play.talkTrack.slice(0, 300)}\n`
       solutionPlaysContext += '\n'
     }
-  }
-
-  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
-  if (materialPeerProofs.length > 0) {
-    solutionPlaysContext += `\n### Play: "Source Material Customer Wins"\n`
-    solutionPlaysContext += `- TDP: Campaign Source Material\n`
-    solutionPlaysContext += `- Real-World Examples:\n`
-    materialPeerProofs.forEach((proof, i) => {
-      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
-    })
-    solutionPlaysContext += '\nPRIORITIZE these source material examples over generic plays when they are relevant to the campaign topic.\n\n'
   }
 
   const userPrompt = `## Material: ${opts.materialTitle}
@@ -667,9 +668,24 @@ export async function callGeminiForCampaignSelection(opts: {
 
   const contactLines = opts.resolvedContacts.map(c => `- ${c.name}, ${c.title} (role: ${c.role})`).join('\n')
 
-  let solutionPlaysContext = ''
+  let solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (cite by playName + exampleIndex)\n\n'
+
+  // Source material customer wins go FIRST — these are directly relevant to the campaign topic
+  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
+  if (materialPeerProofs.length > 0) {
+    console.log(`[campaigns] Extracted ${materialPeerProofs.length} peer proofs from source material: ${materialPeerProofs.map(p => p.customer).join(', ')}`)
+    solutionPlaysContext += `### Play: "Source Material Customer Wins" ⭐ USE THESE FIRST\n`
+    solutionPlaysContext += `- TDP: Campaign Source Material\n`
+    solutionPlaysContext += `- Real-World Examples:\n`
+    materialPeerProofs.forEach((proof, i) => {
+      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
+    })
+    solutionPlaysContext += '\n'
+  } else {
+    console.log(`[campaigns] No peer proofs found in source material (${opts.materialContent.length} chars)`)
+  }
+
   if (opts.structuredPlays && opts.structuredPlays.length > 0) {
-    solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (cite by playName + exampleIndex)\n\n'
     for (const play of opts.structuredPlays) {
       solutionPlaysContext += `### Play: "${play.name}"\n`
       solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
@@ -682,21 +698,6 @@ export async function callGeminiForCampaignSelection(opts: {
       if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
       solutionPlaysContext += '\n'
     }
-  }
-
-  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
-  if (materialPeerProofs.length > 0) {
-    console.log(`[campaigns] Extracted ${materialPeerProofs.length} peer proofs from source material: ${materialPeerProofs.map(p => p.customer).join(', ')}`)
-    // Inject as a synthetic play so Gemini can reference via playName + exampleIndex
-    solutionPlaysContext += `\n### Play: "Source Material Customer Wins"\n`
-    solutionPlaysContext += `- TDP: Campaign Source Material\n`
-    solutionPlaysContext += `- Real-World Examples:\n`
-    materialPeerProofs.forEach((proof, i) => {
-      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
-    })
-    solutionPlaysContext += '\nPRIORITIZE these source material examples over generic plays when they are relevant to the campaign topic.\n\n'
-  } else {
-    console.log(`[campaigns] No peer proofs found in source material (${opts.materialContent.length} chars)`)
   }
 
   const featureUrlMap = getFeatureUrlMap()
