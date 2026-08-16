@@ -1367,6 +1367,19 @@ export async function generateCampaign(
       if (refs.length > 0) selection.referenceMaterials = refs
     }
 
+    // Enrich referenceMaterials with URLs from email sourceLinks
+    if (selection.referenceMaterials && referenceMaterialData.length > 0) {
+      for (const rm of selection.referenceMaterials) {
+        if (!rm.url) {
+          const match = referenceMaterialData.find(sd =>
+            rm.resource.toLowerCase().includes(sd.title.toLowerCase().substring(0, 20)) ||
+            sd.title.toLowerCase().includes(rm.resource.toLowerCase().substring(0, 20)),
+          )
+          if (match) rm.url = match.url
+        }
+      }
+    }
+
     if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
       const attrs: Array<{ name: string; description: string }> = []
       if (materialTitle) attrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
