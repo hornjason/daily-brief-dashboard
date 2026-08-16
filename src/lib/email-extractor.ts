@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import { JSDOM } from 'jsdom'
+import { isGoogleDocUrl, extractFileId, extractMaterialContent } from './google-content-extractor.ts'
 
 export interface EmailExtractResult {
   title: string
@@ -148,6 +149,14 @@ async function fetchLinkedContent(
   const results = await Promise.allSettled(
     contentLinks.map(async (link) => {
       try {
+        if (isGoogleDocUrl(link.url)) {
+          const fileId = extractFileId(link.url)
+          if (fileId) {
+            const { title, content } = await extractMaterialContent(fileId)
+            return { url: link.url, title, excerpt: content.substring(0, 500) }
+          }
+        }
+
         const resp = await fetch(link.url, {
           signal: AbortSignal.timeout(8000),
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PAI-EmailExtractor/1.0)' },

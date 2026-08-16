@@ -333,44 +333,9 @@ interface CampaignCacheEntry {
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
-
-/**
- * Extract Google Doc/Slides file ID from URL.
- * Accepts: https://docs.google.com/presentation/d/{fileId}/...
- *          https://docs.google.com/document/d/{fileId}/...
- */
-export function extractFileId(url: string): string | null {
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
-  return match?.[1] ?? null
-}
-
-/**
- * Export material as plain text via Google Drive API.
- * Returns { title, content }
- */
-export async function extractMaterialContent(fileId: string): Promise<{ title: string; content: string }> {
-  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
-  // Get file metadata (title + mimeType)
-  const meta = await drive.files.get({
-    fileId,
-    fields: 'name,mimeType',
-    supportsAllDrives: true,
-  })
-
-  const title = meta.data.name ?? 'Untitled'
-
-  // Export as plain text
-  const exportRes = await drive.files.export(
-    { fileId, mimeType: 'text/plain' },
-    { responseType: 'text' },
-  )
-
-  const content = typeof exportRes.data === 'string' ? exportRes.data : String(exportRes.data)
-
-  return { title, content }
-}
+// Moved to src/lib/google-content-extractor.ts — imported for local use, re-exported for consumers
+import { extractFileId, extractMaterialContent } from './lib/google-content-extractor.ts'
+export { extractFileId, extractMaterialContent }
 
 // ── Gemini campaign generation ───────────────────────────────────────────────
 
