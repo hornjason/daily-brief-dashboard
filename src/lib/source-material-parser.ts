@@ -11,7 +11,7 @@ const WIN_PATTERNS = [
   /([A-Z][A-Za-z\s&.']{2,30})\s+(?:achieved|saved|reduced|realized|delivered|generated|gained|eliminated|consolidated|migrated|deployed|replaced|standardized)\s+(.+?(?:\$[\d,.]+[MBK]?\b|[\d,.]+%|[\d,]+\s*(?:nodes|servers|instances)).+?)(?:\.|;|\n|$)/gi,
 ]
 
-const NOISE_WORDS = new Set(['the', 'our', 'their', 'this', 'that', 'with', 'from', 'red hat', 'ansible', 'openshift', 'rhel', 'customer', 'company', 'organization'])
+const NOISE_WORDS = new Set(['the', 'our', 'their', 'this', 'that', 'with', 'from', 'red hat', 'ansible', 'openshift', 'rhel', 'customer', 'company', 'organization', 'what', 'why', 'how', 'when', 'where', 'who', 'which', 'chef', 'puppet', 'terraform', 'salt', 'why ansible', 'why aap', 'challenge', 'solution', 'results', 'products', 'background'])
 
 function isValidCustomerName(name: string): boolean {
   const trimmed = name.trim()
@@ -43,6 +43,30 @@ export function extractPeerProofsFromMaterial(content: string): MaterialPeerProo
       seen.add(key)
       results.push({ customer, outcome })
     }
+  }
+
+  // Proximity-based: find "Customer Background:" sections and associate metrics within 40 lines
+  const lines = content.split('\n')
+  const CUSTOMER_BG_RE = /Customer(?:\s+Background)?:\s*([A-Z][A-Za-z&'.]+(?:\s+[A-Z][A-Za-z&'.]+){0,3}?)(?:[',\s])/
+  const STANDALONE_NAME_RE = /^([A-Z][A-Za-z&'.]+(?:\s+[A-Z][A-Za-z&'.]*){0,3}?)\s+(?:is|was|has|had|are|were|chose|selected|replaced|consolidated|migrated|realized|in the process|Limited)/
+  for (let i = 0; i < lines.length; i++) {
+    const bgMatch = lines[i].match(CUSTOMER_BG_RE)
+    const nameMatch = !bgMatch ? lines[i].match(STANDALONE_NAME_RE) : null
+    const rawName = bgMatch?.[1] || nameMatch?.[1]
+    if (!rawName) continue
+    const customer = rawName.trim().replace(/['',]$/, '').replace(/'s?\s*mission$/, '')
+    if (!isValidCustomerName(customer)) continue
+    if (seen.has(customer.toLowerCase())) continue
+    const window = lines.slice(i, Math.min(i + 40, lines.length)).join(' ')
+    const metrics: string[] = []
+    const metricRe = new RegExp(METRIC_PATTERN.source, METRIC_PATTERN.flags)
+    let mm: RegExpExecArray | null
+    while ((mm = metricRe.exec(window)) !== null) {
+      metrics.push(mm[0])
+    }
+    if (metrics.length === 0) continue
+    seen.add(customer.toLowerCase())
+    results.push({ customer, outcome: metrics.join(', ') })
   }
 
   return results
