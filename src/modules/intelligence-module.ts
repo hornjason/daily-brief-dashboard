@@ -61,7 +61,7 @@ function extractMetric(text: string): string | null {
   return null
 }
 
-const CATEGORY_KEYWORDS: Record<ObjectiveCategory, RegExp> = {
+export const CATEGORY_KEYWORDS: Record<ObjectiveCategory, RegExp> = {
   security: /\b(security|threat|firewall|vulnerabilit|cyber|protection|zero[\s-]trust|compliance)\b/i,
   financial: /\b(cost|margin|EBITDA|cash|fiscal|dividend|EPS|capital|balance\s*sheet|profitab|net\s*income|debt)\b/i,
   operational: /\b(automat|efficien|operation|infrastructure|management|consolidat|streamline|overhead|manual)\b/i,

@@ -14,6 +14,7 @@ import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
 import type { CustomerObjectiveProfile, ObjectiveCategory } from './modules/intelligence-module.ts'
+import { classifyPersona } from './lib/persona-classifier.ts'
 
 const BRAND_RED = '#c41e3a'
 
@@ -674,38 +675,11 @@ ${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkin
   return html
 }
 
-// ── Campaign Title Cleaner ─────────────────────────────────────────────────
+// ── Campaign Title Cleaner (extracted to src/lib/text-utils.ts) ───────────
+export { cleanEmailSubject as cleanCampaignTitle } from './lib/text-utils.ts'
 
-const EMAIL_PREFIX_PATTERN = /^\s*(?:\[[^\]]+\]\s*)*(?:(?:Re|Fwd|FW|Fw):\s*)*/gi
-
-export function cleanCampaignTitle(rawTitle: string): string {
-  if (!rawTitle) return ''
-  let cleaned = rawTitle.replace(EMAIL_PREFIX_PATTERN, '').trim()
-  if (!cleaned) return rawTitle.trim()
-  const minorWords = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'in', 'of', 'with', 'as', 'is', 'vs'])
-  const PRESERVED_ACRONYMS = new Set(['SaaS', 'AI', 'API', 'AAP', 'TCO', 'ROI', 'RHEL', 'AWS', 'GCP', 'VMware', 'IaC', 'DDoS', 'EBITDA', 'EPS', 'YoY', 'CI', 'CD', 'DevOps', 'MLOps', 'AIOps', 'OpenShift', 'CISO', 'CTO', 'CFO', 'CEO', 'CIO'])
-  const acronymLookup = new Map([...PRESERVED_ACRONYMS].map(a => [a.toLowerCase(), a]))
-  cleaned = cleaned.replace(/\b\w+/g, (word, index) => {
-    const preserved = acronymLookup.get(word.toLowerCase())
-    if (preserved) return preserved
-    if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    if (minorWords.has(word.toLowerCase())) return word.toLowerCase()
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  })
-  return cleaned
-}
-
-// ── Contact Quality Check ─────────────────────────────────────────────────
-
-const ROLE_PREFIXES = /^(VP|Director|Head|Sr\.|Sr|Chief|Manager|CIO|CTO|CFO|COO|CMO|CISO|SVP|EVP|President|Executive)\b/i
-
-export function isRealPersonName(name: string): boolean {
-  if (!name || name.trim().length < 4) return false
-  const trimmed = name.trim()
-  if (/\bat\b/i.test(trimmed)) return false
-  if (ROLE_PREFIXES.test(trimmed)) return false
-  return true
-}
+// ── Contact Quality Check (extracted to src/lib/contact-quality.ts) ──────
+export { isRealPersonName } from './lib/contact-quality.ts'
 
 // ── Footprint Sanitizer ───────────────────────────────────────────────────
 
@@ -795,25 +769,6 @@ export function renderMetricsTable(usedObjectives: UsedObjective[]): string {
   return html
 }
 
-// ── Persona-to-Category Matching (ADR-044) ────────────────────────────────
-
-export function matchPersonaToCategory(title: string): ObjectiveCategory {
-  const lower = title.toLowerCase()
-  if (/\bcfo\b|finance|controller|treasurer/i.test(lower)) return 'financial'
-  if (/\bceo\b|president|chief executive|founder/i.test(lower)) return 'growth'
-  if (/\bciso\b|security|risk|compliance/i.test(lower)) return 'security'
-  if (/\bcto\b|chief technology|engineer|developer|architect|platform/i.test(lower)) return 'innovation'
-  if (/\bcio\b|\bit\b|operations|infrastructure|head of it/i.test(lower)) return 'operational'
-  if (/\bvp\b|director|head\b/i.test(lower)) {
-    if (/finance|accounting/i.test(lower)) return 'financial'
-    if (/security/i.test(lower)) return 'security'
-    if (/engineer|product|platform/i.test(lower)) return 'innovation'
-    if (/sales|revenue|growth|business dev/i.test(lower)) return 'growth'
-    return 'operational'
-  }
-  return 'financial'
-}
-
 const INTERNAL_SIGNAL_PATTERN = /terminat|resign|restructur|layoff/i
 
 // ── Objective Block Rendering (ADR-044) ───────────────────────────────────
@@ -849,10 +804,14 @@ export function renderObjectiveBlock(
       ? catEntries[0]
       : filterUsable(allEntries)[0] || allEntries[0]
   } else if (recipientTitle) {
-    const cat = matchPersonaToCategory(recipientTitle)
-    const catEntries = filterUsable(profile[cat].map(e => ({ ...e, category: cat })))
-    if (catEntries.length > 0) {
-      selected = catEntries[0]
+    const classification = classifyPersona({ name: '', title: recipientTitle })
+    let matched: typeof allEntries[0] | undefined
+    for (const { category: cat } of classification.categories) {
+      const catEntries = filterUsable(profile[cat].map(e => ({ ...e, category: cat })))
+      if (catEntries.length > 0) { matched = catEntries[0]; break }
+    }
+    if (matched) {
+      selected = matched
     } else {
       const usable = filterUsable(allEntries)
       selected = usable.length > 0 ? usable[0] : allEntries[0]

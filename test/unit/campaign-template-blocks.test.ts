@@ -19,7 +19,6 @@ import {
   assembleEmail,
   sanitizeCreepyLines,
   renderObjectiveBlock,
-  matchPersonaToCategory,
 } from '../../src/campaign-html-template.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
@@ -562,55 +561,6 @@ describe('renderObjectiveBlock', () => {
   })
 })
 
-// ── matchPersonaToCategory ────────────────────────────────────────────────
-
-describe('matchPersonaToCategory', () => {
-  it('CFO → financial', () => {
-    expect(matchPersonaToCategory('CFO')).toBe('financial')
-    expect(matchPersonaToCategory('Chief Financial Officer')).toBe('financial')
-  })
-
-  it('CEO → growth', () => {
-    expect(matchPersonaToCategory('CEO')).toBe('growth')
-    expect(matchPersonaToCategory('President & CEO')).toBe('growth')
-  })
-
-  it('CISO → security', () => {
-    expect(matchPersonaToCategory('CISO')).toBe('security')
-    expect(matchPersonaToCategory('VP Security & Risk')).toBe('security')
-  })
-
-  it('CTO → innovation', () => {
-    expect(matchPersonaToCategory('CTO')).toBe('innovation')
-    expect(matchPersonaToCategory('Chief Technology Officer')).toBe('innovation')
-  })
-
-  it('CIO → operational', () => {
-    expect(matchPersonaToCategory('CIO')).toBe('operational')
-    expect(matchPersonaToCategory('Head of IT Operations')).toBe('operational')
-  })
-
-  it('VP Finance → financial', () => {
-    expect(matchPersonaToCategory('VP Finance')).toBe('financial')
-  })
-
-  it('VP Engineering → innovation', () => {
-    expect(matchPersonaToCategory('VP Engineering')).toBe('innovation')
-  })
-
-  it('VP Sales → growth', () => {
-    expect(matchPersonaToCategory('VP Sales')).toBe('growth')
-  })
-
-  it('Director with no sub-keyword → operational', () => {
-    expect(matchPersonaToCategory('Director of Corporate Strategy')).toBe('operational')
-  })
-
-  it('unknown title → financial (default)', () => {
-    expect(matchPersonaToCategory('Board Member')).toBe('financial')
-  })
-})
-
 // ── renderObjectiveBlock persona fallback ──────────────────────────────────
 
 describe('renderObjectiveBlock — persona fallback', () => {
@@ -624,22 +574,22 @@ describe('renderObjectiveBlock — persona fallback', () => {
     expect(result).toContain('protects this trajectory')
   })
 
-  it('null selection + CISO title → picks security entry', () => {
+  it('null selection + security title → picks security entry', () => {
     const profile = makeProfile({
       financial: [makeEntry('margin target')],
       security: [makeEntry('breach prevention program')],
     })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CISO')
+    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'Head of Cybersecurity and Threat Protection')
     expect(result).toContain('breach prevention program')
     expect(result).toContain('strategic exposure')
   })
 
-  it('null selection + CTO title → picks innovation entry', () => {
+  it('null selection + innovation title → picks innovation entry', () => {
     const profile = makeProfile({
       innovation: [makeEntry('AI platform rollout')],
       financial: [makeEntry('cost discipline')],
     })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CTO')
+    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'VP AI and Digital Transformation')
     expect(result).toContain('AI platform rollout')
     expect(result).toContain('keeps this on track')
   })
