@@ -1367,13 +1367,6 @@ export async function generateCampaign(
       if (refs.length > 0) selection.referenceMaterials = refs
     }
 
-    // Filter internal URLs from reference materials
-    if (selection.referenceMaterials) {
-      selection.referenceMaterials = selection.referenceMaterials.map(m =>
-        m.url && isInternalUrl(m.url) ? { ...m, url: undefined } : m,
-      )
-    }
-
     if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
       const attrs: Array<{ name: string; description: string }> = []
       if (materialTitle) attrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
