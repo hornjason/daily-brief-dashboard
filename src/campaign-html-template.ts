@@ -437,10 +437,13 @@ function renderReferenceMaterials(materials: ReferenceMaterial[], heading: strin
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Resource</td>
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Key Takeaway</td>
   </tr>
-  ${materials.map(m => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${m.url ? `<a href="${escapeHtml(m.url)}" style="color: #1a73e8;">${escapeHtml(m.resource)}</a>` : escapeHtml(m.resource)}</td>
+  ${materials.map(m => {
+    const showUrl = m.url && !isInternalUrl(m.url)
+    return `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${showUrl ? `<a href="${escapeHtml(m.url!)}" style="color: #1a73e8;">${escapeHtml(m.resource)}</a>` : escapeHtml(m.resource)}</td>
     <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway)}</td>
-  </tr>`).join('\n')}
+  </tr>`
+  }).join('\n')}
 </table>`
 }
 
@@ -1199,16 +1202,35 @@ export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string)
   return signOff
 }
 
-const TRUSTED_URL_DOMAINS = ['redhat.com', 'access.redhat.com', 'content.redhat.com', 'developers.redhat.com', 'docs.google.com', 'drive.google.com']
+const TRUSTED_URL_DOMAINS = ['redhat.com', 'developers.redhat.com']
+
+const INTERNAL_URL_PATTERNS = [
+  /docs\.google\.com/,
+  /drive\.google\.com/,
+  /slides\.google\.com/,
+  /access\.redhat\.com/,
+  /content\.redhat\.com/,
+  /source\.redhat\.com/,
+  /mojo\.redhat\.com/,
+  /salesforce\.com/,
+  /seismic\.com/,
+]
+
+export function isInternalUrl(url: string): boolean {
+  return INTERNAL_URL_PATTERNS.some(p => p.test(url))
+}
 
 function sanitizeReferenceLine(line: string, sourceUrls?: string[]): string {
   if (!line) return ''
   const sourceDomains = new Set<string>()
   for (const u of sourceUrls ?? []) {
-    try { sourceDomains.add(new URL(u).hostname) } catch {}
+    try {
+      if (!isInternalUrl(u)) sourceDomains.add(new URL(u).hostname)
+    } catch {}
   }
   return line.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_match, text, url) => {
     try {
+      if (isInternalUrl(url)) return text
       const host = new URL(url).hostname
       if (TRUSTED_URL_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return `[${text}](${url})`
       if (sourceDomains.has(host)) return `[${text}](${url})`

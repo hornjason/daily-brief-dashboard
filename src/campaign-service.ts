@@ -27,7 +27,8 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, type BVTalkingPoint } from './campaign-html-template.ts'
+import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
@@ -502,6 +503,15 @@ export async function callGeminiForCampaign(opts: {
     }
   }
 
+  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
+  if (materialPeerProofs.length > 0) {
+    solutionPlaysContext += '\n## SOURCE MATERIAL CUSTOMER WINS (cite these for peer proof when relevant to the campaign topic)\n\n'
+    for (const proof of materialPeerProofs) {
+      solutionPlaysContext += `- ${proof.customer} → ${proof.outcome}\n`
+    }
+    solutionPlaysContext += '\n'
+  }
+
   const userPrompt = `## Material: ${opts.materialTitle}
 
 ### Material Content (first 8000 chars):
@@ -670,6 +680,15 @@ export async function callGeminiForCampaignSelection(opts: {
       if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
       solutionPlaysContext += '\n'
     }
+  }
+
+  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
+  if (materialPeerProofs.length > 0) {
+    solutionPlaysContext += '\n## SOURCE MATERIAL CUSTOMER WINS (cite these for peer proof when relevant to the campaign topic)\n\n'
+    for (const proof of materialPeerProofs) {
+      solutionPlaysContext += `- ${proof.customer} → ${proof.outcome}\n`
+    }
+    solutionPlaysContext += '\n'
   }
 
   const featureUrlMap = getFeatureUrlMap()
@@ -1317,19 +1336,20 @@ export async function generateCampaign(
     for (const match of augmentedMaterial.matchAll(/###\s+(.+)\n(https?:\/\/[^\s]+)/g)) {
       materialUrlMap.set(match[1].trim(), match[2].trim())
     }
+    // Filter internal URLs from materialUrlMap before using for reference lines
+    for (const [name, url] of materialUrlMap.entries()) {
+      if (isInternalUrl(url)) materialUrlMap.delete(name)
+    }
     for (const email of selection.emails) {
       if (materialUrlMap.size > 0) {
         if (!email.referenceLine) {
           const externalRefs = [...materialUrlMap.entries()]
-            .filter(([, url]) => !url.includes('redhat.com'))
             .slice(0, 2)
           if (externalRefs.length > 0) {
             email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
           }
         } else if (email.referenceLine && !email.referenceLine.includes('](http')) {
-          // Deterministic URL injection — replace Gemini's reference line entirely
-          // with a properly linked version using known URLs from material
-          const externalUrls = [...materialUrlMap.entries()].filter(([, url]) => !url.includes('redhat.com'))
+          const externalUrls = [...materialUrlMap.entries()]
           if (externalUrls.length >= 2) {
             email.referenceLine = `For background on the law: [${externalUrls[0][0]}](${externalUrls[0][1]}) covers the definitions, and [${externalUrls[1][0]}](${externalUrls[1][1]}) provides the broader landscape.`
           } else if (externalUrls.length === 1) {
@@ -1345,6 +1365,13 @@ export async function generateCampaign(
         refs.push({ resource: name, url, keyTakeaway: 'Source document referenced in campaign material.' })
       }
       if (refs.length > 0) selection.referenceMaterials = refs
+    }
+
+    // Filter internal URLs from reference materials
+    if (selection.referenceMaterials) {
+      selection.referenceMaterials = selection.referenceMaterials.map(m =>
+        m.url && isInternalUrl(m.url) ? { ...m, url: undefined } : m,
+      )
     }
 
     if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
