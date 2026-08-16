@@ -237,7 +237,7 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
       ...emptyProfile,
       financial: [{ objective: '12% YoY revenue growth', metric: '12%', priority: null, source: 'Q2 2026 earnings', confidence: 'HIGH' }],
     }
-    const result = renderObjectiveBlock(profile, {}, { threat: 'SaaS tax', solution: 'self-managed automation' })
+    const result = renderObjectiveBlock(profile, { threat: 'SaaS tax', solution: 'self-managed automation' })
     expect(result).toContain('12% YoY revenue growth')
     expect(result).toStartWith('With ')
     expect(result).not.toBe('')
@@ -248,7 +248,7 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
       ...emptyProfile,
       financial: [{ objective: '$514K pipeline opportunity', metric: '$514K pipeline opportunity', priority: null, source: 'internal', confidence: 'HIGH' }],
     }
-    const objCtx = renderObjectiveBlock(profile, {}, { threat: 'SaaS tax', solution: 'automation' })
+    const objCtx = renderObjectiveBlock(profile, { threat: 'SaaS tax', solution: 'automation' })
     const combined = `Your IaC modernization signal caught our attention. ${objCtx}`
     const sanitized = sanitizeCreepyLines(combined)
     expect(sanitized).not.toContain('pipeline')
@@ -261,7 +261,7 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
       ...emptyProfile,
       security: [{ objective: 'zero-trust initiative', metric: null, priority: 'HIGH', source: 'strategy', confidence: 'HIGH' }],
     }
-    const result = renderObjectiveBlock(profile, {}, { threat: 'rising breach costs', solution: 'Red Hat security platform' })
+    const result = renderObjectiveBlock(profile, { threat: 'rising breach costs', solution: 'Red Hat security platform' })
     expect(result).toContain('rising breach costs')
     expect(result).toContain('Red Hat security platform')
     expect(result).toContain('strategic exposure')
@@ -275,7 +275,7 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
         { objective: 'Revenue Trajectory: 11% growth', metric: '11%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
       ],
     }
-    const result = renderObjectiveBlock(profile, { objectiveIndex: 0 }, { threat: 'rising costs', solution: 'automation' })
+    const result = renderObjectiveBlock(profile, { threat: 'rising costs', solution: 'automation' })
     expect(result).toContain('$290.6M')
     expect(result).toContain('protects this trajectory')
     expect(result.length).toBeLessThan(200)

@@ -32,6 +32,11 @@ describe('classifyPersona', () => {
     expect(result.categories[0].category).toBe('financial')
   })
 
+  it('bare CISO title → security top category', () => {
+    const result = classifyPersona({ name: 'Jane Doe', title: 'CISO' })
+    expect(result.categories[0].category).toBe('security')
+  })
+
   it('CISO title + security context → security high confidence', () => {
     const result = classifyPersona({
       name: 'Sean Pike',

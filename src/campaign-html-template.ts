@@ -775,7 +775,6 @@ const INTERNAL_SIGNAL_PATTERN = /terminat|resign|restructur|layoff/i
 
 export function renderObjectiveBlock(
   profile: CustomerObjectiveProfile | undefined,
-  selection: { objectiveIndex?: number | null; objectiveCategory?: string | null },
   campaignTheme: { threat: string; solution: string },
   recipientTitle?: string,
   preMatch?: import('./lib/persona-classifier.ts').PreMatchedMetric,
@@ -815,15 +814,7 @@ export function renderObjectiveBlock(
   if (allEntries.length === 0) return ''
 
   let selected: typeof allEntries[0]
-  if (selection.objectiveIndex != null && selection.objectiveIndex < allEntries.length) {
-    selected = allEntries[selection.objectiveIndex]
-  } else if (selection.objectiveCategory) {
-    const cat = selection.objectiveCategory as 'financial' | 'security' | 'operational' | 'innovation' | 'growth'
-    const catEntries = filterUsable(profile[cat].map(e => ({ ...e, category: cat })))
-    selected = catEntries.length > 0
-      ? catEntries[0]
-      : filterUsable(allEntries)[0] || allEntries[0]
-  } else if (recipientTitle) {
+  if (recipientTitle) {
     const classification = classifyPersona({ name: '', title: recipientTitle })
     let matched: typeof allEntries[0] | undefined
     for (const { category: cat } of classification.categories) {
@@ -1463,7 +1454,13 @@ export function generateCampaignFromStructured(
     threat: data.campaignThreat || 'rising infrastructure costs',
     solution: data.campaignSolution || 'consolidated infrastructure',
   }
-  const objectiveCorrelation = renderObjectiveBlock(data.objectiveProfile, { objectiveIndex: 0, objectiveCategory: null }, campaignTheme)
+  const fitPreMatch = data.preMatchedMetrics?.[0]
+  const objectiveCorrelation = renderObjectiveBlock(
+    data.objectiveProfile,
+    campaignTheme,
+    fitPreMatch?.recipientTitle,
+    fitPreMatch,
+  )
 
   // Find AE name from account team (always from account team, never from selection)
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
@@ -1502,7 +1499,6 @@ export function generateCampaignFromStructured(
     const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
     const objectiveContext = sanitizeCreepyLines(renderObjectiveBlock(
       data.objectiveProfile,
-      {},
       campaignTheme,
       recipientTitle,
       preMatch,

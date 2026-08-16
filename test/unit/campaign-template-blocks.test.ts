@@ -466,7 +466,7 @@ const defaultTheme = { threat: 'SaaS tax and vendor lock-in', solution: 'self-ma
 describe('renderObjectiveBlock', () => {
   it('returns financial sentence with objective context and threat', () => {
     const profile = makeProfile({ financial: [makeEntry('25-30% EBITDA margins target', { metric: '25-30%' })] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('25-30% EBITDA margins target')
     expect(result).toContain('SaaS tax and vendor lock-in')
     expect(result).toContain('self-managed automation')
@@ -476,7 +476,7 @@ describe('renderObjectiveBlock', () => {
 
   it('returns security sentence about strategic exposure', () => {
     const profile = makeProfile({ security: [makeEntry('zero-trust security initiative')] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('zero-trust security initiative')
     expect(result).toContain('strategic exposure')
     expect(result).toContain('reduces this surface')
@@ -485,7 +485,7 @@ describe('renderObjectiveBlock', () => {
 
   it('returns operational sentence', () => {
     const profile = makeProfile({ operational: [makeEntry('modernization initiative')] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('modernization initiative')
     expect(result).toContain('operational overhead')
     expect(result).toContain('consolidates this')
@@ -493,7 +493,7 @@ describe('renderObjectiveBlock', () => {
 
   it('returns innovation sentence about progress', () => {
     const profile = makeProfile({ innovation: [makeEntry('AI platform strategy')] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('AI platform strategy')
     expect(result).toContain('keeps this on track')
     expect(result).toStartWith('As ')
@@ -501,62 +501,33 @@ describe('renderObjectiveBlock', () => {
 
   it('returns growth sentence', () => {
     const profile = makeProfile({ growth: [makeEntry('15% YoY growth', { metric: '15% YoY growth' })] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('15% YoY growth')
     expect(result).toContain('removes this barrier')
   })
 
   it('returns empty string for undefined profile', () => {
-    expect(renderObjectiveBlock(undefined, {}, defaultTheme)).toBe('')
+    expect(renderObjectiveBlock(undefined, defaultTheme)).toBe('')
   })
 
   it('returns empty string for profile with no entries', () => {
     const profile = makeProfile()
-    expect(renderObjectiveBlock(profile, {}, defaultTheme)).toBe('')
-  })
-
-  it('objectiveIndex selects specific entry', () => {
-    const profile = makeProfile({
-      financial: [makeEntry('EBITDA target', { metric: '25%' })],
-      security: [makeEntry('breach prevention')],
-    })
-    const r0 = renderObjectiveBlock(profile, { objectiveIndex: 0 }, defaultTheme)
-    const r1 = renderObjectiveBlock(profile, { objectiveIndex: 1 }, defaultTheme)
-    expect(r0).toContain('EBITDA target')
-    expect(r0).toContain('protects this trajectory')
-    expect(r1).toContain('breach prevention')
-    expect(r1).toContain('strategic exposure')
-  })
-
-  it('objectiveCategory selects from category', () => {
-    const profile = makeProfile({
-      financial: [makeEntry('margin discipline', { metric: '30%' })],
-      security: [makeEntry('compliance program')],
-    })
-    const result = renderObjectiveBlock(profile, { objectiveCategory: 'security' }, defaultTheme)
-    expect(result).toContain('compliance program')
-    expect(result).not.toContain('30%')
+    expect(renderObjectiveBlock(profile, defaultTheme)).toBe('')
   })
 
   it('Red Hat products never in threat position — threat is always external', () => {
     const profile = makeProfile({ financial: [makeEntry('cost discipline', { metric: '20%' })] })
     const theme = { threat: 'rising SaaS costs', solution: 'Red Hat Ansible Automation Platform' }
-    const result = renderObjectiveBlock(profile, {}, theme)
+    const result = renderObjectiveBlock(profile, theme)
     expect(result).toContain('rising SaaS costs')
     expect(result).toContain('Red Hat Ansible Automation Platform')
     expect(result).not.toMatch(/Red Hat.*creates a direct headwind/)
     expect(result).toMatch(/Red Hat.*protects this trajectory/)
   })
 
-  it('falls back to first entry when objectiveIndex exceeds bounds', () => {
-    const profile = makeProfile({ financial: [makeEntry('only entry', { metric: '10%' })] })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: 99 }, defaultTheme)
-    expect(result).toContain('only entry')
-  })
-
   it('uses objective text as metric fallback when metric is null', () => {
     const profile = makeProfile({ operational: [makeEntry('modernize legacy stack')] })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('modernize legacy stack')
   })
 })
@@ -569,7 +540,7 @@ describe('renderObjectiveBlock — persona fallback', () => {
       financial: [makeEntry('25% margin target', { metric: '25%' })],
       security: [makeEntry('zero-trust initiative')],
     })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CFO')
+    const result = renderObjectiveBlock(profile, defaultTheme, 'CFO')
     expect(result).toContain('25% margin target')
     expect(result).toContain('protects this trajectory')
   })
@@ -579,7 +550,7 @@ describe('renderObjectiveBlock — persona fallback', () => {
       financial: [makeEntry('margin target')],
       security: [makeEntry('breach prevention program')],
     })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'Head of Cybersecurity and Threat Protection')
+    const result = renderObjectiveBlock(profile, defaultTheme, 'Head of Cybersecurity and Threat Protection')
     expect(result).toContain('breach prevention program')
     expect(result).toContain('strategic exposure')
   })
@@ -589,7 +560,7 @@ describe('renderObjectiveBlock — persona fallback', () => {
       innovation: [makeEntry('AI platform rollout')],
       financial: [makeEntry('cost discipline')],
     })
-    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'VP AI and Digital Transformation')
+    const result = renderObjectiveBlock(profile, defaultTheme, 'VP AI and Digital Transformation')
     expect(result).toContain('AI platform rollout')
     expect(result).toContain('keeps this on track')
   })
@@ -610,7 +581,7 @@ describe('renderObjectiveBlock — persona fallback', () => {
         confidence: 'HIGH' as const,
       }],
     })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('high priority margin target')
     expect(result).not.toContain('low priority thing')
   })
@@ -631,7 +602,7 @@ describe('renderObjectiveBlock — persona fallback', () => {
         confidence: 'HIGH' as const,
       }],
     })
-    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    const result = renderObjectiveBlock(profile, defaultTheme)
     expect(result).toContain('infrastructure modernization initiative')
     expect(result).not.toContain('termination')
   })
@@ -652,7 +623,7 @@ describe('renderObjectiveBlock — preMatch priority', () => {
       confidence: 0.9,
       entry: makeEntry('zero-trust architecture initiative'),
     }
-    const result = renderObjectiveBlock(profile, {}, defaultTheme, undefined, preMatch)
+    const result = renderObjectiveBlock(profile, defaultTheme, undefined, preMatch)
     expect(result).toContain('zero-trust architecture initiative')
     expect(result).toContain('strategic exposure')
     expect(result).not.toContain('EBITDA')
@@ -666,7 +637,7 @@ describe('renderObjectiveBlock — preMatch priority', () => {
       confidence: 0.7,
       entry: makeEntry('25-30% EBITDA margins target', { metric: '25-30%' }),
     }
-    const result = renderObjectiveBlock(undefined, {}, defaultTheme, undefined, preMatch)
+    const result = renderObjectiveBlock(undefined, defaultTheme, undefined, preMatch)
     expect(result).toContain('25-30% EBITDA margins target')
     expect(result).toContain('protects this trajectory')
   })
@@ -679,13 +650,13 @@ describe('renderObjectiveBlock — preMatch priority', () => {
       confidence: 0.5,
       entry: makeEntry('AI platform modernization'),
     }
-    const result = renderObjectiveBlock(undefined, {}, defaultTheme, undefined, preMatch)
+    const result = renderObjectiveBlock(undefined, defaultTheme, undefined, preMatch)
     expect(result).toContain('AI platform modernization')
     expect(result).toContain('keeps this on track')
     expect(result).toStartWith('As ')
   })
 
-  it('preMatch takes priority over objectiveIndex', () => {
+  it('preMatch takes priority over recipientTitle fallback', () => {
     const profile = makeProfile({
       financial: [makeEntry('EBITDA target')],
       security: [makeEntry('breach prevention')],
@@ -697,7 +668,7 @@ describe('renderObjectiveBlock — preMatch priority', () => {
       confidence: 0.8,
       entry: makeEntry('breach prevention'),
     }
-    const result = renderObjectiveBlock(profile, { objectiveIndex: 0 }, defaultTheme, undefined, preMatch)
+    const result = renderObjectiveBlock(profile, defaultTheme, undefined, preMatch)
     expect(result).toContain('breach prevention')
     expect(result).toContain('strategic exposure')
     expect(result).not.toContain('EBITDA')
