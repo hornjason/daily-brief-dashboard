@@ -505,11 +505,13 @@ export async function callGeminiForCampaign(opts: {
 
   const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
   if (materialPeerProofs.length > 0) {
-    solutionPlaysContext += '\n## SOURCE MATERIAL CUSTOMER WINS (cite these for peer proof when relevant to the campaign topic)\n\n'
-    for (const proof of materialPeerProofs) {
-      solutionPlaysContext += `- ${proof.customer} → ${proof.outcome}\n`
-    }
-    solutionPlaysContext += '\n'
+    solutionPlaysContext += `\n### Play: "Source Material Customer Wins"\n`
+    solutionPlaysContext += `- TDP: Campaign Source Material\n`
+    solutionPlaysContext += `- Real-World Examples:\n`
+    materialPeerProofs.forEach((proof, i) => {
+      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
+    })
+    solutionPlaysContext += '\nPRIORITIZE these source material examples over generic plays when they are relevant to the campaign topic.\n\n'
   }
 
   const userPrompt = `## Material: ${opts.materialTitle}
@@ -685,11 +687,14 @@ export async function callGeminiForCampaignSelection(opts: {
   const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
   if (materialPeerProofs.length > 0) {
     console.log(`[campaigns] Extracted ${materialPeerProofs.length} peer proofs from source material: ${materialPeerProofs.map(p => p.customer).join(', ')}`)
-    solutionPlaysContext += '\n## SOURCE MATERIAL CUSTOMER WINS (cite these for peer proof when relevant to the campaign topic)\n\n'
-    for (const proof of materialPeerProofs) {
-      solutionPlaysContext += `- ${proof.customer} → ${proof.outcome}\n`
-    }
-    solutionPlaysContext += '\n'
+    // Inject as a synthetic play so Gemini can reference via playName + exampleIndex
+    solutionPlaysContext += `\n### Play: "Source Material Customer Wins"\n`
+    solutionPlaysContext += `- TDP: Campaign Source Material\n`
+    solutionPlaysContext += `- Real-World Examples:\n`
+    materialPeerProofs.forEach((proof, i) => {
+      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
+    })
+    solutionPlaysContext += '\nPRIORITIZE these source material examples over generic plays when they are relevant to the campaign topic.\n\n'
   } else {
     console.log(`[campaigns] No peer proofs found in source material (${opts.materialContent.length} chars)`)
   }
