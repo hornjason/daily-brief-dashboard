@@ -908,6 +908,7 @@ export interface StructuredCampaignData {
   campaignSolution?: string
   objectiveProfile?: CustomerObjectiveProfile
   preMatchedMetrics?: import('./lib/persona-classifier.ts').PreMatchedMetric[]
+  preMatchedPeerProofs?: import('./lib/persona-classifier.ts').PreMatchedPeerProof[]
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1123,7 +1124,12 @@ function getCapabilityDescription(featureKey: string): string {
 export function buildPeerPattern(
   peerProof: { playName: string; exampleIndex: number } | null,
   structuredPlays: StructuredPlay[],
+  preMatchedProof?: { proof: { customer: string; outcome: string } },
 ): string {
+  if (preMatchedProof) {
+    return `${preMatchedProof.proof.customer} ${preMatchedProof.proof.outcome}`
+  }
+
   if (peerProof) {
     const target = peerProof.playName.toLowerCase()
     const play = structuredPlays.find(p => p.name === peerProof.playName)
@@ -1553,7 +1559,8 @@ export function generateCampaignFromStructured(
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
     const referenceLine = sanitizeReferenceLine(email.referenceLine || '', data.sourceUrls)
-    const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays)
+    const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
+    const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof)
     const challengerFrame = buildChallengerFrame(email.challengerDataPoint, i)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)

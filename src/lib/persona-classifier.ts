@@ -1,4 +1,5 @@
 import { CATEGORY_KEYWORDS, type ObjectiveCategory, type CustomerObjectiveProfile, type ObjectiveEntry } from '../modules/intelligence-module.ts'
+import type { MaterialPeerProof } from './source-material-parser.ts'
 
 export interface ContactContext {
   name: string
@@ -36,7 +37,7 @@ export function classifyPersona(contact: ContactContext): PersonaClassification 
   }
 
   if (total === 0) {
-    return { categories: [{ category: 'financial', confidence: 0.5 }] }
+    return { categories: [{ category: 'operational', confidence: 0.5 }] }
   }
 
   const ranked = Object.entries(counts)
@@ -44,6 +45,63 @@ export function classifyPersona(contact: ContactContext): PersonaClassification 
     .sort((a, b) => b.confidence - a.confidence)
 
   return { categories: ranked }
+}
+
+export interface PreMatchedPeerProof {
+  recipientName: string
+  proof: MaterialPeerProof
+  category: string
+}
+
+export function preMatchPeerProofs(
+  contacts: Array<{ name: string; title: string }>,
+  availableProofs: MaterialPeerProof[],
+): PreMatchedPeerProof[] {
+  if (availableProofs.length === 0) return []
+
+  const classifiedProofs = availableProofs.map(proof => {
+    let bestCat = 'operational'
+    let bestScore = 0
+    for (const [cat, re] of Object.entries(CATEGORY_KEYWORDS)) {
+      const matches = proof.outcome.match(new RegExp(re.source, 'gi'))
+      if (matches && matches.length > bestScore) {
+        bestScore = matches.length
+        bestCat = cat
+      }
+    }
+    if (/\$[\d,.]+|ROI|cost|TCO|payback|benefit/i.test(proof.outcome)) {
+      bestCat = 'financial'
+    }
+    return { proof, category: bestCat }
+  })
+
+  const results: PreMatchedPeerProof[] = []
+  const usedProofIndices = new Map<number, number>()
+
+  for (const contact of contacts) {
+    const persona = classifyPersona({ name: contact.name, title: contact.title })
+    const topCategory = persona.categories[0]?.category || 'operational'
+
+    let matched = classifiedProofs.find((cp, i) =>
+      cp.category === topCategory && (usedProofIndices.get(i) || 0) < 2
+    )
+    if (!matched) {
+      const idx = classifiedProofs.findIndex((_, i) => (usedProofIndices.get(i) || 0) < 2)
+      if (idx >= 0) matched = classifiedProofs[idx]
+    }
+    if (!matched) matched = classifiedProofs[0]
+
+    const proofIdx = classifiedProofs.indexOf(matched)
+    usedProofIndices.set(proofIdx, (usedProofIndices.get(proofIdx) || 0) + 1)
+
+    results.push({
+      recipientName: contact.name,
+      proof: matched.proof,
+      category: matched.category,
+    })
+  }
+
+  return results
 }
 
 export function preMatchObjectives(

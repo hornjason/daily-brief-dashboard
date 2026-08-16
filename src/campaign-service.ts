@@ -38,7 +38,7 @@ import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
-import { preMatchObjectives, type PreMatchedMetric } from './lib/persona-classifier.ts'
+import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
 import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
@@ -656,6 +656,7 @@ export async function callGeminiForCampaignSelection(opts: {
   temperature?: number
   objectiveProfile?: CustomerObjectiveProfile
   preMatchedMetrics?: PreMatchedMetric[]
+  preMatchedPeerProofs?: PreMatchedPeerProof[]
 }): Promise<CampaignSelectionResult> {
   const featureKeys = getFeatureKeys()
 
@@ -711,7 +712,16 @@ export async function callGeminiForCampaignSelection(opts: {
     preMatchContext += '\nWeave each recipient\'s pre-matched data point into their email\'s signalBridge or customOpener. The data point should appear naturally in the email body.\n'
   }
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  let peerProofContext = ''
+  if (opts.preMatchedPeerProofs && opts.preMatchedPeerProofs.length > 0) {
+    peerProofContext = '\n## PRE-MATCHED PEER PROOFS (use these — DO NOT select different ones)\n\n'
+    for (const pp of opts.preMatchedPeerProofs) {
+      peerProofContext += `- ${pp.recipientName}: ${pp.proof.customer} → ${pp.proof.outcome}\n`
+    }
+    peerProofContext += '\nSet each recipient\'s peerProof to playName: "Source Material Customer Wins" with the matching exampleIndex.\n'
+  }
+
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1265,8 +1275,22 @@ export async function generateCampaign(
     }
   })
 
-  // 4b. Generate campaign — branched by feature flag (ADR-043)
+  // 4a. Inject source material peer proofs into structuredPlays so buildPeerPattern() can resolve them
   const augmentedMaterial = materialContent + resolvedContactsContext
+  const materialPeerProofs = extractPeerProofsFromMaterial(augmentedMaterial)
+  if (materialPeerProofs.length > 0) {
+    structuredPlays.unshift({
+      name: 'Source Material Customer Wins',
+      parentTdp: 'Campaign Source Material',
+      customerWins: undefined,
+      realWorldExamples: materialPeerProofs.map(p => ({ customer: p.customer, outcome: p.outcome })),
+      extractedMetrics: undefined,
+      talkTrack: undefined,
+    })
+    console.log(`[campaigns] Injected ${materialPeerProofs.length} source material peer proofs into structuredPlays: ${materialPeerProofs.map(p => p.customer).join(', ')}`)
+  }
+
+  // 4b. Generate campaign — branched by feature flag (ADR-043)
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
   const timestamp = new Date().toLocaleDateString('en-US', {
@@ -1305,6 +1329,15 @@ export async function generateCampaign(
       console.log(`[campaigns] Pre-matched ${preMatchedMetrics.length} objectives for ${customer.name}`)
     }
 
+    // Pre-match peer proofs deterministically (council fix 2)
+    const preMatchedPeerProofs = preMatchPeerProofs(
+      resolvedExecs.map(e => ({ name: e.name, title: e.title })),
+      materialPeerProofs,
+    )
+    if (preMatchedPeerProofs.length > 0) {
+      console.log(`[campaigns] Pre-matched ${preMatchedPeerProofs.length} peer proofs for ${customer.name}`)
+    }
+
     // Pass 1: Gemini data selection
     const selection = await callGeminiForCampaignSelection({
       materialTitle,
@@ -1318,6 +1351,7 @@ export async function generateCampaign(
       campaignDirective: config?.campaignDirective,
       objectiveProfile,
       preMatchedMetrics,
+      preMatchedPeerProofs,
     })
 
     // Validate selection
@@ -1532,6 +1566,7 @@ export async function generateCampaign(
       campaignSolution: solution,
       objectiveProfile,
       preMatchedMetrics,
+      preMatchedPeerProofs,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

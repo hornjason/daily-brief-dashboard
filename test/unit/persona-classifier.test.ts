@@ -56,9 +56,9 @@ describe('classifyPersona', () => {
     expect(result.categories[0].category).toBe('operational')
   })
 
-  it('empty context → fallback to financial', () => {
+  it('empty context → fallback to operational (ADR-045)', () => {
     const result = classifyPersona({ name: 'Jane Doe', title: 'Board Member' })
-    expect(result.categories[0].category).toBe('financial')
+    expect(result.categories[0].category).toBe('operational')
     expect(result.categories[0].confidence).toBe(0.5)
   })
 
@@ -96,7 +96,7 @@ describe('preMatchObjectives', () => {
 
     const contacts = [
       { name: 'Sean Pike', title: 'Head of Information Security', leadershipContext: 'Former CISO. Cybersecurity veteran.' },
-      { name: 'Ryan Henderson', title: 'Director of Finance' },
+      { name: 'Ryan Henderson', title: 'Director of Finance', leadershipContext: 'Cost management and fiscal planning.' },
     ]
 
     const results = preMatchObjectives(contacts, profile)
