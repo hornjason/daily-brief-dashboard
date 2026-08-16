@@ -153,7 +153,7 @@ async function fetchLinkedContent(
           const fileId = extractFileId(link.url)
           if (fileId) {
             const { title, content } = await extractMaterialContent(fileId)
-            return { url: link.url, title, excerpt: content.substring(0, 8000) }
+            return { url: link.url, title, excerpt: content }
           }
         }
 
