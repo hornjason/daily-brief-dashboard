@@ -14,6 +14,7 @@ import {
   renderObjectiveBlock,
   renderMetricsTable,
 } from '../../src/campaign-html-template.ts'
+import type { UsedObjective } from '../../src/campaign-html-template.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
 // ── 1. Title cleaning ─────────────────────────────────────────────────────
@@ -281,81 +282,57 @@ describe('renderObjectiveBlock in email body — ADR-044', () => {
   })
 })
 
-// ── renderMetricsTable — ADR-044 Phase 4 ───────────────────────────────────
+// ── renderMetricsTable — ADR-044 Phase 4 (UsedObjective[]) ────────────────
 
-describe('renderMetricsTable — produces HTML table with rows', () => {
-  const emptyProfile: CustomerObjectiveProfile = { financial: [], security: [], operational: [], innovation: [], growth: [] }
-
-  it('returns empty string for undefined profile', () => {
-    expect(renderMetricsTable(undefined)).toBe('')
+describe('renderMetricsTable — produces HTML table from used objectives', () => {
+  it('returns empty string for empty array', () => {
+    expect(renderMetricsTable([])).toBe('')
   })
 
-  it('returns empty string for profile with no entries', () => {
-    expect(renderMetricsTable(emptyProfile)).toBe('')
-  })
-
-  it('produces HTML table with correct headers', () => {
-    const profile: CustomerObjectiveProfile = {
-      ...emptyProfile,
-      financial: [{ objective: '11% growth', metric: '11%', priority: null, source: 'Financial Health', confidence: 'HIGH' }],
-    }
-    const result = renderMetricsTable(profile)
+  it('produces HTML table with correct headers including Used In column', () => {
+    const used: UsedObjective[] = [
+      { objective: '11% growth', metric: '11%', category: 'Financial', usedIn: 'Jane Doe (executive)' },
+    ]
+    const result = renderMetricsTable(used)
     expect(result).toContain('<table')
     expect(result).toContain('Category')
     expect(result).toContain('Metric')
-    expect(result).toContain('Source')
-    expect(result).toContain('Priority')
+    expect(result).toContain('Used In')
+    expect(result).not.toContain('Source')
+    expect(result).not.toContain('Priority')
   })
 
-  it('renders rows for each entry with category label', () => {
-    const profile: CustomerObjectiveProfile = {
-      ...emptyProfile,
-      financial: [
-        { objective: '$290.6M revenue', metric: '$290.6M', priority: null, source: 'Financial Health', confidence: 'HIGH' },
-        { objective: '11% growth', metric: '11%', priority: 'HIGH', source: 'Financial Health', confidence: 'HIGH' },
-      ],
-      security: [
-        { objective: 'zero-trust initiative', metric: null, priority: 'HIGH', source: 'Strategic Initiatives', confidence: 'HIGH' },
-      ],
-    }
-    const result = renderMetricsTable(profile)
+  it('renders rows for each used objective with Used In', () => {
+    const used: UsedObjective[] = [
+      { objective: '$290.6M revenue', metric: '$290.6M', category: 'Financial', usedIn: 'Jane Doe (executive)' },
+      { objective: 'zero-trust initiative', metric: null, category: 'Security', usedIn: 'Bob Smith (manager)' },
+    ]
+    const result = renderMetricsTable(used)
     expect(result).toContain('Financial')
     expect(result).toContain('Security')
     expect(result).toContain('$290.6M revenue')
     expect(result).toContain('zero-trust initiative')
+    expect(result).toContain('Jane Doe (executive)')
+    expect(result).toContain('Bob Smith (manager)')
     const rowCount = (result.match(/<tr/g) || []).length
-    expect(rowCount).toBeGreaterThanOrEqual(4)
-  })
-
-  it('renders priority badge for entries with priority', () => {
-    const profile: CustomerObjectiveProfile = {
-      ...emptyProfile,
-      financial: [{ objective: 'test', metric: '10%', priority: 'HIGH', source: 'test', confidence: 'HIGH' }],
-    }
-    const result = renderMetricsTable(profile)
-    expect(result).toContain('HIGH')
-    expect(result).toContain('#fce8e6')
+    expect(rowCount).toBe(3) // header + 2 data rows
   })
 
   it('deduplicates entries with same metric value', () => {
-    const profile: CustomerObjectiveProfile = {
-      ...emptyProfile,
-      financial: [
-        { objective: '15.5% growth', metric: '15.5%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
-        { objective: '$80.1M (+15.5% YoY)', metric: '15.5%', priority: null, source: 'Financial Health', confidence: 'HIGH' },
-      ],
-    }
-    const result = renderMetricsTable(profile)
+    const used: UsedObjective[] = [
+      { objective: '15.5% growth', metric: '15.5%', category: 'Financial', usedIn: 'Alice (executive)' },
+      { objective: '$80.1M (+15.5% YoY)', metric: '15.5%', category: 'Financial', usedIn: 'Bob (manager)' },
+    ]
+    const result = renderMetricsTable(used)
     const rowCount = (result.match(/<tr/g) || []).length
-    expect(rowCount).toBe(2)
+    expect(rowCount).toBe(2) // header + 1 deduped data row
   })
 
-  it('renders dash for entries without priority', () => {
-    const profile: CustomerObjectiveProfile = {
-      ...emptyProfile,
-      financial: [{ objective: 'test', metric: '10%', priority: null, source: 'test', confidence: 'HIGH' }],
-    }
-    const html = renderMetricsTable(profile)
-    expect(html).toContain('—')
+  it('title says Business Metrics Used in Outreach', () => {
+    const used: UsedObjective[] = [
+      { objective: 'test', metric: '10%', category: 'Financial', usedIn: 'Test (executive)' },
+    ]
+    const result = renderMetricsTable(used)
+    expect(result).toContain('Business Metrics Used in Outreach')
   })
 })

@@ -13,7 +13,7 @@ import type { FeatureRegistryEntry } from './lib/feature-url-registry.ts'
 import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
-import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
+import type { CustomerObjectiveProfile, ObjectiveCategory } from './modules/intelligence-module.ts'
 
 const BRAND_RED = '#c41e3a'
 
@@ -767,19 +767,18 @@ export function sanitizeCreepyLines(text: string): string {
 
 // ── Metrics Table Rendering (ADR-044 Phase 4) ────────────────────────────
 
-export function renderMetricsTable(profile: CustomerObjectiveProfile | undefined): string {
-  if (!profile) return ''
-  const allEntries = [
-    ...profile.financial.map(e => ({ ...e, category: 'Financial' })),
-    ...profile.security.map(e => ({ ...e, category: 'Security' })),
-    ...profile.operational.map(e => ({ ...e, category: 'Operational' })),
-    ...profile.innovation.map(e => ({ ...e, category: 'Innovation' })),
-    ...profile.growth.map(e => ({ ...e, category: 'Growth' })),
-  ]
-  if (allEntries.length === 0) return ''
+export interface UsedObjective {
+  objective: string
+  metric: string | null
+  category: string
+  usedIn: string
+}
+
+export function renderMetricsTable(usedObjectives: UsedObjective[]): string {
+  if (usedObjectives.length === 0) return ''
 
   const seen = new Set<string>()
-  const deduped = allEntries.filter(e => {
+  const deduped = usedObjectives.filter(e => {
     const key = e.metric || e.objective
     if (seen.has(key)) return false
     seen.add(key)
@@ -788,16 +787,34 @@ export function renderMetricsTable(profile: CustomerObjectiveProfile | undefined
 
   let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
   html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
-  html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Source</td><td>Priority</td></tr>'
+  html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
   for (const e of deduped) {
-    const priorityBadge = e.priority
-      ? `<span style="background: ${e.priority === 'HIGH' ? '#fce8e6' : '#fef7e0'}; padding: 2px 6px; border-radius: 3px; font-size: 11px;">${escapeHtml(e.priority)}</span>`
-      : '—'
-    html += `<tr><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.objective)}</td><td>${escapeHtml(e.source)}</td><td>${priorityBadge}</td></tr>`
+    html += `<tr><td>${escapeHtml(e.category)}</td><td>${escapeHtml(e.objective)}</td><td>${escapeHtml(e.usedIn)}</td></tr>`
   }
   html += '</table>'
   return html
 }
+
+// ── Persona-to-Category Matching (ADR-044) ────────────────────────────────
+
+export function matchPersonaToCategory(title: string): ObjectiveCategory {
+  const lower = title.toLowerCase()
+  if (/\bcfo\b|finance|controller|treasurer/i.test(lower)) return 'financial'
+  if (/\bceo\b|president|chief executive|founder/i.test(lower)) return 'growth'
+  if (/\bciso\b|security|risk|compliance/i.test(lower)) return 'security'
+  if (/\bcto\b|chief technology|engineer|developer|architect|platform/i.test(lower)) return 'innovation'
+  if (/\bcio\b|\bit\b|operations|infrastructure|head of it/i.test(lower)) return 'operational'
+  if (/\bvp\b|director|head\b/i.test(lower)) {
+    if (/finance|accounting/i.test(lower)) return 'financial'
+    if (/security/i.test(lower)) return 'security'
+    if (/engineer|product|platform/i.test(lower)) return 'innovation'
+    if (/sales|revenue|growth|business dev/i.test(lower)) return 'growth'
+    return 'operational'
+  }
+  return 'financial'
+}
+
+const INTERNAL_SIGNAL_PATTERN = /terminat|resign|restructur|layoff/i
 
 // ── Objective Block Rendering (ADR-044) ───────────────────────────────────
 
@@ -805,8 +822,12 @@ export function renderObjectiveBlock(
   profile: CustomerObjectiveProfile | undefined,
   selection: { objectiveIndex?: number | null; objectiveCategory?: string | null },
   campaignTheme: { threat: string; solution: string },
+  recipientTitle?: string,
 ): string {
   if (!profile) return ''
+
+  const filterUsable = (entries: typeof allEntries) =>
+    entries.filter(e => e.priority !== 'LOW' && !INTERNAL_SIGNAL_PATTERN.test(e.objective))
 
   const allEntries = [
     ...profile.financial.map(e => ({ ...e, category: 'financial' as const })),
@@ -823,12 +844,22 @@ export function renderObjectiveBlock(
     selected = allEntries[selection.objectiveIndex]
   } else if (selection.objectiveCategory) {
     const cat = selection.objectiveCategory as 'financial' | 'security' | 'operational' | 'innovation' | 'growth'
-    const catEntries = profile[cat]
-    selected = catEntries && catEntries.length > 0
-      ? { ...catEntries[0], category: cat }
-      : allEntries[0]
+    const catEntries = filterUsable(profile[cat].map(e => ({ ...e, category: cat })))
+    selected = catEntries.length > 0
+      ? catEntries[0]
+      : filterUsable(allEntries)[0] || allEntries[0]
+  } else if (recipientTitle) {
+    const cat = matchPersonaToCategory(recipientTitle)
+    const catEntries = filterUsable(profile[cat].map(e => ({ ...e, category: cat })))
+    if (catEntries.length > 0) {
+      selected = catEntries[0]
+    } else {
+      const usable = filterUsable(allEntries)
+      selected = usable.length > 0 ? usable[0] : allEntries[0]
+    }
   } else {
-    selected = allEntries[0]
+    const usable = filterUsable(allEntries)
+    selected = usable.length > 0 ? usable[0] : allEntries[0]
   }
 
   const objText = selected.objective.length > 80
@@ -1481,6 +1512,9 @@ export function generateCampaignFromStructured(
     linkedIn: e.linkedIn,
   }))
 
+  // Track which objectives are actually used in emails
+  const usedObjectives: UsedObjective[] = []
+
   // Build per-email HTML
   const execEmailsHtml: string[] = []
   const managerEmailsHtml: string[] = []
@@ -1498,11 +1532,32 @@ export function generateCampaignFromStructured(
     // Build all 8 blocks
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
+    const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
+    const recipientTitle = recipientExec?.title || email.tier
     const objectiveContext = sanitizeCreepyLines(renderObjectiveBlock(
       data.objectiveProfile,
       { objectiveIndex: email.objectiveIndex, objectiveCategory: email.objectiveCategory },
       campaignTheme,
+      recipientTitle,
     ))
+    if (objectiveContext && data.objectiveProfile) {
+      const catEntries = [
+        ...data.objectiveProfile.financial.map(e => ({ ...e, category: 'Financial' })),
+        ...data.objectiveProfile.security.map(e => ({ ...e, category: 'Security' })),
+        ...data.objectiveProfile.operational.map(e => ({ ...e, category: 'Operational' })),
+        ...data.objectiveProfile.innovation.map(e => ({ ...e, category: 'Innovation' })),
+        ...data.objectiveProfile.growth.map(e => ({ ...e, category: 'Growth' })),
+      ]
+      const matched = catEntries.find(e => objectiveContext.includes((e.objective || '').slice(0, 30)))
+      if (matched) {
+        usedObjectives.push({
+          objective: matched.objective,
+          metric: matched.metric,
+          category: matched.category,
+          usedIn: `${email.recipientName} (${email.tier})`,
+        })
+      }
+    }
     const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
@@ -1606,7 +1661,7 @@ ${renderDashboardMetrics(data.rawSignals)}
 
 ${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
 
-${renderMetricsTable(data.objectiveProfile)}
+${renderMetricsTable(usedObjectives)}
 
 ${renderStructuredIntelSections(data.rawSignals)}
 

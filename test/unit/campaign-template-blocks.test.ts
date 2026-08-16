@@ -19,6 +19,7 @@ import {
   assembleEmail,
   sanitizeCreepyLines,
   renderObjectiveBlock,
+  matchPersonaToCategory,
 } from '../../src/campaign-html-template.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
@@ -558,5 +559,130 @@ describe('renderObjectiveBlock', () => {
     const profile = makeProfile({ operational: [makeEntry('modernize legacy stack')] })
     const result = renderObjectiveBlock(profile, {}, defaultTheme)
     expect(result).toContain('modernize legacy stack')
+  })
+})
+
+// ── matchPersonaToCategory ────────────────────────────────────────────────
+
+describe('matchPersonaToCategory', () => {
+  it('CFO → financial', () => {
+    expect(matchPersonaToCategory('CFO')).toBe('financial')
+    expect(matchPersonaToCategory('Chief Financial Officer')).toBe('financial')
+  })
+
+  it('CEO → growth', () => {
+    expect(matchPersonaToCategory('CEO')).toBe('growth')
+    expect(matchPersonaToCategory('President & CEO')).toBe('growth')
+  })
+
+  it('CISO → security', () => {
+    expect(matchPersonaToCategory('CISO')).toBe('security')
+    expect(matchPersonaToCategory('VP Security & Risk')).toBe('security')
+  })
+
+  it('CTO → innovation', () => {
+    expect(matchPersonaToCategory('CTO')).toBe('innovation')
+    expect(matchPersonaToCategory('Chief Technology Officer')).toBe('innovation')
+  })
+
+  it('CIO → operational', () => {
+    expect(matchPersonaToCategory('CIO')).toBe('operational')
+    expect(matchPersonaToCategory('Head of IT Operations')).toBe('operational')
+  })
+
+  it('VP Finance → financial', () => {
+    expect(matchPersonaToCategory('VP Finance')).toBe('financial')
+  })
+
+  it('VP Engineering → innovation', () => {
+    expect(matchPersonaToCategory('VP Engineering')).toBe('innovation')
+  })
+
+  it('VP Sales → growth', () => {
+    expect(matchPersonaToCategory('VP Sales')).toBe('growth')
+  })
+
+  it('Director with no sub-keyword → operational', () => {
+    expect(matchPersonaToCategory('Director of Corporate Strategy')).toBe('operational')
+  })
+
+  it('unknown title → financial (default)', () => {
+    expect(matchPersonaToCategory('Board Member')).toBe('financial')
+  })
+})
+
+// ── renderObjectiveBlock persona fallback ──────────────────────────────────
+
+describe('renderObjectiveBlock — persona fallback', () => {
+  it('null selection + CFO title → picks financial entry', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('25% margin target', { metric: '25%' })],
+      security: [makeEntry('zero-trust initiative')],
+    })
+    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CFO')
+    expect(result).toContain('25% margin target')
+    expect(result).toContain('protects this trajectory')
+  })
+
+  it('null selection + CISO title → picks security entry', () => {
+    const profile = makeProfile({
+      financial: [makeEntry('margin target')],
+      security: [makeEntry('breach prevention program')],
+    })
+    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CISO')
+    expect(result).toContain('breach prevention program')
+    expect(result).toContain('strategic exposure')
+  })
+
+  it('null selection + CTO title → picks innovation entry', () => {
+    const profile = makeProfile({
+      innovation: [makeEntry('AI platform rollout')],
+      financial: [makeEntry('cost discipline')],
+    })
+    const result = renderObjectiveBlock(profile, { objectiveIndex: null, objectiveCategory: null }, defaultTheme, 'CTO')
+    expect(result).toContain('AI platform rollout')
+    expect(result).toContain('keeps this on track')
+  })
+
+  it('filters LOW urgency entries', () => {
+    const profile = makeProfile({
+      financial: [{
+        objective: 'low priority thing',
+        metric: null,
+        priority: 'LOW',
+        source: 'test',
+        confidence: 'HIGH' as const,
+      }, {
+        objective: 'high priority margin target',
+        metric: '25%',
+        priority: 'HIGH',
+        source: 'test',
+        confidence: 'HIGH' as const,
+      }],
+    })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('high priority margin target')
+    expect(result).not.toContain('low priority thing')
+  })
+
+  it('filters internal signal entries (termination, resignation)', () => {
+    const profile = makeProfile({
+      operational: [{
+        objective: 'CEO termination creates leadership vacuum',
+        metric: null,
+        priority: 'HIGH',
+        source: 'test',
+        confidence: 'HIGH' as const,
+      }, {
+        objective: 'infrastructure modernization initiative',
+        metric: null,
+        priority: 'HIGH',
+        source: 'test',
+        confidence: 'HIGH' as const,
+      }],
+    })
+    const result = renderObjectiveBlock(profile, {}, defaultTheme)
+    expect(result).toContain('infrastructure modernization initiative')
+    expect(result).not.toContain('termination')
   })
 })
