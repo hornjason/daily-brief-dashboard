@@ -69,6 +69,19 @@ function writeCache(companyName: string, executives: Record<string, ResolvedExec
   writeJsonAtomic(path, cache)
 }
 
+// ── Title Cleaning ─────────────────────────────────────────────────────────
+
+/**
+ * Fix Gemini grounding concatenation artifacts where title words merge with
+ * prepositions (e.g., "Officerof" → "Officer of"). (#1123)
+ */
+export function cleanExecutiveTitle(title: string): string {
+  return title.replace(
+    /(\b(?:Officer|Director|Manager|President|Head|VP|Chief|Executive|Analyst|Engineer|Architect|Specialist|Coordinator|Lead|Senior|Administrator))(of|at|for)\b/gi,
+    '$1 $2'
+  )
+}
+
 // ── Tier 1: Intelligence Brief Mining ───────────────────────────────────────
 
 function cleanTitle(raw: string): string {
@@ -322,5 +335,5 @@ export async function resolveExecutivesByRole(
     console.log(`[executive-resolver] Tier 3: Enriched ${results.filter(r => r.email).length} contacts with inferred emails`)
   }
 
-  return results
+  return results.map(r => ({ ...r, title: cleanExecutiveTitle(r.title) }))
 }
