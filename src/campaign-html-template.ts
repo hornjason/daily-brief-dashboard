@@ -528,16 +528,20 @@ function renderFitRationale(customerName: string, content: string): string {
 <div style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${convertMarkdownBullets(content)}</div>`
 }
 
-function renderFitFromPass0(customerName: string, pass0Briefs: import('./lib/persona-selector.ts').PersonaBrief[]): string {
+export function renderFitFromPass0(customerName: string, pass0Briefs: import('./lib/persona-selector.ts').PersonaBrief[]): string {
   const timingTriggers = pass0Briefs.map(b => b.timingTrigger).filter(Boolean)
   const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
   const rawBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
-  const installedBases = [...new Set(rawBases.filter((b: string) => {
-    if (customerName && (b.includes(customerName) || (customerName.split(/\s+/)[0].length > 2 && b.startsWith(customerName.split(/\s+/)[0] + ' ')))) return false
-    if (b.length > 40 && SPECULATION_PATTERN.test(b)) return false
-    if (b.length > 120 && !b.includes(',')) return false
-    return true
-  }))]
+  const installedBases = [...new Set(rawBases
+    .filter((b: string) => {
+      if (customerName && (b.includes(customerName) || (customerName.split(/\s+/)[0].length > 2 && b.startsWith(customerName.split(/\s+/)[0] + ' ')))) return false
+      if (b.length > 40 && SPECULATION_PATTERN.test(b)) return false
+      if (b.length > 120 && !b.includes(',')) return false
+      return true
+    })
+    .map((b: string) => sanitizeCreepyLines(b))
+    .filter((b: string) => b.length > 0)
+  )]
   const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
     .map((o: string) => { const s = o.split(/[.!]/)[0]; return s.length <= 120 ? s : s.slice(0, 117) + '…' })
 
@@ -1697,13 +1701,27 @@ export function generateCampaignFromStructured(
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
   const aeName = aeTeamMember?.name ?? 'Account Executive'
 
+  console.log('[#1129 DEBUG] aeName:', aeName, 'data.aeEmail:', data.aeEmail, 'data.aePhone:', data.aePhone)
+
   // Derive AE email from name if not provided (flast@redhat.com)
   if (!data.aeEmail && aeName !== 'Account Executive') {
     const parts = aeName.trim().split(/\s+/)
+    console.log('[#1129 DEBUG] Deriving email from name, parts:', parts)
     if (parts.length >= 2) {
       data.aeEmail = `${parts[0][0].toLowerCase()}${parts[parts.length - 1].toLowerCase()}@redhat.com`
+      console.log('[#1129 DEBUG] Derived email:', data.aeEmail)
     }
   }
+
+  console.log('[#1129 DEBUG] After name derivation, data.aeEmail:', data.aeEmail)
+
+  // Fallback contact info when no named AE and no voice profile (#1129)
+  if (aeName === 'Account Executive' && !data.aeEmail && !data.aePhone) {
+    console.log('[#1129 DEBUG] Applying fallback email')
+    data.aeEmail = 'redhat-team@redhat.com'
+  }
+
+  console.log('[#1129 DEBUG] Final data.aeEmail:', data.aeEmail)
 
   // Build contacts table from resolved execs
   const contacts: CampaignContact[] = data.resolvedExecs.map(e => ({
