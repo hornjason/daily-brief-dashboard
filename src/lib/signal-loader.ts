@@ -5,6 +5,22 @@
 
 import { FeatureModuleRegistry, scoreSignal, applyTimeDecay, type Signal } from '../feature-module-registry.ts'
 
+// ── Signal Tiers (GitHub Issue #1118) ───────────────────────────────────────
+
+export const SIGNAL_TIERS = {
+  CRITICAL: ['intelligence', 'subscriptions'] as const,
+  CONTEXT: ['cases', 'emails', 'meeting-context', 'account-plan'] as const,
+  ENRICHMENT: ['product-intel', 'competitive-intel', 'news-radar', 'rh-events', 'customer-docs', 'customer-product-intel', 'ecosystem-catalog', 'cloud-marketplace', 'ccsp', 'mergers-acquisitions', 'partner-catalog', 'partner-detected', 'pipeline', 'playbook', 'product-lifecycle', 'recommended-actions', 'rh-rss', 'saleshub-plays', 'saleshub-products', 'saleshub-tactics', 'solution-intelligence', 'tech-stack', 'value-maps'] as const,
+} as const
+
+export type SignalTier = 'CRITICAL' | 'CONTEXT' | 'ENRICHMENT'
+
+export function getSignalTier(source: string): SignalTier {
+  if ((SIGNAL_TIERS.CRITICAL as readonly string[]).includes(source)) return 'CRITICAL'
+  if ((SIGNAL_TIERS.CONTEXT as readonly string[]).includes(source)) return 'CONTEXT'
+  return 'ENRICHMENT'
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /**
@@ -44,13 +60,15 @@ export async function ensureSignalsCurrent(
   customerSlug: string,
   customerName?: string
 ): Promise<{ refreshed: string[]; skipped: string[]; failed: string[] }> {
+  const MAX_WAIT_CRITICAL_MS = 90_000
   const MAX_WAIT_MS = 30_000
   const refreshed: string[] = []
   const skipped: string[] = []
   const failed: string[] = []
 
   const modules = FeatureModuleRegistry.getRegisteredModules()
-  const promises: Promise<void>[] = []
+  const criticalPromises: Promise<void>[] = []
+  const otherPromises: Promise<void>[] = []
 
   for (const module of modules) {
     if (!module.ensureFresh) {
@@ -58,25 +76,41 @@ export async function ensureSignalsCurrent(
       continue
     }
 
-    promises.push(
-      module.ensureFresh(customerSlug)
-        .then(() => {
-          refreshed.push(module.name)
-          console.log(`[signal-preflight] ${module.name} refreshed for ${customerSlug}`)
-        })
-        .catch((e: any) => {
-          console.warn(`[signal-preflight] ${module.name} failed for ${customerSlug}:`, e?.message ?? e)
-          failed.push(module.name)
-        })
-    )
+    const promise = module.ensureFresh(customerSlug)
+      .then(() => {
+        refreshed.push(module.name)
+        console.log(`[signal-preflight] ${module.name} refreshed for ${customerSlug}`)
+      })
+      .catch((e: any) => {
+        console.warn(`[signal-preflight] ${module.name} failed for ${customerSlug}:`, e?.message ?? e)
+        failed.push(module.name)
+      })
+
+    const tier = getSignalTier(module.name)
+    if (tier === 'CRITICAL') {
+      criticalPromises.push(promise)
+    } else {
+      otherPromises.push(promise)
+    }
   }
 
-  if (promises.length > 0) {
-    const startTime = performance.now()
+  const startTime = performance.now()
+
+  if (criticalPromises.length > 0) {
     await Promise.race([
-      Promise.allSettled(promises),
+      Promise.allSettled(criticalPromises),
+      new Promise(r => setTimeout(r, MAX_WAIT_CRITICAL_MS)),
+    ])
+  }
+
+  if (otherPromises.length > 0) {
+    await Promise.race([
+      Promise.allSettled(otherPromises),
       new Promise(r => setTimeout(r, MAX_WAIT_MS)),
     ])
+  }
+
+  if (criticalPromises.length > 0 || otherPromises.length > 0) {
     const elapsed = performance.now() - startTime
     console.log(
       `[signal-preflight] ensureSignalsCurrent for ${customerSlug}: ${refreshed.length} refreshed, ${skipped.length} skipped, ${failed.length} failed (${elapsed.toFixed(0)}ms)`
@@ -189,9 +223,12 @@ export async function loadCustomerSignals(
   // Modules that returned signals go into loaded
   loaded.push(...sourceModules)
 
-  // TODO: Track registered modules that returned zero signals for missing array
-  // This requires the registry to expose a list of all registered module names
-  // For now, missing will be empty unless we add that capability to the registry
+  const modules = FeatureModuleRegistry.getRegisteredModules()
+  for (const module of modules) {
+    if (module.signals && !sourceModules.has(module.name)) {
+      missing.push(module.name)
+    }
+  }
 
   console.log(`[signal-loader] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
   return { signals, registrySignals, loaded, missing, refreshResult }
