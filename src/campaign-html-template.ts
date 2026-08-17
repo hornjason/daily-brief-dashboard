@@ -1701,27 +1701,18 @@ export function generateCampaignFromStructured(
   const aeTeamMember = data.accountTeam.find(m => m.role === 'ae')
   const aeName = aeTeamMember?.name ?? 'Account Executive'
 
-  console.log('[#1129 DEBUG] aeName:', aeName, 'data.aeEmail:', data.aeEmail, 'data.aePhone:', data.aePhone)
-
   // Derive AE email from name if not provided (flast@redhat.com)
   if (!data.aeEmail && aeName !== 'Account Executive') {
     const parts = aeName.trim().split(/\s+/)
-    console.log('[#1129 DEBUG] Deriving email from name, parts:', parts)
     if (parts.length >= 2) {
       data.aeEmail = `${parts[0][0].toLowerCase()}${parts[parts.length - 1].toLowerCase()}@redhat.com`
-      console.log('[#1129 DEBUG] Derived email:', data.aeEmail)
     }
   }
 
-  console.log('[#1129 DEBUG] After name derivation, data.aeEmail:', data.aeEmail)
-
   // Fallback contact info when no named AE and no voice profile (#1129)
   if (aeName === 'Account Executive' && !data.aeEmail && !data.aePhone) {
-    console.log('[#1129 DEBUG] Applying fallback email')
     data.aeEmail = 'redhat-team@redhat.com'
   }
-
-  console.log('[#1129 DEBUG] Final data.aeEmail:', data.aeEmail)
 
   // Build contacts table from resolved execs
   const contacts: CampaignContact[] = data.resolvedExecs.map(e => ({
