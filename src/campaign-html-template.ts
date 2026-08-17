@@ -483,6 +483,33 @@ function renderFitRationale(customerName: string, content: string): string {
 <div style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${convertMarkdownBullets(content)}</div>`
 }
 
+function renderFitFromPass0(customerName: string, pass0Briefs: import('./lib/persona-selector.ts').PersonaBrief[]): string {
+  // Pick the best data from across all briefs
+  const timingTriggers = pass0Briefs.map(b => b.timingTrigger).filter(Boolean)
+  const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
+  const installedBases = [...new Set(pass0Briefs.map(b => b.installedBase).filter(Boolean))]
+  const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
+
+  let html = `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>`
+  html += '<div style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">'
+
+  if (timingTriggers.length > 0) {
+    html += `<p style="margin: 8px 0;"><strong>What's happening now:</strong> ${escapeHtml(timingTriggers[0])}</p>`
+  }
+  if (valueProps.length > 0) {
+    html += `<p style="margin: 8px 0;"><strong>Campaign relevance:</strong> ${escapeHtml(valueProps[0])}</p>`
+  }
+  if (installedBases.length > 0) {
+    html += `<p style="margin: 8px 0;"><strong>Product alignment:</strong> ${escapeHtml(installedBases.join('; '))}</p>`
+  }
+  if (objectives.length > 0) {
+    html += `<p style="margin: 8px 0;"><strong>Business context:</strong> ${escapeHtml(objectives[0])}</p>`
+  }
+
+  html += '</div>'
+  return html
+}
+
 function renderReferenceMaterials(materials: ReferenceMaterial[], heading: string): string {
   return `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📚 ${escapeHtml(heading)}</h3>
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
@@ -1777,7 +1804,9 @@ ${renderQualityChecklist(qualityResults, voiceTokens.wordBudget)}
 
 ${renderDashboardMetrics(data.rawSignals, data.objectiveProfile)}
 
-${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
+${data.pass0Briefs && data.pass0Briefs.length > 0
+  ? renderFitFromPass0(data.customerName, data.pass0Briefs)
+  : (data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
 
 ${renderMetricsTable(usedObjectives, data.pass0Briefs)}
 
