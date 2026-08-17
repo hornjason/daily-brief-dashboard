@@ -887,8 +887,10 @@ export function cleanObjectivePrefix(text: string): string {
   // Strip common category prefixes with colons
   cleanText = cleanText.replace(/^(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook|Reiterated[^:]*?|Cybersecurity Enhancement|Security Initiative|Operational Efficiency|Innovation Focus|Growth Strategy)[:\s]+/i, '')
 
-  // Strip "Raised/Lowered/Maintained Full-Year YYYY Guidance —" patterns
+  // Strip "Raised/Lowered/Maintained Full-Year YYYY Guidance —" patterns (start of string)
   cleanText = cleanText.replace(/^(?:Raised|Lowered|Maintained|Updated|Revised)\s+Full[- ]Year\s+\d{4}\s+Guidance\s*[—–]\s*/i, '')
+  // Also strip mid-sentence: "With NN% Raised Full-Year YYYY Guidance — description."
+  cleanText = cleanText.replace(/(?:With\s+)?[\d.%-]+\s+(?:Raised|Lowered|Maintained|Updated|Revised)\s+Full[- ]Year\s+\d{4}\s+Guidance\s*[—–]\s*[^.]*\.\s*/gi, '')
 
   // Strip "Category Name —" patterns (e.g., "Major Acquisition —", "New Partnership —")
   cleanText = cleanText.replace(/^(?:Acquisition of|Major|New|Strong|Strategic|Key)\s+[A-Z][^—–]*?\s*[—–]\s*/i, '')
@@ -1770,12 +1772,12 @@ export function generateCampaignFromStructured(
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
     const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
-    const objectiveContext = sanitizeCreepyLines(renderObjectiveBlock(
+    const objectiveContext = cleanObjectivePrefix(sanitizeCreepyLines(renderObjectiveBlock(
       data.objectiveProfile,
       campaignTheme,
       recipientTitle,
       preMatch,
-    ))
+    )))
     if (preMatch) {
       usedObjectives.push({
         objective: preMatch.entry.objective,
