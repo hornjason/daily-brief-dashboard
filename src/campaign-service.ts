@@ -1313,9 +1313,17 @@ export async function generateCampaign(
       if (pass0Result) {
         pass0Briefs = pass0Result.briefs
         console.log(`[campaigns] Pass 0 selected ${pass0Result.selectedRoles.length} roles: ${pass0Result.selectedRoles.join(', ')}`)
+      } else if (!config?.forceGenerate) {
+        throw new Error(`Pass 0 persona selection returned no results for ${customer.name}. Use forceGenerate to bypass.`)
+      } else {
+        console.warn(`[campaigns] Pass 0 returned null — forceGenerate active, continuing with fallback personas`)
       }
     } catch (e: any) {
-      console.warn(`[campaigns] Pass 0 persona selection failed (non-fatal): ${e?.message}`)
+      if (e.message?.includes('Pass 0 persona selection returned no results')) throw e
+      if (!config?.forceGenerate) {
+        throw new Error(`Pass 0 persona selection failed for ${customer.name}: ${e?.message}. Use forceGenerate to bypass.`)
+      }
+      console.warn(`[campaigns] Pass 0 failed — forceGenerate active, continuing with fallback: ${e?.message}`)
     }
   }
 

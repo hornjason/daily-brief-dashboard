@@ -250,6 +250,7 @@ async function callGeminiForPass0(opts: Pass0PromptInput): Promise<Pass0Result |
     customerName: opts.customerName,
     temperature: 0.15,
     responseSchema: PASS0_PERSONA_SELECTION_SCHEMA,
+    timeoutMs: 90_000,
   })
 
   if (!result.text) return null
