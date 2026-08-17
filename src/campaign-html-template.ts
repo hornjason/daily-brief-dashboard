@@ -806,13 +806,22 @@ export interface UsedObjective {
   usedIn: string
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  'executive-sponsor': 'Executive',
+  'technical-evaluator': 'Technical',
+  'champion': 'Champion',
+  'financial-gatekeeper': 'Financial',
+  'practitioner': 'Practitioner',
+}
+
 export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
   if (pass0Briefs && pass0Briefs.length > 0) {
     let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
     html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
     html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
     for (const brief of pass0Briefs) {
-      html += `<tr><td>${escapeHtml(brief.role)}</td><td>${escapeHtml(brief.objectiveMatch)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
+      const label = ROLE_LABELS[brief.role] || brief.role
+      html += `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(brief.objectiveMatch)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
     }
     html += '</table>'
     return html
