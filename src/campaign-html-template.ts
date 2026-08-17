@@ -327,13 +327,14 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals'], object
   }
 
   // Priority 0: Read initiatives from CustomerObjectiveProfile (ADR-044)
+  const NON_INITIATIVE = /\b(termination|resigned|departed|layoff|hired|appointed|guidance|raised.*guidance|lowered.*guidance|earnings|quarterly results)\b/i
   if (objectiveProfile) {
     const profileInitiatives = [
       ...objectiveProfile.security.filter(e => e.source === 'Strategic Initiatives'),
       ...objectiveProfile.operational.filter(e => e.source === 'Strategic Initiatives'),
       ...objectiveProfile.innovation.filter(e => e.source === 'Strategic Initiatives'),
       ...objectiveProfile.growth.filter(e => e.source === 'Strategic Initiatives'),
-    ]
+    ].filter(e => !NON_INITIATIVE.test(e.objective))
     for (const entry of profileInitiatives) {
       if (result.initiatives.length >= 5) break
       const name = entry.objective.split(' — ')[0].trim()
