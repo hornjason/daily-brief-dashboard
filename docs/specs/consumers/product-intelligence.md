@@ -74,11 +74,12 @@ Product Intelligence is API-only and does not generate structured documents. Out
 - Confidence level (HIGH/MEDIUM/LOW)
 
 ### Customer Data Query (from `product-intelligence.ts`)
-- Answer text (grounded in customer data, not web search)
+- Answer text (grounded in customer data, not web search; rendered as markdown in UI via `lib/render-markdown.ts`)
 - Data sources queried: subscriptions, support cases, docs corpus, pipeline/opportunities, tech stack, account intelligence
 - Grounding: disabled (false) — answers from internal data only
 - Confidence level: based on data section coverage (4+ sections with data = HIGH, 2-3 = MEDIUM, 0-1 = LOW)
 - Sources: internal data section names (not web URLs)
+- UI: `CustomerQueryPanel.tsx` — single unified input, no product tabs, markdown-rendered answers with confidence badge and data source badges
 
 ### Customer Product Intel (from `customer-product-intel.ts`)
 - Customer context (name, subscriptions, support cases)
