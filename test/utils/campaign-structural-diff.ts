@@ -35,9 +35,9 @@ const GOLD_STANDARD_SECTIONS = [
   'SB 122 Eligibility',
   'Existing Red Hat Footprint',
   'Outreach Guardrails',
+  'Call Prep — Key Talking Points',
   'Email Templates by Role',
   'Manager Outreach',
-  'BV Talking Points',
 ]
 
 const CONTACT_TABLE_COLUMNS = ['Name', 'Title', 'Email', 'LinkedIn', 'Signal']
@@ -80,9 +80,9 @@ export function extractSectionsFromText(text: string): SectionInfo[] {
     /SB 122 Eligibility/,
     /Existing Red Hat Footprint/,
     /Outreach Guardrails/,
+    /Call Prep — Key Talking Points/,
     /Email Templates by Role/,
     /Manager Outreach/,
-    /BV Talking Points/,
   ]
 
   let charOffset = 0

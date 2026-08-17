@@ -1563,9 +1563,20 @@ export async function generateCampaign(
       }
     }
 
-    // Derive BV Talking Points — prefer Gemini-selected, fall back to play-name derivation
+    // Derive BV Talking Points — Pass 0 briefs first, then Gemini, then plays
     let bvTalkingPoints: BVTalkingPoint[] = []
-    if (selection.bvTalkingPoints && selection.bvTalkingPoints.length > 0) {
+    if (pass0Briefs.length > 0) {
+      for (const brief of pass0Briefs) {
+        const proofText = brief.peerProofCandidates.length > 0
+          ? brief.peerProofCandidates.map(p => `${p.company}: ${p.outcome}`).join('; ')
+          : ''
+        bvTalkingPoints.push({
+          objective: brief.objectiveMatch,
+          talkingPoints: brief.valueProposition,
+          keyMetrics: proofText,
+        })
+      }
+    } else if (selection.bvTalkingPoints && selection.bvTalkingPoints.length > 0) {
       bvTalkingPoints = selection.bvTalkingPoints.map(bp => ({
         objective: bp.objective,
         talkingPoints: bp.talkingPoints,

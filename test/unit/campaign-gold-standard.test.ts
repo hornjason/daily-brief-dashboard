@@ -56,7 +56,7 @@ describe('gold standard fixture integrity', () => {
     expect(headings.some(h => /Outreach Guardrails/i.test(h))).toBe(true)
     expect(headings.some(h => /Email Templates by Role/i.test(h))).toBe(true)
     expect(headings.some(h => /Manager Outreach/i.test(h))).toBe(true)
-    expect(headings.some(h => /BV Talking Points/i.test(h))).toBe(true)
+    expect(headings.some(h => /Call Prep — Key Talking Points/i.test(h))).toBe(true)
   })
 
   it('text fixture has sections in correct order', () => {
@@ -69,8 +69,8 @@ describe('gold standard fixture integrity', () => {
       'Strategic Initiatives',
       'Competitive Position',
       'Outreach Guardrails',
+      'Call Prep — Key Talking Points',
       'Email Templates by Role',
-      'BV Talking Points',
     ]
     let lastIdx = -1
     for (const name of order) {
@@ -319,7 +319,7 @@ Strategic Objectives:
       markdown: '## Campaign Summary\nMinimal test.',
     })
     expect(minimalHtml).not.toContain('Target Contacts')
-    expect(minimalHtml).not.toContain('BV Talking Points')
+    expect(minimalHtml).not.toContain('Call Prep — Key Talking Points')
     expect(minimalHtml).not.toContain('Reference Material')
     expect(minimalHtml).not.toContain('Eligibility')
     expect(minimalHtml).not.toContain('Existing Red Hat Footprint')
