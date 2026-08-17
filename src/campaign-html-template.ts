@@ -691,7 +691,7 @@ ${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkin
 ${primaryEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}
 
 ${managerEmails.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">200-250 words · technical depth. Designed to be forwarded up with "we should look at this."</p>
+<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">≤200 words · technical depth — forward up with 'we should look at this'</p>
 
 ${managerEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}` : ''}
 
@@ -1747,22 +1747,17 @@ ${data.footprint ? renderFootprintSection(data.footprint) : ''}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
-<div style="background: #fef7e0; border-left: 4px solid #f9ab00; padding: 16px 20px; margin: 0 0 24px 0;">
-  <p style="font-size: 14px; font-weight: bold; color: #b45309; margin: 0 0 8px 0;">How to Use This Campaign</p>
-  <p style="font-size: 14px; color: #5f6368; margin: 0;">Copy each email body and paste into Gmail compose. Rich formatting and hyperlinks transfer automatically. Personalize the opening line before sending.</p>
-</div>
-
 ${data.bvTalkingPoints && data.bvTalkingPoints.length > 0 ? renderBVTalkingPoints(data.bvTalkingPoints) : ''}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">Email Templates by Role</h2>
 
 ${execEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">📧 Executive Outreach</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.exec} words · colleague's note. Designed to be forwarded down with "thoughts?"</p>
+<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">≤${voiceTokens.wordBudget.exec} words · colleague's note — forward down with 'thoughts?'</p>
 
 ${execEmailsHtml.join('\n')}` : ''}
 
 ${managerEmailsHtml.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">${voiceTokens.wordBudget.manager} words · technical depth. Designed to be forwarded up with "we should look at this."</p>
+<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">≤${voiceTokens.wordBudget.manager} words · technical depth — forward up with 'we should look at this'</p>
 
 ${managerEmailsHtml.join('\n')}` : ''}
 
