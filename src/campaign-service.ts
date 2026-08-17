@@ -70,6 +70,41 @@ export function deriveThreatSolution(materialTitle: string, materialContent: str
   return { threat, solution }
 }
 
+export function deriveFootprint(
+  pass0Briefs: PersonaBrief[],
+  subSignals: Signal[],
+  registrySignals: Signal[],
+): { current: string; expansion: string } | undefined {
+  if (pass0Briefs.length > 0) {
+    const installedBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
+    const uniqueBases = [...new Set(installedBases)]
+    const expansions = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
+    const competitive = pass0Briefs
+      .map(b => b.competitiveContext)
+      .filter((c): c is string => c !== null && c.length > 0)
+
+    if (uniqueBases.length > 0) {
+      return {
+        current: uniqueBases.join(' · '),
+        expansion: competitive.length > 0
+          ? `${expansions[0] || 'Expansion under evaluation'} (Competitive: ${competitive[0]})`
+          : expansions[0] || 'Expansion opportunities under evaluation',
+      }
+    }
+  }
+
+  const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
+  if (subProducts.length > 0) {
+    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
+    return {
+      current: subProducts.join(', '),
+      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
+    }
+  }
+
+  return undefined
+}
+
 // ── Feature flags ───────────────────────────────────────────────────────────
 const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
 const CAMPAIGN_PARALLEL_VALIDATION = process.env.CAMPAIGN_PARALLEL_VALIDATION === 'true'
@@ -1552,14 +1587,8 @@ export async function generateCampaign(
       })
     }
 
-    // Derive footprint from subscriptions + intelligence data
-    const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
+    const footprint = deriveFootprint(pass0Briefs, subSignals, registrySignals)
     const enrichedSignals = await enrichSignalsFromCache(signals, slug, subSignals, registrySignals)
-    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
-    const footprint = subProducts.length > 0 ? {
-      current: subProducts.join(', '),
-      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
-    } : undefined
 
     // Derive AE email from name (flast@redhat.com), use voice profile for phone/email
     const aeTeam = accountTeam.find(m => m.role === 'ae')
