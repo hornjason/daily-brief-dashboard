@@ -1477,7 +1477,7 @@ function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals'], obj
 </table>`
 }
 
-function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals']): string {
+function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals'], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
   const structured = extractStructuredIntel(rawSignals)
   let sections = ''
 
@@ -1497,7 +1497,26 @@ function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals
 </table>`
   }
 
-  if (structured.competitors.length > 0) {
+  // Check for Pass 0 competitive context first
+  const pass0CompetitiveBriefs = pass0Briefs?.filter(b => b.competitiveContext && b.competitiveContext.trim().length > 0) || []
+
+  if (pass0CompetitiveBriefs.length > 0) {
+    // Render Pass 0 competitive context (campaign-relevant competitors from persona briefs)
+    sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Role</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitive Context</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Red Hat Advantage</td>
+  </tr>
+  ${pass0CompetitiveBriefs.map(b => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(b.suggestedTitle)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(b.competitiveContext || '')}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(b.valueProposition)}</td>
+  </tr>`).join('\n')}
+</table>`
+  } else if (structured.competitors.length > 0) {
+    // Fallback to intelligence-based competitive rendering
     const hasThreat = structured.competitors.some(c => c.threat)
     const hasAdvantage = structured.competitors.some(c => c.advantage)
     sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
@@ -1737,7 +1756,7 @@ ${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.cus
 
 ${renderMetricsTable(usedObjectives, data.pass0Briefs)}
 
-${renderStructuredIntelSections(data.rawSignals)}
+${renderStructuredIntelSections(data.rawSignals, data.pass0Briefs)}
 
 ${data.referenceMaterials && data.referenceMaterials.length > 0 ? renderReferenceMaterials(data.referenceMaterials, data.referenceMaterialsHeading || 'Reference Material') : ''}
 
