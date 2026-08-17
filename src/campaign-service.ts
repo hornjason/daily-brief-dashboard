@@ -1716,6 +1716,7 @@ export async function generateCampaign(
             const seen = new Set<string>()
             return referenceMaterialData
               .filter(rm => rm.url && rm.title)
+              .filter(rm => !isHomepageUrl(rm.url))
               .filter(rm => {
                 if (seen.has(rm.url)) return false
                 seen.add(rm.url)
@@ -1724,7 +1725,7 @@ export async function generateCampaign(
               .map(rm => ({
                 resource: rm.title,
                 url: rm.url,
-                keyTakeaway: rm.excerpt || '',
+                keyTakeaway: rm.excerpt ? (rm.excerpt.length > 200 ? rm.excerpt.slice(0, 200) + '...' : rm.excerpt) : '',
               }))
           })()
         : selection.referenceMaterials?.map(rm => ({

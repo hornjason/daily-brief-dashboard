@@ -520,7 +520,7 @@ function renderReferenceMaterials(materials: ReferenceMaterial[], heading: strin
   ${materials.map(m => {
     return `<tr>
     <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${m.url ? `<a href="${escapeHtml(m.url)}" style="color: #1a73e8;">${escapeHtml(m.resource)}</a>` : escapeHtml(m.resource)}</td>
-    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway.length > 250 ? m.keyTakeaway.slice(0, 250) + '...' : m.keyTakeaway)}</td>
   </tr>`
   }).join('\n')}
 </table>`
