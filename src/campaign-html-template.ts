@@ -347,8 +347,11 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
         // Include product mapping in detail if available
         const detail = products ? `${description} → ${products}` : description
 
-        if (name.length > 5 && name.length < 80 && !name.match(/Mapping|Account|Why Red Hat/i)) {
+        const DEAL_SUMMARY_PATTERN = /^(Red Hat Solution|Estimated Deal Size|Timeline|Next Steps|Customer Objective Addressed|Tagged Potential|Mapping|Account|Why Red Hat)$/i
+        if (name.length > 5 && name.length < 80 && !DEAL_SUMMARY_PATTERN.test(name)) {
           result.initiatives.push({ name, priority: 'HIGH', detail })
+        } else if (DEAL_SUMMARY_PATTERN.test(name)) {
+          console.warn(`[campaign-template] Filtered deal-summary field from initiatives: "${name}"`)
         }
         if (result.initiatives.length >= 5) break
       }
@@ -366,7 +369,8 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
         while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
           const name = objMatch[1].trim()
           const detail = objMatch[2].trim()
-          if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account') && !name.includes('Why Red Hat')) {
+          const DEAL_SUMMARY_PATTERN2 = /^(Red Hat Solution|Estimated Deal Size|Timeline|Next Steps|Customer Objective Addressed|Tagged Potential|Mapping|Account|Why Red Hat)$/i
+          if (name.length > 5 && name.length < 80 && !DEAL_SUMMARY_PATTERN2.test(name)) {
             result.initiatives.push({ name, priority: 'HIGH', detail })
           }
           if (result.initiatives.length >= 5) break

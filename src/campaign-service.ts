@@ -70,21 +70,25 @@ export function deriveThreatSolution(materialTitle: string, materialContent: str
   return { threat, solution }
 }
 
-const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies)\b|existing\s.*portfolio/i
+const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
 
 /** Returns true when text looks like Gemini speculation rather than real product names */
-export function isSpeculativeInstalledBase(text: string): boolean {
-  return text.length > 80 && SPECULATION_PATTERN.test(text)
+export function isSpeculativeInstalledBase(text: string, customerName?: string): boolean {
+  if (customerName && text.includes(customerName)) return true
+  if (text.length > 40 && SPECULATION_PATTERN.test(text)) return true
+  if (text.length > 120 && !text.includes(',')) return true
+  return false
 }
 
 export function deriveFootprint(
   pass0Briefs: PersonaBrief[],
   subSignals: Signal[],
   registrySignals: Signal[],
+  customerName?: string,
 ): { current: string; expansion: string } | undefined {
   if (pass0Briefs.length > 0) {
     const installedBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
-      .filter(b => !isSpeculativeInstalledBase(b))
+      .filter(b => !isSpeculativeInstalledBase(b, customerName))
     const uniqueBases = [...new Set(installedBases)]
     const expansions = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
     const competitive = pass0Briefs
@@ -1677,7 +1681,7 @@ export async function generateCampaign(
       })
     }
 
-    const footprint = deriveFootprint(pass0Briefs, subSignals, registrySignals)
+    const footprint = deriveFootprint(pass0Briefs, subSignals, registrySignals, customer.name)
     const enrichedSignals = await enrichSignalsFromCache(signals, slug, subSignals, registrySignals)
 
     // Derive AE email from name (flast@redhat.com), use voice profile for phone/email
