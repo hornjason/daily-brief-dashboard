@@ -19,6 +19,7 @@ import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 
 const BRAND_RED = '#c41e3a'
+const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
 
 // ── Exported types for campaign data ──
 
@@ -506,11 +507,17 @@ function renderFitRationale(customerName: string, content: string): string {
 }
 
 function renderFitFromPass0(customerName: string, pass0Briefs: import('./lib/persona-selector.ts').PersonaBrief[]): string {
-  // Pick the best data from across all briefs
   const timingTriggers = pass0Briefs.map(b => b.timingTrigger).filter(Boolean)
   const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
-  const installedBases = [...new Set(pass0Briefs.map(b => b.installedBase).filter(Boolean))]
+  const rawBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
+  const installedBases = [...new Set(rawBases.filter((b: string) => {
+    if (customerName && (b.includes(customerName) || (customerName.split(/\s+/)[0].length > 2 && b.startsWith(customerName.split(/\s+/)[0] + ' ')))) return false
+    if (b.length > 40 && SPECULATION_PATTERN.test(b)) return false
+    if (b.length > 120 && !b.includes(',')) return false
+    return true
+  }))]
   const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
+    .map((o: string) => { const s = o.split(/[.!]/)[0]; return s.length <= 120 ? s : s.slice(0, 117) + '…' })
 
   let html = `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>`
   html += '<div style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">'
@@ -858,7 +865,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
-  if (pass0Briefs && pass0Briefs.length > 0) {
+  if (pass0Briefs && pass0Briefs.length > 0 && usedObjectives.length === 0) {
     let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
     html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
     html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
