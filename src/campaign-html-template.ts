@@ -991,6 +991,7 @@ export interface StructuredCampaignData {
   preMatchedMetrics?: import('./lib/persona-classifier.ts').PreMatchedMetric[]
   preMatchedPeerProofs?: import('./lib/persona-classifier.ts').PreMatchedPeerProof[]
   pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]
+  signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1725,6 +1726,12 @@ export function generateCampaignFromStructured(
       ? data.accountTeam.map(m => `${escapeHtml(m.title)}: ${escapeHtml(m.name)}`).join(' · ')
       : `AE: ${escapeHtml(aeName)}`
   }</p>
+
+${data.signalQuality && data.signalQuality.disposition !== 'PROCEED' ? `
+<div style="background: #fce8e6; border-left: 4px solid #c5221f; padding: 12px 16px; margin: 0 0 16px 0;">
+  <p style="font-size: 14px; font-weight: bold; color: #c5221f; margin: 0 0 4px 0;">Generated with Incomplete Data (${data.signalQuality.signalCompleteness}% signal coverage)</p>
+  <p style="font-size: 13px; color: #5f6368; margin: 0;">Missing: ${data.signalQuality.missing.join(', ')}. Some sections may contain inferred rather than verified data.</p>
+</div>` : ''}
 
 <table width="100%" cellpadding="10" cellspacing="0" style="background: #f8f9fa; margin-bottom: 24px;">
   <tr>

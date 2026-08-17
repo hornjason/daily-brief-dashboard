@@ -22,6 +22,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import {
   generateCampaign,
   generateCampaignFromPlay,
+  CampaignQualityGateError,
   loadCampaignsFromCache,
   loadCampaignFromCache,
   deleteCampaignFromCache,
@@ -82,6 +83,14 @@ export function createCampaignsRouter(): Hono {
         : await generateCampaign(customer, (hasEmailSubject || hasCampaignDirective) ? '' : body.materialUrl, body)
       return c.json(result)
     } catch (e: any) {
+      if (e instanceof CampaignQualityGateError) {
+        return c.json({
+          error: 'quality_gate_blocked',
+          message: e.message,
+          assessment: e.assessment,
+          customerName: e.customerName,
+        }, 422)
+      }
       console.error(`[campaigns] Generation failed for ${customer.name}:`, e.message)
       return c.json({ error: sanitizeErr(e) }, 500)
     } finally {

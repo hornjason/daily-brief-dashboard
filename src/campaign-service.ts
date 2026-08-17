@@ -29,7 +29,7 @@ import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, isHomepageUrl, type BVTalkingPoint } from './campaign-html-template.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
-import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
@@ -330,6 +330,7 @@ export interface CampaignRequest {
   style?: string
   valueProps?: Array<{ id: string; claim: string; detail: string }>
   campaignDirective?: string
+  forceGenerate?: boolean
 }
 
 export interface CampaignResult {
@@ -340,6 +341,78 @@ export interface CampaignResult {
   htmlUrl: string
   signalsLoaded?: string[]
   signalsMissing?: string[]
+  signalCompleteness?: number
+}
+
+// ── Signal Quality Gate (#1120) ──────────────────────────────────────────────
+
+export interface SignalQualityAssessment {
+  disposition: 'PROCEED' | 'DEGRADED' | 'BLOCKED'
+  signalCompleteness: number
+  missing: string[]
+  stale: string[]
+  reasons: Record<string, string>
+}
+
+export class CampaignQualityGateError extends Error {
+  constructor(
+    public assessment: SignalQualityAssessment,
+    public customerName: string,
+  ) {
+    const missingList = assessment.missing.map(s => `  - ${s}: ${assessment.reasons[s] || 'not available'}`).join('\n')
+    super(`Campaign generation blocked for ${customerName} — missing critical signals:\n${missingList}\n\nTo override: add forceGenerate: true to request. Warning banner will be injected into output.`)
+    this.name = 'CampaignQualityGateError'
+  }
+}
+
+export function assessSignalQuality(
+  loaded: string[],
+  missing: string[],
+): SignalQualityAssessment {
+  const loadedSet = new Set(loaded)
+  const missingSet = new Set(missing)
+  const reasons: Record<string, string> = {}
+  const stale: string[] = []
+
+  const criticalMissing: string[] = []
+  for (const source of SIGNAL_TIERS.CRITICAL) {
+    if (missingSet.has(source) || !loadedSet.has(source)) {
+      criticalMissing.push(source)
+      reasons[source] = 'not loaded — no data available for this customer'
+    }
+  }
+
+  const contextMissing: string[] = []
+  for (const source of SIGNAL_TIERS.CONTEXT) {
+    if (missingSet.has(source) || !loadedSet.has(source)) {
+      contextMissing.push(source)
+      reasons[source] = 'not loaded'
+    }
+  }
+
+  const criticalScore = ((SIGNAL_TIERS.CRITICAL.length - criticalMissing.length) / SIGNAL_TIERS.CRITICAL.length) * 60
+  const contextScore = ((SIGNAL_TIERS.CONTEXT.length - contextMissing.length) / SIGNAL_TIERS.CONTEXT.length) * 30
+  const enrichmentTotal = SIGNAL_TIERS.ENRICHMENT.length
+  const enrichmentLoaded = SIGNAL_TIERS.ENRICHMENT.filter(s => loadedSet.has(s)).length
+  const enrichmentScore = (enrichmentLoaded / enrichmentTotal) * 10
+  const signalCompleteness = Math.round(criticalScore + contextScore + enrichmentScore)
+
+  let disposition: 'PROCEED' | 'DEGRADED' | 'BLOCKED'
+  if (criticalMissing.length > 0) {
+    disposition = 'BLOCKED'
+  } else if (contextMissing.length > 0) {
+    disposition = 'DEGRADED'
+  } else {
+    disposition = 'PROCEED'
+  }
+
+  return {
+    disposition,
+    signalCompleteness,
+    missing: [...criticalMissing, ...contextMissing],
+    stale,
+    reasons,
+  }
 }
 
 export interface CampaignListItem {
@@ -364,6 +437,7 @@ interface CampaignCacheEntry {
   driveHtmlFileId?: string
   signalsLoaded?: string[]
   signalsMissing?: string[]
+  signalCompleteness?: number
   qualityScorecard?: QualityScorecard
   campaignDirective?: string
   generationPath?: 'structured' | 'freeform'
@@ -1127,6 +1201,14 @@ export async function generateCampaign(
   const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name, { ensureFresh: true })
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
+  // Signal quality gate (#1118/#1120)
+  const signalQuality = assessSignalQuality(loaded, missing)
+  console.log(`[campaigns] Signal quality for ${customer.name}: ${signalQuality.disposition} (${signalQuality.signalCompleteness}%) — missing: [${signalQuality.missing.join(', ')}]`)
+
+  if (signalQuality.disposition === 'BLOCKED' && !config?.forceGenerate) {
+    throw new CampaignQualityGateError(signalQuality, customer.name)
+  }
+
   // 3-obj. Load objective profile from intelligence cache (ADR-044 Phase 2)
   let objectiveProfile: CustomerObjectiveProfile | undefined
   try {
@@ -1663,6 +1745,7 @@ export async function generateCampaign(
       preMatchedMetrics,
       preMatchedPeerProofs,
       pass0Briefs: pass0Briefs.length > 0 ? pass0Briefs : undefined,
+      signalQuality: signalQuality.disposition !== 'PROCEED' || config?.forceGenerate ? signalQuality : undefined,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility
@@ -1894,6 +1977,7 @@ export async function generateCampaign(
     driveHtmlFileId: driveHtmlFileId || undefined,
     signalsLoaded: loaded,
     signalsMissing: missing,
+    signalCompleteness: signalQuality.signalCompleteness,
     qualityScorecard,
     campaignDirective: config?.campaignDirective,
     generationPath,
@@ -1907,6 +1991,7 @@ export async function generateCampaign(
     htmlUrl,
     signalsLoaded: loaded,
     signalsMissing: missing,
+    signalCompleteness: signalQuality.signalCompleteness,
   }
 }
 
