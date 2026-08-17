@@ -39,7 +39,8 @@ import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
-import type { CustomerObjectiveProfile } from './modules/intelligence-module.ts'
+import { selectPersonas, formatBriefsForPrompt, type Pass0Result, type PersonaBrief } from './lib/persona-selector.ts'
+import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
 
@@ -657,6 +658,7 @@ export async function callGeminiForCampaignSelection(opts: {
   objectiveProfile?: CustomerObjectiveProfile
   preMatchedMetrics?: PreMatchedMetric[]
   preMatchedPeerProofs?: PreMatchedPeerProof[]
+  pass0Briefs?: PersonaBrief[]
 }): Promise<CampaignSelectionResult> {
   const featureKeys = getFeatureKeys()
 
@@ -721,7 +723,9 @@ export async function callGeminiForCampaignSelection(opts: {
     peerProofContext += '\nSet each recipient\'s peerProof to playName: "Source Material Customer Wins" with the matching exampleIndex.\n'
   }
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  const pass0BriefContext = opts.pass0Briefs ? formatBriefsForPrompt(opts.pass0Briefs) : ''
+
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}${pass0BriefContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1099,6 +1103,13 @@ export async function generateCampaign(
   } catch (e: any) {
     console.warn(`[campaigns] Failed to load objective profile: ${e?.message}`)
   }
+  if (!objectiveProfile && signals.intelligence) {
+    const companyText = typeof signals.intelligence === 'string' ? signals.intelligence : (signals.intelligence.company || '')
+    if (companyText) {
+      objectiveProfile = extractObjectiveProfile(companyText)
+      console.log(`[campaigns] Extracted objective profile from intelligence text (${objectiveProfile.financial.length} financial entries)`)
+    }
+  }
 
   // 3a. Build deterministic intelligence context from signals (PRINCIPLES.md Layer 2)
   // #668: Filter account team to AE + product-relevant SSP/SSA only
@@ -1130,8 +1141,56 @@ export async function generateCampaign(
     }
   }
 
-  // 3c. Resolve real executives for campaign personas (#1055)
-  // Campaign-directive-aware: add finance/procurement roles when directive mentions tax/cost themes
+  // 3c-pre. Build structuredPlays early so Pass 0 can reference them
+  const structuredPlays = (templateResult.structured?.solutionPlays ?? []).map(sp => {
+    const salesHubPlay = getSalesPlayByName(sp.playName)
+    return {
+      name: sp.playName,
+      parentTdp: sp.tdp,
+      customerWins: sp.customerWins,
+      realWorldExamples: sp.realWorldExamples ?? salesHubPlay?.realWorldExamples,
+      extractedMetrics: sp.extractedMetrics,
+      talkTrack: sp.talkTrack ?? salesHubPlay?.description,
+    }
+  })
+
+  // 3c. AI-powered persona selection via Pass 0 (#1097)
+  let pass0Result: Pass0Result | null = null
+  let pass0Briefs: PersonaBrief[] = []
+
+  // User-provided personas take priority — skip Pass 0 entirely
+  const userPersonas = config?.personas?.filter(p => p.enabled)
+  if (!userPersonas?.length && (materialContent || config?.campaignDirective)) {
+    try {
+      const intelligenceText = typeof signals.intelligence === 'string'
+        ? signals.intelligence
+        : (signals.intelligence?.company || '')
+      const accountPlanText = typeof signals.accountPlan === 'string'
+        ? signals.accountPlan
+        : ''
+      const featureKeysList = getFeatureKeys()
+      pass0Result = await selectPersonas({
+        materialTitle,
+        materialContent,
+        campaignDirective: config?.campaignDirective,
+        intelligenceText: intelligenceText || undefined,
+        accountPlanText: accountPlanText || undefined,
+        objectiveProfile: objectiveProfile || undefined,
+        subscriptionSignals: registrySignals.filter(s => s.source === 'subscriptions'),
+        structuredPlays: structuredPlays.map(sp => ({ name: sp.name, parentTdp: sp.parentTdp })),
+        customerName: customer.name,
+        featureKeys: featureKeysList,
+      })
+      if (pass0Result) {
+        pass0Briefs = pass0Result.briefs
+        console.log(`[campaigns] Pass 0 selected ${pass0Result.selectedRoles.length} roles: ${pass0Result.selectedRoles.join(', ')}`)
+      }
+    } catch (e: any) {
+      console.warn(`[campaigns] Pass 0 persona selection failed (non-fatal): ${e?.message}`)
+    }
+  }
+
+  // Persona cascade: user-provided → Pass 0 → directiveRoleMap → defaults
   const directiveRoleMap: Record<string, string[]> = {
     'tax': ['CEO', 'CFO', 'VP Engineering', 'Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
     'cost': ['Director of Finance', 'VP Finance', 'Head of Procurement'],
@@ -1140,24 +1199,31 @@ export async function generateCampaign(
     'compliance': ['Director of Finance', 'Head of Compliance', 'General Counsel'],
   }
   let directiveRoles: string[] = []
-  if (config?.campaignDirective) {
+  if (!pass0Result && !userPersonas?.length && config?.campaignDirective) {
     const directiveLower = config.campaignDirective.toLowerCase()
     for (const [keyword, roles] of Object.entries(directiveRoleMap)) {
       if (directiveLower.includes(keyword)) directiveRoles.push(...roles)
     }
     directiveRoles = [...new Set(directiveRoles)]
   }
-  const defaultPersonas: Array<{ role: string; enabled: boolean; linkedinUrl?: string; name?: string }> = directiveRoles.length > 0
-    ? directiveRoles.slice(0, 6).map(r => ({ role: r, enabled: true }))
-    : [
-        { role: 'CIO', enabled: true },
-        { role: 'VP Infrastructure', enabled: true },
-        { role: 'VP Operations', enabled: true },
-        { role: 'Director of IT', enabled: true },
-        { role: 'Sr. Manager, Cloud Operations', enabled: true },
-        { role: 'Director of Platform Engineering', enabled: true },
-      ]
-  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? defaultPersonas
+
+  let enabledPersonas: Array<{ role: string; enabled: boolean; linkedinUrl?: string; name?: string }>
+  if (userPersonas?.length) {
+    enabledPersonas = userPersonas
+  } else if (pass0Result) {
+    enabledPersonas = pass0Result.briefs.map(b => ({ role: b.suggestedTitle, enabled: true }))
+  } else if (directiveRoles.length > 0) {
+    enabledPersonas = directiveRoles.slice(0, 6).map(r => ({ role: r, enabled: true }))
+  } else {
+    enabledPersonas = [
+      { role: 'CIO', enabled: true },
+      { role: 'VP Infrastructure', enabled: true },
+      { role: 'VP Operations', enabled: true },
+      { role: 'Director of IT', enabled: true },
+      { role: 'Sr. Manager, Cloud Operations', enabled: true },
+      { role: 'Director of Platform Engineering', enabled: true },
+    ]
+  }
   let resolvedContactsContext = ''
   let resolvedExecs: ResolvedExecutive[] = []
   try {
@@ -1263,19 +1329,6 @@ export async function generateCampaign(
     // Solution signals unavailable — proceed without template
   }
 
-  // 4. Map solution plays to structured format, enriched with SalesHub data (ADR-040)
-  const structuredPlays = (templateResult.structured?.solutionPlays ?? []).map(sp => {
-    const salesHubPlay = getSalesPlayByName(sp.playName)
-    return {
-      name: sp.playName,
-      parentTdp: sp.tdp,
-      customerWins: sp.customerWins,
-      realWorldExamples: sp.realWorldExamples ?? salesHubPlay?.realWorldExamples,
-      extractedMetrics: sp.extractedMetrics,
-      talkTrack: sp.talkTrack ?? salesHubPlay?.description,
-    }
-  })
-
   // 4a. Inject source material peer proofs into structuredPlays so buildPeerPattern() can resolve them
   const augmentedMaterial = materialContent + resolvedContactsContext
   const materialPeerProofs = extractPeerProofsFromMaterial(augmentedMaterial)
@@ -1353,6 +1406,7 @@ export async function generateCampaign(
       objectiveProfile,
       preMatchedMetrics,
       preMatchedPeerProofs,
+      pass0Briefs,
     })
 
     // Validate selection

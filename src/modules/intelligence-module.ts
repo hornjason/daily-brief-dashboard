@@ -36,7 +36,7 @@ export interface CustomerObjectiveProfile {
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const INTELLIGENCE_TTL_MS = 14 * 24 * 60 * 60 * 1000  // 14 days
 
-function parseSections(text: string): Record<string, string> {
+export function parseSections(text: string): Record<string, string> {
   const sections: Record<string, string> = {}
   let current: string | null = null
   for (const line of text.split('\n')) {
