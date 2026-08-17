@@ -76,9 +76,19 @@ function classifyObjective(text: string): ObjectiveCategory {
   return 'operational'
 }
 
+function derivePriority(category: string, metric: string | null): 'HIGH' | 'MED' | 'LOW' | null {
+  if (!metric) return null
+  const cat = category.toLowerCase()
+  if (cat.includes('revenue') || cat.includes('profitability') || cat.includes('growth')) return 'HIGH'
+  if (cat.includes('margin') || cat.includes('eps') || cat.includes('net income')) return 'HIGH'
+  if (cat.includes('cash') || cat.includes('outlook') || cat.includes('guidance')) return 'MED'
+  return 'MED'
+}
+
 function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
   const entries: ObjectiveEntry[] = []
   const seen = new Set<string>()
+  let currentCategory = ''
 
   function add(objective: string, metric: string) {
     if (seen.has(metric)) {
@@ -87,7 +97,8 @@ function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
       return
     }
     seen.add(metric)
-    entries.push({ objective, metric, priority: null, source: 'Financial Health', confidence: 'HIGH' })
+    const priority = derivePriority(currentCategory, metric)
+    entries.push({ objective, metric, priority, source: 'Financial Health', confidence: 'HIGH' })
   }
 
   const bullets = sectionText.split(/\n\*\s+/).filter(b => b.trim())
@@ -95,6 +106,7 @@ function parseFinancialHealth(sectionText: string): ObjectiveEntry[] {
     const titleMatch = bullet.match(/\*\*([^*]+)\*\*[:\s]*(.+)/s)
     if (!titleMatch) continue
     const category = titleMatch[1].replace(/:$/, '').trim()
+    currentCategory = category
     const text = titleMatch[2].replace(/\n/g, ' ').trim()
 
     for (const m of text.matchAll(/(?:revenue of |revenue )\$?([\d,.]+)\s*(million|billion|M|B)/gi)) {
@@ -209,7 +221,7 @@ function parseFacts(sectionText: string, source: string): ObjectiveEntry[] {
     entries.push({
       objective: factText.slice(0, 200),
       metric: extractMetric(factText),
-      priority: null,
+      priority: 'MED',
       source,
       confidence,
     })

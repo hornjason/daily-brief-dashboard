@@ -259,7 +259,7 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfi
   }
 }
 
-function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
+function extractStructuredIntel(signals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): {
   initiatives: Array<{ name: string; priority: string; detail: string }>
   competitors: Array<{ name: string; threat: string; advantage: string }>
   differentiation?: string
@@ -326,6 +326,23 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
   }
 
+  // Priority 0: Read initiatives from CustomerObjectiveProfile (ADR-044)
+  if (objectiveProfile) {
+    const profileInitiatives = [
+      ...objectiveProfile.security.filter(e => e.source === 'Strategic Initiatives'),
+      ...objectiveProfile.operational.filter(e => e.source === 'Strategic Initiatives'),
+      ...objectiveProfile.innovation.filter(e => e.source === 'Strategic Initiatives'),
+      ...objectiveProfile.growth.filter(e => e.source === 'Strategic Initiatives'),
+    ]
+    for (const entry of profileInitiatives) {
+      if (result.initiatives.length >= 5) break
+      const name = entry.objective.split(' — ')[0].trim()
+      const detail = entry.objective.includes(' — ') ? entry.objective.split(' — ').slice(1).join(' — ').trim() : ''
+      const priority = entry.priority || 'MED'
+      result.initiatives.push({ name, priority, detail })
+    }
+  }
+
   // Priority 1: Extract initiatives from account plan (has Red Hat product mapping)
   const planText = signals?.accountPlan || ''
   if (planText && result.initiatives.length === 0) {
@@ -349,7 +366,7 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
 
         const DEAL_SUMMARY_PATTERN = /^(Red Hat Solution|Estimated Deal Size|Timeline|Next Steps|Customer Objective Addressed|Tagged Potential.*|Mapping.*|Account|Why Red Hat)$/i
         if (name.length > 5 && name.length < 80 && !DEAL_SUMMARY_PATTERN.test(name)) {
-          result.initiatives.push({ name, priority: 'HIGH', detail })
+          result.initiatives.push({ name, priority: 'MED', detail })
         } else if (DEAL_SUMMARY_PATTERN.test(name)) {
           console.warn(`[campaign-template] Filtered deal-summary field from initiatives: "${name}"`)
         }
@@ -371,7 +388,7 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
           const detail = objMatch[2].trim()
           const DEAL_SUMMARY_PATTERN2 = /^(Red Hat Solution|Estimated Deal Size|Timeline|Next Steps|Customer Objective Addressed|Tagged Potential.*|Mapping.*|Account|Why Red Hat)$/i
           if (name.length > 5 && name.length < 80 && !DEAL_SUMMARY_PATTERN2.test(name)) {
-            result.initiatives.push({ name, priority: 'HIGH', detail })
+            result.initiatives.push({ name, priority: 'MED', detail })
           }
           if (result.initiatives.length >= 5) break
         }
@@ -1533,8 +1550,8 @@ function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals'], obj
 </table>`
 }
 
-function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals'], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
-  const structured = extractStructuredIntel(rawSignals)
+function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals'], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[], objectiveProfile?: CustomerObjectiveProfile): string {
+  const structured = extractStructuredIntel(rawSignals, objectiveProfile)
   let sections = ''
 
   if (structured.initiatives.length > 0) {
@@ -1818,7 +1835,7 @@ ${data.pass0Briefs && data.pass0Briefs.length > 0
 
 ${renderMetricsTable(usedObjectives, data.pass0Briefs)}
 
-${renderStructuredIntelSections(data.rawSignals, data.pass0Briefs)}
+${renderStructuredIntelSections(data.rawSignals, data.pass0Briefs, data.objectiveProfile)}
 
 ${data.referenceMaterials && data.referenceMaterials.length > 0 ? renderReferenceMaterials(data.referenceMaterials, data.referenceMaterialsHeading || 'Reference Material') : ''}
 
