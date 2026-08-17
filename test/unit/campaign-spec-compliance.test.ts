@@ -21,6 +21,7 @@ import { join } from 'path'
 import {
   generateCampaignFromStructured,
   sanitizeCreepyLines,
+  cleanObjectivePrefix,
 } from '../../src/campaign-html-template.ts'
 import { buildHappyFixture, buildMinimalFixture, buildPoisonedFixture } from '../fixtures/campaign-fixture-factory.ts'
 import { DENY_PATTERNS, assertNoDenyPatterns, assertNoGhostValues, extractEmails } from '../helpers/campaign-assertions.ts'
@@ -447,6 +448,83 @@ describe('5. Adversarial/poisoned input handling', () => {
     const emailPlain = emailSection.replace(/<[^>]+>/g, ' ')
     expect(emailPlain).not.toMatch(/pending\s+deal/i)
     expect(emailPlain).not.toMatch(/renewal\s+of\s+\$/i)
+  })
+
+  // #1132 — cleanObjectivePrefix strips raw objective prefixes from Gemini selection output
+  it('cleanObjectivePrefix strips "Raised Full-Year YYYY Guidance —" prefix', () => {
+    const input = 'Raised Full-Year 2026 Guidance — revenue expected to grow 15%'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('revenue expected to grow 15%')
+    expect(result).not.toMatch(/Raised Full-Year/i)
+  })
+
+  it('cleanObjectivePrefix strips "Lowered Full-Year YYYY Guidance —" prefix', () => {
+    const input = 'Lowered Full-Year 2025 Guidance — adjusted EBITDA targets'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('adjusted EBITDA targets')
+    expect(result).not.toMatch(/Lowered Full-Year/i)
+  })
+
+  it('cleanObjectivePrefix strips "Revenue Trajectory:" prefix', () => {
+    const input = 'Revenue Trajectory: strong Q4 performance'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('strong Q4 performance')
+    expect(result).not.toMatch(/Revenue Trajectory:/i)
+  })
+
+  it('cleanObjectivePrefix strips "Profitability:" prefix', () => {
+    const input = 'Profitability: margin expansion expected'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('margin expansion expected')
+    expect(result).not.toMatch(/Profitability:/i)
+  })
+
+  it('cleanObjectivePrefix strips "Cybersecurity Enhancement:" prefix', () => {
+    const input = 'Cybersecurity Enhancement: new security framework deployed'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('new security framework deployed')
+    expect(result).not.toMatch(/Cybersecurity Enhancement:/i)
+  })
+
+  it('cleanObjectivePrefix strips "Major Acquisition —" prefix', () => {
+    const input = 'Major Acquisition — enterprise software company for $2B'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe('enterprise software company for $2B')
+    expect(result).not.toMatch(/Major Acquisition/i)
+  })
+
+  it('cleanObjectivePrefix returns empty string for empty input', () => {
+    expect(cleanObjectivePrefix('')).toBe('')
+  })
+
+  it('cleanObjectivePrefix preserves text without objective prefixes', () => {
+    const input = 'This is normal text without any prefixes'
+    const result = cleanObjectivePrefix(input)
+    expect(result).toBe(input)
+  })
+
+  it('generateCampaignFromStructured applies cleanObjectivePrefix to selection fields', () => {
+    // Build a fixture with raw objective prefixes in Gemini selection fields
+    const fixture = buildHappyFixture()
+    fixture.selection.emails[0].signalBridge = 'Raised Full-Year 2026 Guidance — revenue up 15%'
+    fixture.selection.emails[0].challengerDataPoint = 'Revenue Trajectory: strong Q4'
+    fixture.selection.emails[0].customOpener = 'Profitability: margin expansion'
+    fixture.selection.emails[0].featureApplications = ['Cybersecurity Enhancement: new framework']
+
+    const html = generateCampaignFromStructured(fixture.selection, fixture.data)
+    const plain = html.replace(/<[^>]+>/g, ' ')
+
+    // Verify prefixes are stripped
+    expect(plain).not.toMatch(/Raised Full-Year/i)
+    expect(plain).not.toMatch(/Revenue Trajectory:/i)
+    expect(plain).not.toMatch(/Profitability:/i)
+    expect(plain).not.toMatch(/Cybersecurity Enhancement:/i)
+
+    // Verify content is preserved
+    expect(plain).toContain('revenue up 15%')
+    expect(plain).toContain('strong Q4')
+    expect(plain).toContain('margin expansion')
+    expect(plain).toContain('new framework')
   })
 })
 

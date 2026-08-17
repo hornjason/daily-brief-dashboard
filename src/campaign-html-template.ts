@@ -874,6 +874,28 @@ export function sanitizeCreepyLines(text: string): string {
   return result
 }
 
+// ── Objective Prefix Stripper (#1132) ─────────────────────────────────────
+// Strips raw objective prefixes that leak through Gemini's Pass 1 selection fields.
+// Reuses logic from renderObjectiveBlock() to clean signalBridge, challengerDataPoint,
+// customOpener, and featureApplications.
+
+export function cleanObjectivePrefix(text: string): string {
+  if (!text) return ''
+
+  let cleanText = text.trim()
+
+  // Strip common category prefixes with colons
+  cleanText = cleanText.replace(/^(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook|Reiterated[^:]*?|Cybersecurity Enhancement|Security Initiative|Operational Efficiency|Innovation Focus|Growth Strategy)[:\s]+/i, '')
+
+  // Strip "Raised/Lowered/Maintained Full-Year YYYY Guidance —" patterns
+  cleanText = cleanText.replace(/^(?:Raised|Lowered|Maintained|Updated|Revised)\s+Full[- ]Year\s+\d{4}\s+Guidance\s*[—–]\s*/i, '')
+
+  // Strip "Category Name —" patterns (e.g., "Major Acquisition —", "New Partnership —")
+  cleanText = cleanText.replace(/^(?:Acquisition of|Major|New|Strong|Strategic|Key)\s+[A-Z][^—–]*?\s*[—–]\s*/i, '')
+
+  return cleanText.trim()
+}
+
 // ── Metrics Table Rendering (ADR-044 Phase 4) ────────────────────────────
 
 export interface UsedObjective {
@@ -1677,10 +1699,10 @@ export function generateCampaignFromStructured(
   selection.customerContext = sanitizeCreepyLines(selection.customerContext)
   selection.positioning = sanitizeCreepyLines(selection.positioning)
   for (const email of selection.emails) {
-    email.customOpener = sanitizeCreepyLines(email.customOpener)
-    email.signalBridge = sanitizeCreepyLines(email.signalBridge)
-    email.challengerDataPoint = sanitizeCreepyLines(email.challengerDataPoint)
-    email.featureApplications = email.featureApplications.map(fa => sanitizeCreepyLines(fa))
+    email.customOpener = cleanObjectivePrefix(sanitizeCreepyLines(email.customOpener))
+    email.signalBridge = cleanObjectivePrefix(sanitizeCreepyLines(email.signalBridge))
+    email.challengerDataPoint = cleanObjectivePrefix(sanitizeCreepyLines(email.challengerDataPoint))
+    email.featureApplications = email.featureApplications.map(fa => cleanObjectivePrefix(sanitizeCreepyLines(fa)))
     if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
   }
 
