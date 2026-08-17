@@ -920,7 +920,10 @@ export function renderObjectiveBlock(
   }
 
   if (preMatch) {
-    return renderTemplate(preMatch.category, preMatch.entry.objective)
+    const text = preMatch.entry.metric
+      ? `${preMatch.entry.metric} ${preMatch.entry.objective.replace(/^[^:]+:\s*/, '').replace(preMatch.entry.metric, '').trim()}`
+      : preMatch.entry.objective
+    return renderTemplate(preMatch.category, text)
   }
 
   if (!profile) return ''
@@ -1244,7 +1247,13 @@ function getCapabilityDescription(featureKey: string): string {
 
 const VERB_PATTERN = /\b(?:replaced|consolidated|migrated|deployed|reduced|saved|achieved|realized|delivered|generated|gained|eliminated|standardized|chose|selected|adopted|cut|lowered|scaled|automated|runs?|saw)\b/i
 
+const HAS_METRIC = /\d+%|\$[\d,.]+|[\d,.]+ (?:million|billion|M|B)\b|\d+x\b|\d+ (?:months?|years?|hours?|days?)\b/i
+
 function formatPeerProofLine(customer: string, outcome: string): string {
+  if (!HAS_METRIC.test(outcome)) {
+    console.warn(`[template] Peer proof rejected — no metric: "${customer}: ${outcome.slice(0, 60)}..."`)
+    return ''
+  }
   if (VERB_PATTERN.test(outcome)) return `${customer} ${outcome}`
   return `${customer} → ${outcome}`
 }
