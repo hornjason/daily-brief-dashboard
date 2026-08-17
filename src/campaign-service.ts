@@ -1582,18 +1582,7 @@ export async function generateCampaign(
       if (refs.length > 0) selection.referenceMaterials = refs
     }
 
-    // Enrich referenceMaterials with URLs from email sourceLinks
-    if (selection.referenceMaterials && referenceMaterialData.length > 0) {
-      for (const rm of selection.referenceMaterials) {
-        if (!rm.url) {
-          const match = referenceMaterialData.find(sd =>
-            rm.resource.toLowerCase().includes(sd.title.toLowerCase().substring(0, 20)) ||
-            sd.title.toLowerCase().includes(rm.resource.toLowerCase().substring(0, 20)),
-          )
-          if (match) rm.url = match.url
-        }
-      }
-    }
+    // Fuzzy URL backfill removed — we now use referenceMaterialData directly (see line 1725)
 
     if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
       const attrs: Array<{ name: string; description: string }> = []
@@ -1722,11 +1711,27 @@ export async function generateCampaign(
       generatedDate: timestamp,
       rawSignals: enrichedSignals,
       bvTalkingPoints: bvTalkingPoints.length > 0 ? bvTalkingPoints : undefined,
-      referenceMaterials: selection.referenceMaterials?.map(rm => ({
-        resource: rm.resource,
-        url: rm.url,
-        keyTakeaway: rm.keyTakeaway,
-      })),
+      referenceMaterials: referenceMaterialData.length > 0
+        ? (() => {
+            const seen = new Set<string>()
+            return referenceMaterialData
+              .filter(rm => rm.url && rm.title)
+              .filter(rm => {
+                if (seen.has(rm.url)) return false
+                seen.add(rm.url)
+                return true
+              })
+              .map(rm => ({
+                resource: rm.title,
+                url: rm.url,
+                keyTakeaway: rm.excerpt || '',
+              }))
+          })()
+        : selection.referenceMaterials?.map(rm => ({
+            resource: rm.resource,
+            url: rm.url,
+            keyTakeaway: rm.keyTakeaway,
+          })),
       referenceMaterialsHeading: 'SB 122 Reference Material',
       eligibilityTable: selection.eligibilityTable?.map(et => ({
         offering: et.offering,
