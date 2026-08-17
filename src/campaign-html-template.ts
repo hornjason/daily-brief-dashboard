@@ -86,6 +86,7 @@ interface CampaignHTMLOptions {
   eligibilityHeading?: string
   footprint?: CampaignFootprint
   bvTalkingPoints?: BVTalkingPoint[]
+  objectiveProfile?: CustomerObjectiveProfile
 }
 
 // ── Internal types ──
@@ -206,14 +207,35 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfi
   }
 
   // Priority 1: objective profile financial entries (pre-parsed, most reliable)
+  // Two-pass approach: annual first, then fallback to generic revenue
   let profileRevenue: string | null = null
   if (objectiveProfile?.financial) {
+    // First pass: ONLY annual/FY/full-year revenue (exclude quarterly patterns)
     for (const entry of objectiveProfile.financial) {
       const text = entry.objective || ''
+      // Skip quarterly entries (Q1, Q2, Q3, Q4, quarterly)
+      if (/\bQ[1-4]\b|\bquarterly\b/i.test(text)) continue
+
       const m = text.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
-      if (m && /revenue|annual|full[- ]year/i.test(text)) {
+      // Match ONLY if it has annual/FY/full-year markers
+      if (m && /\b(?:annual|full[- ]year|FY\s*\d{4})\b/i.test(text)) {
         profileRevenue = `$${m[1]}`
         break
+      }
+    }
+
+    // Second pass: fallback to generic "revenue" if no annual found (still exclude quarterly)
+    if (!profileRevenue) {
+      for (const entry of objectiveProfile.financial) {
+        const text = entry.objective || ''
+        // Skip quarterly entries
+        if (/\bQ[1-4]\b|\bquarterly\b/i.test(text)) continue
+
+        const m = text.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+        if (m && /revenue/i.test(text)) {
+          profileRevenue = `$${m[1]}`
+          break
+        }
       }
     }
   }
@@ -621,8 +643,8 @@ function renderEmailBox(email: EmailTemplate, aeName: string): string {
 
 export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   const parsed = parseCampaignMarkdown(options.markdown)
-  const metrics = extractMetrics(options.signals)
-  const structured = extractStructuredIntel(options.signals)
+  const metrics = extractMetrics(options.signals, options.objectiveProfile)
+  const structured = extractStructuredIntel(options.signals, options.objectiveProfile)
 
   // Resolve contacts: prefer explicit, fall back to extracted
   const contacts: CampaignContact[] = options.contacts ?? extractContacts(options.signals).map(c => ({
@@ -838,7 +860,8 @@ export function sanitizeCreepyLines(text: string): string {
     .map(sentence => sentence.replace(SKU_PATTERN, '').replace(/\s{2,}/g, ' ').trim())
     .filter(s => s.length > 0)
 
-  if (cleaned.length === 0) return text.replace(SKU_PATTERN, '').trim()
+  // Fail-closed: when ALL sentences match creepy patterns, return empty string (#1096)
+  if (cleaned.length === 0) return ''
 
   let result = cleaned.join(' ')
   result = result.replace(/\.\s*\./g, '.')
