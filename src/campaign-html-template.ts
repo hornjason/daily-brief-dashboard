@@ -19,6 +19,7 @@ import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 
 const BRAND_RED = '#c41e3a'
+const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
 
 // ── Exported types for campaign data ──
 
@@ -85,6 +86,7 @@ interface CampaignHTMLOptions {
   eligibilityHeading?: string
   footprint?: CampaignFootprint
   bvTalkingPoints?: BVTalkingPoint[]
+  objectiveProfile?: CustomerObjectiveProfile
 }
 
 // ── Internal types ──
@@ -205,14 +207,35 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfi
   }
 
   // Priority 1: objective profile financial entries (pre-parsed, most reliable)
+  // Two-pass approach: annual first, then fallback to generic revenue
   let profileRevenue: string | null = null
   if (objectiveProfile?.financial) {
+    // First pass: ONLY annual/FY/full-year revenue (exclude quarterly patterns)
     for (const entry of objectiveProfile.financial) {
       const text = entry.objective || ''
+      // Skip quarterly entries (Q1, Q2, Q3, Q4, quarterly)
+      if (/\bQ[1-4]\b|\bquarterly\b/i.test(text)) continue
+
       const m = text.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
-      if (m && /revenue|annual|full[- ]year/i.test(text)) {
+      // Match ONLY if it has annual/FY/full-year markers
+      if (m && /\b(?:annual|full[- ]year|FY\s*\d{4})\b/i.test(text)) {
         profileRevenue = `$${m[1]}`
         break
+      }
+    }
+
+    // Second pass: fallback to generic "revenue" if no annual found (still exclude quarterly)
+    if (!profileRevenue) {
+      for (const entry of objectiveProfile.financial) {
+        const text = entry.objective || ''
+        // Skip quarterly entries
+        if (/\bQ[1-4]\b|\bquarterly\b/i.test(text)) continue
+
+        const m = text.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+        if (m && /revenue/i.test(text)) {
+          profileRevenue = `$${m[1]}`
+          break
+        }
       }
     }
   }
@@ -506,11 +529,17 @@ function renderFitRationale(customerName: string, content: string): string {
 }
 
 function renderFitFromPass0(customerName: string, pass0Briefs: import('./lib/persona-selector.ts').PersonaBrief[]): string {
-  // Pick the best data from across all briefs
   const timingTriggers = pass0Briefs.map(b => b.timingTrigger).filter(Boolean)
   const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
-  const installedBases = [...new Set(pass0Briefs.map(b => b.installedBase).filter(Boolean))]
+  const rawBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
+  const installedBases = [...new Set(rawBases.filter((b: string) => {
+    if (customerName && (b.includes(customerName) || (customerName.split(/\s+/)[0].length > 2 && b.startsWith(customerName.split(/\s+/)[0] + ' ')))) return false
+    if (b.length > 40 && SPECULATION_PATTERN.test(b)) return false
+    if (b.length > 120 && !b.includes(',')) return false
+    return true
+  }))]
   const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
+    .map((o: string) => { const s = o.split(/[.!]/)[0]; return s.length <= 120 ? s : s.slice(0, 117) + '…' })
 
   let html = `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>`
   html += '<div style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">'
@@ -614,8 +643,8 @@ function renderEmailBox(email: EmailTemplate, aeName: string): string {
 
 export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   const parsed = parseCampaignMarkdown(options.markdown)
-  const metrics = extractMetrics(options.signals)
-  const structured = extractStructuredIntel(options.signals)
+  const metrics = extractMetrics(options.signals, options.objectiveProfile)
+  const structured = extractStructuredIntel(options.signals, options.objectiveProfile)
 
   // Resolve contacts: prefer explicit, fall back to extracted
   const contacts: CampaignContact[] = options.contacts ?? extractContacts(options.signals).map(c => ({
@@ -831,7 +860,8 @@ export function sanitizeCreepyLines(text: string): string {
     .map(sentence => sentence.replace(SKU_PATTERN, '').replace(/\s{2,}/g, ' ').trim())
     .filter(s => s.length > 0)
 
-  if (cleaned.length === 0) return text.replace(SKU_PATTERN, '').trim()
+  // Fail-closed: when ALL sentences match creepy patterns, return empty string (#1096)
+  if (cleaned.length === 0) return ''
 
   let result = cleaned.join(' ')
   result = result.replace(/\.\s*\./g, '.')
@@ -858,7 +888,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
-  if (pass0Briefs && pass0Briefs.length > 0) {
+  if (pass0Briefs && pass0Briefs.length > 0 && usedObjectives.length === 0) {
     let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
     html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
     html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'

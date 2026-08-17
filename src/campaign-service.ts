@@ -90,6 +90,17 @@ export function deriveFootprint(
   registrySignals: Signal[],
   customerName?: string,
 ): { current: string; expansion: string } | undefined {
+  // Subscription signals are authoritative — use them first
+  const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
+  if (subProducts.length > 0) {
+    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
+    return {
+      current: subProducts.join(', '),
+      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
+    }
+  }
+
+  // Fall back to Pass 0 installedBase for prospects without subscription data
   if (pass0Briefs.length > 0) {
     const installedBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
       .filter(b => !isSpeculativeInstalledBase(b, customerName))
@@ -106,15 +117,6 @@ export function deriveFootprint(
           ? `${expansions[0] || 'Expansion under evaluation'} (Competitive: ${competitive[0]})`
           : expansions[0] || 'Expansion opportunities under evaluation',
       }
-    }
-  }
-
-  const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
-  if (subProducts.length > 0) {
-    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
-    return {
-      current: subProducts.join(', '),
-      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
     }
   }
 
