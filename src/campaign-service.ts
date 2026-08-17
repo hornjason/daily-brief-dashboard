@@ -1654,7 +1654,7 @@ export async function generateCampaign(
           ? brief.peerProofCandidates.map(p => `${p.company}: ${p.outcome}`).join('; ')
           : ''
         bvTalkingPoints.push({
-          objective: brief.objectiveMatch,
+          objective: brief.suggestedTitle || brief.role,
           talkingPoints: brief.valueProposition,
           keyMetrics: proofText,
         })

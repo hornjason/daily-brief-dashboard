@@ -70,8 +70,8 @@ export function runEmailQualityCheck(input: EmailCheckInput): EmailQualityResult
   const maxWords = input.tier === 'executive' ? input.wordBudget.exec : input.wordBudget.manager
   const wordCount = countWords(plainBody)
 
-  // 1. Word limit
-  const wordLimit = wordCount <= maxWords
+  // 1. Word limit (20% tolerance)
+  const wordLimit = wordCount <= maxWords * 1.2
 
   // 2. Tech observations only — no firmographic facts
   const techObservations = !FIRMOGRAPHIC_PATTERN.test(plainBody)
