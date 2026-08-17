@@ -196,7 +196,7 @@ function convertMarkdownBullets(text: string): string {
   return html
 }
 
-function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
+function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): {
   revenue: string
   employees: string
   productInstances: string
@@ -209,13 +209,31 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
     productName: 'Product',
   }
 
+  // Priority 1: objective profile financial entries (pre-parsed, most reliable)
+  let profileRevenue: string | null = null
+  if (objectiveProfile?.financial) {
+    for (const entry of objectiveProfile.financial) {
+      const text = entry.objective || ''
+      const m = text.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+      if (m && /revenue|annual|full[- ]year/i.test(text)) {
+        profileRevenue = `$${m[1]}`
+        break
+      }
+    }
+  }
+
   const intel = signals?.intelligence
-  if (!intel) return defaults
+  if (!intel && !profileRevenue) return defaults
 
-  const companyText = typeof intel === 'string' ? intel : (intel.company || '')
+  const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
 
-  const revenueMatch = companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
-    || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK])?)/i)
+  // Priority 2: regex on intelligence text — annual/FY markers first, then generic
+  const revenueMatch = !profileRevenue ? (
+    companyText.match(/(?:annual|full[- ]year|FY\s*\d{4})[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+    || companyText.match(/record revenue of \$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+    || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+    || companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+  ) : null
 
   const employeesMatch = companyText.match(/approximately\s+([\d,]+)\s*employees/i)
     || companyText.match(/([\d,]+)\s+employees/i)
@@ -239,7 +257,7 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   }
 
   return {
-    revenue: revenueMatch?.[1] ? `$${revenueMatch[1]}` : defaults.revenue,
+    revenue: profileRevenue ?? (revenueMatch?.[1] ? `$${revenueMatch[1]}` : defaults.revenue),
     employees: employeesMatch?.[1] ?? defaults.employees,
     productInstances,
     productName,
@@ -588,7 +606,7 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 <p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</p>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
   options.accountTeam && options.accountTeam.length > 0
-    ? options.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHtml(m.name)}`).join(' · ')
+    ? options.accountTeam.map(m => `${escapeHtml(m.title)}: ${escapeHtml(m.name)}`).join(' · ')
     : `AE: ${escapeHtml(options.aeName)}`
 }${options.focus ? ` · Focus: ${escapeHtml(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHtml(options.style)}` : ''}</p>
 
@@ -606,7 +624,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(options.aeName)}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
     options.accountTeam && options.accountTeam.length > 0
-      ? options.accountTeam.map(m => `${escapeHtml(m.name)} (${m.role.toUpperCase()})`).join(', ')
+      ? options.accountTeam.map(m => `${escapeHtml(m.name)} (${escapeHtml(m.title)})`).join(', ')
       : escapeHtml(options.aeName) + ' (AE)'
   }</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤120 words) + 3 Manager (200-250 words)</td></tr>
@@ -788,7 +806,18 @@ export interface UsedObjective {
   usedIn: string
 }
 
-export function renderMetricsTable(usedObjectives: UsedObjective[]): string {
+export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
+  if (pass0Briefs && pass0Briefs.length > 0) {
+    let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
+    html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
+    html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
+    for (const brief of pass0Briefs) {
+      html += `<tr><td>${escapeHtml(brief.role)}</td><td>${escapeHtml(brief.objectiveMatch)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
+    }
+    html += '</table>'
+    return html
+  }
+
   if (usedObjectives.length === 0) return ''
 
   const seen = new Set<string>()
@@ -952,6 +981,7 @@ export interface StructuredCampaignData {
   objectiveProfile?: CustomerObjectiveProfile
   preMatchedMetrics?: import('./lib/persona-classifier.ts').PreMatchedMetric[]
   preMatchedPeerProofs?: import('./lib/persona-classifier.ts').PreMatchedPeerProof[]
+  pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1447,8 +1477,8 @@ function renderStructuredEmailBox(
  * this function assembles emails from composable blocks.
  */
 
-function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals']): string {
-  const metrics = extractMetrics(rawSignals)
+function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): string {
+  const metrics = extractMetrics(rawSignals, objectiveProfile)
   return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
 <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
   <tr>
@@ -1683,7 +1713,7 @@ export function generateCampaignFromStructured(
 <p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(data.customerName)}</p>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${data.generatedDate} · ${
     data.accountTeam.length > 0
-      ? data.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHtml(m.name)}`).join(' · ')
+      ? data.accountTeam.map(m => `${escapeHtml(m.title)}: ${escapeHtml(m.name)}`).join(' · ')
       : `AE: ${escapeHtml(aeName)}`
   }</p>
 
@@ -1705,7 +1735,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(aeName)} (${voiceTokens.formality}, ${voiceTokens.assertionLevel})</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
     data.accountTeam.length > 0
-      ? data.accountTeam.map(m => `${escapeHtml(m.name)} (${m.role.toUpperCase()})`).join(', ')
+      ? data.accountTeam.map(m => `${escapeHtml(m.name)} (${escapeHtml(m.title)})`).join(', ')
       : escapeHtml(aeName) + ' (AE)'
   }</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">${execEmailsHtml.length} Executive (${voiceTokens.wordBudget.exec} words) + ${managerEmailsHtml.length} Manager (${voiceTokens.wordBudget.manager} words)</td></tr>
@@ -1721,11 +1751,11 @@ ${renderQualityChecklist(qualityResults, voiceTokens.wordBudget)}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
-${renderDashboardMetrics(data.rawSignals)}
+${renderDashboardMetrics(data.rawSignals, data.objectiveProfile)}
 
 ${(data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
 
-${renderMetricsTable(usedObjectives)}
+${renderMetricsTable(usedObjectives, data.pass0Briefs)}
 
 ${renderStructuredIntelSections(data.rawSignals)}
 

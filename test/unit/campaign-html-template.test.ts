@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignHTML } from '../../src/campaign-html-template.ts'
+import { generateCampaignHTML, renderMetricsTable, type UsedObjective } from '../../src/campaign-html-template.ts'
+import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 
 describe('generateCampaignHTML', () => {
   it('should generate HTML with core structure and branding', () => {
@@ -312,5 +313,83 @@ Test positioning.`
 
     expect(html).not.toContain('<script>alert')
     expect(html).toContain('&lt;script&gt;')
+  })
+})
+
+describe('renderMetricsTable with Pass 0 briefs', () => {
+  const mockBriefs: PersonaBrief[] = [
+    {
+      role: 'CISO',
+      suggestedTitle: 'Chief Information Security Officer',
+      why: 'test',
+      objectiveMatch: 'Reduce risk exposure by 40%',
+      peerProofCandidates: [],
+      timingTrigger: 'Q3 budget',
+      valueProposition: 'test',
+      featureKeys: [],
+      competitiveContext: null,
+      relationshipPath: 'test',
+      installedBase: 'test',
+      suppressTriggers: [],
+      confidence: { overall: 'HIGH' },
+    },
+    {
+      role: 'VP_INFRA',
+      suggestedTitle: 'VP of Infrastructure',
+      why: 'test',
+      objectiveMatch: 'Migrate 80% of workloads to hybrid cloud',
+      peerProofCandidates: [],
+      timingTrigger: 'EOY deadline',
+      valueProposition: 'test',
+      featureKeys: [],
+      competitiveContext: null,
+      relationshipPath: 'test',
+      installedBase: 'test',
+      suppressTriggers: [],
+      confidence: { overall: 'MEDIUM' },
+    },
+  ]
+
+  const fallbackObjectives: UsedObjective[] = [
+    { objective: 'Fallback objective', metric: 'metric1', category: 'Financial', usedIn: 'John (Executive)' },
+  ]
+
+  it('renders all Pass 0 briefs as table rows', () => {
+    const html = renderMetricsTable(fallbackObjectives, mockBriefs)
+    expect(html).toContain('Business Metrics Used in Outreach')
+    expect(html).toContain('<tr')
+    const rowCount = (html.match(/<tr/g) || []).length
+    expect(rowCount).toBe(3) // header + 2 briefs
+  })
+
+  it('renders Pass 0 brief role in the Category column', () => {
+    const html = renderMetricsTable([], mockBriefs)
+    expect(html).toContain('CISO')
+    expect(html).toContain('VP_INFRA')
+  })
+
+  it('renders Pass 0 brief objectiveMatch in the Metric column', () => {
+    const html = renderMetricsTable([], mockBriefs)
+    expect(html).toContain('Reduce risk exposure by 40%')
+    expect(html).toContain('Migrate 80% of workloads to hybrid cloud')
+  })
+
+  it('renders Pass 0 brief suggestedTitle in the Used In column', () => {
+    const html = renderMetricsTable([], mockBriefs)
+    expect(html).toContain('Chief Information Security Officer')
+    expect(html).toContain('VP of Infrastructure')
+  })
+
+  it('falls back to usedObjectives when Pass 0 briefs not provided', () => {
+    const html = renderMetricsTable(fallbackObjectives)
+    expect(html).toContain('Fallback objective')
+    expect(html).toContain('Financial')
+    expect(html).not.toContain('CISO')
+  })
+
+  it('falls back to usedObjectives when Pass 0 briefs is empty array', () => {
+    const html = renderMetricsTable(fallbackObjectives, [])
+    expect(html).toContain('Fallback objective')
+    expect(html).not.toContain('CISO')
   })
 })

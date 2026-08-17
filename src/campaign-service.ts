@@ -1622,6 +1622,7 @@ export async function generateCampaign(
       objectiveProfile,
       preMatchedMetrics,
       preMatchedPeerProofs,
+      pass0Briefs: pass0Briefs.length > 0 ? pass0Briefs : undefined,
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility
