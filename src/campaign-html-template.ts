@@ -19,12 +19,6 @@ import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, 
 
 const BRAND_RED = '#c41e3a'
 
-const DEFAULT_GUARDRAILS = {
-  never: ['Pipeline opportunities', 'RHEL Private Offer', 'Support cases', 'Subscription counts', 'Layoff numbers'],
-  careful: ['Leadership changes — frame around strategy, not departures'],
-  safe: ['Public earnings', 'CTO/CIO appointments', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship'],
-}
-
 // ── Exported types for campaign data ──
 
 export interface CampaignContact {
@@ -267,13 +261,11 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfi
 function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
   initiatives: Array<{ name: string; priority: string; detail: string }>
   competitors: Array<{ name: string; threat: string; advantage: string }>
-  guardrails: { never: string[]; careful: string[]; safe: string[] }
   differentiation?: string
 } {
   const result = {
     initiatives: [] as Array<{ name: string; priority: string; detail: string }>,
     competitors: [] as Array<{ name: string; threat: string; advantage: string }>,
-    guardrails: { never: [] as string[], careful: [] as string[], safe: [] as string[] },
     differentiation: undefined as string | undefined,
   }
 
@@ -375,25 +367,7 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
       }
     }
 
-    const risksSection = planText.match(/Account Plan Risks[\s\S]*?(?=\n## |$)/i)
-    if (risksSection) {
-      const riskItems = risksSection[0].match(/\*\*([^*]+)\*\*:?\s*([^*\n]+)/g)
-      if (riskItems) {
-        for (const item of riskItems.slice(0, 5)) {
-          const clean = item.replace(/\*\*/g, '').split(':')[0].trim()
-          if (clean.length > 3 && clean.length < 60) {
-            result.guardrails.careful.push(clean)
-          }
-        }
-      }
-    }
   }
-
-  result.guardrails.never = [...DEFAULT_GUARDRAILS.never]
-  if (result.guardrails.careful.length === 0) {
-    result.guardrails.careful = [...DEFAULT_GUARDRAILS.careful]
-  }
-  result.guardrails.safe = [...DEFAULT_GUARDRAILS.safe]
 
   return result
 }
@@ -697,11 +671,6 @@ ${options.referenceMaterials && options.referenceMaterials.length > 0 ? renderRe
 ${options.eligibilityTable && options.eligibilityTable.length > 0 ? renderEligibilityTable(options.eligibilityTable, options.eligibilityHeading || 'Eligibility') : ''}
 
 ${options.footprint ? renderFootprintSection(options.footprint) : ''}
-
-<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
-${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
@@ -1546,11 +1515,6 @@ ${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margi
   </tr>`).join('\n')}
 </table>`
   }
-
-  sections += `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
-${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>`
 
   return sections
 }

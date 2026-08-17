@@ -53,7 +53,6 @@ describe('gold standard fixture integrity', () => {
     expect(headings.some(h => /SB 122 Reference Material/i.test(h))).toBe(true)
     expect(headings.some(h => /SB 122 Eligibility/i.test(h))).toBe(true)
     expect(headings.some(h => /Existing Red Hat Footprint/i.test(h))).toBe(true)
-    expect(headings.some(h => /Outreach Guardrails/i.test(h))).toBe(true)
     expect(headings.some(h => /Email Templates by Role/i.test(h))).toBe(true)
     expect(headings.some(h => /Manager Outreach/i.test(h))).toBe(true)
     expect(headings.some(h => /Call Prep — Key Talking Points/i.test(h))).toBe(true)
@@ -68,7 +67,6 @@ describe('gold standard fixture integrity', () => {
       'Customer Intelligence Dashboard',
       'Strategic Initiatives',
       'Competitive Position',
-      'Outreach Guardrails',
       'Call Prep — Key Talking Points',
       'Email Templates by Role',
     ]
@@ -279,11 +277,6 @@ Strategic Objectives:
 
   it('generated HTML has metric boxes', () => {
     const missing = checkMetricBoxes(generatedHtml)
-    expect(missing).toHaveLength(0)
-  })
-
-  it('generated HTML has guardrail badges', () => {
-    const missing = checkGuardrailBadges(generatedHtml)
     expect(missing).toHaveLength(0)
   })
 

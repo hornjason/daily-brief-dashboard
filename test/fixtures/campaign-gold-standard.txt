@@ -176,10 +176,6 @@ Offering
 
 Current: Red Hat Enterprise Linux (embedded in Thunder/Defend products via TD Synnex)
 Expansion: AAP (100 nodes in VMware Replace pipeline), OpenShift AI POC, RHEL Embedded Expansion
-⚠️ Outreach Guardrails
-NEVER Pipeline opportunities, Support cases, Subscription counts, Node counts, SKU codes, Layoff numbers
-CAREFUL Flex pool licensing conflict, CentOS migration timeline, EBITDA margin specifics
-SAFE Public earnings, AI security strategy, SB 122 (public law), Existing RHEL relationship, Multi-cloud architecture
 ________________
 💬 Call Prep — Key Talking Points
 

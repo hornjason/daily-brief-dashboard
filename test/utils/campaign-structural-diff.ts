@@ -12,7 +12,7 @@ export interface SectionInfo {
 }
 
 export interface StructuralMismatch {
-  type: 'missing-section' | 'extra-section' | 'order-mismatch' | 'missing-contact-column' | 'missing-metric-box' | 'missing-guardrail-badge' | 'missing-color' | 'missing-email-box' | 'section-count-mismatch'
+  type: 'missing-section' | 'extra-section' | 'order-mismatch' | 'missing-contact-column' | 'missing-metric-box' | 'missing-color' | 'missing-email-box' | 'section-count-mismatch'
   detail: string
 }
 
@@ -238,15 +238,6 @@ export function structuralDiff(generatedHtml: string, fixtureText: string): Stru
     mismatches.push({
       type: 'missing-email-box',
       detail: `Expected 6 email boxes (3 exec + 3 manager), found ${emailCount}`,
-    })
-  }
-
-  // Check guardrail badges
-  const missingBadges = checkGuardrailBadges(generatedHtml)
-  for (const badge of missingBadges) {
-    mismatches.push({
-      type: 'missing-guardrail-badge',
-      detail: `Missing guardrail badge: "${badge}"`,
     })
   }
 
