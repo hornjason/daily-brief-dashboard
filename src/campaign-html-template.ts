@@ -864,7 +864,8 @@ export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?
     html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
     for (const brief of pass0Briefs) {
       const label = ROLE_LABELS[brief.role] || brief.role
-      html += `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(brief.objectiveMatch)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
+      const metric = brief.objectiveMatch.split(/[.;]/)[0]?.trim().slice(0, 120) || brief.objectiveMatch.slice(0, 120)
+      html += `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(metric)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
     }
     html += '</table>'
     return html

@@ -74,7 +74,11 @@ const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|impli
 
 /** Returns true when text looks like Gemini speculation rather than real product names */
 export function isSpeculativeInstalledBase(text: string, customerName?: string): boolean {
-  if (customerName && text.includes(customerName)) return true
+  if (customerName) {
+    if (text.includes(customerName)) return true
+    const firstName = customerName.split(/\s+/)[0]
+    if (firstName.length > 2 && text.startsWith(firstName + ' ')) return true
+  }
   if (text.length > 40 && SPECULATION_PATTERN.test(text)) return true
   if (text.length > 120 && !text.includes(',')) return true
   return false
