@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignHTML, renderMetricsTable, renderObjectiveBlock, type UsedObjective } from '../../src/campaign-html-template.ts'
+import { generateCampaignHTML, generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, type UsedObjective } from '../../src/campaign-html-template.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -484,5 +484,82 @@ describe('renderObjectiveBlock prefix stripping (#1095)', () => {
     // Should not have double colons or em-dashes mid-sentence indicating leaked prefixes
     expect(result).not.toMatch(/:\s*—/)
     expect(result).not.toMatch(/—\s*—/)
+  })
+})
+
+describe('generateCampaignFromStructured — sign-off contact info (#1129)', () => {
+  const minimalSelection = {
+    customerContext: 'Test customer context',
+    emails: [
+      {
+        recipientName: 'John Smith',
+        tier: 'executive' as const,
+        subject: 'Test Subject',
+        signalIndex: 0,
+        featureKeys: [],
+        peerProof: '',
+        challengerDataPoint: '',
+        signalBridge: '',
+        customOpener: '',
+        featureApplications: [],
+        referenceLine: '',
+      },
+    ],
+  }
+
+  // Helper to create fresh data object for each test (avoid mutation across tests)
+  const createMinimalData = () => ({
+    materialTitle: 'Test Material',
+    materialUrl: 'https://example.com/material',
+    customerName: 'Test Corp',
+    generatedDate: '2026-08-17',
+    accountTeam: [],
+    resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@example.com', linkedIn: '' }],
+    signals: [{ headline: 'Test Signal', metadata: {} }],
+    subscriptions: [],
+    sourceUrls: [],
+    structuredPlays: [],
+    voiceProfile: undefined,
+    objectiveProfile: undefined,
+    rawSignals: undefined,
+    pass0Briefs: undefined,
+    fitRationale: undefined,
+    campaignThreat: undefined,
+    campaignSolution: undefined,
+    signalQuality: undefined,
+    preMatchedMetrics: undefined,
+    preMatchedPeerProofs: undefined,
+    sourceAttributions: undefined,
+  })
+
+  it('includes voice profile email/phone in sign-off when no named AE exists', () => {
+    const html = generateCampaignFromStructured(minimalSelection, {
+      ...createMinimalData(),
+      aeEmail: 'test@redhat.com',
+      aePhone: '555-1234',
+    })
+
+    expect(html).toContain('Account Executive')
+    expect(html).toContain('test@redhat.com')
+    expect(html).toContain('M: 555-1234')
+  })
+
+  it('includes fallback contact when no named AE and no voice profile contact info', () => {
+    const html = generateCampaignFromStructured(minimalSelection, createMinimalData())
+
+    expect(html).toContain('Account Executive')
+    // Should have SOME contact info - either a fallback email or message
+    const hasContactInfo = html.includes('@redhat.com') || html.includes('Contact your Red Hat account team')
+    expect(hasContactInfo).toBe(true)
+  })
+
+  it('derives email from name when named AE exists', () => {
+    const html = generateCampaignFromStructured(minimalSelection, {
+      ...createMinimalData(),
+      accountTeam: [{ name: 'Jane Doe', role: 'ae', title: 'Account Executive' }],
+    })
+
+    expect(html).toContain('Jane Doe')
+    expect(html).toContain('jdoe@redhat.com')
   })
 })
