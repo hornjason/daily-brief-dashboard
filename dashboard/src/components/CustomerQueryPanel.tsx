@@ -1,6 +1,7 @@
 import { useState, useRef, KeyboardEvent } from 'react'
 import { Loader2, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react'
 import { useCustomerQuery } from '../hooks/useCustomerQuery'
+import { renderMarkdown } from '../lib/render-markdown'
 
 // ── Confidence badge ──────────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ export function CustomerQueryPanel({ customerName }: { customerName: string }) {
               <ConfidenceBadge confidence={result.confidence} />
             </div>
             <div className="px-3 py-3">
-              <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{result.answer}</p>
+              <div className="text-sm text-text-primary leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(result.answer) }} />
             </div>
             {result.sources.length > 0 && (
               <div className="px-3 pb-3 flex flex-wrap gap-1.5">
@@ -133,7 +134,7 @@ export function CustomerQueryPanel({ customerName }: { customerName: string }) {
                       <ConfidenceBadge confidence={entry.result.confidence} />
                     </div>
                     <div className="px-3 py-2">
-                      <p className="text-xs text-text-secondary leading-relaxed line-clamp-3">{entry.result.answer}</p>
+                      <div className="text-xs text-text-secondary leading-relaxed line-clamp-3" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.result.answer) }} />
                     </div>
                     {entry.result.sources.length > 0 && (
                       <div className="px-3 pb-2 flex flex-wrap gap-1">
