@@ -70,6 +70,13 @@ export function deriveThreatSolution(materialTitle: string, materialContent: str
   return { threat, solution }
 }
 
+const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies)\b|existing\s.*portfolio/i
+
+/** Returns true when text looks like Gemini speculation rather than real product names */
+export function isSpeculativeInstalledBase(text: string): boolean {
+  return text.length > 80 && SPECULATION_PATTERN.test(text)
+}
+
 export function deriveFootprint(
   pass0Briefs: PersonaBrief[],
   subSignals: Signal[],
@@ -77,6 +84,7 @@ export function deriveFootprint(
 ): { current: string; expansion: string } | undefined {
   if (pass0Briefs.length > 0) {
     const installedBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
+      .filter(b => !isSpeculativeInstalledBase(b))
     const uniqueBases = [...new Set(installedBases)]
     const expansions = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
     const competitive = pass0Briefs

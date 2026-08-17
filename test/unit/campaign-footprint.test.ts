@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { deriveFootprint } from '../../src/campaign-service.ts'
+import { deriveFootprint, isSpeculativeInstalledBase } from '../../src/campaign-service.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 
 function makeBrief(overrides: Partial<PersonaBrief> = {}): PersonaBrief {
@@ -101,5 +101,84 @@ describe('deriveFootprint', () => {
     expect(result).toBeDefined()
     expect(result!.expansion).toContain('Cloud migration initiative')
     expect(result!.expansion).toContain('Kubernetes adoption')
+  })
+
+  it('filters out speculative installedBase and omits footprint when all are speculative', () => {
+    const briefs = [
+      makeBrief({ installedBase: "A10 Networks' existing automation portfolio likely includes SaaS tools that will be impacted by the tax." }),
+      makeBrief({ installedBase: "The company's use of remotely accessed software implies a technical team familiar with enterprise infrastructure." }),
+    ]
+    const result = deriveFootprint(briefs, [], [])
+    expect(result).toBeUndefined()
+  })
+
+  it('keeps real product names and filters speculative ones in mixed briefs', () => {
+    const briefs = [
+      makeBrief({ installedBase: 'RHEL 9, Ansible Automation Platform' }),
+      makeBrief({ installedBase: "The customer's existing automation portfolio likely includes tools that suggest enterprise readiness." }),
+    ]
+    const result = deriveFootprint(briefs, [], [])
+    expect(result).toBeDefined()
+    expect(result!.current).toBe('RHEL 9, Ansible Automation Platform')
+  })
+})
+
+describe('isSpeculativeInstalledBase', () => {
+  it('returns false for short product names', () => {
+    expect(isSpeculativeInstalledBase('RHEL 9, Ansible Automation Platform')).toBe(false)
+  })
+
+  it('returns false for single product names', () => {
+    expect(isSpeculativeInstalledBase('OpenShift')).toBe(false)
+  })
+
+  it('returns true for long speculative text with "likely"', () => {
+    expect(isSpeculativeInstalledBase(
+      "A10 Networks' existing automation portfolio likely includes SaaS tools that will be impacted by the tax."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "implies"', () => {
+    expect(isSpeculativeInstalledBase(
+      "The company's use of remotely accessed software implies a technical team familiar with enterprise infrastructure."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "suggests"', () => {
+    expect(isSpeculativeInstalledBase(
+      "Their cloud-first strategy suggests a migration path from legacy systems to modern containerized platforms."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "existing.*portfolio"', () => {
+    expect(isSpeculativeInstalledBase(
+      "Their existing infrastructure portfolio spans cloud and on-premise systems with hybrid management tools."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "probably"', () => {
+    expect(isSpeculativeInstalledBase(
+      "The organization probably runs a mix of on-premise Linux servers and cloud-based container platforms for deployment."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "appears"', () => {
+    expect(isSpeculativeInstalledBase(
+      "Based on their public infrastructure, the company appears to use enterprise-grade automation tools for deployment."
+    )).toBe(true)
+  })
+
+  it('returns true for text with "indicates"', () => {
+    expect(isSpeculativeInstalledBase(
+      "Their recent hiring patterns indicates a shift toward containerized infrastructure and DevOps automation tooling."
+    )).toBe(true)
+  })
+
+  it('returns false for short text even with speculation words', () => {
+    expect(isSpeculativeInstalledBase('RHEL likely')).toBe(false)
+  })
+
+  it('returns false for empty string', () => {
+    expect(isSpeculativeInstalledBase('')).toBe(false)
   })
 })
