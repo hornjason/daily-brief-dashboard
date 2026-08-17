@@ -14,6 +14,7 @@ import { getVoiceTokens } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import type { Signal } from './feature-module-registry.ts'
 import type { CustomerObjectiveProfile, ObjectiveCategory } from './modules/intelligence-module.ts'
+import { parseSections } from './modules/intelligence-module.ts'
 import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 
@@ -325,7 +326,56 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
   }
 
-  // Extract initiatives from intelligence company text ("## Strategic Initiatives")
+  // Priority 1: Extract initiatives from account plan (has Red Hat product mapping)
+  const planText = signals?.accountPlan || ''
+  if (planText && result.initiatives.length === 0) {
+    // Try parsing as markdown sections first (for structured account plans)
+    const sections = parseSections(planText)
+    const initiativesSection = sections['IT and Modernization Initiatives']
+      || sections['Initiatives']
+      || sections['Strategic Initiatives']
+
+    if (initiativesSection) {
+      // Parse bold bullet items with product mapping (e.g., "Initiative Name: Description → RHEL AI, OpenShift AI")
+      const boldItemRegex = /[*\-]\s+\*\*([^*]+?)\*\*:?\s*([^→\n]+)(?:→\s*([^\n]+))?/gm
+      let match
+      while ((match = boldItemRegex.exec(initiativesSection)) !== null) {
+        const name = match[1].trim().replace(/:$/, '')
+        const description = match[2].trim()
+        const products = match[3]?.trim() || ''
+
+        // Include product mapping in detail if available
+        const detail = products ? `${description} → ${products}` : description
+
+        if (name.length > 5 && name.length < 80 && !name.match(/Mapping|Account|Why Red Hat/i)) {
+          result.initiatives.push({ name, priority: 'HIGH', detail })
+        }
+        if (result.initiatives.length >= 5) break
+      }
+    }
+
+    // Fall back to regex matching for less structured account plans
+    if (result.initiatives.length === 0) {
+      const objectivesSection = planText.match(/Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
+        || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
+        || planText.match(/Modernization Initiatives[\s\S]*?(?=\n##\s|$)/i)
+        || planText.match(/Why Red Hat\?[\s\S]*?(?=\n##\s|$)/i)
+      if (objectivesSection) {
+        const objectiveRegex = /\*\*([^*]+)\*\*:?\s*([^*\n]+)/g
+        let objMatch
+        while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
+          const name = objMatch[1].trim()
+          const detail = objMatch[2].trim()
+          if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account') && !name.includes('Why Red Hat')) {
+            result.initiatives.push({ name, priority: 'HIGH', detail })
+          }
+          if (result.initiatives.length >= 5) break
+        }
+      }
+    }
+  }
+
+  // Priority 2: Fall back to intelligence doc if no account plan initiatives
   if (result.initiatives.length === 0) {
     const intelInitSection = companyText.match(/## Strategic Initiatives[\s\S]*?(?=\n## |$)/i)
     if (intelInitSection) {
@@ -342,31 +392,6 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
         if (result.initiatives.length >= 5) break
       }
     }
-  }
-
-  const planText = signals?.accountPlan || ''
-  if (planText) {
-    // Match multiple account plan formats:
-    // Format 1: "Strategic Objectives:" section
-    // Format 2: "IT and Modernization Initiatives" with bold bullet items
-    // Format 3: "Why Red Hat?" section with bold items
-    const objectivesSection = planText.match(/Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
-      || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
-      || planText.match(/Modernization Initiatives[\s\S]*?(?=\n##\s|$)/i)
-      || planText.match(/Why Red Hat\?[\s\S]*?(?=\n##\s|$)/i)
-    if (objectivesSection && result.initiatives.length === 0) {
-      const objectiveRegex = /\*\*([^*]+)\*\*:?\s*([^*\n]+)/g
-      let objMatch
-      while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
-        const name = objMatch[1].trim()
-        const detail = objMatch[2].trim()
-        if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account') && !name.includes('Why Red Hat')) {
-          result.initiatives.push({ name, priority: 'HIGH', detail })
-        }
-        if (result.initiatives.length >= 5) break
-      }
-    }
-
   }
 
   return result
