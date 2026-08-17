@@ -82,8 +82,8 @@ export function extractPeerProofsFromMaterial(content: string): MaterialPeerProo
     if (metricLines.length === 0) continue
 
     metricLines.sort((a, b) => b.score - a.score)
-    const topLines = metricLines.slice(0, 3)
-    let outcome = topLines.map(l => l.line).join('; ')
+    // SC-2: Take single best narrative line instead of joining multiple with semicolons
+    let outcome = metricLines[0].line
     if (outcome.length > 150) outcome = outcome.slice(0, 147) + '...'
 
     seen.add(customer.toLowerCase())

@@ -1,10 +1,13 @@
 /**
  * Regression test for #853: Campaign peer proof variation
  * All 6 emails should NOT cite the same peer proof.
+ * Regression test for #1093: Peer proof renders as natural sentence, not metric dump
  */
 
 import { describe, it, expect } from 'bun:test'
 import { campaignValidator } from '../../src/quality-validators/campaign-validator.ts'
+import { extractPeerProofsFromMaterial } from '../../src/lib/source-material-parser.ts'
+import { buildPeerPattern } from '../../src/campaign-html-template.ts'
 
 // ── Structured fixtures ────────────────────────────────────────────────────
 
@@ -175,6 +178,50 @@ describe('campaign peer proof variation (#853)', () => {
       const check = scorecard.checks.find(c => c.name === 'varied-peer-proof')
       expect(check).toBeDefined()
       expect(check?.passed).toBe(true)
+    })
+  })
+
+  describe('peer proof narrative quality (#1093)', () => {
+    it('extracts natural sentence from source material, not metric dump', () => {
+      const sourceMaterial = `
+Customer Background: Amadeus
+Amadeus is a global travel technology provider with 5000 nodes across their infrastructure.
+They replaced Chef SaaS with Ansible Automation Platform, realizing $5.62M in benefits and $270K
+in annual subscription savings. Their migration achieved 257.9% ROI over three years while
+consolidating 500 nodes in the first phase.
+`
+      const proofs = extractPeerProofsFromMaterial(sourceMaterial)
+      expect(proofs.length).toBeGreaterThan(0)
+
+      const amadeusProof = proofs.find(p => p.customer === 'Amadeus')
+      expect(amadeusProof).toBeDefined()
+
+      // SC-2: Outcome should be a natural sentence with context, not just comma-separated metrics
+      expect(amadeusProof!.outcome).not.toMatch(/^[\d,]+\s*nodes;\s*\$[\d,.]+/)
+      expect(amadeusProof!.outcome).toMatch(/replaced|realized|achieved|consolidat/)
+      expect(amadeusProof!.outcome.length).toBeLessThan(200)
+    })
+
+    it('renders peer proof as readable sentence in buildPeerPattern', () => {
+      const structuredPlays = [{
+        name: 'Infrastructure Modernization',
+        parentTdp: 'Ansible',
+        realWorldExamples: [{
+          customer: 'Amadeus',
+          outcome: 'replaced Chef SaaS with Ansible Automation Platform, realizing $5.62M in benefits and 257.9% ROI over three years'
+        }]
+      }]
+
+      const result = buildPeerPattern(null, structuredPlays, undefined)
+
+      // SC-1: Should be a natural sentence with company + context + key metric
+      expect(result).toMatch(/Amadeus/)
+      expect(result).toMatch(/replaced/)
+      expect(result).toMatch(/\$5\.62M/)
+
+      // SC-3: Should NOT be a metric dump with semicolons
+      expect(result).not.toMatch(/\d+\s*nodes;\s*\$/)
+      expect(result).not.toMatch(/;\s*\$[\d,.]+;\s*\$/)
     })
   })
 })
