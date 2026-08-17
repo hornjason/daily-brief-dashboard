@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignHTML, renderMetricsTable, type UsedObjective } from '../../src/campaign-html-template.ts'
+import { generateCampaignHTML, renderMetricsTable, renderObjectiveBlock, type UsedObjective } from '../../src/campaign-html-template.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
+import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
 describe('generateCampaignHTML', () => {
   it('should generate HTML with core structure and branding', () => {
@@ -391,5 +392,97 @@ describe('renderMetricsTable with Pass 0 briefs', () => {
     const html = renderMetricsTable(fallbackObjectives, [])
     expect(html).toContain('Fallback objective')
     expect(html).not.toContain('CISO')
+  })
+})
+
+describe('renderObjectiveBlock prefix stripping (#1095)', () => {
+  const mockProfile: CustomerObjectiveProfile = {
+    financial: [
+      {
+        objective: 'Revenue Trajectory: 14.5% growth year-over-year',
+        metric: '14.5%',
+        priority: 'HIGH',
+        source: 'Financial Metrics',
+        confidence: 'HIGH',
+      },
+      {
+        objective: 'Raised Full-Year 2026 Guidance — Management increased revenue growth guidance to 16-18%',
+        metric: '16-18%',
+        priority: 'HIGH',
+        source: 'Strategic Initiatives',
+        confidence: 'HIGH',
+      },
+      {
+        objective: 'Profitability: Operating margin improved to 22.3%',
+        metric: '22.3%',
+        priority: 'HIGH',
+        source: 'Financial Metrics',
+        confidence: 'HIGH',
+      },
+    ],
+    security: [
+      {
+        objective: 'Cybersecurity Enhancement — Invested $50M in threat detection systems',
+        metric: '$50M',
+        priority: 'MED',
+        source: 'Strategic Initiatives',
+        confidence: 'HIGH',
+      },
+    ],
+    operational: [],
+    innovation: [],
+    growth: [],
+  }
+
+  const campaignTheme = {
+    threat: 'infrastructure sprawl',
+    solution: 'consolidated platform approach',
+  }
+
+  it('strips "Revenue Trajectory:" prefix from financial objectives', () => {
+    const result = renderObjectiveBlock(mockProfile, campaignTheme)
+    expect(result).not.toContain('Revenue Trajectory:')
+    expect(result).toContain('14.5% growth')
+  })
+
+  it('strips "Raised Full-Year XXXX Guidance —" prefix from financial objectives', () => {
+    const mockWithGuidance: CustomerObjectiveProfile = {
+      ...mockProfile,
+      financial: [mockProfile.financial[1]], // Only the guidance entry
+    }
+    const result = renderObjectiveBlock(mockWithGuidance, campaignTheme)
+    expect(result).not.toContain('Raised Full-Year 2026 Guidance —')
+    expect(result).not.toContain('Raised Full-Year')
+    expect(result).toContain('Management increased revenue growth guidance')
+  })
+
+  it('strips "Profitability:" prefix from financial objectives', () => {
+    const mockWithProfitability: CustomerObjectiveProfile = {
+      ...mockProfile,
+      financial: [mockProfile.financial[2]], // Only the profitability entry
+    }
+    const result = renderObjectiveBlock(mockWithProfitability, campaignTheme)
+    expect(result).not.toContain('Profitability:')
+    expect(result).toContain('Operating margin')
+  })
+
+  it('strips category prefix from security objectives with em-dash', () => {
+    const mockWithSecurity: CustomerObjectiveProfile = {
+      ...mockProfile,
+      security: [mockProfile.security[0]],
+      financial: [],
+    }
+    const result = renderObjectiveBlock(mockWithSecurity, campaignTheme)
+    expect(result).not.toContain('Cybersecurity Enhancement —')
+    expect(result).toContain('Invested $50M')
+  })
+
+  it('produces natural-reading sentences without visible prefixes', () => {
+    const result = renderObjectiveBlock(mockProfile, campaignTheme)
+    // Verify sentence structure looks natural - no raw category labels
+    expect(result).toMatch(/^(With|Given|As)\s+[^:]+[,.]/)
+    // Should not have double colons or em-dashes mid-sentence indicating leaked prefixes
+    expect(result).not.toMatch(/:\s*—/)
+    expect(result).not.toMatch(/—\s*—/)
   })
 })

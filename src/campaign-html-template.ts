@@ -902,11 +902,22 @@ export function renderObjectiveBlock(
   preMatch?: import('./lib/persona-classifier.ts').PreMatchedMetric,
 ): string {
   const renderTemplate = (category: string, objective: string) => {
-    const cleanObj = objective
-      .replace(/^(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook|Reiterated[^:]*?)[:\s]+/i, '')
-      .replace(/^(?:Acquisition of|Major|New|Strong)[^—–]+?\s[—–]\s*/i, '')
-      .replace(/^(?:Raised|Lowered|Maintained|Updated|Revised)[^—–]+?\s[—–]\s*/i, '')
-      .trim()
+    let cleanObj = objective.trim()
+
+    // Strip common category prefixes with colons
+    cleanObj = cleanObj.replace(/^(?:Revenue Trajectory|Profitability|Balance Sheet|Financial Health|Growth Outlook|Reiterated[^:]*?|Cybersecurity Enhancement|Security Initiative|Operational Efficiency|Innovation Focus|Growth Strategy)[:\s]+/i, '')
+
+    // Strip "Raised/Lowered/Maintained Full-Year YYYY Guidance —" patterns
+    cleanObj = cleanObj.replace(/^(?:Raised|Lowered|Maintained|Updated|Revised)\s+Full[- ]Year\s+\d{4}\s+Guidance\s*[—–]\s*/i, '')
+
+    // Strip "Category Name —" patterns (e.g., "Major Acquisition —", "New Partnership —")
+    cleanObj = cleanObj.replace(/^(?:Acquisition of|Major|New|Strong|Strategic|Key)\s+[A-Z][^—–]*?\s*[—–]\s*/i, '')
+
+    // Strip any remaining "Word/Phrase —" at start (fallback for unlisted category prefixes)
+    cleanObj = cleanObj.replace(/^[A-Z][^—–:]*?\s*[—–]\s*/, '')
+
+    cleanObj = cleanObj.trim()
+
     const objText = cleanObj.length > 80
       ? (cleanObj.split(/[.;]/)[0]?.trim() || cleanObj.slice(0, 80))
       : cleanObj
