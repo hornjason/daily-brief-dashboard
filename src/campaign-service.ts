@@ -41,6 +41,7 @@ import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive
 import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
 import { selectPersonas, formatBriefsForPrompt, type Pass0Result, type PersonaBrief } from './lib/persona-selector.ts'
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
+import { assertExtractionOutput, assertPass0Output, assertExecResolutionOutput, assertPass1Output, assertPass2Output } from './lib/campaign-contracts.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
 
@@ -1141,6 +1142,14 @@ export async function generateCampaign(
     console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars, ${referenceMaterialData.length} URLs discovered)`)
   }
 
+  // ── Contract assertion: Extraction → Pass 0 ──
+  try {
+    assertExtractionOutput({ materialContent, materialTitle })
+  } catch (e: any) {
+    if (process.env.NODE_ENV === 'test') throw e
+    console.warn(`[campaigns] Extraction contract warning:`, e?.message)
+  }
+
   if (config?.supplementalUrls?.length) {
     for (const url of config.supplementalUrls) {
       try {
@@ -1301,6 +1310,14 @@ export async function generateCampaign(
       if (pass0Result) {
         pass0Briefs = pass0Result.briefs
         console.log(`[campaigns] Pass 0 selected ${pass0Result.selectedRoles.length} roles: ${pass0Result.selectedRoles.join(', ')}`)
+
+        // ── Contract assertion: Pass 0 → Exec Resolution ──
+        try {
+          assertPass0Output(pass0Briefs)
+        } catch (e: any) {
+          if (process.env.NODE_ENV === 'test') throw e
+          console.warn(`[campaigns] Pass 0 contract warning:`, e?.message)
+        }
       } else if (!config?.forceGenerate) {
         throw new Error(`Pass 0 persona selection returned no results for ${customer.name}. Use forceGenerate to bypass.`)
       } else {
@@ -1597,6 +1614,14 @@ export async function generateCampaign(
     console.log(`[campaigns] Email backfill: ${backfilled} new, ${resolvedExecs.filter(e => e.email).length}/${resolvedExecs.length} have email for ${customer.name}`)
   }
 
+  // ── Contract assertion: Exec Resolution → Pass 1 ──
+  try {
+    assertExecResolutionOutput(resolvedExecs)
+  } catch (e: any) {
+    if (process.env.NODE_ENV === 'test') throw e
+    console.warn(`[campaigns] Exec resolution contract warning:`, e?.message)
+  }
+
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
   // Uses solution-intelligence signals from loadCustomerSignals() instead of
   // direct module import (PRINCIPLES.md Layer 3 compliance).
@@ -1711,6 +1736,14 @@ export async function generateCampaign(
       console.warn(`[campaigns] Selection validation warnings:`, validationResult.reasons)
     } else {
       console.log(`[campaigns] Selection validation passed for ${customer.name}`)
+    }
+
+    // ── Contract assertion: Pass 1 → Pass 2 ──
+    try {
+      assertPass1Output(selection, resolvedExecs.length)
+    } catch (e: any) {
+      if (process.env.NODE_ENV === 'test') throw e
+      console.warn(`[campaigns] Pass 1 contract warning:`, e?.message)
     }
 
     // ── Deterministic fallback: extract URLs from materialContent for backfill ──
@@ -1931,6 +1964,14 @@ export async function generateCampaign(
     // Store selection JSON as markdown equivalent for cache compatibility
     markdown = JSON.stringify(selection, null, 2)
     console.log(`[campaigns] Structured campaign generated (${htmlContent.length} chars HTML, ${selection.emails.length} emails)`)
+
+    // ── Contract assertion: Pass 2 → Drive ──
+    try {
+      assertPass2Output(htmlContent)
+    } catch (e: any) {
+      if (process.env.NODE_ENV === 'test') throw e
+      console.warn(`[campaigns] Pass 2 contract warning:`, e?.message)
+    }
 
     // Upload to Drive with pre-built HTML
     const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
