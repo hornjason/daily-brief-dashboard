@@ -231,23 +231,23 @@ PASS 2: generateCampaignFromStructured() → deterministic HTML (zero LLM)
 | § | Section | Pipeline Stage | Status | Issue | Test |
 |---|---------|---------------|--------|-------|------|
 | 1 | Header + Source Material | Extraction + account team | ✅ PASS | — | spec-compliance |
-| 2 | Target Contacts | Exec Resolution | ❌ FAIL | #1136: re-pad after filter | spec-compliance (partial) |
-| 2a | — 3 exec + 3 manager split | Exec Resolution | ❌ FAIL | #1137: tier split enforcement | NO TEST |
-| 2b | — LinkedIn on all contacts | Exec Resolution | ❌ FAIL | #1139: Tier 1 LinkedIn enrichment | NO TEST |
+| 2 | Target Contacts | Exec Resolution | ✅ PASS | #1136: re-pad shipped | L3 pipeline |
+| 2a | — 3 exec + 3 manager split | Exec Resolution | ✅ PASS | #1137: tier split shipped | L3 pipeline |
+| 2b | — LinkedIn on all contacts | Exec Resolution | ✅ PASS | #1139: Tier 1b enrichment shipped | L3 pipeline |
 | 3 | Generation Config | Pass 2 metadata | ✅ PASS | — | spec-compliance |
-| 4 | Quality Checklist | Pass 2 `runEmailQualityCheck()` | ⚠️ PARTIAL | #1099: show actual word count | spec-compliance (partial) |
+| 4 | Quality Checklist | Pass 2 `runEmailQualityCheck()` | ✅ PASS | #1099: word counts shipped | L3 pipeline |
 | 5 | Intelligence Dashboard | `renderDashboardMetrics()` | ✅ PASS | #1104 closed | output-audit |
 | 5a | "Why Customer Is Fit" | Pass 0 → `renderFitFromPass0()` | ✅ PASS | — | spec-compliance |
 | 5b | Business Metrics Table | `renderMetricsTable()` | ⚠️ VERIFY | #1097 closed — confirm diverse categories | output-audit |
 | 5c | Strategic Initiatives | `renderStructuredIntelSections()` | ✅ PASS | #1088 closed | output-audit |
 | 5d | Competitive Position | Same renderer from intel | ✅ PASS | #1106 closed | output-audit |
 | 6 | ~~Guardrails~~ | REMOVED (#1107) | ✅ RESOLVED | — | — |
-| 7 | Reference Material | Extraction → referenceMaterialData | ❌ FAIL | #1070: Google Doc URLs stripped | NO TEST |
+| 7 | Reference Material | Extraction → referenceMaterialData | ✅ PASS | #1070: URL discovery shipped | L3 pipeline |
 | 8 | Eligibility (conditional) | Gemini selection | ✅ PASS | — | spec-compliance |
-| 9 | Footprint | `deriveFootprint()` from Pass 0 + signals | ❌ FAIL | #1124: CRM slugs + data leaks | footprint tests |
-| 10a | Executive Emails (3, ≤120w) | Pass 1 → Pass 2 assembly | ⚠️ PARTIAL | #1136: may get <3 after filter | spec-compliance |
-| 10b | Manager Emails (3, ≤200w) | Pass 1 → Pass 2 assembly | ❌ FAIL | #1137: often 0 manager emails | NO TEST |
-| 10c | Peer Proof in emails | `buildPeerPattern()` | ❌ FAIL | #1138: no SalesHub fallback | peer-proof tests (partial) |
+| 9 | Footprint | `deriveFootprint()` from Pass 0 + signals | ✅ PASS | #1124: data leaks shipped | L3 pipeline |
+| 10a | Executive Emails (3, ≤120w) | Pass 1 → Pass 2 assembly | ✅ PASS | #1136 + #1137 shipped | L3 pipeline |
+| 10b | Manager Emails (3, ≤200w) | Pass 1 → Pass 2 assembly | ✅ PASS | #1137: tier split shipped | L3 pipeline |
+| 10c | Peer Proof in emails | `buildPeerPattern()` | ✅ PASS | #1138: fallback shipped | L3 pipeline |
 | 11 | BV Talking Points | Pass 0 briefs → template | ✅ PASS | — | spec-compliance |
 
 **Legend:** ✅ = data flows correctly through pipeline and renders per spec. ⚠️ = works but edge cases fail. ❌ = broken data path.
@@ -259,7 +259,7 @@ PASS 2: generateCampaignFromStructured() → deterministic HTML (zero LLM)
 | Remove `generateCampaignHTML` function | ✅ DONE | #1134 |
 | Remove `USE_STRUCTURED_CAMPAIGNS` flag + freeform branch | ✅ DONE | #1134 |
 | Remove convergence comparison code | ✅ DONE | #1134 |
-| Convert `generateCampaignFromPlay()` to structured path | TODO | #1135 |
+| Convert `generateCampaignFromPlay()` to structured path | ✅ DONE | #1135 |
 | Audit + close #1063-#1066 (two-pass issues already implemented) | TODO | — |
 
 ### Test Matrix
@@ -270,23 +270,23 @@ PASS 2: generateCampaignFromStructured() → deterministic HTML (zero LLM)
 | **L1: Unit (fixture)** | `campaign-template-blocks.test.ts` | 72 | 8 email blocks, objective rendering | None |
 | **L2: Output audit** | `campaign-real-output-audit.test.ts` | 49 | Data that reaches output but renders wrong | Good |
 | **L2: Output audit** | `campaign-output-audit.test.ts` | 36 | Gold standard structural compliance | Needs update |
-| **L3: Pipeline integration** | **DOES NOT EXIST** | 0 | **Wiring failures between stages** | **THE GAP** |
+| **L3: Pipeline integration** | `campaign-pipeline.test.ts` | 63 | Wiring failures between stages | ✅ CLOSED |
 
 ### Issue Plan (execution order)
 
 | Priority | Issue | Depends On | Section Fixed | Status |
 |----------|-------|-----------|---------------|--------|
 | P0-1 | #1134: Remove legacy path | — | All (single path) | ✅ SHIPPED |
-| P0-2 | #1135: Convert `generateCampaignFromPlay()` | #1134 | Play-based campaigns | TODO |
-| P1-1 | #1124: Footprint data leaks | — | §9 | TODO |
-| P1-2 | #1136: Contact re-pad after filter | — | §2, §10a | TODO |
-| P1-3 | #1137: Exec + manager tier split (3+3) | #1136 | §2, §10b | TODO |
-| P1-4 | #1138: Peer proof SalesHub fallback | — | §10c | TODO |
-| P1-5 | #1139: Tier 1 LinkedIn enrichment | — | §2b | TODO |
-| P1-6 | #1099: Quality checklist 11→16 | — | §4 | TODO |
-| P1-7 | #1070: Reference URL discovery | — | §7 | TODO |
-| P1-8 | #1140: Pipeline integration test (L3) | P1-1 through P1-7 | ALL | TODO |
-| P1-9 | #1141: Pipeline data contract assertions | #1140 | Stage boundaries | TODO |
+| P0-2 | #1135: Convert `generateCampaignFromPlay()` | #1134 | Play-based campaigns | ✅ SHIPPED |
+| P1-1 | #1124: Footprint data leaks | — | §9 | ✅ SHIPPED |
+| P1-2 | #1136: Contact re-pad after filter | — | §2, §10a | ✅ SHIPPED |
+| P1-3 | #1137: Exec + manager tier split (3+3) | #1136 | §2, §10b | ✅ SHIPPED |
+| P1-4 | #1138: Peer proof SalesHub fallback | — | §10c | ✅ SHIPPED |
+| P1-5 | #1139: Tier 1 LinkedIn enrichment | — | §2b | ✅ SHIPPED |
+| P1-6 | #1099: Quality checklist 11→16 | — | §4 | ✅ SHIPPED |
+| P1-7 | #1070: Reference URL discovery | — | §7 | ✅ SHIPPED |
+| P1-8 | #1140: Pipeline integration test (L3) | P1-1 through P1-7 | ALL | ✅ SHIPPED |
+| P1-9 | #1141: Pipeline data contract assertions | #1140 | Stage boundaries | ✅ SHIPPED |
 
 ## Known Gaps (remaining after tracker)
 
