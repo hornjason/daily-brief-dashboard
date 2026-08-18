@@ -822,18 +822,25 @@ export function buildOpener(
 ): string {
   const firstName = recipientName.split(' ')[0]
 
-  // Signal-driven: use persona's objective + timing trigger from Pass 0
+  // Signal-driven: use persona's intelligence from Pass 0 — rotate which field for variety
   if (matchedBrief) {
-    const objective = matchedBrief.objectiveMatch
-    const timing = matchedBrief.timingTrigger
-    // Truncate to first clause for a concise opener
-    const shortTiming = timing ? timing.split(/\s*[—–]\s*/)[0].trim() : ''
-    const shortObjective = objective ? objective.split(/\s*[—–]\s*/)[0].trim() : ''
-    if (shortObjective && shortTiming) {
-      return `${firstName}, with ${shortTiming.charAt(0).toLowerCase() + shortTiming.slice(1)}, ${shortObjective.charAt(0).toLowerCase() + shortObjective.slice(1)}.`
+    const truncateClause = (text: string, maxLen = 70): string => {
+      const cleaned = text.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+      const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
+      return first.length > maxLen ? first.slice(0, maxLen).replace(/\s+\S*$/, '...') : first
     }
-    if (shortObjective) {
-      return `Hi ${firstName}, ${shortObjective.charAt(0).toLowerCase() + shortObjective.slice(1)}.`
+    const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
+
+    const fields = [
+      matchedBrief.objectiveMatch ? `${lc(truncateClause(matchedBrief.objectiveMatch))}` : null,
+      matchedBrief.timingTrigger ? `${lc(truncateClause(matchedBrief.timingTrigger))}` : null,
+      matchedBrief.valueProposition ? `${lc(truncateClause(matchedBrief.valueProposition))}` : null,
+      matchedBrief.competitiveContext ? `${lc(truncateClause(matchedBrief.competitiveContext))}` : null,
+    ].filter(Boolean) as string[]
+
+    if (fields.length > 0) {
+      const field = fields[openerVariant % fields.length]
+      return `${firstName}, ${field}.`
     }
   }
 
@@ -1654,6 +1661,8 @@ export function generateCampaignFromStructured(
   // Build per-email HTML
   const execEmailsHtml: string[] = []
   const managerEmailsHtml: string[] = []
+  let execIdx = 0
+  let mgrIdx = 0
 
   for (let i = 0; i < selection.emails.length; i++) {
     const email = selection.emails[i]
@@ -1665,13 +1674,23 @@ export function generateCampaignFromStructured(
     const openerVariant = i % 3
     const signal = data.signals[email.signalIndex]
 
-    // Match email to its Pass 0 brief by comparing exec title to brief suggestedTitle
+    // Match email to its Pass 0 brief — distribute briefs across contacts (round-robin per tier)
     const contactTitle = (contact?.title || '').toLowerCase()
-    const matchedBrief = data.pass0Briefs?.find(b =>
-      b.suggestedTitle && contactTitle === b.suggestedTitle.toLowerCase()
-    ) || data.pass0Briefs?.find(b =>
-      b.suggestedTitle && (contactTitle.includes(b.suggestedTitle.toLowerCase()) || b.suggestedTitle.toLowerCase().includes(contactTitle))
+    const briefsByTier = (data.pass0Briefs || []).reduce((acc, b) => {
+      const isExec = b.role === 'executive-sponsor' || b.role === 'financial-gatekeeper'
+      const tier = isExec ? 'executive' : 'manager'
+      if (!acc[tier]) acc[tier] = []
+      acc[tier].push(b)
+      return acc
+    }, {} as Record<string, typeof data.pass0Briefs>)
+    const tierBriefs = briefsByTier[email.tier] || data.pass0Briefs || []
+    const exactMatch = tierBriefs.find(b =>
+      b.suggestedTitle && (contactTitle === b.suggestedTitle.toLowerCase() ||
+        contactTitle.includes(b.suggestedTitle.toLowerCase()) ||
+        b.suggestedTitle.toLowerCase().includes(contactTitle))
     )
+    const tierIndex = email.tier === 'executive' ? execIdx++ : mgrIdx++
+    const matchedBrief = exactMatch || tierBriefs[tierIndex % tierBriefs.length]
 
     // Build all 8 blocks
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief)
