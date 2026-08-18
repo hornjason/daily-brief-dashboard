@@ -240,6 +240,46 @@ export async function resolveExecutivesByRole(
     console.log(`[executive-resolver] Tier 1: Found ${intelContacts.length} contacts from intelligence brief for ${companyName}`)
   }
 
+  // ── Tier 1b: LinkedIn enrichment for Tier 1 contacts ───────────────────
+  const tier1NeedsLinkedIn = intelContacts.filter(c => !c.linkedinUrl)
+  if (tier1NeedsLinkedIn.length > 0) {
+    try {
+      const { callGemini } = await import('../gemini-call.ts')
+      const contactList = tier1NeedsLinkedIn.map(c => `- ${c.name}, ${c.title}`).join('\n')
+
+      const result = await callGemini(
+        'You are a professional identity researcher. Given a company name and a list of executives with their titles, find their LinkedIn profile URLs. Search LinkedIn for each person. Return ONLY a JSON array of objects with fields: name (person\'s full name as given), linkedinUrl (full LinkedIn profile URL). If you cannot find someone\'s LinkedIn with certainty, omit that person from the array. Never guess — only include confirmed matches.',
+        `Find LinkedIn profiles for these executives at "${companyName}":\n${contactList}\n\nFor each person, search: "{name}" "{title}" site:linkedin.com/in "${companyName}"\nReturn JSON array: [{"name":"...","linkedinUrl":"..."}]`,
+        {
+          callType: 'tier1-linkedin-enrichment',
+          customerName: companyName,
+          grounding: true,
+          timeoutMs: 30_000,
+        }
+      )
+
+      // Parse JSON array from response
+      const jsonMatch = result.text.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        const parsed: Array<{ name: string; linkedinUrl: string }> = JSON.parse(jsonMatch[0])
+        const enrichedCount = parsed.length
+
+        for (const entry of parsed) {
+          const contact = results.find(r => r.name.toLowerCase() === entry.name.toLowerCase())
+          if (contact && entry.linkedinUrl) {
+            contact.linkedinUrl = entry.linkedinUrl
+          }
+        }
+
+        if (enrichedCount > 0) {
+          console.log(`[executive-resolver] Tier 1b: Enriched ${enrichedCount} Tier 1 contacts with LinkedIn URLs`)
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[executive-resolver] Tier 1b LinkedIn enrichment failed for ${companyName}:`, e?.message ?? e)
+    }
+  }
+
   // Check cache for remaining roles
   const cached = readCache(companyName)
   const uncachedRoles: string[] = []
