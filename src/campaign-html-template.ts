@@ -70,6 +70,38 @@ interface CampaignSignals {
 
 // ── Utility functions ──
 
+/**
+ * Truncate text at the last complete sentence within maxChars.
+ * Prevents mid-word truncation (#1147).
+ */
+function truncateAtSentence(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+
+  // Find the last sentence boundary (. ! ?) within the limit
+  const upToLimit = text.slice(0, maxChars)
+  const boundaries = [
+    upToLimit.lastIndexOf('. '),
+    upToLimit.lastIndexOf('! '),
+    upToLimit.lastIndexOf('? ')
+  ]
+  const lastBoundary = Math.max(...boundaries)
+
+  if (lastBoundary > 0) {
+    // Return text up to and including the punctuation (but not the space after)
+    return text.slice(0, lastBoundary + 1)
+  }
+
+  // No sentence boundary found - truncate at last word boundary to avoid mid-word cut
+  const lastSpace = upToLimit.lastIndexOf(' ')
+  if (lastSpace > maxChars * 0.5) {
+    // Only use word boundary if we're at least halfway through the limit
+    return upToLimit.slice(0, lastSpace) + '…'
+  }
+
+  // Last resort: just truncate at limit with ellipsis
+  return upToLimit + '…'
+}
+
 function convertMarkdownBullets(text: string): string {
   const lines = text.split('\n')
   let html = ''
@@ -393,7 +425,7 @@ export function renderFitFromPass0(customerName: string, pass0Briefs: import('./
     .filter((b: string) => b.length > 0)
   )]
   const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
-    .map((o: string) => { const s = o.split(/[.!]/)[0]; return s.length <= 120 ? s : s.slice(0, 117) + '…' })
+    .map((o: string) => { const s = o.split(/[.!]/)[0]; return truncateAtSentence(s, 120) })
 
   let html = `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>`
   html += '<div style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">'
@@ -425,7 +457,7 @@ function renderReferenceMaterials(materials: ReferenceMaterial[], heading: strin
   ${materials.map(m => {
     return `<tr>
     <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${m.url ? `<a href="${escapeHtml(m.url)}" style="color: #1a73e8;">${escapeHtml(m.resource)}</a>` : escapeHtml(m.resource)}</td>
-    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway.length > 250 ? m.keyTakeaway.slice(0, 250) + '...' : m.keyTakeaway)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(m.keyTakeaway.length > 250 ? truncateAtSentence(m.keyTakeaway, 250) : m.keyTakeaway)}</td>
   </tr>`
   }).join('\n')}
 </table>`
@@ -592,7 +624,7 @@ export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?
     html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Metric</td><td>Used In</td></tr>'
     for (const brief of pass0Briefs) {
       const label = ROLE_LABELS[brief.role] || brief.role
-      const metric = brief.objectiveMatch.split(/[.;]/)[0]?.trim().slice(0, 120) || brief.objectiveMatch.slice(0, 120)
+      const metric = truncateAtSentence(brief.objectiveMatch.split(/[.;]/)[0]?.trim() || brief.objectiveMatch, 120)
       html += `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(metric)}</td><td>${escapeHtml(brief.suggestedTitle)}</td></tr>`
     }
     html += '</table>'
@@ -647,7 +679,7 @@ export function renderObjectiveBlock(
     cleanObj = cleanObj.trim()
 
     const objText = cleanObj.length > 80
-      ? (cleanObj.split(/[.;]/)[0]?.trim() || cleanObj.slice(0, 80))
+      ? truncateAtSentence(cleanObj.split(/[.;]/)[0]?.trim() || cleanObj, 80)
       : cleanObj
     const { threat, solution } = campaignTheme
     const templates: Record<string, string> = {
