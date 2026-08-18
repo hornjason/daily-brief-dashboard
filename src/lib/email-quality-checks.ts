@@ -6,6 +6,8 @@
 
 export interface EmailQualityResult {
   wordLimit: boolean
+  wordCount: number
+  tier: 'executive' | 'manager'
   techObservations: boolean
   statementsOnly: boolean
   bulletLinks: boolean
@@ -119,6 +121,8 @@ export function runEmailQualityCheck(input: EmailCheckInput): EmailQualityResult
 
   return {
     wordLimit,
+    wordCount,
+    tier: input.tier,
     techObservations,
     statementsOnly,
     bulletLinks,
@@ -181,6 +185,52 @@ export function renderQualityChecklist(
     results.filter(r => r[check]).length
 
   const rows = CHECKLIST_ITEMS.map(item => {
+    // Special handling for word limit check — show actual counts
+    if (item.key === 'wordLimit') {
+      const execEmails = results.filter(r => r.tier === 'executive')
+      const mgrEmails = results.filter(r => r.tier === 'manager')
+
+      const execLimit = wordBudget.exec
+      const mgrLimit = wordBudget.manager
+      const execTolerance = Math.floor(execLimit * 1.2)
+      const mgrTolerance = Math.floor(mgrLimit * 1.2)
+
+      const execPassed = execEmails.every(r => r.wordLimit)
+      const mgrPassed = mgrEmails.every(r => r.wordLimit)
+      const allPassed = execPassed && mgrPassed
+
+      const icon = allPassed ? '☑' : '☒'
+
+      let detail = ''
+      if (!allPassed || emailCount === 0) {
+        const parts: string[] = []
+
+        if (execEmails.length > 0) {
+          const execCounts = execEmails.map(r => r.wordCount)
+          const execMax = Math.max(...execCounts)
+          const execAvg = Math.floor(execCounts.reduce((a, b) => a + b, 0) / execCounts.length)
+          const overBy = execMax > execTolerance ? ` — over by ${execMax - execTolerance}` : ''
+          parts.push(`Exec: limit ${execLimit} (tolerance ${execTolerance}), actual ${execAvg} avg, ${execMax} max${overBy}`)
+        }
+
+        if (mgrEmails.length > 0) {
+          const mgrCounts = mgrEmails.map(r => r.wordCount)
+          const mgrMax = Math.max(...mgrCounts)
+          const mgrAvg = Math.floor(mgrCounts.reduce((a, b) => a + b, 0) / mgrCounts.length)
+          const overBy = mgrMax > mgrTolerance ? ` — over by ${mgrMax - mgrTolerance}` : ''
+          parts.push(`Mgr: limit ${mgrLimit} (tolerance ${mgrTolerance}), actual ${mgrAvg} avg, ${mgrMax} max${overBy}`)
+        }
+
+        if (parts.length > 0) {
+          detail = ` (${parts.join(' | ')})`
+        }
+      }
+
+      const label = `Word limits: Executive ≤${execLimit} words | Manager ≤${mgrLimit} words`
+      return `  <tr><td style="padding: 2px 0;">${icon} ${label}${detail}</td></tr>`
+    }
+
+    // Standard rendering for all other checks
     const label = item.label
       .replace('{exec}', String(wordBudget.exec))
       .replace('{manager}', String(wordBudget.manager))
