@@ -824,18 +824,24 @@ export function buildOpener(
 
   // Signal-driven: use persona's intelligence from Pass 0 — rotate which field for variety
   if (matchedBrief) {
-    const truncateClause = (text: string, maxLen = 70): string => {
-      const cleaned = text.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+    const cleanBriefField = (text: string): string => {
+      let cleaned = text
+        .replace(/\*\*[^*]+\*\*:?\s*/g, '')
+        .replace(/\s*\(.*?\)\s*/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      cleaned = cleaned.replace(/\b(?:show how|highlight|position|demonstrate|emphasize)\b.*$/i, '').trim()
+      const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
+      if (sentenceMatch && sentenceMatch[1].length <= 80) return sentenceMatch[1].replace(/[.!?]$/, '')
       const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
-      return first.length > maxLen ? first.slice(0, maxLen).replace(/\s+\S*$/, '...') : first
+      return first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
     }
     const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 
     const fields = [
-      matchedBrief.objectiveMatch ? `${lc(truncateClause(matchedBrief.objectiveMatch))}` : null,
-      matchedBrief.timingTrigger ? `${lc(truncateClause(matchedBrief.timingTrigger))}` : null,
-      matchedBrief.valueProposition ? `${lc(truncateClause(matchedBrief.valueProposition))}` : null,
-      matchedBrief.competitiveContext ? `${lc(truncateClause(matchedBrief.competitiveContext))}` : null,
+      matchedBrief.objectiveMatch ? `${lc(cleanBriefField(matchedBrief.objectiveMatch))}` : null,
+      matchedBrief.timingTrigger ? `${lc(cleanBriefField(matchedBrief.timingTrigger))}` : null,
+      matchedBrief.valueProposition ? `${lc(cleanBriefField(matchedBrief.valueProposition))}` : null,
     ].filter(Boolean) as string[]
 
     if (fields.length > 0) {
@@ -917,6 +923,9 @@ export function buildSignalBridge(
   // Signal-driven: use product fit section from intel brief
   if (product && productFitSections?.[product]) {
     const fitText = productFitSections[product]
+      .replace(/\*\*[^*]+\*\*:?\s*/g, '')
+      .replace(/^\s*[-*]\s*/gm, '')
+      .trim()
     const firstSentence = fitText.split(/[.!?]\s/)[0]
     if (firstSentence && firstSentence.length > 20) {
       return firstSentence.trim() + '.'
@@ -927,7 +936,7 @@ export function buildSignalBridge(
   const signalType = signal.type === 'news' ? 'news' : 'default'
 
   if (product) return SIGNAL_BRIDGES[`${product}-${signalType}`]
-  return `This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of signal'} into operational advantage.`
+  return `This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of change'} into operational advantage.`
 }
 
 /**
@@ -1147,16 +1156,8 @@ const CHALLENGER_CLOSERS = [
 export function buildChallengerFrame(
   signal: Signal | undefined,
   emailIndex: number = 0,
-  matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
 ): string {
-  // Signal-driven: competitive context from Pass 0
-  if (matchedBrief?.competitiveContext) {
-    const insight = matchedBrief.competitiveContext
-    const closer = CHALLENGER_CLOSERS[emailIndex % CHALLENGER_CLOSERS.length]
-    return `${insight.trim().replace(/\.$/, '')}. ${closer}`
-  }
-
-  // Fallback: signal headline
+  // Signal headline only — competitive context belongs in Call Prep, not emails
   if (!signal) return ''
   let insight = signal.headline
   if (insight.includes(' — ')) {
@@ -1735,7 +1736,7 @@ export function generateCampaignFromStructured(
     const referenceLine = sanitizeReferenceLine(buildReferenceLine(data.sourceUrls || [], data.materialUrlMap), data.sourceUrls)
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof)
-    const challengerFrame = buildChallengerFrame(signal, i, matchedBrief)
+    const challengerFrame = buildChallengerFrame(signal, i)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 

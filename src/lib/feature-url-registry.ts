@@ -65,7 +65,7 @@ const FEATURE_REGISTRY: readonly FeatureRegistryEntry[] = [
   },
   {
     featureKey: 'event-driven-automation',
-    featureName: 'Event-Driven Automation (concept)',
+    featureName: 'Event-Driven Automation',
     url: 'https://www.redhat.com/en/topics/automation/what-is-event-driven-automation',
     product: 'ansible',
   },
@@ -159,19 +159,19 @@ const FEATURE_REGISTRY: readonly FeatureRegistryEntry[] = [
   },
   {
     featureKey: 'container-security',
-    featureName: 'Container Security (concept)',
+    featureName: 'Container Security',
     url: 'https://www.redhat.com/en/topics/security/container-security',
     product: 'rhel',
   },
   {
     featureKey: 'kubernetes-clusters',
-    featureName: 'Kubernetes Clusters (concept)',
+    featureName: 'Kubernetes Clusters',
     url: 'https://www.redhat.com/en/topics/containers/what-is-a-kubernetes-cluster',
     product: 'rhel',
   },
   {
     featureKey: 'aiops',
-    featureName: 'AIOps (concept)',
+    featureName: 'AIOps',
     url: 'https://www.redhat.com/en/topics/ai/what-is-aiops',
     product: 'rhel',
   },
