@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, type UsedObjective } from '../../src/campaign-html-template.ts'
+import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, assembleEmail, type UsedObjective } from '../../src/campaign-html-template.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -317,5 +317,142 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
 
     expect(html).toContain('Jane Doe')
     expect(html).toContain('jdoe@redhat.com')
+  })
+})
+
+describe('email body formatting — bullets and links (#1149)', () => {
+  it('assembleEmail preserves newlines after word-limit hard trim', () => {
+    const featureBullets = [
+      '• [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible) — unifies automation across hybrid environments',
+      '• [Event-Driven Ansible](https://www.redhat.com/en/technologies/management/ansible/event-driven) — triggers automated responses in real time',
+      '• [Ansible Lightspeed](https://www.redhat.com/en/technologies/management/ansible/ansible-lightspeed) — accelerates playbook creation with AI',
+    ].join('\n')
+
+    const blocks = {
+      opener: 'Hi Sarah, I noticed your team is expanding automation initiatives across multiple business units.',
+      signalBridge: 'Your recent investment in hybrid cloud infrastructure creates an opportunity to consolidate automation tooling.',
+      relationshipLine: 'Your teams already rely on OpenShift and RHEL.',
+      featureBullets,
+      referenceLine: 'For a deeper look, see [Automation Strategy Guide](https://www.redhat.com/en/resources/automation-guide).',
+      peerPattern: 'Teams in financial services have reduced deployment time by 60% using a unified automation platform. The pattern is consistent across regulated industries.',
+      challengerFrame: 'Without consolidation, automation sprawl typically increases operational costs by 30% within 18 months.',
+      cta: 'Worth a 15-minute conversation to map this to your environment?',
+      signOff: 'Best,\nCarolanne Farrell',
+    }
+
+    const voiceTokens = {
+      formality: 'professional' as const,
+      assertionLevel: 'confident' as const,
+      wordBudget: { exec: 80, manager: 200 },
+    }
+
+    const result = assembleEmail(blocks, 'executive', voiceTokens, 'Sarah')
+    expect(result.body).toContain('\n')
+  })
+
+  it('assembleEmail body has no inline bullet characters after hard trim', () => {
+    const featureBullets = [
+      '• [AAP](https://www.redhat.com/aap) — unifies automation',
+      '• [EDA](https://www.redhat.com/eda) — triggers responses',
+    ].join('\n')
+
+    const blocks = {
+      opener: 'Hi Sarah, expanding automation.',
+      signalBridge: 'Investment in hybrid cloud creates opportunity.',
+      relationshipLine: 'Your teams rely on OpenShift.',
+      featureBullets,
+      referenceLine: '',
+      peerPattern: 'Financial services reduced deploy time by 60%.',
+      challengerFrame: 'Sprawl increases costs by 30%.',
+      cta: 'Worth a call?',
+      signOff: 'Best,\nCarolanne',
+    }
+
+    const voiceTokens = {
+      formality: 'professional' as const,
+      assertionLevel: 'confident' as const,
+      wordBudget: { exec: 30, manager: 200 },
+    }
+
+    const result = assembleEmail(blocks, 'executive', voiceTokens, 'Sarah')
+    const lines = result.body.split('\n').filter(l => l.trim().length > 0)
+    for (const line of lines) {
+      const inlineBullets = (line.match(/•/g) || []).length
+      expect(inlineBullets).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('feature bullets render as styled elements with anchor tags in full pipeline', () => {
+    const html = generateCampaignFromStructured(
+      {
+        customerContext: 'Test',
+        emails: [{
+          recipientName: 'John Smith',
+          tier: 'manager' as const,
+          subject: 'Test',
+          signalIndex: 0,
+          featureKeys: ['ansible-automation-platform', 'event-driven-ansible'],
+          peerProof: '',
+          challengerDataPoint: '',
+          signalBridge: '',
+          customOpener: '',
+          featureApplications: ['unifies automation', 'triggers responses'],
+          referenceLine: 'See [Automation Guide](https://www.redhat.com/en/resources/guide) for details.',
+        }],
+      },
+      {
+        materialTitle: 'Test',
+        materialUrl: 'https://example.com',
+        customerName: 'Test Corp',
+        generatedDate: '2026-08-18',
+        accountTeam: [{ name: 'Test AE', role: 'ae', title: 'Account Executive' }],
+        resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@test.com', linkedIn: '' }],
+        signals: [{ headline: 'Test Signal', metadata: {} }],
+        subscriptions: [],
+        sourceUrls: ['https://www.redhat.com/en/resources/guide'],
+        structuredPlays: [],
+      },
+    )
+
+    const styledBullets = (html.match(/position: absolute[^>]*>•<\/span>/g) || []).length
+    expect(styledBullets).toBeGreaterThanOrEqual(2)
+
+    const anchorMatches = html.match(/<a href="https:\/\/www\.redhat\.com[^"]*"[^>]*>/g) || []
+    expect(anchorMatches.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('referenceLine markdown links convert to clickable anchor tags', () => {
+    const html = generateCampaignFromStructured(
+      {
+        customerContext: 'Test',
+        emails: [{
+          recipientName: 'John Smith',
+          tier: 'manager' as const,
+          subject: 'Test',
+          signalIndex: 0,
+          featureKeys: [],
+          peerProof: '',
+          challengerDataPoint: '',
+          signalBridge: '',
+          customOpener: '',
+          featureApplications: [],
+          referenceLine: 'See [Automation Guide](https://www.redhat.com/en/resources/guide) for details.',
+        }],
+      },
+      {
+        materialTitle: 'Test',
+        materialUrl: 'https://example.com',
+        customerName: 'Test Corp',
+        generatedDate: '2026-08-18',
+        accountTeam: [{ name: 'Test AE', role: 'ae', title: 'Account Executive' }],
+        resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@test.com', linkedIn: '' }],
+        signals: [{ headline: 'Test Signal', metadata: {} }],
+        subscriptions: [],
+        sourceUrls: ['https://www.redhat.com/en/resources/guide'],
+        structuredPlays: [],
+      },
+    )
+
+    expect(html).not.toMatch(/\]\(https:\/\/www\.redhat\.com/)
   })
 })
