@@ -574,9 +574,6 @@ export function sanitizeCreepyLines(text: string): string {
 }
 
 // ── Objective Prefix Stripper (#1132) ─────────────────────────────────────
-// Strips raw objective prefixes that leak through Gemini's Pass 1 selection fields.
-// Reuses logic from renderObjectiveBlock() to clean signalBridge, challengerDataPoint,
-// customOpener, and featureApplications.
 
 export function cleanObjectivePrefix(text: string): string {
   if (!text) return ''
@@ -749,11 +746,6 @@ export interface StructuredEmailSelection {
   signalIndex: number
   featureKeys: string[]
   peerProof: { playName: string; exampleIndex: number } | null
-  challengerDataPoint: string
-  customOpener: string
-  featureApplications: string[]
-  signalBridge: string
-  referenceLine?: string
 }
 
 export interface StructuredCampaignSelection {
@@ -810,6 +802,7 @@ export interface StructuredCampaignData {
   preMatchedPeerProofs?: import('./lib/persona-classifier.ts').PreMatchedPeerProof[]
   pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]
   signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
+  materialUrlMap?: Map<string, string>
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -823,12 +816,9 @@ export function buildOpener(
   signals: Signal[],
   openerVariant: number,
   recipientName: string,
-  customOpener?: string,
+  tier: 'executive' | 'manager' = 'manager',
 ): string {
   const firstName = recipientName.split(' ')[0]
-  if (customOpener) return `${firstName}, ${customOpener.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()}`
-
-  console.warn(`[template] FALLBACK: buildOpener using generic pattern for ${recipientName} — customOpener not provided`)
   const signal = signals[signalIndex]
   if (!signal) return `Hi ${firstName},`
 
@@ -844,16 +834,24 @@ export function buildOpener(
     observation = observation.charAt(0).toUpperCase() + observation.slice(1)
   }
 
-  switch (openerVariant) {
-    case 0:
-      return `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`
-    case 1:
-      return `Hi ${firstName}, ${observation} is driving new priorities for leaders in your position.`
-    case 2:
-      return `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`
-    default:
-      return `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`
-  }
+  const EXEC_OPENERS = [
+    `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`,
+    `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`,
+    `${firstName}, ${observation} is creating a window that closes faster than most planning cycles account for.`,
+    `${firstName}, ${observation} is the kind of shift that separates the organizations that act early from those that react late.`,
+    `Hi ${firstName}, ${observation} is already changing how your peers allocate infrastructure investment.`,
+  ]
+
+  const MGR_OPENERS = [
+    `Hi ${firstName}, ${observation} is driving new priorities for leaders in your position.`,
+    `Hi ${firstName}, ${observation} has direct implications for how your team operates day to day.`,
+    `${firstName}, ${observation} is worth a closer look — the technical implications run deeper than the headline.`,
+    `Hi ${firstName}, ${observation} is accelerating timelines for teams running infrastructure like yours.`,
+    `${firstName}, ${observation} means the playbook your team is running today may need an update sooner than planned.`,
+  ]
+
+  const variants = tier === 'executive' ? EXEC_OPENERS : MGR_OPENERS
+  return variants[openerVariant % variants.length]
 }
 
 /**
@@ -867,21 +865,26 @@ const SIGNAL_BRIDGES: Record<string, string> = {
   'openshift-default': "This creates an opportunity to consolidate on a single enterprise platform — from containers to VMs to AI workloads.",
   'rhel-news': "Teams already running enterprise Linux are finding the fastest path runs through their existing infrastructure.",
   'rhel-default': "The same enterprise Linux foundation your teams already rely on extends naturally into this space.",
+  'ai-news': "The organizations moving fastest on AI are deploying models on infrastructure they already control — not waiting for cloud-only options to mature.",
+  'ai-default': "Enterprise AI deployment works best when it runs on the same platform your operations teams already manage.",
+  'security-news': "The teams that handle this best are the ones running security policy enforcement as code — not as a quarterly audit.",
+  'security-default': "Container supply chain security and runtime policy enforcement are how organizations stay ahead of this kind of risk.",
+  'cost-news': "The organizations that come out ahead in cost restructuring are the ones that consolidate platforms before the deadline, not after.",
+  'cost-default': "Platform consolidation is how organizations convert rising licensing and tax costs into a structural advantage.",
 }
 
 export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
-  customBridge?: string,
 ): string {
-  if (customBridge) return customBridge.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
-  console.warn(`[template] FALLBACK: buildSignalBridge using generic pattern — customBridge not provided`)
   if (!signal || featureKeys.length === 0) return ''
 
   const primaryKey = featureKeys[0]
   const product = primaryKey.includes('ansible') ? 'ansible'
     : primaryKey.includes('openshift') ? 'openshift'
     : (primaryKey.includes('rhel') || primaryKey.includes('enterprise-linux')) ? 'rhel'
+    : primaryKey.includes('ai') ? 'ai'
+    : primaryKey.includes('security') ? 'security'
     : null
   const signalType = signal.type === 'news' ? 'news' : 'default'
 
@@ -962,17 +965,22 @@ export function buildRelationshipLine(
 export function buildFeatureBullets(
   featureKeys: string[],
   tier: 'executive' | 'manager',
-  featureApplications?: string[],
-  priorText?: string,
+  campaignTheme?: string,
 ): string {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
   for (let i = 0; i < featureKeys.slice(0, 3).length; i++) {
     const key = featureKeys[i]
     const entry = resolveFeatureEntry(key)
     if (!entry) continue
-    const hasCustom = featureApplications?.[i]
-    if (!hasCustom) console.warn(`[template] FALLBACK: buildFeatureBullets using generic description for ${key}`)
-    const applicationSentence = (hasCustom || getCapabilityDescription(key)).replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
+    let applicationSentence = getCapabilityDescription(key)
+    if (campaignTheme) {
+      const theme = campaignTheme.toLowerCase()
+      if (theme.includes('tax') || theme.includes('cost')) {
+        applicationSentence += ' — with self-managed deployment, zero SaaS tax exposure'
+      } else if (theme.includes('security')) {
+        applicationSentence += ' — with enterprise-grade security and compliance built in'
+      }
+    }
     bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
@@ -1083,12 +1091,49 @@ const CHALLENGER_CLOSERS = [
   'The organizations that address this proactively will carry a permanent cost advantage.',
 ]
 
-export function buildChallengerFrame(challengerDataPoint: string, emailIndex: number = 0): string {
-  if (!challengerDataPoint) return ''
-  const trimmed = challengerDataPoint.replace(/\s*\(Signal\s*\d+\)\s*/gi, ' ').trim()
+export function buildChallengerFrame(signal: Signal | undefined, emailIndex: number = 0): string {
+  if (!signal) return ''
+  let insight = signal.headline
+  if (insight.includes(' — ')) {
+    insight = insight.split(' — ')[0]
+  }
+  insight = insight
+    .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  if (!insight) return ''
   const closer = CHALLENGER_CLOSERS[emailIndex % CHALLENGER_CLOSERS.length]
-  if (trimmed.endsWith('.')) return `${trimmed} ${closer}`
-  return `${trimmed}. ${closer}`
+  if (insight.endsWith('.')) return `${insight} ${closer}`
+  return `${insight}. ${closer}`
+}
+
+function shortenTitle(name: string): string {
+  const m = name.match(/^(.+?)(?:\s*[|:—–]\s*.+)?$/)
+  const base = m ? m[1].trim() : name
+  return base.length > 40 ? base.slice(0, 37) + '...' : base
+}
+
+export function buildReferenceLine(sourceUrls: string[], materialUrlMap?: Map<string, string>): string {
+  if ((!sourceUrls || sourceUrls.length === 0) && (!materialUrlMap || materialUrlMap.size === 0)) return ''
+
+  const entries: Array<[string, string]> = []
+
+  if (materialUrlMap && materialUrlMap.size > 0) {
+    for (const [name, url] of materialUrlMap.entries()) {
+      if (entries.length >= 2) break
+      entries.push([shortenTitle(name), url])
+    }
+  }
+
+  if (entries.length === 0 && sourceUrls.length > 0) {
+    for (const url of sourceUrls.slice(0, 2)) {
+      const domain = url.replace(/^https?:\/\/(?:www\.)?/, '').split('/')[0]
+      entries.push([domain, url])
+    }
+  }
+
+  if (entries.length === 0) return ''
+  return `For context: ${entries.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
 }
 
 /**
@@ -1503,13 +1548,6 @@ export function generateCampaignFromStructured(
   // Sanitize customer-facing fields from Gemini selection output
   selection.customerContext = sanitizeCreepyLines(selection.customerContext)
   selection.positioning = sanitizeCreepyLines(selection.positioning)
-  for (const email of selection.emails) {
-    email.customOpener = cleanObjectivePrefix(sanitizeCreepyLines(email.customOpener))
-    email.signalBridge = cleanObjectivePrefix(sanitizeCreepyLines(email.signalBridge))
-    email.challengerDataPoint = cleanObjectivePrefix(sanitizeCreepyLines(email.challengerDataPoint))
-    email.featureApplications = email.featureApplications.map(fa => cleanObjectivePrefix(sanitizeCreepyLines(fa)))
-    if (email.referenceLine) email.referenceLine = sanitizeCreepyLines(email.referenceLine)
-  }
 
   // Use objective profile from intelligence cache (ADR-044) instead of regex extraction
   const campaignTheme = {
@@ -1570,8 +1608,8 @@ export function generateCampaignFromStructured(
     const signal = data.signals[email.signalIndex]
 
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.customOpener)
-    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, email.signalBridge)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier)
+    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
     const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
@@ -1608,11 +1646,11 @@ export function generateCampaignFromStructured(
     }
     const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
-    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, email.featureApplications, `${opener} ${signalBridge}`)
-    const referenceLine = sanitizeReferenceLine(email.referenceLine || '', data.sourceUrls)
+    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution)
+    const referenceLine = sanitizeReferenceLine(buildReferenceLine(data.sourceUrls || [], data.materialUrlMap), data.sourceUrls)
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof)
-    const challengerFrame = buildChallengerFrame(email.challengerDataPoint, i)
+    const challengerFrame = buildChallengerFrame(signal, i)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 

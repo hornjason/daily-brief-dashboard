@@ -316,15 +316,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 0,
       featureKeys: ['ansible-automation-platform', 'ansible-lightspeed-coding-assistant', 'automation-dashboard-aap-2-6'],
       peerProof: { playName: 'Source Material Customer Wins', exampleIndex: 0 },
-      challengerDataPoint: 'SB 122 redefines remotely accessed software as tangible personal property — organizations that consolidate before January 2027 lock in the exemption.',
-      customOpener: 'SB 122 takes effect January 1 — every SaaS automation tool your engineering teams rely on picks up an 8-10% tax overhead.',
-      featureApplications: [
-        'self-managed in your VPC, zero SaaS tax exposure on automation workloads',
-        'AI-assisted playbook creation accelerates migration from Chef and Puppet',
-        'centralized visibility into automation health across your 12 manufacturing plants',
-      ],
-      signalBridge: 'For a company already running [Red Hat Enterprise Linux](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux), the fix is straightforward.',
-      referenceLine: 'For background on the law: [Holland & Knight\'s analysis of SB 122](https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://www.numeral.com/saas-tax-guide) shows where California fits.',
     },
     {
       recipientName: 'Robert Nakamura',
@@ -334,15 +325,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 1,
       featureKeys: ['openshift-container-platform', 'openshift-ai', 'advanced-cluster-security'],
       peerProof: { playName: 'Source Material Customer Wins', exampleIndex: 1 },
-      challengerDataPoint: 'Engineering teams that standardize CI/CD on a single platform before cloud migration close deployment cycles 40% faster than those running parallel toolchains.',
-      customOpener: 'your engineering org inherited three automation platforms — that operational debt compounds every quarter it stays unconsolidated.',
-      featureApplications: [
-        'unified control plane for containers, VMs, and AI workloads in your hybrid environment',
-        'deploy and serve AI models directly on the platform your teams already operate',
-        'automated container supply chain security for your FedRAMP compliance timeline',
-      ],
-      signalBridge: 'The teams moving fastest on this are running hybrid workloads on a platform that handles containers, VMs, and AI inference together.',
-      referenceLine: 'For background on the law: [Holland & Knight\'s analysis of SB 122](https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis) covers the definitions.',
     },
     {
       recipientName: 'Samantha Wells',
@@ -352,15 +334,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 3,
       featureKeys: ['event-driven-ansible', 'ansible-automation-platform', 'aiops-overview'],
       peerProof: { playName: 'Source Material Customer Wins', exampleIndex: 2 },
-      challengerDataPoint: 'Manufacturing operations teams that automate incident response see 50% fewer escalations — the ones still running manual runbooks are the same ones missing SLA targets.',
-      customOpener: 'your manufacturing QA initiative creates an opportunity to transform how your operations team handles incidents across all 4 plants.',
-      featureApplications: [
-        'triggers automated responses to infrastructure events in real time across your manufacturing plants',
-        'standardizes automation runbooks so every plant runs the same operational playbook',
-        'applies AI to IT operations for predictive incident management before escalation',
-      ],
-      signalBridge: 'Organizations facing similar operational shifts are using enterprise automation to respond faster than manual operations allow.',
-      referenceLine: null as unknown as string,
     },
     {
       recipientName: 'Kevin Patel',
@@ -370,15 +343,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 2,
       featureKeys: ['openshift-virtualization', 'openshift-container-platform', 'red-hat-enterprise-linux'],
       peerProof: { playName: 'Infrastructure Modernization', exampleIndex: 0 },
-      challengerDataPoint: 'VMware licensing changes are creating a 2-year window where VM migration costs less than renewal. After that window closes, switching costs lock in.',
-      customOpener: 'your infrastructure team is running containers and VMs on separate platforms — that operational split doubles your patching surface and complicates every compliance audit.',
-      featureApplications: [
-        'migrates your existing VMs alongside containers on a unified platform — no forklift required',
-        'runs containerized workloads at scale with the same Kubernetes your teams already use',
-        'the same enterprise Linux foundation your 200 nodes already rely on extends into the container layer',
-      ],
-      signalBridge: 'The same enterprise Linux foundation your teams already rely on extends naturally into this space.',
-      referenceLine: 'For background: [Holland & Knight\'s analysis of SB 122](https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis) covers the exemption framework.',
     },
     {
       recipientName: 'Maria Gonzalez',
@@ -388,15 +352,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 4,
       featureKeys: ['red-hat-developer-hub', 'openshift-container-platform', 'getting-started-with-openshift'],
       peerProof: null,
-      challengerDataPoint: 'Platform engineering teams that build custom developer portals from Backstage spend 6-9 months on customization. Production-ready alternatives exist.',
-      customOpener: 'your platform engineering team is building developer golden paths — the organizations shipping fastest started with a production-ready portal instead of customizing from scratch.',
-      featureApplications: [
-        'centralizes developer tools and golden paths in an internal developer portal your teams can adopt this quarter',
-        'developer-ready environments built on the OpenShift your clusters already run',
-        'provides getting-started templates that reduce onboarding time for new engineers',
-      ],
-      signalBridge: 'The teams moving fastest on platform engineering are starting with a production-ready portal instead of building from Backstage.',
-      referenceLine: null as unknown as string,
     },
     {
       recipientName: 'James Liu',
@@ -406,15 +361,6 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
       signalIndex: 7,
       featureKeys: ['ansible-automation-platform', 'execution-environments', 'automation-mesh'],
       peerProof: { playName: 'Source Material Customer Wins', exampleIndex: 1 },
-      challengerDataPoint: 'Enterprise automation licensing that scales per-node makes the business case worse as adoption succeeds. Flat-rate licensing inverts that equation.',
-      customOpener: 'your team proved Ansible works at pilot scale — the expansion to enterprise-wide is approved, and the licensing model determines whether the ROI compounds or erodes.',
-      featureApplications: [
-        'flat-rate licensing means your enterprise rollout costs stay flat as automation adoption scales across the organization',
-        'packages automation dependencies into portable containers your team controls — no more environment drift',
-        'extends automation reach across your distributed manufacturing network and edge locations',
-      ],
-      signalBridge: 'Red Hat\'s automation platform is how organizations are converting this kind of expansion into consistent, repeatable operations.',
-      referenceLine: 'For additional context: [Holland & Knight\'s analysis of SB 122](https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis) and [Numeral\'s state-by-state breakdown](https://www.numeral.com/saas-tax-guide).',
     },
   ]
 
@@ -469,10 +415,6 @@ function buildThinMaterialFixture(): { data: StructuredCampaignData; selection: 
         signalIndex: 0,
         featureKeys: ['openshift-container-platform'],
         peerProof: null,
-        challengerDataPoint: 'Organizations that delay cloud modernization face technical debt compounding at 15% annually.',
-        customOpener: 'your cloud strategy evaluation is well-timed as enterprise adoption patterns shift toward hybrid-first architectures.',
-        featureApplications: ['unified control plane for hybrid cloud workloads across cloud and on-prem'],
-        signalBridge: 'The teams moving fastest on cloud strategy are running hybrid workloads on a platform that handles containers and VMs together.',
       },
       {
         recipientName: 'David Chen',
@@ -482,10 +424,6 @@ function buildThinMaterialFixture(): { data: StructuredCampaignData; selection: 
         signalIndex: 0,
         featureKeys: ['openshift-container-platform'],
         peerProof: null,
-        challengerDataPoint: 'IT teams running parallel container and VM platforms spend 35% more on operations than those running unified infrastructure.',
-        customOpener: 'your IT team can start with a small OpenShift deployment and expand as cloud strategy matures — no big-bang migration required.',
-        featureApplications: ['runs containerized workloads at scale with enterprise Kubernetes'],
-        signalBridge: 'The same approach works whether you start with 3 nodes or scale to 300.',
       },
     ],
   }

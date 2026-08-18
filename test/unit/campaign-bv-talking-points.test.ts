@@ -6,7 +6,7 @@ function makeMinimalStructuredData(overrides: Record<string, any> = {}) {
     campaignSummary: 'Test campaign',
     customerContext: 'Test context',
     positioning: 'Test positioning',
-    emails: [{ persona: 'VP Engineering — Executive', subject: 'Test', body: 'Hi there.', customOpener: '', signalBridge: '', challengerDataPoint: '', featureApplications: [], closingCTA: '', recipientName: 'Test User', tier: 'Executive' }],
+    emails: [{ recipientName: 'Test User', tier: 'executive', intent: 'nurture', subject: 'Test', signalIndex: 0, featureKeys: [], peerProof: null }],
     referenceMaterials: [],
     eligibilityTable: [],
     bvTalkingPoints: [] as Array<{ objective: string; talkingPoints: string; keyMetrics: string }>,

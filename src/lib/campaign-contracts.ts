@@ -165,8 +165,6 @@ export function assertPass1Output(
       featureKeys: string[]
       tier?: string
       intent?: string
-      challengerDataPoint?: string
-      customOpener?: string
     }>
   },
   execCount: number,

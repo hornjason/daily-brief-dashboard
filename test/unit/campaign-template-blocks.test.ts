@@ -184,20 +184,19 @@ describe('buildFeatureBullets — anti-gaming', () => {
 
 describe('buildChallengerFrame — anti-gaming', () => {
   it('does not use generic "While many organizations" wrapper', () => {
-    const result = buildChallengerFrame('Companies adopting self-managed automation see 40% lower TCO')
+    const result = buildChallengerFrame(testSignals[0])
     expect(result).not.toContain('While many organizations')
     expect(result).not.toContain('broad digital transformation')
   })
 
-  it('uses the data point as the lead sentence', () => {
-    const dataPoint = 'Companies adopting self-managed automation see 40% lower TCO'
-    const result = buildChallengerFrame(dataPoint)
-    // Data point should appear at the start, not buried in a wrapper
-    expect(result.indexOf(dataPoint)).toBeLessThan(5)
+  it('derives insight from signal headline', () => {
+    const result = buildChallengerFrame(testSignals[0])
+    expect(result).toContain('Infrastructure-as-Code Modernization')
+    expect(result.length).toBeGreaterThan(0)
   })
 
-  it('returns empty string for empty data point', () => {
-    expect(buildChallengerFrame('')).toBe('')
+  it('returns empty string for undefined signal', () => {
+    expect(buildChallengerFrame(undefined)).toBe('')
   })
 })
 
@@ -252,38 +251,37 @@ describe('buildPeerPattern — anti-gaming', () => {
     expect(result).toContain('Amadeus')
   })
 
-  it('returns empty string when no plays have metrics either', () => {
+  it('returns generic fallback when no plays have metrics', () => {
     const emptyPlays = [{ name: 'Empty', parentTdp: 'TDP-X' }]
     const result = buildPeerPattern(null, emptyPlays)
-    expect(result).toBe('')
+    expect(result).toContain('sat with a handful of leaders')
   })
 })
 
 // ── Custom content passthrough ──────────────────────────────────────────────
 
-describe('custom content passthrough', () => {
-  it('buildOpener uses customOpener when provided', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'SB 122 takes effect January 1 — every SaaS tool picks up 8-10% tax')
-    expect(result).toContain('SB 122 takes effect')
+describe('deterministic content generation', () => {
+  it('buildOpener uses tier-aware variants for executive', () => {
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'executive')
     expect(result).toContain('Dhrupad')
+    expect(result).toContain('Infrastructure-as-Code Modernization')
   })
 
-  it('buildOpener falls back to signal when no customOpener', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi')
+  it('buildOpener uses tier-aware variants for manager', () => {
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager')
     expect(result).toContain('Dhrupad')
-    expect(result).not.toContain('SB 122 takes effect')
+    expect(result).toContain('Infrastructure-as-Code Modernization')
   })
 
-  it('buildSignalBridge uses custom bridge when provided', () => {
-    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform'], 'For a company shipping products built on RHEL, the fix is straightforward.')
-    expect(result).toContain('shipping products')
+  it('buildSignalBridge uses SIGNAL_BRIDGES lookup', () => {
+    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform'])
+    expect(result).toContain('automation')
   })
 
-  it('buildFeatureBullets uses custom applications when provided', () => {
-    const apps = ['self-managed in your VPC, zero SaaS tax exposure', 'automated security response for Thunder and Defend', 'portable automation across cloud and on-prem']
-    const result = buildFeatureBullets(['ansible-automation-platform', 'event-driven-ansible', 'execution-environments'], 'manager', apps)
-    expect(result).toContain('self-managed in your VPC')
-    expect(result).toContain('Thunder and Defend')
+  it('buildFeatureBullets uses getCapabilityDescription deterministically', () => {
+    const result = buildFeatureBullets(['ansible-automation-platform', 'event-driven-ansible', 'execution-environments'], 'manager')
+    expect(result).toContain('unifies automation')
+    expect(result).toContain('triggers automated responses')
   })
 })
 
@@ -292,21 +290,20 @@ describe('custom content passthrough', () => {
 describe('buildFeatureBullets — every bullet always linked', () => {
   const featureKeys = ['ansible-automation-platform', 'event-driven-ansible', 'openshift-ai']
 
-  it('links all products even when mentioned in prior text', () => {
-    const priorText = 'switching to Red Hat Ansible Automation Platform avoids the SaaS tax'
-    const result = buildFeatureBullets(featureKeys, 'manager', undefined, priorText)
+  it('links all products in deterministic output', () => {
+    const result = buildFeatureBullets(featureKeys, 'manager')
     const lines = result.split('\n')
     expect(lines[0]).toContain('[Ansible Automation Platform]')
     expect(lines[1]).toContain('[Event-Driven Ansible]')
     expect(lines[2]).toContain('[OpenShift AI]')
   })
 
-  it('links all products when none appear in prior text', () => {
-    const priorText = 'Your teams are evaluating cloud infrastructure options'
-    const result = buildFeatureBullets(featureKeys, 'manager', undefined, priorText)
+  it('links all products with theme modifier', () => {
+    const result = buildFeatureBullets(featureKeys, 'manager', 'SaaS tax')
     expect(result).toContain('[Ansible Automation Platform]')
     expect(result).toContain('[Event-Driven Ansible]')
     expect(result).toContain('[OpenShift AI]')
+    expect(result).toContain('SaaS tax exposure')
   })
 })
 

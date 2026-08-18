@@ -270,82 +270,12 @@ const CAMPAIGN_SELECTION_SCHEMA = {
           signalIndex: { type: 'INTEGER', description: 'Zero-based index into signals array.' },
           featureKeys: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Exactly 3 keys from URL registry.' },
           peerProof: { type: 'OBJECT', nullable: true, properties: { playName: { type: 'STRING' }, exampleIndex: { type: 'INTEGER' } } },
-          challengerDataPoint: { type: 'STRING', description: 'Observation from signals that teaches the customer something.' },
-          customOpener: {
-            type: 'STRING',
-            description: 'One sentence observation about THIS recipient\'s specific situation — what is happening in their world that connects to the campaign theme. Must reference a concrete fact from the loaded signals (a recent event, initiative, or business change). NOT a generic opener. Example: "SB 122 takes effect January 1 — every SaaS automation tool your San Jose engineering teams rely on picks up an 8-10% tax overhead." NOT: "Infrastructure modernization is shaping how your teams operate."',
-          },
-          featureApplications: {
-            type: 'ARRAY',
-            items: { type: 'STRING' },
-            description: 'Exactly 3 sentences, one per featureKey (same order). Each explains why THIS specific feature matters for THIS customer\'s specific situation. Must reference customer context, not generic capability. Example for A10+SaaS tax: "self-managed in your VPC, zero SaaS tax exposure on automation workloads" NOT: "unifies automation across hybrid environments". Keep to 1 sentence each, 8-12 words. Reference the campaign theme directly. For a SaaS tax campaign: "self-managed in your VPC, zero SaaS tax exposure". NOT generic: "unifies automation across hybrid environments".',
-          },
-          signalBridge: {
-            type: 'STRING',
-            description: 'One sentence connecting the selected signal to the customer\'s business and the primary Red Hat product. When mentioning a Red Hat product by name, use a markdown link to its product page from the feature URL registry. Example: "For a company shipping products built on [Red Hat Enterprise Linux](https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux), the fix is straightforward." Must be specific to this customer.',
-          },
-          referenceLine: {
-            type: 'STRING',
-            nullable: true,
-            description: 'One sentence pointing the recipient to relevant source documents. Use markdown links for each document name: [Document Title](url). Example: "For background on the law: [Holland & Knight\'s analysis of SB 122](https://example.com/hk) covers the definitions and exemptions, and [Numeral\'s state-by-state breakdown](https://example.com/numeral) shows where California fits." URLs must come from the provided material content or reference data. Set to null if no reference docs apply.',
-          },
         },
-        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys', 'challengerDataPoint', 'customOpener', 'featureApplications', 'signalBridge', 'referenceLine'],
+        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys'],
       },
-    },
-    referenceMaterials: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          resource: { type: 'STRING', description: 'Name of the reference document or source.' },
-          url: { type: 'STRING', nullable: true, description: 'URL if from redhat.com, otherwise null.' },
-          keyTakeaway: { type: 'STRING', description: 'One-sentence summary of what this source covers.' },
-        },
-        required: ['resource', 'keyTakeaway'],
-      },
-      description: 'Extract reference materials/sources from the campaign material. Each entry has resource name, optional URL, and key takeaway. These are external documents cited in the material (legal analyses, reports, sales plays).',
-    },
-    eligibilityTable: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          offering: { type: 'STRING', description: 'Product or offering name.' },
-          deployment: { type: 'STRING', description: 'Deployment model (e.g., Customer VPC, Red Hat Hosted).' },
-          status: { type: 'STRING', description: 'Eligibility status (e.g., ELIGIBLE FOR EXEMPTION, TAXABLE).' },
-        },
-        required: ['offering', 'deployment', 'status'],
-      },
-      description: 'Extract product deployment eligibility information from the material. Each row has offering name, deployment model, and status. Only include if the material discusses deployment-specific eligibility/compliance.',
-    },
-    bvTalkingPoints: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          objective: { type: 'STRING', description: 'Business objective category (e.g., Cost Efficiency, Risk Mitigation, Revenue Growth).' },
-          talkingPoints: { type: 'STRING', description: '1-2 key talking points for this objective.' },
-          keyMetrics: { type: 'STRING', description: 'Specific peer proof metrics from the solution plays.' },
-        },
-        required: ['objective', 'talkingPoints', 'keyMetrics'],
-      },
-      description: 'Extract 3-4 business value talking points organized by objective category. Each has: objective (category name), talkingPoints (1-2 key messages), keyMetrics (specific peer proof metrics). These are for internal call prep, not email content.',
-    },
-    sourceAttributions: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          name: { type: 'STRING', description: 'Source document title.' },
-          description: { type: 'STRING', description: 'Brief description of what this source covers.' },
-        },
-        required: ['name', 'description'],
-      },
-      description: 'Extract source document titles and brief descriptions from the material content.',
     },
   },
-  required: ['campaignSummary', 'customerContext', 'positioning', 'emails', 'referenceMaterials', 'eligibilityTable', 'bvTalkingPoints', 'sourceAttributions'],
+  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -726,28 +656,14 @@ For each resolved contact, select:
 1. The most relevant signal (by index) from the loaded signals
 2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role. CRITICAL DIVERSITY RULE: Do NOT reuse the same feature key in the same position (1st, 2nd, or 3rd) across more than 2 emails. Each email's 3 features should be a unique combination. Distribute ansible-automation-platform across different slots — it should NOT be the 2nd key in every email. Aim for at least 8 distinct feature keys across all 6 emails.
 3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
-4. A challenger data point: one observation from the loaded signals that teaches the customer something about their own business
-5. A custom opener: one sentence specific to THIS recipient's situation — reference a concrete fact from the signals. This replaces generic template openers. Write as if opening a colleague's email, not a marketing template.
-6. Three feature application sentences (one per feature key, same order): explain why each feature matters for THIS customer's specific situation. Keep each to 8-12 words. Reference the campaign theme directly, not generic capability descriptions.
-7. A signal bridge: one sentence connecting the selected signal to the customer's business and the primary Red Hat product. Must be specific to this customer, not a generic industry statement.
-8. A reference line: one sentence pointing the recipient to relevant source documents. Use markdown links [Document Title](url) for ALL URLs found in the source material content — including external legal analyses and third-party reports. Do NOT invent URLs that aren't in the material. Example: "For background on the law: [Holland & Knight's analysis of SB 122](https://www.hklaw.com/...) covers the definitions, and [Numeral's state-by-state breakdown](https://www.numeral.com/...) shows where California fits."
-9. Reference materials: Extract ALL source documents, legal analyses, reports, and sales plays cited in the material content. Each gets resource name, URL if present in the material, and a one-sentence key takeaway. You MUST extract at least the primary source documents.
-10. Eligibility table: If the material discusses deployment-specific compliance, eligibility, or tax status by deployment model, extract every row with offering name, deployment model, and status (e.g., 'ELIGIBLE FOR EXEMPTION', 'TAXABLE').
-11. BV Talking Points: Extract 3-4 business value talking points organized by business objective category (e.g., 'Cost Efficiency', 'Risk Mitigation', 'Revenue Growth'). Each has talking points and key metrics from the material or verified solution plays.
-12. Source attributions: Extract every source document title referenced in the material with a one-line description. Include the primary campaign material, any legal analyses, tax guides, and supplemental sources.
-
-When the source material uses specific terminology (e.g., 'remotely accessed software', 'self-managed in your VPC', '8-10% tax overhead'), REUSE those exact phrases in customOpener, signalBridge, and featureApplications. Do not paraphrase established terminology from the campaign material.
-
-CRITICAL: customOpener, featureApplications, and signalBridge are the PRIMARY quality differentiator. Generic text in these fields defeats the purpose of the entire system. Every sentence must contain a fact that could ONLY apply to THIS customer.
 
 GROUNDING RULES:
 - recipientName MUST exactly match one of the resolved contact names provided
 - featureKeys MUST be selected from the provided feature key enum — no invented keys
 - signalIndex MUST be a valid zero-based index into the signals array
-- challengerDataPoint MUST reference actual data from the loaded signals — never fabricate
 - peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
-- Do NOT write email body text, CTAs, or prose — the template engine handles all prose generation
-- NEVER include signal index references like "(Signal 6)" or "(Signal 29)" in customOpener, featureApplications, signalBridge, or challengerDataPoint — these are internal identifiers that must not appear in customer-facing text
+- Do NOT write email body text, CTAs, opener prose, signal bridges, feature descriptions, challenger insights, or reference lines — the template engine handles ALL prose generation deterministically
+- Your job is DATA SELECTION ONLY: which signal, which features, which peer proof
 
 CRITICAL: You MUST generate one email entry for EVERY resolved contact provided. Do NOT skip any contacts. If 6 contacts are listed, produce exactly 6 email entries.
 
@@ -768,16 +684,7 @@ export interface CampaignSelectionResult {
     signalIndex: number
     featureKeys: string[]
     peerProof: { playName: string; exampleIndex: number } | null
-    challengerDataPoint: string
-    customOpener: string
-    featureApplications: string[]
-    signalBridge: string
-    referenceLine?: string
   }>
-  referenceMaterials?: Array<{ resource: string; url?: string; keyTakeaway: string }>
-  eligibilityTable?: Array<{ offering: string; deployment: string; status: string }>
-  bvTalkingPoints?: Array<{ objective: string; talkingPoints: string; keyMetrics: string }>
-  sourceAttributions?: Array<{ name: string; description: string }>
 }
 
 export async function callGeminiForCampaignSelection(opts: {
@@ -847,7 +754,7 @@ export async function callGeminiForCampaignSelection(opts: {
     for (const pm of opts.preMatchedMetrics) {
       preMatchContext += `- ${pm.recipientName} (${pm.recipientTitle}): USE THIS DATA POINT: "${pm.entry.objective}" [${pm.category}]\n`
     }
-    preMatchContext += '\nWeave each recipient\'s pre-matched data point into their email\'s signalBridge or customOpener. The data point should appear naturally in the email body.\n'
+    preMatchContext += '\nThese pre-matched metrics inform signal selection — choose the signal index most relevant to each recipient\'s matched data point.\n'
   }
 
   let peerProofContext = ''
@@ -861,7 +768,7 @@ export async function callGeminiForCampaignSelection(opts: {
 
   const pass0BriefContext = opts.pass0Briefs ? formatBriefsForPrompt(opts.pass0Briefs) : ''
 
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}${pass0BriefContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n## VERIFIED URLS — use ONLY these URLs for reference lines (referenceLine field):\n${featureUrlMap}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, peer proof (if available), and a challenger data point. Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write email prose.`
+  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}${pass0BriefContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, and peer proof (if available). Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write any prose.`
 
   const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
     callType: 'campaign-selection',
@@ -1819,56 +1726,32 @@ export async function generateCampaign(
       }
     }
 
-    for (const email of selection.emails) {
-      if (materialUrlMap.size > 0) {
-        if (!email.referenceLine) {
-          const externalRefs = [...materialUrlMap.entries()]
-            .slice(0, 2)
-          if (externalRefs.length > 0) {
-            email.referenceLine = `For additional context: ${externalRefs.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
-          }
-        } else if (email.referenceLine && !email.referenceLine.includes('](http')) {
-          const externalUrls = [...materialUrlMap.entries()]
-          if (externalUrls.length >= 2) {
-            email.referenceLine = `For background on the law: [${externalUrls[0][0]}](${externalUrls[0][1]}) covers the definitions, and [${externalUrls[1][0]}](${externalUrls[1][1]}) provides the broader landscape.`
-          } else if (externalUrls.length === 1) {
-            email.referenceLine = `For background: [${externalUrls[0][0]}](${externalUrls[0][1]}).`
-          }
+    // Build deterministic reference materials from extraction data
+    const deterministicRefMaterials: Array<{ resource: string; url?: string; keyTakeaway: string }> = []
+    if (referenceMaterialData.length > 0) {
+      for (const ref of referenceMaterialData) {
+        if (ref.url && ref.title && !isInternalUrl(ref.url) && !isHomepageUrl(ref.url)) {
+          deterministicRefMaterials.push({ resource: ref.title, url: ref.url, keyTakeaway: ref.excerpt ? (ref.excerpt.length > 200 ? ref.excerpt.slice(0, 200) + '...' : ref.excerpt) : 'Source document referenced in campaign material.' })
         }
       }
     }
-
-    if (!selection.referenceMaterials || selection.referenceMaterials.length === 0) {
-      const refs: Array<{ resource: string; url?: string; keyTakeaway: string }> = []
+    if (deterministicRefMaterials.length === 0) {
       for (const [name, url] of materialUrlMap.entries()) {
-        refs.push({ resource: name, url, keyTakeaway: 'Source document referenced in campaign material.' })
+        deterministicRefMaterials.push({ resource: name, url, keyTakeaway: 'Source document referenced in campaign material.' })
       }
-      if (refs.length > 0) selection.referenceMaterials = refs
     }
 
-    // Fuzzy URL backfill removed — we now use referenceMaterialData directly (see line 1725)
-
-    if (!selection.sourceAttributions || selection.sourceAttributions.length < 2) {
-      const attrs: Array<{ name: string; description: string }> = []
-      if (materialTitle) attrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
-      for (const [name] of materialUrlMap.entries()) {
-        if (name !== materialTitle) attrs.push({ name, description: 'Referenced source document.' })
-      }
-      if (attrs.length > (selection.sourceAttributions?.length ?? 0)) {
-        selection.sourceAttributions = attrs
-      }
+    // Build deterministic source attributions
+    const deterministicSourceAttrs: Array<{ name: string; description: string }> = []
+    if (materialTitle) deterministicSourceAttrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
+    for (const [name] of materialUrlMap.entries()) {
+      if (name !== materialTitle) deterministicSourceAttrs.push({ name, description: 'Referenced source document.' })
     }
 
     // ── Gold-standard validation gate ──
     const goldGaps: string[] = []
     if (resolvedExecs.length === 0) goldGaps.push('resolvedExecs: 0 contacts')
-    if (!selection.referenceMaterials?.length) goldGaps.push('referenceMaterials')
-    if (!selection.eligibilityTable?.length) goldGaps.push('eligibilityTable')
-    if (!selection.bvTalkingPoints?.length) goldGaps.push('bvTalkingPoints')
-    if (!selection.sourceAttributions?.length) goldGaps.push('sourceAttributions')
     if (selection.emails.length !== resolvedExecs.length) goldGaps.push(`emails: ${selection.emails.length}/${resolvedExecs.length}`)
-    const nullRefLines = selection.emails.filter(e => !e.referenceLine).length
-    if (nullRefLines > 0) goldGaps.push(`${nullRefLines} null referenceLines`)
 
     if (goldGaps.length > 0) {
       console.warn(`[campaigns] Gold standard gaps after fallbacks: ${goldGaps.join(', ')}`)
@@ -1898,7 +1781,7 @@ export async function generateCampaign(
       }
     }
 
-    // Derive BV Talking Points — Pass 0 briefs first, then Gemini, then plays
+    // Derive BV Talking Points deterministically — Pass 0 briefs first, then plays
     let bvTalkingPoints: BVTalkingPoint[] = []
     if (pass0Briefs.length > 0) {
       for (const brief of pass0Briefs) {
@@ -1911,12 +1794,6 @@ export async function generateCampaign(
           keyMetrics: proofText,
         })
       }
-    } else if (selection.bvTalkingPoints && selection.bvTalkingPoints.length > 0) {
-      bvTalkingPoints = selection.bvTalkingPoints.map(bp => ({
-        objective: bp.objective,
-        talkingPoints: bp.talkingPoints,
-        keyMetrics: bp.keyMetrics,
-      }))
     } else if (structuredPlays && structuredPlays.length > 0) {
       for (const play of structuredPlays.slice(0, 4)) {
         bvTalkingPoints.push({
@@ -1931,6 +1808,18 @@ export async function generateCampaign(
         talkingPoints: selection.campaignSummary,
         keyMetrics: selection.positioning || '',
       })
+    }
+
+    // Derive eligibility table deterministically — static for SB 122 campaigns
+    let eligibilityTable: Array<{ offering: string; deployment: string; status: string }> | undefined
+    const isSb122 = /sb[\s-]*122|saas[\s-]*tax/i.test(materialTitle) || /sb[\s-]*122|saas[\s-]*tax/i.test(materialContent.slice(0, 2000))
+    if (isSb122) {
+      eligibilityTable = [
+        { offering: 'Ansible Automation Platform', deployment: 'Customer VPC (self-managed)', status: 'ELIGIBLE FOR EXEMPTION' },
+        { offering: 'Ansible Automation Platform', deployment: 'Red Hat Hosted', status: 'TAXABLE' },
+        { offering: 'OpenShift Container Platform', deployment: 'Customer VPC (self-managed)', status: 'ELIGIBLE FOR EXEMPTION' },
+        { offering: 'Red Hat Enterprise Linux', deployment: 'Customer-managed', status: 'ELIGIBLE FOR EXEMPTION' },
+      ]
     }
 
     const footprint = deriveFootprint(pass0Briefs, subSignals, registrySignals, customer.name)
@@ -1975,37 +1864,13 @@ export async function generateCampaign(
       generatedDate: timestamp,
       rawSignals: enrichedSignals,
       bvTalkingPoints: bvTalkingPoints.length > 0 ? bvTalkingPoints : undefined,
-      referenceMaterials: referenceMaterialData.length > 0
-        ? (() => {
-            const seen = new Set<string>()
-            return referenceMaterialData
-              .filter(rm => rm.url && rm.title)
-              .filter(rm => !isHomepageUrl(rm.url))
-              .filter(rm => {
-                if (seen.has(rm.url)) return false
-                seen.add(rm.url)
-                return true
-              })
-              .map(rm => ({
-                resource: rm.title,
-                url: rm.url,
-                keyTakeaway: rm.excerpt ? (rm.excerpt.length > 200 ? rm.excerpt.slice(0, 200) + '...' : rm.excerpt) : '',
-              }))
-          })()
-        : selection.referenceMaterials?.map(rm => ({
-            resource: rm.resource,
-            url: rm.url,
-            keyTakeaway: rm.keyTakeaway,
-          })),
-      referenceMaterialsHeading: 'SB 122 Reference Material',
-      eligibilityTable: selection.eligibilityTable?.map(et => ({
-        offering: et.offering,
-        deployment: et.deployment,
-        status: et.status,
-      })),
-      eligibilityHeading: 'SB 122 Eligibility by AAP Deployment Type',
+      referenceMaterials: deterministicRefMaterials.length > 0 ? deterministicRefMaterials : undefined,
+      referenceMaterialsHeading: 'Source Documents & Analyses',
+      eligibilityTable,
+      eligibilityHeading: 'Deployment Eligibility',
       footprint,
-      sourceAttributions: selection.sourceAttributions,
+      sourceAttributions: deterministicSourceAttrs.length > 0 ? deterministicSourceAttrs : undefined,
+      materialUrlMap,
       aeEmail,
       aePhone,
       sourceUrls: (materialContent.match(/https?:\/\/[^\s)"<>]+/g) || []).filter((u: string) => !u.includes('redhat.com')),

@@ -501,8 +501,7 @@ describe('account-team', () => {
           emails: [{
             recipientName: 'John Smith', tier: 'executive' as const, intent: 'nurture' as const,
             subject: 'Test subject', signalIndex: 0, featureKeys: [],
-            peerProof: null, challengerDataPoint: '', customOpener: 'Test opener.',
-            featureApplications: [], signalBridge: '', referenceLine: '',
+            peerProof: null,
           }],
         },
         {

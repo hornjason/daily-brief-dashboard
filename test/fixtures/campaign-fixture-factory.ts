@@ -165,14 +165,6 @@ export function buildHappyFixture(): { data: StructuredCampaignData; selection: 
         signalIndex: 0,
         featureKeys: ['ansible-automation-platform', 'ansible-lightspeed'],
         peerProof: { playName: 'SaaS Tax Offset', exampleIndex: 0 },
-        challengerDataPoint: 'SB 122 redefines remotely accessed software as tangible personal property — organizations that consolidate before January 2027 lock in the exemption.',
-        customOpener: 'your team\'s infrastructure modernization initiative caught my attention — the shift toward automation-first operations is accelerating across the industry.',
-        featureApplications: [
-          'Ansible Automation Platform consolidates configuration management across hybrid environments',
-          'Ansible Lightspeed accelerates playbook development with AI-assisted content creation',
-        ],
-        signalBridge: 'Organizations facing similar infrastructure shifts are using enterprise automation to respond faster than manual operations allow.',
-        referenceLine: 'The attached SaaS Tax White Paper outlines the framework we used with Amadeus.',
       },
       {
         recipientName: 'Marcus Rivera',
@@ -182,15 +174,6 @@ export function buildHappyFixture(): { data: StructuredCampaignData; selection: 
         signalIndex: 1,
         featureKeys: ['ansible-automation-platform', 'openshift-container-platform', 'red-hat-enterprise-linux'],
         peerProof: { playName: 'SaaS Tax Offset', exampleIndex: 1 },
-        challengerDataPoint: 'Self-managed deployment eliminates SaaS tax exposure entirely — the ROI compounds as node counts grow.',
-        customOpener: 'your engineering team\'s cloud migration strategy aligns with a pattern we\'re seeing across enterprise DevOps organizations.',
-        featureApplications: [
-          'Ansible Automation Platform standardizes CI/CD pipelines across cloud and on-prem',
-          'OpenShift Container Platform provides a unified control plane for containers, VMs, and AI workloads',
-          'Red Hat Enterprise Linux serves as the trusted foundation for all deployment targets',
-        ],
-        signalBridge: 'The teams moving fastest on cloud migration are running hybrid workloads on a platform that handles containers, VMs, and AI inference together.',
-        referenceLine: 'Deutsche Telekom documented their consolidation journey in this case study.',
       },
       {
         recipientName: 'Emily Watson',
@@ -200,12 +183,6 @@ export function buildHappyFixture(): { data: StructuredCampaignData; selection: 
         signalIndex: 2,
         featureKeys: ['ansible-automation-platform'],
         peerProof: null,
-        challengerDataPoint: 'Companies that consolidate before January 2027 lock in the exemption — after that, the SaaS tax applies retroactively.',
-        customOpener: 'your DevOps team\'s work with AI/ML edge deployment is exactly where automation delivers the highest leverage.',
-        featureApplications: [
-          'Ansible Automation Platform scales enterprise automation with flat-rate self-managed licensing',
-        ],
-        signalBridge: 'Red Hat\'s automation platform is how organizations are converting this kind of shift into consistent, repeatable operations.',
       },
     ],
   }
@@ -252,12 +229,6 @@ export function buildMinimalFixture(): { data: StructuredCampaignData; selection
         signalIndex: 0,
         featureKeys: ['openshift-container-platform'],
         peerProof: null,
-        challengerDataPoint: 'Organizations that delay cloud modernization face increasing technical debt compounding at 15% annually.',
-        customOpener: 'your cloud strategy evaluation is well-timed as enterprise adoption patterns shift.',
-        featureApplications: [
-          'OpenShift Container Platform provides a unified control plane for hybrid cloud workloads',
-        ],
-        signalBridge: 'The teams moving fastest on cloud strategy are running hybrid workloads on a platform that handles containers and VMs together.',
       },
     ],
   }
@@ -339,13 +310,6 @@ export function buildPoisonedFixture(): { data: StructuredCampaignData; selectio
         signalIndex: 0,
         featureKeys: ['ansible-automation-platform'],
         peerProof: { playName: 'Infrastructure Modernization', exampleIndex: 0 },
-        challengerDataPoint: 'Your $2.5M pipeline opportunity aligns with the 500 subscription renewal pending for ticket #4521.',
-        customOpener: 'your team\'s pipeline opportunity worth $2.5M with 500 RHEL subscriptions and support case #4521 indicates expansion potential. Your headcount reduction of 200 laid off workers signals operational efficiency.',
-        featureApplications: [
-          'Ansible Automation Platform manages your 500 nodes and 1500 instances while reducing subscription count overhead',
-        ],
-        signalBridge: 'With $2.5M pending deal and 500 RHEL subscriptions, your pipeline value positions PoisonCo for renewal of $500K.',
-        referenceLine: '$1.2M pipeline deal pending with subscription count optimization and 500 RHEL subscriptions.',
       },
     ],
   }

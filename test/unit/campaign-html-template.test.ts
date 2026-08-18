@@ -253,12 +253,7 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
         subject: 'Test Subject',
         signalIndex: 0,
         featureKeys: [],
-        peerProof: '',
-        challengerDataPoint: '',
-        signalBridge: '',
-        customOpener: '',
-        featureApplications: [],
-        referenceLine: '',
+        peerProof: null,
       },
     ],
   }
@@ -392,12 +387,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
           subject: 'Test',
           signalIndex: 0,
           featureKeys: ['ansible-automation-platform', 'event-driven-ansible'],
-          peerProof: '',
-          challengerDataPoint: '',
-          signalBridge: '',
-          customOpener: '',
-          featureApplications: ['unifies automation', 'triggers responses'],
-          referenceLine: 'See [Automation Guide](https://www.redhat.com/en/resources/guide) for details.',
+          peerProof: null,
         }],
       },
       {
@@ -421,7 +411,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
     expect(anchorMatches.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('referenceLine markdown links convert to clickable anchor tags', () => {
+  it('referenceLine from sourceUrls renders as clickable anchor tags', () => {
     const html = generateCampaignFromStructured(
       {
         customerContext: 'Test',
@@ -431,12 +421,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
           subject: 'Test',
           signalIndex: 0,
           featureKeys: [],
-          peerProof: '',
-          challengerDataPoint: '',
-          signalBridge: '',
-          customOpener: '',
-          featureApplications: [],
-          referenceLine: 'See [Automation Guide](https://www.redhat.com/en/resources/guide) for details.',
+          peerProof: null,
         }],
       },
       {
@@ -448,11 +433,11 @@ describe('email body formatting — bullets and links (#1149)', () => {
         resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@test.com', linkedIn: '' }],
         signals: [{ headline: 'Test Signal', metadata: {} }],
         subscriptions: [],
-        sourceUrls: ['https://www.redhat.com/en/resources/guide'],
+        sourceUrls: ['https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis'],
         structuredPlays: [],
       },
     )
 
-    expect(html).not.toMatch(/\]\(https:\/\/www\.redhat\.com/)
+    expect(html).toContain('hklaw.com')
   })
 })
