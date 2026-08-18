@@ -96,11 +96,38 @@ export function deriveFootprint(
   if (rawSubProducts.length > 0) {
     // AC-2: Deduplicate product names and strip subscription count text (#1124)
     const subProducts = [...new Set(rawSubProducts.map(p => p.replace(/\s*\d+\s*subscriptions?\s*total\s*/gi, '').trim()))]
-    // AC-1: Filter out pipeline source signals from expansion (#1124)
-    const intelSignals = registrySignals.filter(s => s.source === 'intelligence')
+
+    // Build expansion from multiple sources (priority order):
+    // 1. Pass 0 briefs valueProposition (persona-specific expansion opportunities)
+    // 2. Intelligence brief growth areas (intelligence signals)
+    // 3. Generic fallback
+    let expansion = ''
+
+    // Try Pass 0 briefs valueProposition first
+    if (pass0Briefs.length > 0) {
+      const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
+      if (valueProps.length > 0) {
+        expansion = valueProps[0] // Use first value proposition
+      }
+    }
+
+    // Fall back to intelligence signals if no Pass 0 expansion
+    if (!expansion) {
+      // AC-1: Filter out pipeline source signals from expansion (#1124)
+      const intelSignals = registrySignals.filter(s => s.source === 'intelligence')
+      if (intelSignals.length > 0) {
+        expansion = intelSignals.slice(0, 3).map(s => s.headline).join(', ')
+      }
+    }
+
+    // Final fallback
+    if (!expansion) {
+      expansion = 'Expansion opportunities under evaluation'
+    }
+
     return {
       current: subProducts.join(', '),
-      expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',
+      expansion,
     }
   }
 
@@ -1474,6 +1501,8 @@ export async function generateCampaign(
           'Director of Security',
         ]
 
+        // AC-1: Deduplicate by name to prevent same person appearing in both tiers (#1143)
+        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
         const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
         let added = 0
 
@@ -1483,9 +1512,15 @@ export async function generateCampaign(
             try {
               const additionalManager = await resolveExecutivesByRole([role], customer.name, customer.domain)
               if (additionalManager.length > 0) {
-                resolvedExecs.push(additionalManager[0])
-                existingTitles.add(role.toLowerCase())
-                added++
+                // AC-1: Check if this person is already in resolvedExecs (any tier)
+                if (!existingNames.has(additionalManager[0].name.toLowerCase())) {
+                  resolvedExecs.push(additionalManager[0])
+                  existingNames.add(additionalManager[0].name.toLowerCase())
+                  existingTitles.add(role.toLowerCase())
+                  added++
+                } else {
+                  console.log(`[campaigns] Skipping duplicate contact ${additionalManager[0].name} for role ${role}`)
+                }
               } else {
                 // Fallback: create placeholder contact if resolution fails
                 resolvedExecs.push({
@@ -1494,6 +1529,7 @@ export async function generateCampaign(
                   role,
                   resolvedAt: new Date().toISOString(),
                 })
+                existingNames.add(`${role} at ${customer.name}`.toLowerCase())
                 existingTitles.add(role.toLowerCase())
                 added++
               }
@@ -1506,6 +1542,7 @@ export async function generateCampaign(
                 role,
                 resolvedAt: new Date().toISOString(),
               })
+              existingNames.add(`${role} at ${customer.name}`.toLowerCase())
               existingTitles.add(role.toLowerCase())
               added++
             }
@@ -1530,6 +1567,8 @@ export async function generateCampaign(
           'VP Infrastructure',
         ]
 
+        // AC-1: Deduplicate by name to prevent same person appearing in both tiers (#1143)
+        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
         const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
         let added = 0
 
@@ -1539,9 +1578,15 @@ export async function generateCampaign(
             try {
               const additionalExec = await resolveExecutivesByRole([role], customer.name, customer.domain)
               if (additionalExec.length > 0) {
-                resolvedExecs.push(additionalExec[0])
-                existingTitles.add(role.toLowerCase())
-                added++
+                // AC-1: Check if this person is already in resolvedExecs (any tier)
+                if (!existingNames.has(additionalExec[0].name.toLowerCase())) {
+                  resolvedExecs.push(additionalExec[0])
+                  existingNames.add(additionalExec[0].name.toLowerCase())
+                  existingTitles.add(role.toLowerCase())
+                  added++
+                } else {
+                  console.log(`[campaigns] Skipping duplicate contact ${additionalExec[0].name} for role ${role}`)
+                }
               } else {
                 resolvedExecs.push({
                   name: `${role} at ${customer.name}`,
@@ -1549,6 +1594,7 @@ export async function generateCampaign(
                   role,
                   resolvedAt: new Date().toISOString(),
                 })
+                existingNames.add(`${role} at ${customer.name}`.toLowerCase())
                 existingTitles.add(role.toLowerCase())
                 added++
               }
@@ -1560,6 +1606,7 @@ export async function generateCampaign(
                 role,
                 resolvedAt: new Date().toISOString(),
               })
+              existingNames.add(`${role} at ${customer.name}`.toLowerCase())
               existingTitles.add(role.toLowerCase())
               added++
             }

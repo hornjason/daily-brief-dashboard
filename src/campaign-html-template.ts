@@ -1190,6 +1190,25 @@ function applyFormality(
 }
 
 /**
+ * Trim peer pattern to one sentence (first sentence only).
+ */
+function trimPeerPatternToOneSentence(peerPattern: string): string {
+  const sentences = peerPattern.split(/\.\s+/)
+  if (sentences.length === 0) return peerPattern
+  const firstSentence = sentences[0].trim()
+  return firstSentence.endsWith('.') ? firstSentence : `${firstSentence}.`
+}
+
+/**
+ * Trim feature bullets from 3 to 2 bullets.
+ */
+function trimFeatureBulletsToTwo(featureBullets: string): string {
+  const bullets = featureBullets.split('\n').filter(b => b.trim().length > 0)
+  if (bullets.length <= 2) return featureBullets
+  return bullets.slice(0, 2).join('\n')
+}
+
+/**
  * Assemble email from composable blocks, applying word budget and tier formatting.
  */
 export function assembleEmail(
@@ -1206,6 +1225,7 @@ export function assembleEmail(
   },
   tier: 'executive' | 'manager',
   voiceTokens: ReturnType<typeof getVoiceTokens>,
+  recipientName?: string,
 ): { body: string; signOff: string } {
   const bodyParts = [
     blocks.opener,
@@ -1224,22 +1244,51 @@ export function assembleEmail(
   body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
 
   const maxWords = tier === 'executive' ? voiceTokens.wordBudget.exec : voiceTokens.wordBudget.manager
+  const tolerance = maxWords * 1.2
 
   let wordCount = countWords(body)
-  const trimThreshold = maxWords * 1.5
-  if (wordCount > trimThreshold) {
-    // Trim challenger frame first
-    if (blocks.challengerFrame) {
+  const originalCount = wordCount
+
+  // Executive tier only: enforce word limit with trim cascade (#1144)
+  if (tier === 'executive' && wordCount > tolerance) {
+    // Trim cascade: challengerFrame → peerPattern → featureBullets
+    // Step 1: Remove challengerFrame (supplementary, not core)
+    if (blocks.challengerFrame && wordCount > tolerance) {
       const trimmedParts = bodyParts.filter(b => b !== blocks.challengerFrame)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
       wordCount = countWords(body)
     }
-    // If still over, trim signal bridge
-    if (wordCount > trimThreshold && blocks.signalBridge) {
-      const trimmedParts = bodyParts.filter(b => b !== blocks.challengerFrame && b !== blocks.signalBridge)
+
+    // Step 2: Trim peerPattern to one sentence
+    if (blocks.peerPattern && wordCount > tolerance) {
+      const trimmedPeerPattern = trimPeerPatternToOneSentence(blocks.peerPattern)
+      const trimmedParts = bodyParts.map(b => b === blocks.peerPattern ? trimmedPeerPattern : b).filter(b => b !== blocks.challengerFrame)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
+      wordCount = countWords(body)
+    }
+
+    // Step 3: Trim featureBullets from 3 to 2
+    if (blocks.featureBullets && wordCount > tolerance) {
+      const trimmedBullets = trimFeatureBulletsToTwo(blocks.featureBullets)
+      const peerPatternContent = blocks.peerPattern ? trimPeerPatternToOneSentence(blocks.peerPattern) : blocks.peerPattern
+      const trimmedParts = bodyParts
+        .map(b => {
+          if (b === blocks.featureBullets) return trimmedBullets
+          if (b === blocks.peerPattern) return peerPatternContent
+          return b
+        })
+        .filter(b => b !== blocks.challengerFrame)
+      body = trimmedParts.join('\n\n')
+      body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
+      wordCount = countWords(body)
+    }
+
+    // Log warning if any trimming occurred
+    if (wordCount < originalCount) {
+      const recipientInfo = recipientName ? ` for ${recipientName}` : ''
+      console.warn(`[template] WORD LIMIT: trimmed exec email${recipientInfo} from ${originalCount} to ${wordCount} words (tolerance: ${Math.floor(tolerance)})`)
     }
   }
 
@@ -1502,6 +1551,7 @@ export function generateCampaignFromStructured(
       { opener, signalBridge, relationshipLine, featureBullets, referenceLine, peerPattern, challengerFrame, cta, signOff },
       email.tier,
       voiceTokens,
+      email.recipientName,
     )
 
     // Run quality checks on assembled email
