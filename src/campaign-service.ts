@@ -91,9 +91,12 @@ export function deriveFootprint(
   customerName?: string,
 ): { current: string; expansion: string } | undefined {
   // Subscription signals are authoritative — use them first
-  const subProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
-  if (subProducts.length > 0) {
-    const intelSignals = registrySignals.filter(s => s.source === 'intelligence' || s.source === 'pipeline')
+  const rawSubProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
+  if (rawSubProducts.length > 0) {
+    // AC-2: Deduplicate product names and strip subscription count text (#1124)
+    const subProducts = [...new Set(rawSubProducts.map(p => p.replace(/\s*\d+\s*subscriptions?\s*total\s*/gi, '').trim()))]
+    // AC-1: Filter out pipeline source signals from expansion (#1124)
+    const intelSignals = registrySignals.filter(s => s.source === 'intelligence')
     return {
       current: subProducts.join(', '),
       expansion: intelSignals.slice(0, 3).map(s => s.headline).join(', ') || 'Expansion opportunities under evaluation',

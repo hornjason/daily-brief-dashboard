@@ -562,6 +562,9 @@ export function cleanObjectivePrefix(text: string): string {
   // Strip "Category Name —" patterns (e.g., "Major Acquisition —", "New Partnership —")
   cleanText = cleanText.replace(/^(?:Acquisition of|Major|New|Strong|Strategic|Key)\s+[A-Z][^—–]*?\s*[—–]\s*/i, '')
 
+  // AC-4: Strip "As [Initiative] — [Description]" format from email body (#1124)
+  cleanText = cleanText.replace(/^As\s+[^—–]+?\s*[—–]\s*/i, '')
+
   return cleanText.trim()
 }
 

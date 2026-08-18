@@ -89,6 +89,7 @@ function cleanTitle(raw: string): string {
     .replace(/,\s*(?:effective|replacing|succeeding)\b.*/i, '')
     .replace(/\s*\(.*?\)\s*/g, '')
     .replace(/,\s*(?:since|from|as of)\b.*/i, '')
+    .replace(/\s*\b(?:joined|moved|came|hired|appointed|brought)\b.*/i, '') // AC-3: Strip biographical verbs (#1124)
     .trim()
 }
 
