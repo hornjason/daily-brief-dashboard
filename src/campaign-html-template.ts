@@ -1209,6 +1209,30 @@ function trimFeatureBulletsToTwo(featureBullets: string): string {
 }
 
 /**
+ * Hard trim: truncate to last complete sentence within word limit.
+ * Safety net when cascade isn't aggressive enough (#1144).
+ */
+function trimToWordLimit(text: string, maxWords: number): string {
+  const words = text.split(/\s+/).filter(w => w.length > 0)
+  if (words.length <= maxWords) return text
+
+  // Find last sentence boundary within word limit
+  const truncated = words.slice(0, maxWords).join(' ')
+  const lastPeriod = truncated.lastIndexOf('.')
+  const lastQuestion = truncated.lastIndexOf('?')
+  const lastExclaim = truncated.lastIndexOf('!')
+
+  const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclaim)
+
+  if (lastSentenceEnd > 0) {
+    return truncated.slice(0, lastSentenceEnd + 1).trim()
+  }
+
+  // No sentence boundary found - hard cut at word limit with ellipsis
+  return truncated.trim() + '…'
+}
+
+/**
  * Assemble email from composable blocks, applying word budget and tier formatting.
  */
 export function assembleEmail(
@@ -1289,6 +1313,15 @@ export function assembleEmail(
     if (wordCount < originalCount) {
       const recipientInfo = recipientName ? ` for ${recipientName}` : ''
       console.warn(`[template] WORD LIMIT: trimmed exec email${recipientInfo} from ${originalCount} to ${wordCount} words (tolerance: ${Math.floor(tolerance)})`)
+    }
+
+    // Hard trim safety net: if still over tolerance after cascade, truncate to maxWords (#1144)
+    if (wordCount > tolerance) {
+      const beforeHardTrim = wordCount
+      body = trimToWordLimit(body, maxWords)
+      wordCount = countWords(body)
+      const recipientInfo = recipientName ? ` for ${recipientName}` : ''
+      console.warn(`[template] HARD TRIM: truncated exec email${recipientInfo} from ${beforeHardTrim} to ${wordCount} words (limit: ${maxWords})`)
     }
   }
 
