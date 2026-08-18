@@ -425,7 +425,7 @@ export function renderFitFromPass0(customerName: string, pass0Briefs: import('./
     .filter((b: string) => b.length > 0)
   )]
   const objectives = pass0Briefs.map(b => b.objectiveMatch).filter(Boolean)
-    .map((o: string) => { const s = o.split(/[.!]/)[0]; return truncateAtSentence(s, 120) })
+    .map((o: string) => { const s = o.split(/[.!]/)[0]; return truncateAtSentence(s, 300) })
 
   let html = `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Why ${escapeHtml(customerName)} Is a Strong Fit</h3>`
   html += '<div style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">'
@@ -1305,8 +1305,8 @@ export function assembleEmail(
   let wordCount = countWords(body)
   const originalCount = wordCount
 
-  // Executive tier only: enforce word limit with trim cascade (#1144)
-  if (tier === 'executive' && wordCount > tolerance) {
+  // Enforce word limit with trim cascade for both tiers (#1144, #1147)
+  if (wordCount > tolerance) {
     // Trim cascade: challengerFrame → peerPattern → featureBullets
     // Step 1: Remove challengerFrame (supplementary, not core)
     if (blocks.challengerFrame && wordCount > tolerance) {
