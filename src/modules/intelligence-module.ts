@@ -163,7 +163,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
       const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
       const cleanBody = cleanMarkdown(body)
       const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
-      const objective = shortDesc ? `${rawTitle} — ${shortDesc}`.slice(0, 80) : rawTitle.slice(0, 80)
+      const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 80) : truncateAtSentence(rawTitle, 80)
       entries.push({
         objective,
         metric: extractMetric(cleanBody),
@@ -179,7 +179,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
     const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
     const cleanBody = cleanMarkdown(body)
     const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
-    const objective = shortDesc ? `${rawTitle} — ${shortDesc}`.slice(0, 80) : rawTitle.slice(0, 80)
+    const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 80) : truncateAtSentence(rawTitle, 80)
     entries.push({
       objective,
       metric: extractMetric(cleanBody),
@@ -197,6 +197,38 @@ function cleanMarkdown(text: string): string {
     .replace(/\*{1,2}/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/**
+ * Truncate text at the last complete sentence within maxChars.
+ * Prevents mid-word truncation (#1147).
+ */
+function truncateAtSentence(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+
+  // Find the last sentence boundary (. ! ?) within the limit
+  const upToLimit = text.slice(0, maxChars)
+  const boundaries = [
+    upToLimit.lastIndexOf('. '),
+    upToLimit.lastIndexOf('! '),
+    upToLimit.lastIndexOf('? ')
+  ]
+  const lastBoundary = Math.max(...boundaries)
+
+  if (lastBoundary > 0) {
+    // Return text up to and including the punctuation (but not the space after)
+    return text.slice(0, lastBoundary + 1)
+  }
+
+  // No sentence boundary found - truncate at last word boundary to avoid mid-word cut
+  const lastSpace = upToLimit.lastIndexOf(' ')
+  if (lastSpace > maxChars * 0.5) {
+    // Only use word boundary if we're at least halfway through the limit
+    return upToLimit.slice(0, lastSpace) + '…'
+  }
+
+  // Last resort: just truncate at limit with ellipsis
+  return upToLimit + '…'
 }
 
 function parseFacts(sectionText: string, source: string): ObjectiveEntry[] {
@@ -219,7 +251,7 @@ function parseFacts(sectionText: string, source: string): ObjectiveEntry[] {
     factText = cleanMarkdown(factText).replace(/^Fact:\s*/i, '')
     if (!factText) continue
     entries.push({
-      objective: factText.slice(0, 200),
+      objective: truncateAtSentence(factText, 200),
       metric: extractMetric(factText),
       priority: 'MED',
       source,
@@ -317,17 +349,17 @@ function extractStructuredFields(companyText: string): {
   const oppsText = sections['Opportunities (External, Positive — informed by PESTLE)'] ?? ''
   for (const line of oppsText.split('\n')) {
     const fact = line.match(/\*\*Specific Fact:\*\*\s*(.+)/i)
-    if (fact) objectives.push(fact[1].trim().slice(0, 200))
+    if (fact) objectives.push(truncateAtSentence(fact[1].trim(), 200))
   }
 
   const strengthsText = sections['Strengths (Internal, Positive)'] ?? ''
   for (const line of strengthsText.split('\n')) {
     const fact = line.match(/\*\*Specific Fact:\*\*\s*(.+)/i)
-    if (fact) initiatives.push(fact[1].trim().slice(0, 200))
+    if (fact) initiatives.push(truncateAtSentence(fact[1].trim(), 200))
   }
 
   const techText = sections['Technological'] ?? ''
-  const techStrategy = techText.trim().slice(0, 500) || null
+  const techStrategy = truncateAtSentence(techText.trim(), 500) || null
 
   return {
     businessObjectives: objectives.slice(0, 5),
