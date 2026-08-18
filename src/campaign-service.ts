@@ -1386,11 +1386,138 @@ export async function generateCampaign(
       }
     }
 
+    // #1137: Tier split enforcement — ensure 3+ executive and 3+ manager tier contacts
     if (resolvedExecs.length > 0) {
-      // AC-2: Log tier breakdown
+      // Classify contacts by email tier (executive vs manager)
+      const classifyEmailTier = (title: string): 'executive' | 'manager' => {
+        const titleLower = title.toLowerCase()
+        // Executive tier: C-level and VPs
+        if (/\b(ceo|cfo|cto|cio|ciso|chief|c-level)\b/i.test(titleLower)) return 'executive'
+        if (/\bvp\b|vice president/i.test(titleLower)) return 'executive'
+        // Manager tier: Directors, Heads, Sr. Managers
+        return 'manager'
+      }
+
+      const execTierContacts = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive')
+      const managerTierContacts = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager')
+
+      console.log(`[campaigns] Tier split before enforcement: ${execTierContacts.length} executive, ${managerTierContacts.length} manager`)
+
+      // If all contacts are executive-level, force-include manager-level roles
+      if (managerTierContacts.length < 3 && resolvedExecs.length >= 3) {
+        const needed = 3 - managerTierContacts.length
+        console.log(`[campaigns] Insufficient manager tier contacts (${managerTierContacts.length}/3) — adding ${needed} manager-level roles`)
+
+        const managerRoles = [
+          'Director of IT',
+          'Director of Infrastructure',
+          'Director of Platform Engineering',
+          'Sr. Manager, Cloud Operations',
+          'Head of DevOps',
+          'Director of Security',
+        ]
+
+        const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
+        let added = 0
+
+        for (const role of managerRoles) {
+          if (added >= needed) break
+          if (!existingTitles.has(role.toLowerCase())) {
+            try {
+              const additionalManager = await resolveExecutivesByRole([role], customer.name, customer.domain)
+              if (additionalManager.length > 0) {
+                resolvedExecs.push(additionalManager[0])
+                existingTitles.add(role.toLowerCase())
+                added++
+              } else {
+                // Fallback: create placeholder contact if resolution fails
+                resolvedExecs.push({
+                  name: `${role} at ${customer.name}`,
+                  title: role,
+                  role,
+                  resolvedAt: new Date().toISOString(),
+                })
+                existingTitles.add(role.toLowerCase())
+                added++
+              }
+            } catch (e: any) {
+              console.warn(`[campaigns] Failed to resolve ${role} (non-fatal):`, e?.message)
+              // Fallback: create placeholder contact
+              resolvedExecs.push({
+                name: `${role} at ${customer.name}`,
+                title: role,
+                role,
+                resolvedAt: new Date().toISOString(),
+              })
+              existingTitles.add(role.toLowerCase())
+              added++
+            }
+          }
+        }
+
+        console.log(`[campaigns] Added ${added} manager-level contacts — new split: ${execTierContacts.length} executive, ${resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager').length} manager`)
+      }
+
+      // If we have too few executive contacts (and enough manager contacts), add executive roles
+      const currentExecCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length
+      if (currentExecCount < 3 && resolvedExecs.length >= 3) {
+        const needed = 3 - currentExecCount
+        console.log(`[campaigns] Insufficient executive tier contacts (${currentExecCount}/3) — adding ${needed} executive-level roles`)
+
+        const executiveRoles = [
+          'CIO',
+          'CTO',
+          'VP Engineering',
+          'VP Operations',
+          'Chief Information Officer',
+          'VP Infrastructure',
+        ]
+
+        const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
+        let added = 0
+
+        for (const role of executiveRoles) {
+          if (added >= needed) break
+          if (!existingTitles.has(role.toLowerCase())) {
+            try {
+              const additionalExec = await resolveExecutivesByRole([role], customer.name, customer.domain)
+              if (additionalExec.length > 0) {
+                resolvedExecs.push(additionalExec[0])
+                existingTitles.add(role.toLowerCase())
+                added++
+              } else {
+                resolvedExecs.push({
+                  name: `${role} at ${customer.name}`,
+                  title: role,
+                  role,
+                  resolvedAt: new Date().toISOString(),
+                })
+                existingTitles.add(role.toLowerCase())
+                added++
+              }
+            } catch (e: any) {
+              console.warn(`[campaigns] Failed to resolve ${role} (non-fatal):`, e?.message)
+              resolvedExecs.push({
+                name: `${role} at ${customer.name}`,
+                title: role,
+                role,
+                resolvedAt: new Date().toISOString(),
+              })
+              existingTitles.add(role.toLowerCase())
+              added++
+            }
+          }
+        }
+
+        console.log(`[campaigns] Added ${added} executive-level contacts — new split: ${resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length} executive, ${managerTierContacts.length} manager`)
+      }
+
+      // AC-2: Log final tier breakdown
+      const finalExecCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length
+      const finalManagerCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager').length
       const tier1Count = resolvedExecs.filter(e => e.leadershipContext).length
       const tier2Count = resolvedExecs.length - tier1Count
-      console.log(`[campaigns] Resolved ${resolvedExecs.length} contacts (${tier1Count} Tier 1, ${tier2Count} Tier 2) for ${customer.name}`)
+      console.log(`[campaigns] Final contact distribution: ${resolvedExecs.length} total (${tier1Count} Tier 1 intel, ${tier2Count} Tier 2 Gemini) — Email tiers: ${finalExecCount} executive, ${finalManagerCount} manager`)
 
       const contactLines = resolvedExecs.map(r =>
         `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
