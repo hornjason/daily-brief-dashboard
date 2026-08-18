@@ -1841,6 +1841,19 @@ export async function generateCampaign(
     // Derive threat/solution from campaign material (ADR-044 Phase 2)
     const { threat, solution } = deriveThreatSolution(materialTitle, materialContent)
 
+    // Parse product fit sections from intel brief (#197 — signals as source of truth)
+    const productFitSections: Record<string, string> = {}
+    const intelText = typeof enrichedSignals.intelligence === 'string'
+      ? enrichedSignals.intelligence
+      : (enrichedSignals.intelligence?.company || '')
+    for (const [key, label] of [['rhel', 'RHEL Fit'], ['openshift', 'OpenShift Fit'], ['ansible', 'Ansible Fit'], ['ai', 'Red Hat AI Fit']] as const) {
+      const match = intelText.match(new RegExp(`##\\s*#?\\s*${label}([\\s\\S]*?)(?=\\n##|$)`, 'i'))
+      if (match) productFitSections[key] = match[1].trim().slice(0, 300)
+    }
+    if (Object.keys(productFitSections).length > 0) {
+      console.log(`[campaigns] Parsed ${Object.keys(productFitSections).length} product fit sections from intel brief: ${Object.keys(productFitSections).join(', ')}`)
+    }
+
     // Pass 2: Template assembly (deterministic, no LLM)
     htmlContent = generateCampaignFromStructured(selection, {
       resolvedExecs: resolvedExecs.map(e => ({
@@ -1880,6 +1893,7 @@ export async function generateCampaign(
       preMatchedMetrics,
       preMatchedPeerProofs,
       pass0Briefs: pass0Briefs.length > 0 ? pass0Briefs : undefined,
+      productFitSections: Object.keys(productFitSections).length > 0 ? productFitSections : undefined,
       signalQuality: signalQuality.disposition !== 'PROCEED' || config?.forceGenerate ? signalQuality : undefined,
     })
 

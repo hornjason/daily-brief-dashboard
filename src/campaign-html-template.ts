@@ -801,6 +801,7 @@ export interface StructuredCampaignData {
   preMatchedMetrics?: import('./lib/persona-classifier.ts').PreMatchedMetric[]
   preMatchedPeerProofs?: import('./lib/persona-classifier.ts').PreMatchedPeerProof[]
   pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]
+  productFitSections?: Record<string, string>
   signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
   materialUrlMap?: Map<string, string>
 }
@@ -817,8 +818,26 @@ export function buildOpener(
   openerVariant: number,
   recipientName: string,
   tier: 'executive' | 'manager' = 'manager',
+  matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
 ): string {
   const firstName = recipientName.split(' ')[0]
+
+  // Signal-driven: use persona's objective + timing trigger from Pass 0
+  if (matchedBrief) {
+    const objective = matchedBrief.objectiveMatch
+    const timing = matchedBrief.timingTrigger
+    // Truncate to first clause for a concise opener
+    const shortTiming = timing ? timing.split(/\s*[—–]\s*/)[0].trim() : ''
+    const shortObjective = objective ? objective.split(/\s*[—–]\s*/)[0].trim() : ''
+    if (shortObjective && shortTiming) {
+      return `${firstName}, with ${shortTiming.charAt(0).toLowerCase() + shortTiming.slice(1)}, ${shortObjective.charAt(0).toLowerCase() + shortObjective.slice(1)}.`
+    }
+    if (shortObjective) {
+      return `Hi ${firstName}, ${shortObjective.charAt(0).toLowerCase() + shortObjective.slice(1)}.`
+    }
+  }
+
+  // Fallback: signal headline + rotation
   const signal = signals[signalIndex]
   if (!signal) return `Hi ${firstName},`
 
@@ -876,6 +895,7 @@ const SIGNAL_BRIDGES: Record<string, string> = {
 export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
+  productFitSections?: Record<string, string>,
 ): string {
   if (!signal || featureKeys.length === 0) return ''
 
@@ -886,6 +906,17 @@ export function buildSignalBridge(
     : primaryKey.includes('ai') ? 'ai'
     : primaryKey.includes('security') ? 'security'
     : null
+
+  // Signal-driven: use product fit section from intel brief
+  if (product && productFitSections?.[product]) {
+    const fitText = productFitSections[product]
+    const firstSentence = fitText.split(/[.!?]\s/)[0]
+    if (firstSentence && firstSentence.length > 20) {
+      return firstSentence.trim() + '.'
+    }
+  }
+
+  // Fallback: existing SIGNAL_BRIDGES lookup
   const signalType = signal.type === 'news' ? 'news' : 'default'
 
   if (product) return SIGNAL_BRIDGES[`${product}-${signalType}`]
@@ -966,13 +997,28 @@ export function buildFeatureBullets(
   featureKeys: string[],
   tier: 'executive' | 'manager',
   campaignTheme?: string,
+  matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
 ): string {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
   for (let i = 0; i < featureKeys.slice(0, 3).length; i++) {
     const key = featureKeys[i]
     const entry = resolveFeatureEntry(key)
     if (!entry) continue
-    let applicationSentence = getCapabilityDescription(key)
+
+    // Signal-driven: use valueProposition from matched brief when relevant to this feature
+    let applicationSentence = ''
+    if (matchedBrief?.valueProposition) {
+      const vpLower = matchedBrief.valueProposition.toLowerCase()
+      if (vpLower.includes(entry.featureName.toLowerCase()) || vpLower.includes(key.replace(/-/g, ' '))) {
+        applicationSentence = matchedBrief.valueProposition
+      }
+    }
+
+    // Fallback: static description
+    if (!applicationSentence) {
+      applicationSentence = getCapabilityDescription(key)
+    }
+
     if (campaignTheme) {
       const theme = campaignTheme.toLowerCase()
       if (theme.includes('tax') || theme.includes('cost')) {
@@ -1091,7 +1137,19 @@ const CHALLENGER_CLOSERS = [
   'The organizations that address this proactively will carry a permanent cost advantage.',
 ]
 
-export function buildChallengerFrame(signal: Signal | undefined, emailIndex: number = 0): string {
+export function buildChallengerFrame(
+  signal: Signal | undefined,
+  emailIndex: number = 0,
+  matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
+): string {
+  // Signal-driven: competitive context from Pass 0
+  if (matchedBrief?.competitiveContext) {
+    const insight = matchedBrief.competitiveContext
+    const closer = CHALLENGER_CLOSERS[emailIndex % CHALLENGER_CLOSERS.length]
+    return `${insight.trim().replace(/\.$/, '')}. ${closer}`
+  }
+
+  // Fallback: signal headline
   if (!signal) return ''
   let insight = signal.headline
   if (insight.includes(' — ')) {
@@ -1607,9 +1665,17 @@ export function generateCampaignFromStructured(
     const openerVariant = i % 3
     const signal = data.signals[email.signalIndex]
 
+    // Match email to its Pass 0 brief by comparing exec title to brief suggestedTitle
+    const contactTitle = (contact?.title || '').toLowerCase()
+    const matchedBrief = data.pass0Briefs?.find(b =>
+      b.suggestedTitle && contactTitle === b.suggestedTitle.toLowerCase()
+    ) || data.pass0Briefs?.find(b =>
+      b.suggestedTitle && (contactTitle.includes(b.suggestedTitle.toLowerCase()) || b.suggestedTitle.toLowerCase().includes(contactTitle))
+    )
+
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier)
-    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief)
+    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
     const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
@@ -1646,11 +1712,11 @@ export function generateCampaignFromStructured(
     }
     const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
-    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution)
+    const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution, matchedBrief)
     const referenceLine = sanitizeReferenceLine(buildReferenceLine(data.sourceUrls || [], data.materialUrlMap), data.sourceUrls)
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof)
-    const challengerFrame = buildChallengerFrame(signal, i)
+    const challengerFrame = buildChallengerFrame(signal, i, matchedBrief)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 
