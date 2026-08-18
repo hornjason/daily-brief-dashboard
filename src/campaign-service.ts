@@ -27,7 +27,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignHTML, generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, isHomepageUrl, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, isHomepageUrl, type BVTalkingPoint } from './campaign-html-template.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
@@ -123,10 +123,6 @@ export function deriveFootprint(
   return undefined
 }
 
-// ── Feature flags ───────────────────────────────────────────────────────────
-const USE_STRUCTURED_CAMPAIGNS = process.env.USE_STRUCTURED_CAMPAIGNS !== 'false'
-const CAMPAIGN_PARALLEL_VALIDATION = process.env.CAMPAIGN_PARALLEL_VALIDATION === 'true'
-const CAMPAIGN_FREEFORM_REMOVED = process.env.CAMPAIGN_FREEFORM_REMOVED === 'true'
 
 // ── Signal enrichment (loads intelligence + account plan from cache) ────────
 
@@ -162,39 +158,6 @@ export function scoreStructuredOutput(html: string): { sections: number; emails:
   const emails = (html.match(/📧/g) || []).length
   const words = html.replace(/<[^>]*>/g, '').split(/\s+/).filter(w => w.length > 0).length
   return { sections, emails, words }
-}
-
-// ── Convergence tracking (parallel validation) ──────────────────────────────
-interface ConvergenceRecord {
-  timestamp: string
-  customer: string
-  structuredScore: number
-  freeformScore: number
-  winner: 'structured' | 'freeform' | 'tie'
-}
-
-const CONVERGENCE_FILE = resolve(CACHE_DIR, 'campaign-convergence.json')
-
-export function loadConvergenceRecords(): ConvergenceRecord[] {
-  try {
-    if (existsSync(CONVERGENCE_FILE)) {
-      return JSON.parse(readFileSync(CONVERGENCE_FILE, 'utf-8'))
-    }
-  } catch { /* corrupt file — start fresh */ }
-  return []
-}
-
-export function appendConvergenceRecord(record: ConvergenceRecord): void {
-  const records = loadConvergenceRecords()
-  records.push(record)
-  mkdirSync(resolve(CACHE_DIR), { recursive: true })
-  writeFileSync(CONVERGENCE_FILE, JSON.stringify(records, null, 2))
-}
-
-export function checkCutoverReady(records: ConvergenceRecord[]): boolean {
-  if (records.length < 3) return false
-  const last3 = records.slice(-3)
-  return last3.every(r => r.winner === 'structured')
 }
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
@@ -458,7 +421,6 @@ interface CampaignCacheEntry {
   signalCompleteness?: number
   qualityScorecard?: QualityScorecard
   campaignDirective?: string
-  generationPath?: 'structured' | 'freeform'
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
@@ -917,31 +879,8 @@ async function uploadCampaignToDrive(
     : materialTitle
   const docName = `${campaignLabel} - ${customer.name}`
 
-  // Build HTML content first — used for BOTH Google Doc and HTML preview (#1054)
-  // If prebuiltHtml is provided (structured two-pass path), use it directly
   const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
-  let htmlContent: string
-  if (prebuiltHtml) {
-    htmlContent = prebuiltHtml
-  } else {
-    const timestamp = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    htmlContent = generateCampaignHTML({
-      materialTitle,
-      materialUrl,
-      customerName: customer.name,
-      aeName,
-      generatedDate: timestamp,
-      accountTeam,
-      signals,
-      markdown,
-    })
-  }
+  const htmlContent = prebuiltHtml ?? ''
 
   // Google Doc: upload HTML (not markdown) so all template sections render (#1054)
   // HTML-to-Google-Doc conversion preserves formatting, tables, and styling
@@ -1501,19 +1440,16 @@ export async function generateCampaign(
   let markdown = ''
   let htmlContent = ''
   let qualityScorecard: QualityScorecard | undefined
-  let generationPath: 'structured' | 'freeform' = 'freeform'
   let driveUrl = ''
   let htmlUrl = ''
   let driveFileId = ''
   let driveHtmlFileId = ''
 
-  // Build subscription signals for template data (used by both paths)
+  // Build subscription signals for template data
   const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
 
-  if (USE_STRUCTURED_CAMPAIGNS) {
-    // ── Structured two-pass path (ADR-043) ──────────────────────────────────
-    console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
-    generationPath = 'structured'
+  // ── Structured two-pass path (ADR-043) ──────────────────────────────────
+  console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
 
     // Pre-match objectives deterministically (ADR-045 Phase 4)
     const preMatchedMetrics = objectiveProfile
@@ -1799,7 +1735,7 @@ export async function generateCampaign(
         accountTeam,
         cachedFileIds ?? undefined,
         config?.campaignDirective,
-        htmlContent,  // pre-built HTML — skips internal generateCampaignHTML
+        htmlContent,
       )
       driveUrl = driveResult.driveUrl
       htmlUrl = driveResult.htmlUrl
@@ -1809,190 +1745,6 @@ export async function generateCampaign(
     } catch (e: any) {
       console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
     }
-
-    // ── Parallel validation: also run freeform for comparison ──────────────
-    if (CAMPAIGN_PARALLEL_VALIDATION) {
-      try {
-        const freeformRaw = await callGeminiForCampaign({
-          materialTitle,
-          materialContent: augmentedMaterial,
-          customerName: customer.name,
-          customerSignals: signals,
-          registrySignals,
-          deterministicContext: templateResult.deterministic,
-          voiceInstruction,
-          personas: config?.personas ?? enabledPersonas,
-          emailTemplateContext,
-          structuredPlays,
-          campaignDirective: config?.campaignDirective,
-        })
-
-        const freeformGate = await validateAndRetry(
-          freeformRaw,
-          { validator: campaignValidator },
-          async (failures) => {
-            const feedback = formatFailureFeedback(failures)
-            return callGeminiForCampaign({
-              materialTitle,
-              materialContent: augmentedMaterial + '\n\n' + feedback,
-              customerName: customer.name,
-              customerSignals: signals,
-              registrySignals,
-              deterministicContext: templateResult.deterministic,
-              voiceInstruction,
-              personas: config?.personas ?? enabledPersonas,
-              emailTemplateContext,
-              structuredPlays,
-              campaignDirective: config?.campaignDirective,
-            })
-          }
-        )
-
-        const structuredMetrics = scoreStructuredOutput(htmlContent)
-        const freeformScore = freeformGate.scorecard.score
-        const freeformThreshold = freeformGate.scorecard.passThreshold
-        const structuredNormalized = Math.min(100, Math.round(
-          (structuredMetrics.sections >= 2 ? 30 : 0) +
-          (structuredMetrics.emails >= 2 ? 40 : 0) +
-          (structuredMetrics.words >= 100 ? 30 : 0)
-        ))
-        const winner = structuredNormalized >= freeformScore ? 'structured' as const
-          : 'freeform' as const
-
-        console.log(`[campaigns] PARALLEL: structured=${structuredMetrics.sections}/${structuredMetrics.emails}/${structuredMetrics.words} freeform=${freeformScore}/${freeformThreshold} delta=${structuredNormalized - freeformScore}`)
-
-        appendConvergenceRecord({
-          timestamp: new Date().toISOString(),
-          customer: customer.name,
-          structuredScore: structuredNormalized,
-          freeformScore,
-          winner,
-        })
-
-        const records = loadConvergenceRecords()
-        if (checkCutoverReady(records)) {
-          console.log(`[campaigns] CUTOVER READY: Structured path has matched or exceeded freeform for 3 consecutive generations`)
-        }
-      } catch (e: any) {
-        console.warn(`[campaigns] Parallel validation failed (non-fatal):`, e.message)
-      }
-    }
-
-  } else if (!CAMPAIGN_FREEFORM_REMOVED) {
-    // ── Freeform path (existing behavior, unchanged) ────────────────────────
-    console.log(`[campaigns] Using FREEFORM generation path for ${customer.name}`)
-    const rawMarkdown = await callGeminiForCampaign({
-      materialTitle,
-      materialContent: augmentedMaterial,
-      customerName: customer.name,
-      customerSignals: signals,
-      registrySignals,
-      deterministicContext: templateResult.deterministic,
-      voiceInstruction,
-      personas: config?.personas ?? enabledPersonas,
-      emailTemplateContext,
-      structuredPlays,
-      campaignDirective: config?.campaignDirective,
-    })
-
-    const gateResult = await validateAndRetry(
-      rawMarkdown,
-      { validator: campaignValidator },
-      async (failures) => {
-        const feedback = formatFailureFeedback(failures)
-        return callGeminiForCampaign({
-          materialTitle,
-          materialContent: augmentedMaterial + '\n\n' + feedback,
-          customerName: customer.name,
-          customerSignals: signals,
-          registrySignals,
-          deterministicContext: templateResult.deterministic,
-          voiceInstruction,
-          personas: config?.personas ?? enabledPersonas,
-          emailTemplateContext,
-          structuredPlays,
-          campaignDirective: config?.campaignDirective,
-        })
-      }
-    )
-    markdown = gateResult.output
-    qualityScorecard = gateResult.scorecard
-    console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
-
-    // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
-    const templateSignals: any = { ...signals }
-    try {
-      const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
-      const { resolve: pathResolve } = await import('path')
-      const intelCachePath = pathResolve(CACHE_DIR, 'intelligence', `${slug}.json`)
-      if (fsExists(intelCachePath)) {
-        templateSignals.intelligence = JSON.parse(fsRead(intelCachePath, 'utf-8'))
-      }
-    } catch { /* silent — template will show dashes */ }
-    try {
-      const { existsSync: fsExists2, readFileSync: fsRead2 } = await import('fs')
-      const { resolve: pathResolve2 } = await import('path')
-      const accountPlanPath = pathResolve2(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
-      if (fsExists2(accountPlanPath)) {
-        templateSignals.accountPlan = fsRead2(accountPlanPath, 'utf-8')
-      }
-    } catch { /* silent */ }
-    if (subSignals.length > 0) {
-      templateSignals.subscriptions = subSignals.map(s => ({
-        productName: s.metadata?.product ?? s.headline,
-        quantity: s.metadata?.quantity ?? 1,
-        status: 'Active',
-      }))
-    }
-    const caseSignals = registrySignals.filter(s => s.source === 'cases')
-    if (caseSignals.length > 0) templateSignals.cases = caseSignals
-    const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
-    if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
-
-    const allSignalSources = [...new Set([
-      ...loaded,
-      ...registrySignals.map(s => s.source),
-    ])]
-
-    htmlContent = generateCampaignHTML({
-      materialTitle,
-      materialUrl,
-      customerName: customer.name,
-      aeName: customer.ae ?? 'Unknown AE',
-      generatedDate: timestamp,
-      accountTeam,
-      signals: templateSignals,
-      signalsLoaded: allSignalSources,
-      markdown,
-    })
-
-    // Upload to Drive (Google Doc + HTML file) — PATCH existing on re-runs (#1059)
-    const cachedFileIds = findExistingDriveFileIds(slug, materialUrl)
-    try {
-      const customerFolderId = await findCustomerDriveFolder(customer)
-      const driveResult = await uploadCampaignToDrive(
-        customerFolderId,
-        customer,
-        materialTitle,
-        materialUrl,
-        markdown,
-        customer.ae ?? 'Unknown AE',
-        templateSignals,
-        accountTeam,
-        cachedFileIds ?? undefined,
-        config?.campaignDirective,
-      )
-      driveUrl = driveResult.driveUrl
-      htmlUrl = driveResult.htmlUrl
-      driveFileId = driveResult.driveFileId
-      driveHtmlFileId = driveResult.driveHtmlFileId
-      console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
-    } catch (e: any) {
-      console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
-    }
-  } else {
-    console.warn('[campaigns] Freeform path disabled (CAMPAIGN_FREEFORM_REMOVED=true). Using structured only.')
-  }
 
   // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
   saveCampaignToCache(slug, {
@@ -2012,7 +1764,6 @@ export async function generateCampaign(
     signalCompleteness: signalQuality.signalCompleteness,
     qualityScorecard,
     campaignDirective: config?.campaignDirective,
-    generationPath,
   })
 
   return {
@@ -2221,22 +1972,10 @@ export async function generateCampaignFromPlay(
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
 
-  // Generate HTML
-  const timestamp = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  // TODO: Migrate to generateCampaignFromStructured (#1135)
+  throw new Error('generateCampaignFromPlay must be migrated to the structured path — see #1135')
 
-  const htmlContent = generateCampaignHTML({
-    materialTitle,
-    materialUrl: '',
-    customerName: customer.name,
-    aeName: customer.ae ?? 'Unknown AE',
-    generatedDate: timestamp,
-    accountTeam,
-    signals,
-    markdown,
-  })
+  const htmlContent = '' // unreachable — placeholder for cache entry type
 
   // Upload to Drive — PATCH existing on re-runs (#1059)
   let driveUrl = ''

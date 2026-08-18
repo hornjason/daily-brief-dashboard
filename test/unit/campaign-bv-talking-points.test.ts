@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignHTML, generateCampaignFromStructured, type BVTalkingPoint } from '../../src/campaign-html-template.ts'
-import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
+import { generateCampaignFromStructured, type BVTalkingPoint } from '../../src/campaign-html-template.ts'
 
 function makeMinimalStructuredData(overrides: Record<string, any> = {}) {
   return {
@@ -20,6 +19,7 @@ function makeMinimalOpts(overrides: Record<string, any> = {}) {
   return {
     resolvedExecs: [],
     signals: [],
+    voiceProfile: null,
     accountTeam: [],
     subscriptions: [],
     structuredPlays: [],
@@ -36,41 +36,14 @@ describe('BV Talking Points — heading rename', () => {
     const bvTalkingPoints: BVTalkingPoint[] = [
       { objective: 'Cost Efficiency', talkingPoints: 'Save money on SaaS taxes', keyMetrics: '$5M savings' },
     ]
-    const html = generateCampaignHTML({
-      materialTitle: 'Test',
-      materialUrl: 'https://test.com',
-      customerName: 'Test Corp',
-      aeName: 'Test AE',
-      generatedDate: '2026-08-17',
-      markdown: '## Campaign Summary\nTest.',
-      bvTalkingPoints,
-    })
+    const selection = makeMinimalStructuredData()
+    const html = generateCampaignFromStructured(selection, makeMinimalOpts({ bvTalkingPoints }))
     expect(html).toContain('Call Prep — Key Talking Points')
     expect(html).not.toContain('BV Talking Points')
   })
 })
 
 describe('BV Talking Points — section positioning', () => {
-  it('renders BV talking points BEFORE "Email Templates by Role" in generateCampaignHTML', () => {
-    const bvTalkingPoints: BVTalkingPoint[] = [
-      { objective: 'Risk Mitigation', talkingPoints: 'Avoid audit risk', keyMetrics: '$5M threshold' },
-    ]
-    const html = generateCampaignHTML({
-      materialTitle: 'Test',
-      materialUrl: 'https://test.com',
-      customerName: 'Test Corp',
-      aeName: 'Test AE',
-      generatedDate: '2026-08-17',
-      markdown: '## Campaign Summary\nTest.\n\n## Email Templates\n\n### VP — Executive Tier\n**Subject:** Test\nBody text.',
-      bvTalkingPoints,
-    })
-    const bvPos = html.indexOf('Call Prep — Key Talking Points')
-    const emailPos = html.indexOf('Email Templates by Role')
-    expect(bvPos).toBeGreaterThan(-1)
-    expect(emailPos).toBeGreaterThan(-1)
-    expect(bvPos).toBeLessThan(emailPos)
-  })
-
   it('renders BV talking points BEFORE "Email Templates by Role" in generateCampaignFromStructured', () => {
     const selection = makeMinimalStructuredData()
     const opts = makeMinimalOpts({
@@ -88,15 +61,9 @@ describe('BV Talking Points — section positioning', () => {
 })
 
 describe('BV Talking Points — absent when no data', () => {
-  it('does not render when bvTalkingPoints is empty', () => {
-    const html = generateCampaignHTML({
-      materialTitle: 'Test',
-      materialUrl: 'https://test.com',
-      customerName: 'Test Corp',
-      aeName: 'Test AE',
-      generatedDate: '2026-08-17',
-      markdown: '## Campaign Summary\nMinimal.',
-    })
+  it('does not render when bvTalkingPoints is not provided', () => {
+    const selection = makeMinimalStructuredData()
+    const html = generateCampaignFromStructured(selection, makeMinimalOpts())
     expect(html).not.toContain('Call Prep — Key Talking Points')
     expect(html).not.toContain('BV Talking Points')
   })

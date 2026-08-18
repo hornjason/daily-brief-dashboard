@@ -55,113 +55,17 @@ export interface CampaignFootprint {
   expansion: string
 }
 
-// ── Template options ──
+// ── Signal types (used by internal helper functions) ──
 
-interface CampaignHTMLOptions {
-  materialTitle: string
-  materialUrl: string
-  customerName: string
-  aeName: string
-  generatedDate: string
-  focus?: string
-  style?: string
-  accountTeam?: AccountTeamMember[]
-  signals?: {
-    productIntel?: any
-    intelligence?: any
-    customerDocs?: any
-    dailyBrief?: any
-    subscriptions?: any
-    emails?: any
-    cases?: any
-    accountPlan?: string
-  }
-  markdown: string
-  signalsLoaded?: string[]
-  contacts?: CampaignContact[]
-  fitRationale?: string
-  referenceMaterials?: ReferenceMaterial[]
-  referenceMaterialsHeading?: string
-  eligibilityTable?: EligibilityRow[]
-  eligibilityHeading?: string
-  footprint?: CampaignFootprint
-  bvTalkingPoints?: BVTalkingPoint[]
-  objectiveProfile?: CustomerObjectiveProfile
-}
-
-// ── Internal types ──
-
-interface ParsedCampaign {
-  summary: string
-  customerContext: string
-  positioning: string[]
-  valuePropsList: string[]
-  emailTemplates: EmailTemplate[]
-}
-
-interface EmailTemplate {
-  persona: string
-  tier: string
-  subject: string
-  body: string
-}
-
-// ── Markdown parsing ──
-
-function parseCampaignMarkdown(markdown: string): ParsedCampaign {
-  const sections: ParsedCampaign = {
-    summary: '',
-    customerContext: '',
-    positioning: [],
-    valuePropsList: [],
-    emailTemplates: [],
-  }
-
-  const sectionBlocks = markdown.split(/\n(?=#{1,3}\s)/)
-
-  for (const block of sectionBlocks) {
-    const headerMatch = block.match(/^#{1,3}\s+(.+)/)
-    if (!headerMatch) continue
-
-    const header = headerMatch[1].trim()
-    const content = block.slice(headerMatch[0].length).trim()
-
-    if (/campaign summary/i.test(header)) {
-      sections.summary = content
-    } else if (/customer context/i.test(header)) {
-      sections.customerContext = content
-    } else if (/^positioning$/i.test(header)) {
-      const items = content.split(/\n\n+/).filter(p => p.trim().length > 0)
-      sections.positioning = items
-    } else if (/^email templates$/i.test(header)) {
-      continue
-    } else if (/—|–/.test(header) && !/campaign|customer|positioning|email templates/i.test(header)) {
-      const tierMatch = header.match(/^(.+?)\s*[—–]\s*(.+)$/)
-      if (!tierMatch) continue
-
-      const persona = tierMatch[1].trim()
-      const tier = tierMatch[2].trim()
-
-      const subjectMatch = content.match(/\*?\*?Subject:?\*?\*?\s*(.+)/i)
-      const subject = subjectMatch ? subjectMatch[1].trim() : ''
-
-      let body = content
-      if (subjectMatch) {
-        const subjectIdx = content.indexOf(subjectMatch[0])
-        body = content.slice(subjectIdx + subjectMatch[0].length).trim()
-      }
-
-      body = body.replace(/^\*?\*?Body:?\*?\*?\s*/i, '').trim()
-      body = body.replace(/\n*(?:Best regards|Sincerely|Thanks|Regards),?[\s\S]*$/i, '')
-      body = body.replace(/\n*(?:Link|Peer reference):?\s*\[?[^\]]*\]?\s*$/i, '')
-
-      if (persona && (subject || body)) {
-        sections.emailTemplates.push({ persona, tier, subject, body: body.trim() })
-      }
-    }
-  }
-
-  return sections
+interface CampaignSignals {
+  productIntel?: any
+  intelligence?: any
+  customerDocs?: any
+  dailyBrief?: any
+  subscriptions?: any
+  emails?: any
+  cases?: any
+  accountPlan?: string
 }
 
 // ── Utility functions ──
@@ -193,7 +97,7 @@ function convertMarkdownBullets(text: string): string {
   return html
 }
 
-function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): {
+function extractMetrics(signals?: CampaignSignals, objectiveProfile?: CustomerObjectiveProfile): {
   revenue: string
   employees: string
   productInstances: string
@@ -282,7 +186,7 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals'], objectiveProfi
   }
 }
 
-function extractStructuredIntel(signals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): {
+function extractStructuredIntel(signals?: CampaignSignals, objectiveProfile?: CustomerObjectiveProfile): {
   initiatives: Array<{ name: string; priority: string; detail: string }>
   competitors: Array<{ name: string; threat: string; advantage: string }>
   differentiation?: string
@@ -442,60 +346,6 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals'], object
   return result
 }
 
-function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name: string; title: string; email?: string }> {
-  const contacts: Array<{ name: string; title: string; email?: string }> = []
-  const intel = signals?.intelligence
-  const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
-
-  const leadershipSection = companyText.match(/## Leadership[\s\S]*?(?=\n## |$)/i)
-  if (leadershipSection) {
-    const section = leadershipSection[0]
-    const titleWords = 'President|CEO|CFO|CTO|CIO|COO|CMO|Chief|Executive Vice|EVP|SVP|Senior Vice President|VP|Vice President|Director|Head of'
-    // Pattern 1: "Name, Title" (e.g., "Dhrupad Trivedi, CEO")
-    const p1 = new RegExp(`([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+),\\s*((?:${titleWords})[^.\\n]*)`, 'gi')
-    // Pattern 2: "Title Name" (e.g., "CEO Dhrupad Trivedi" or "President and CEO Dhrupad Trivedi")
-    const p2 = new RegExp(`(?:${titleWords})(?:\\s+(?:and|&)\\s+(?:${titleWords}))*[^A-Z]*([A-Z][a-z]+\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)`, 'g')
-    // Pattern 3: "Name was appointed Title" (e.g., "Michelle Caron was appointed CFO")
-    const p3 = new RegExp(`([A-Z][a-z]+\\s+[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)?)\\s+was\\s+appointed\\s+((?:${titleWords})[^.,]*)`, 'gi')
-    let match
-    while ((match = p1.exec(section)) !== null) {
-      const name = match[1].trim()
-      const title = match[2].trim()
-      if (name.length > 3 && !contacts.some(c => c.name === name)) contacts.push({ name, title })
-    }
-    while ((match = p3.exec(section)) !== null) {
-      const name = match[1].trim()
-      const title = match[2].trim()
-      if (name.length > 3 && !contacts.some(c => c.name === name)) contacts.push({ name, title })
-    }
-    while ((match = p2.exec(section)) !== null) {
-      const name = match[1].trim()
-      if (name.length > 3 && !contacts.some(c => c.name === name)) {
-        const titleMatch = match[0].match(new RegExp(`((?:${titleWords})(?:\\s+(?:and|&)\\s+(?:${titleWords}))*)`, 'i'))
-        contacts.push({ name, title: titleMatch?.[1]?.trim() || '' })
-      }
-    }
-  }
-
-  const planText = signals?.accountPlan || ''
-  if (planText) {
-    const teamSection = planText.match(/## (?:Key Stakeholders|Team Members)[\s\S]*?(?=\n## |$)/i)
-    if (teamSection) {
-      const memberRegex = /\*\*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\*\*:?\s*([^.\n]+)/g
-      let match
-      while ((match = memberRegex.exec(teamSection[0])) !== null) {
-        const name = match[1].trim()
-        const title = match[2].trim()
-        if (!contacts.some(c => c.name === name)) {
-          contacts.push({ name, title })
-        }
-      }
-    }
-  }
-
-  return contacts
-}
-
 // ── Section renderers ──
 
 function renderContactsSection(contacts: CampaignContact[]): string {
@@ -625,189 +475,6 @@ function renderBVTalkingPoints(points: BVTalkingPoint[]): string {
 </table>`
 }
 
-function renderEmailBox(email: EmailTemplate, aeName: string): string {
-  return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
-  <div style="background: ${BRAND_RED}; padding: 12px 20px;">
-    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(email.persona)}</span>
-  </div>
-  <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
-    <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(email.subject)}</strong></p>
-  </div>
-  <div style="padding: 20px;">
-    ${convertMarkdownBullets(email.body)}
-    <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid ${BRAND_RED};">
-      <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(aeName)}</p>
-      <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: ${BRAND_RED}; font-weight: bold;">Red Hat</span></p>
-    </div>
-  </div>
-</div>`
-}
-
-// ── Main export ──
-
-export function generateCampaignHTML(options: CampaignHTMLOptions): string {
-  const parsed = parseCampaignMarkdown(options.markdown)
-  const metrics = extractMetrics(options.signals, options.objectiveProfile)
-  const structured = extractStructuredIntel(options.signals, options.objectiveProfile)
-
-  // Resolve contacts: prefer explicit, fall back to extracted
-  const contacts: CampaignContact[] = options.contacts ?? extractContacts(options.signals).map(c => ({
-    name: c.name,
-    title: c.title,
-    email: c.email,
-  }))
-
-  // Split emails by tier
-  const execEmails = parsed.emailTemplates.filter(e => /executive/i.test(e.tier))
-  const managerEmails = parsed.emailTemplates.filter(e => /manager/i.test(e.tier))
-  const otherEmails = parsed.emailTemplates.filter(e => !(/executive/i.test(e.tier) || /manager/i.test(e.tier)))
-  const primaryEmails = execEmails.length > 0 ? execEmails : (managerEmails.length > 0 ? otherEmails : parsed.emailTemplates)
-
-  // Fit rationale: prefer explicit, fall back to parsed customer context
-  const fitContent = options.fitRationale || parsed.customerContext
-
-  // Run quality checks against parsed emails
-  const defaultWordBudget = { exec: 120, manager: 200 }
-  const markdownQualityResults: EmailQualityResult[] = parsed.emailTemplates.map(email => {
-    const tier: 'executive' | 'manager' = /executive/i.test(email.tier) ? 'executive' : 'manager'
-    return runEmailQualityCheck({
-      body: email.body,
-      subject: email.subject,
-      tier,
-      wordBudget: defaultWordBudget,
-    })
-  })
-
-  const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #202124;">
-
-<h1 style="font-size: 28px; color: ${BRAND_RED}; margin: 0 0 4px 0; border-bottom: 3px solid ${BRAND_RED}; padding-bottom: 12px;">Content Campaign: ${escapeHtml(options.materialTitle)}</h1>
-<p style="font-size: 22px; font-weight: bold; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</p>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
-  options.accountTeam && options.accountTeam.length > 0
-    ? options.accountTeam.map(m => `${escapeHtml(m.title)}: ${escapeHtml(m.name)}`).join(' · ')
-    : `AE: ${escapeHtml(options.aeName)}`
-}${options.focus ? ` · Focus: ${escapeHtml(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHtml(options.style)}` : ''}</p>
-
-<table width="100%" cellpadding="10" cellspacing="0" style="background: #f8f9fa; margin-bottom: 24px;">
-  <tr>
-    <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHtml(options.materialUrl)}" style="color: #1a73e8;">${escapeHtml(options.materialTitle)}</a></td>
-  </tr>
-</table>
-
-${renderContactsSection(contacts)}
-
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
-<table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
-  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Gemini 2.5 Pro (Vertex AI)</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(options.aeName)}</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
-    options.accountTeam && options.accountTeam.length > 0
-      ? options.accountTeam.map(m => `${escapeHtml(m.name)} (${escapeHtml(m.title)})`).join(', ')
-      : escapeHtml(options.aeName) + ' (AE)'
-  }</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤120 words) + 3 Manager (200-250 words)</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHtml(e.persona)} (${escapeHtml(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">${options.signalsLoaded?.join(', ') || 'Intelligence brief, customer docs, subscriptions, cases, account plan'}</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa;">Council Rules</td><td>11 council-validated email design rules (see checklist below)</td></tr>
-</table>
-
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
-<table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
-${renderQualityChecklist(markdownQualityResults, defaultWordBudget)}
-</table>
-
-<hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
-
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
-
-<table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
-  <tr>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.revenue}</div>
-      <div style="font-size: 12px; color: #5f6368;">Annual Revenue</div>
-    </td>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.employees}</div>
-      <div style="font-size: 12px; color: #5f6368;">Employees</div>
-    </td>
-    <td width="33%" style="background: #fef7f7; padding: 14px; text-align: center; border-radius: 6px;">
-      <div style="font-size: 24px; font-weight: bold; color: ${BRAND_RED};">${metrics.productInstances}</div>
-      <div style="font-size: 12px; color: #5f6368;">${metrics.productName} Instances</div>
-    </td>
-  </tr>
-</table>
-
-${fitContent ? renderFitRationale(options.customerName, fitContent) : ''}
-
-${structured.initiatives.length > 0 ? `
-<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
-<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
-  <tr style="background: #f8f9fa;">
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Initiative</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0; width: 80px; text-align: center;">Priority</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
-  </tr>
-  ${structured.initiatives.map(i => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(i.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(i.priority)}</span></td>
-    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(i.detail)}</td>
-  </tr>`).join('\n')}
-</table>` : ''}
-
-${structured.competitors.length > 0 ? `
-<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
-${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml(structured.differentiation)}</p>` : ''}
-<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
-  <tr style="background: #f8f9fa;">
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
-    ${structured.competitors.some(c => c.threat) ? `<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>` : ''}
-    ${structured.competitors.some(c => c.advantage) ? `<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>` : ''}
-  </tr>
-  ${structured.competitors.map(c => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
-    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.threat)}</td>` : ''}
-    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.advantage)}</td>` : ''}
-  </tr>`).join('\n')}
-</table>` : ''}
-
-${options.referenceMaterials && options.referenceMaterials.length > 0 ? renderReferenceMaterials(options.referenceMaterials, options.referenceMaterialsHeading || 'Reference Material') : ''}
-
-${options.eligibilityTable && options.eligibilityTable.length > 0 ? renderEligibilityTable(options.eligibilityTable, options.eligibilityHeading || 'Eligibility') : ''}
-
-${options.footprint ? renderFootprintSection(options.footprint) : ''}
-
-<hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
-
-${parsed.positioning.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 20px 0;">Positioning Matches</h2>
-
-${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid ${BRAND_RED}; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
-  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${BRAND_RED}; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
-  <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${applyInlineFormatting(escapeHtml(p))}</p>
-</div>`).join('\n')}
-
-<hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">` : ''}
-
-${options.bvTalkingPoints && options.bvTalkingPoints.length > 0 ? renderBVTalkingPoints(options.bvTalkingPoints) : ''}
-
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 8px 0;">Email Templates by Role</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">Copy each email body and paste into Gmail compose. Rich formatting transfers automatically.</p>
-
-${primaryEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}
-
-${managerEmails.length > 0 ? `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 24px 0 8px 0;">📧 Manager Outreach</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 20px 0;">≤200 words · technical depth — forward up with 'we should look at this'</p>
-
-${managerEmails.map(email => renderEmailBox(email, options.aeName)).join('\n')}` : ''}
-
-<hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
-<p style="text-align: center; font-size: 13px; color: #80868b;">Generated by ContentCampaign · Source: DailyBriefDashboard Intelligence · ${options.generatedDate}</p>
-</body></html>`
-
-  return html
-}
 
 // ── Campaign Title Cleaner (extracted to src/lib/text-utils.ts) ───────────
 export { cleanEmailSubject as cleanCampaignTitle } from './lib/text-utils.ts'
@@ -1609,7 +1276,7 @@ function renderStructuredEmailBox(
  * this function assembles emails from composable blocks.
  */
 
-function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals'], objectiveProfile?: CustomerObjectiveProfile): string {
+function renderDashboardMetrics(rawSignals?: CampaignSignals, objectiveProfile?: CustomerObjectiveProfile): string {
   const metrics = extractMetrics(rawSignals, objectiveProfile)
   return `<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 0 0 16px 0;">📊 Customer Intelligence Dashboard</h2>
 <table width="100%" cellpadding="0" cellspacing="8" style="margin-bottom: 20px;">
@@ -1630,7 +1297,7 @@ function renderDashboardMetrics(rawSignals?: CampaignHTMLOptions['signals'], obj
 </table>`
 }
 
-function renderStructuredIntelSections(rawSignals?: CampaignHTMLOptions['signals'], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[], objectiveProfile?: CustomerObjectiveProfile): string {
+function renderStructuredIntelSections(rawSignals?: CampaignSignals, pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[], objectiveProfile?: CustomerObjectiveProfile): string {
   const structured = extractStructuredIntel(rawSignals, objectiveProfile)
   let sections = ''
 

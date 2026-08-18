@@ -42,21 +42,21 @@ describe('account-team', () => {
 
   describe('product filter', () => {
     it('filters specialists by product when filter provided', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignHTML({
-        materialTitle: 'Test',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Test AE',
-        generatedDate: 'May 14, 2026',
-        markdown: '## Campaign Summary\nTest',
-        accountTeam: [
-          { name: 'Test AE', title: 'Account Executive', role: 'ae' },
-          { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
-          { name: 'Brad Hinson', title: 'Ansible SSP', role: 'ssp' },
-        ],
-      })
+      const html = generateCampaignFromStructured(
+        { campaignSummary: 'Test', customerContext: 'Test', positioning: 'Test', emails: [] },
+        {
+          resolvedExecs: [], signals: [], voiceProfile: null, subscriptions: [],
+          structuredPlays: [], customerName: 'Test Corp', materialTitle: 'Test',
+          materialUrl: 'https://test.com', generatedDate: 'May 14, 2026',
+          accountTeam: [
+            { name: 'Test AE', title: 'Account Executive', role: 'ae' },
+            { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
+            { name: 'Brad Hinson', title: 'Ansible SSP', role: 'ssp' },
+          ],
+        },
+      )
 
       expect(html).toContain('AE: Test AE')
       expect(html).toContain('ASA: Jason Horn')
@@ -430,37 +430,33 @@ describe('account-team', () => {
   })
 
   describe('campaign HTML template with accountTeam', () => {
-    it('renders team members in metadata line when accountTeam provided', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+    const baseSelection = { campaignSummary: 'Test', customerContext: 'Test', positioning: 'Test', emails: [] as any[] }
+    const baseData = {
+      resolvedExecs: [] as any[], signals: [] as any[], voiceProfile: null as any, subscriptions: [] as any[],
+      structuredPlays: [] as any[], customerName: 'Test Corp', materialTitle: 'Test',
+      materialUrl: 'https://test.com', generatedDate: 'May 14, 2026',
+    }
 
-      const html = generateCampaignHTML({
-        materialTitle: 'Test Material',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Elmer Alvarez',
-        generatedDate: 'May 14, 2026',
-        markdown: '## Campaign Summary\nTest campaign',
+    it('renders team members in metadata line when accountTeam provided', async () => {
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
+
+      const html = generateCampaignFromStructured(baseSelection, {
+        ...baseData, materialTitle: 'Test Material',
         accountTeam: [
           { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
           { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
         ],
       })
 
-      // Metadata line should show both team members
       expect(html).toContain('AE: Elmer Alvarez')
       expect(html).toContain('ASA: Jason Horn')
     })
 
     it('renders SSP role correctly when title contains SSP', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignHTML({
-        materialTitle: 'Test',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Test AE',
-        generatedDate: 'May 14, 2026',
-        markdown: '## Campaign Summary\nTest',
+      const html = generateCampaignFromStructured(baseSelection, {
+        ...baseData,
         accountTeam: [
           { name: 'Test AE', title: 'Account Executive', role: 'ae' },
           { name: 'Pat Smith', title: 'Ansible SSP', role: 'ssp' },
@@ -471,15 +467,10 @@ describe('account-team', () => {
     })
 
     it('renders Account Team row in config table', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignHTML({
-        materialTitle: 'Test',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Elmer Alvarez',
-        generatedDate: 'May 14, 2026',
-        markdown: '## Campaign Summary\nTest',
+      const html = generateCampaignFromStructured(baseSelection, {
+        ...baseData,
         accountTeam: [
           { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
           { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
@@ -491,54 +482,41 @@ describe('account-team', () => {
       expect(html).toContain('Jason Horn (ASA)')
     })
 
-    it('falls back to aeName when no accountTeam provided', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+    it('falls back to "Account Executive" when no accountTeam provided', async () => {
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignHTML({
-        materialTitle: 'Test',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Carolanne Farrell',
-        generatedDate: 'May 14, 2026',
-        markdown: '## Campaign Summary\nTest',
+      const html = generateCampaignFromStructured(baseSelection, {
+        ...baseData, accountTeam: [],
       })
 
-      // Should fall back to just AE name
-      expect(html).toContain('AE: Carolanne Farrell')
-      expect(html).toContain('Carolanne Farrell (AE)')
+      expect(html).toContain('Account Executive')
     })
 
     it('keeps email signatures as AE-only even with accountTeam', async () => {
-      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+      const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const markdown = `## Campaign Summary
-Test
+      const html = generateCampaignFromStructured(
+        {
+          ...baseSelection,
+          emails: [{
+            recipientName: 'John Smith', tier: 'executive' as const, intent: 'nurture' as const,
+            subject: 'Test subject', signalIndex: 0, featureKeys: [],
+            peerProof: null, challengerDataPoint: '', customOpener: 'Test opener.',
+            featureApplications: [], signalBridge: '', referenceLine: '',
+          }],
+        },
+        {
+          ...baseData,
+          resolvedExecs: [{ name: 'John Smith', title: 'VP Engineering', email: 'jsmith@test.com' }],
+          signals: [{ headline: 'Test signal', type: 'news', source: 'news', detail: '', metadata: {} }],
+          accountTeam: [
+            { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
+            { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
+          ],
+        },
+      )
 
-## Email Templates
-
-### VP Engineering — Executive Tier
-
-**Subject:** Test subject
-
-**Body:**
-Test body content here.`
-
-      const html = generateCampaignHTML({
-        materialTitle: 'Test',
-        materialUrl: 'https://test.com',
-        customerName: 'Test Corp',
-        aeName: 'Elmer Alvarez',
-        generatedDate: 'May 14, 2026',
-        markdown,
-        accountTeam: [
-          { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
-          { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
-        ],
-      })
-
-      // Signature should be AE only
       expect(html).toContain('Account Executive · <span')
-      // ASA should NOT appear in signature area
       const signatureBlocks = html.split('border-top: 3px solid #c41e3a')
       for (let i = 1; i < signatureBlocks.length; i++) {
         const sigBlock = signatureBlocks[i].split('</div>')[0]

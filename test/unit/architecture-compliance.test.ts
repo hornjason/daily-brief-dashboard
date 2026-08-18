@@ -1951,9 +1951,9 @@ describe('Layer 2 — Signal Scoring compliance (#7)', () => {
 
 describe('Layer 3 — Template Engine compliance (#7)', () => {
   // ── Campaign Html Template ───────────────────────────────────────────────
-  test('campaign-html-template.ts exists and exports generateCampaignHTML', () => {
+  test('campaign-html-template.ts exists and exports generateCampaignFromStructured', () => {
     const content = readSrc('campaign-html-template.ts')
-    expect(content).toMatch(/export\s+function\s+generateCampaignHTML/)
+    expect(content).toMatch(/export\s+function\s+generateCampaignFromStructured/)
   })
 
   test('campaign-html-template.ts exports assembleEmail for structured output', () => {
