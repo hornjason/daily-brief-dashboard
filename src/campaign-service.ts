@@ -155,6 +155,22 @@ async function enrichSignalsFromCache(
   return enriched
 }
 
+// ── URL extraction from plain text ──────────────────────────────────────────
+function extractUrlsFromPlainText(text: string): Array<{ url: string; title: string }> {
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g
+  const matches = text.match(urlRegex) ?? []
+  const seen = new Set<string>()
+  const results: Array<{ url: string; title: string }> = []
+  for (const url of matches) {
+    const cleaned = url.replace(/[.,;:!?)]+$/, '')
+    if (!seen.has(cleaned)) {
+      seen.add(cleaned)
+      results.push({ url: cleaned, title: cleaned })
+    }
+  }
+  return results
+}
+
 // ── Structured HTML quality scoring (parallel validation) ───────────────────
 export function scoreStructuredOutput(html: string): { sections: number; emails: number; words: number } {
   const sections = (html.match(/<h[23][^>]*>/g) || []).length
@@ -1098,7 +1114,31 @@ export async function generateCampaign(
     const extracted = await extractMaterialContent(fileId)
     materialTitle = extracted.title
     materialContent = extracted.content
-    console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
+
+    // Extract URLs from the document content
+    const contentUrls = extractUrlsFromPlainText(materialContent)
+
+    // Add the source document itself as primary reference
+    referenceMaterialData = [
+      {
+        url: materialUrl,
+        title: materialTitle,
+        excerpt: materialContent.substring(0, 500).replace(/\s+/g, ' ').trim()
+      }
+    ]
+
+    // Add any URLs discovered within the document
+    for (const link of contentUrls) {
+      if (!referenceMaterialData.some(r => r.url === link.url)) {
+        referenceMaterialData.push({
+          url: link.url,
+          title: link.title,
+          excerpt: ''
+        })
+      }
+    }
+
+    console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars, ${referenceMaterialData.length} URLs discovered)`)
   }
 
   if (config?.supplementalUrls?.length) {
