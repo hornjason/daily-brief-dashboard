@@ -491,8 +491,8 @@ const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect cre
 
 Every generated email MUST pass ALL of these rules:
 
-1. **Word limits:** Executive tier = 120 words max; Manager tier = 200-250 words
-WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 120 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
+1. **Word limits:** Executive tier = 150 words max; Manager tier = 200-250 words
+WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 150 words will be rejected. Manager emails below 200 words will be rejected. Count your words.
 2. **Technical observations only** — no firmographic facts ("You're a $2B company")
 3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
 4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
@@ -520,7 +520,7 @@ WORD COUNT IS NON-NEGOTIABLE: Executive emails that exceed 120 words will be rej
 
 ## Two Email Tiers (6 personas total)
 
-### Executive Tier (3 personas, 120 words max each)
+### Executive Tier (3 personas, 150 words max each)
 Purpose: Competitive urgency, strategic. Designed to be forwarded DOWN with "thoughts?"
 Structure: Competitive observation (1 sentence) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 1 sentence) → Peer proof (1 sentence) → ACTION STEP: "[AE name] should [specific ask] by [timeframe]." (1 sentence, MANDATORY — email is incomplete without this)
 

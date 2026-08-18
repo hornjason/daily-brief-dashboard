@@ -76,7 +76,7 @@ export function classifyTemplateTier(personaRole: string): 'executive' | 'manage
 
 function buildSystemPrompt(tier: 'executive' | 'manager'): string {
   const wordLimit = tier === 'executive'
-    ? 'This is an EXECUTIVE tier email. Maximum 120 words.'
+    ? 'This is an EXECUTIVE tier email. Maximum 150 words.'
     : 'This is a MANAGER tier email. 200-250 words.'
 
   return `You are a Red Hat Account Solution Architect creating a deeply personalized email as part of a strategic motion campaign.

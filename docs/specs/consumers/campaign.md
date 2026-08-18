@@ -115,7 +115,7 @@ Campaign Google Doc contains these sections in order:
 - Current products, expansion opportunities (sanitized — no NN- prefixes, no "— Pipeline")
 
 ### 10. Email Templates
-- **Executive Outreach** (≤120 words) — colleague's note, designed to be forwarded down with "thoughts?"
+- **Executive Outreach** (≤150 words) — colleague's note, designed to be forwarded down with "thoughts?"
 - **Manager Outreach** (≤200 words) — technical depth, designed to be forwarded up with "we should look at this"
 
 Each email contains:
@@ -245,7 +245,7 @@ PASS 2: generateCampaignFromStructured() → deterministic HTML (zero LLM)
 | 7 | Reference Material | Extraction → referenceMaterialData | ✅ PASS | #1070: URL discovery shipped | L3 pipeline |
 | 8 | Eligibility (conditional) | Gemini selection | ✅ PASS | — | spec-compliance |
 | 9 | Footprint | `deriveFootprint()` from Pass 0 + signals | ✅ PASS | #1124: data leaks shipped | L3 pipeline |
-| 10a | Executive Emails (3, ≤120w) | Pass 1 → Pass 2 assembly | ✅ PASS | #1136 + #1137 shipped | L3 pipeline |
+| 10a | Executive Emails (3, ≤150w) | Pass 1 → Pass 2 assembly | ✅ PASS | #1136 + #1137 shipped | L3 pipeline |
 | 10b | Manager Emails (3, ≤200w) | Pass 1 → Pass 2 assembly | ✅ PASS | #1137: tier split shipped | L3 pipeline |
 | 10c | Peer Proof in emails | `buildPeerPattern()` | ✅ PASS | #1138: fallback shipped | L3 pipeline |
 | 11 | BV Talking Points | Pass 0 briefs → template | ✅ PASS | — | spec-compliance |
