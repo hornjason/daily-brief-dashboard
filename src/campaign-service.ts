@@ -1345,12 +1345,54 @@ export async function generateCampaign(
     if (resolvedExecs.length < prePadCount) {
       console.log(`[campaigns] Filtered ${prePadCount - resolvedExecs.length} placeholder contacts for ${customer.name}`)
     }
+
+    // AC-1: Re-pad with Tier 2 contacts if filter dropped count below 6
+    if (resolvedExecs.length < 6) {
+      const needed = 6 - resolvedExecs.length
+      console.log(`[campaigns] Contact count ${resolvedExecs.length}/6 after filter — attempting to re-resolve ${needed} additional contacts via Tier 2`)
+      try {
+        // Use fallback roles from executive-resolver.ts
+        const fallbackRoles = [
+          'IT Operations Manager',
+          'Cloud Architect',
+          'Head of Engineering',
+          'VP Engineering',
+          'Director of Infrastructure',
+          'Engineering Manager',
+        ]
+        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
+        const additionalContacts = await resolveExecutivesByRole(fallbackRoles, customer.name, customer.domain)
+
+        // Filter out duplicates and add up to needed count
+        let added = 0
+        for (const contact of additionalContacts) {
+          if (added >= needed) break
+          if (!existingNames.has(contact.name.toLowerCase())) {
+            resolvedExecs.push(contact)
+            existingNames.add(contact.name.toLowerCase())
+            added++
+          }
+        }
+        if (added > 0) {
+          console.log(`[campaigns] Re-padded with ${added} Tier 2 contacts for ${customer.name}`)
+        } else {
+          console.log(`[campaigns] No additional Tier 2 contacts found — proceeding with ${resolvedExecs.length} contacts`)
+        }
+      } catch (e: any) {
+        console.warn(`[campaigns] Tier 2 re-resolution failed (non-fatal):`, e?.message ?? e)
+      }
+    }
+
     if (resolvedExecs.length > 0) {
+      // AC-2: Log tier breakdown
+      const tier1Count = resolvedExecs.filter(e => e.leadershipContext).length
+      const tier2Count = resolvedExecs.length - tier1Count
+      console.log(`[campaigns] Resolved ${resolvedExecs.length} contacts (${tier1Count} Tier 1, ${tier2Count} Tier 2) for ${customer.name}`)
+
       const contactLines = resolvedExecs.map(r =>
         `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
       )
       resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name.\n${contactLines.join('\n')}\n`
-      console.log(`[campaigns] Resolved ${resolvedExecs.length} executives for ${customer.name}`)
     }
   } catch (e: any) {
     console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
