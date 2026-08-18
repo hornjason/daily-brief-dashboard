@@ -11,7 +11,23 @@
  * Issue #1141
  */
 
-import { DENY_PATTERNS } from '../../test/helpers/campaign-assertions.ts'
+const DENY_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\$\d[\d,.]*[kKmMbB]?\s+(?:pipeline|deal)/i, label: 'pipeline dollar amounts' },
+  { pattern: /pipeline\s+(?:opportunit|value)/i, label: 'pipeline opportunity/value language' },
+  { pattern: /pending\s+\$/i, label: 'pending dollar references' },
+  { pattern: /support\s+(?:case|ticket)/i, label: 'support case/ticket references' },
+  { pattern: /(?:case|ticket)\s+#\d/i, label: 'case/ticket number references' },
+  { pattern: /\d+\s+(?:RHEL\s+)?subscriptions?\b/i, label: 'subscription count disclosure' },
+  { pattern: /subscription\s+count/i, label: 'subscription count language' },
+  { pattern: /\d+\s+(?:nodes?|instances?)\b/i, label: 'node/instance count disclosure' },
+  { pattern: /\b[A-Z]{2,4}\d{4,6}\b/, label: 'SKU codes' },
+  { pattern: /laid\s+off\s+\d|headcount\s+reduction|workforce\s+reduction/i, label: 'layoff language' },
+  { pattern: /\$\d[\d,.]*[kKmMbB]?\s+renewal|renewal\s+of\s+\$/i, label: 'renewal dollar amounts' },
+  { pattern: /NN-\d+\s*—\s*Pipeline/i, label: 'internal footprint prefix' },
+  { pattern: /Company\s+intelligence/i, label: 'internal system name' },
+  { pattern: /(?:^|\s)Red\s+Hat\b.*?\bthreat\b/im, label: 'Red Hat as threat' },
+  { pattern: /Initiative\s*—\s*Description/i, label: 'raw table headers' },
+]
 
 const IS_TEST = process.env.NODE_ENV === 'test'
 
