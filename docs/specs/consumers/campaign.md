@@ -208,9 +208,88 @@ This classification is enforced by `sanitizeCreepyLines()` which runs on every e
 | Audience classification | ✅ EXTERNAL |
 | ADR governance | ✅ ADR-043, ADR-044, ADR-045 |
 
-## Known Gaps (as of 2026-08-16)
+## Pipeline Section Tracker (as of 2026-08-17)
 
-- [ ] ADR-045 not fully implemented — persona pre-matching is fallback, not primary
+Source of truth for what works, what's broken, and what test covers it. Update this table as each section ships.
+
+### Pipeline Stages
+
+```
+EXTRACTION (one-time)
+  ↓
+PASS 0: selectPersonas() → PersonaBrief[] (12 fields/persona, role-based AI)
+  ↓
+EXECUTIVE RESOLUTION (Tier 1 intel → Tier 2 Gemini → Tier 3 email inference)
+  ↓
+PASS 1: callGeminiForCampaignSelection() → CAMPAIGN_SELECTION_SCHEMA (data only, no prose)
+  ↓
+PASS 2: generateCampaignFromStructured() → deterministic HTML (zero LLM)
+```
+
+### Section Status
+
+| § | Section | Pipeline Stage | Status | Issue | Test |
+|---|---------|---------------|--------|-------|------|
+| 1 | Header + Source Material | Extraction + account team | ✅ PASS | — | spec-compliance |
+| 2 | Target Contacts | Exec Resolution | ❌ FAIL | #1136: re-pad after filter | spec-compliance (partial) |
+| 2a | — 3 exec + 3 manager split | Exec Resolution | ❌ FAIL | #1137: tier split enforcement | NO TEST |
+| 2b | — LinkedIn on all contacts | Exec Resolution | ❌ FAIL | #1139: Tier 1 LinkedIn enrichment | NO TEST |
+| 3 | Generation Config | Pass 2 metadata | ✅ PASS | — | spec-compliance |
+| 4 | Quality Checklist | Pass 2 `runEmailQualityCheck()` | ⚠️ PARTIAL | #1099: show actual word count | spec-compliance (partial) |
+| 5 | Intelligence Dashboard | `renderDashboardMetrics()` | ✅ PASS | #1104 closed | output-audit |
+| 5a | "Why Customer Is Fit" | Pass 0 → `renderFitFromPass0()` | ✅ PASS | — | spec-compliance |
+| 5b | Business Metrics Table | `renderMetricsTable()` | ⚠️ VERIFY | #1097 closed — confirm diverse categories | output-audit |
+| 5c | Strategic Initiatives | `renderStructuredIntelSections()` | ✅ PASS | #1088 closed | output-audit |
+| 5d | Competitive Position | Same renderer from intel | ✅ PASS | #1106 closed | output-audit |
+| 6 | ~~Guardrails~~ | REMOVED (#1107) | ✅ RESOLVED | — | — |
+| 7 | Reference Material | Extraction → referenceMaterialData | ❌ FAIL | #1070: Google Doc URLs stripped | NO TEST |
+| 8 | Eligibility (conditional) | Gemini selection | ✅ PASS | — | spec-compliance |
+| 9 | Footprint | `deriveFootprint()` from Pass 0 + signals | ❌ FAIL | #1124: CRM slugs + data leaks | footprint tests |
+| 10a | Executive Emails (3, ≤120w) | Pass 1 → Pass 2 assembly | ⚠️ PARTIAL | #1136: may get <3 after filter | spec-compliance |
+| 10b | Manager Emails (3, ≤200w) | Pass 1 → Pass 2 assembly | ❌ FAIL | #1137: often 0 manager emails | NO TEST |
+| 10c | Peer Proof in emails | `buildPeerPattern()` | ❌ FAIL | #1138: no SalesHub fallback | peer-proof tests (partial) |
+| 11 | BV Talking Points | Pass 0 briefs → template | ✅ PASS | — | spec-compliance |
+
+**Legend:** ✅ = data flows correctly through pipeline and renders per spec. ⚠️ = works but edge cases fail. ❌ = broken data path.
+
+### Legacy Path Removal
+
+| Item | Status | Issue |
+|------|--------|-------|
+| Remove `generateCampaignHTML` function | ✅ DONE | #1134 |
+| Remove `USE_STRUCTURED_CAMPAIGNS` flag + freeform branch | ✅ DONE | #1134 |
+| Remove convergence comparison code | ✅ DONE | #1134 |
+| Convert `generateCampaignFromPlay()` to structured path | TODO | #1135 |
+| Audit + close #1063-#1066 (two-pass issues already implemented) | TODO | — |
+
+### Test Matrix
+
+| Layer | Test File | Tests | What It Catches | Gap |
+|-------|-----------|-------|-----------------|-----|
+| **L1: Unit (fixture)** | `campaign-spec-compliance.test.ts` | 105 | Template rendering bugs, missing sections | None |
+| **L1: Unit (fixture)** | `campaign-template-blocks.test.ts` | 72 | 8 email blocks, objective rendering | None |
+| **L2: Output audit** | `campaign-real-output-audit.test.ts` | 49 | Data that reaches output but renders wrong | Good |
+| **L2: Output audit** | `campaign-output-audit.test.ts` | 36 | Gold standard structural compliance | Needs update |
+| **L3: Pipeline integration** | **DOES NOT EXIST** | 0 | **Wiring failures between stages** | **THE GAP** |
+
+### Issue Plan (execution order)
+
+| Priority | Issue | Depends On | Section Fixed | Status |
+|----------|-------|-----------|---------------|--------|
+| P0-1 | #1134: Remove legacy path | — | All (single path) | ✅ SHIPPED |
+| P0-2 | #1135: Convert `generateCampaignFromPlay()` | #1134 | Play-based campaigns | TODO |
+| P1-1 | #1124: Footprint data leaks | — | §9 | TODO |
+| P1-2 | #1136: Contact re-pad after filter | — | §2, §10a | TODO |
+| P1-3 | #1137: Exec + manager tier split (3+3) | #1136 | §2, §10b | TODO |
+| P1-4 | #1138: Peer proof SalesHub fallback | — | §10c | TODO |
+| P1-5 | #1139: Tier 1 LinkedIn enrichment | — | §2b | TODO |
+| P1-6 | #1099: Quality checklist 11→16 | — | §4 | TODO |
+| P1-7 | #1070: Reference URL discovery | — | §7 | TODO |
+| P1-8 | #1140: Pipeline integration test (L3) | P1-1 through P1-7 | ALL | TODO |
+| P1-9 | #1141: Pipeline data contract assertions | #1140 | Stage boundaries | TODO |
+
+## Known Gaps (remaining after tracker)
+
 - [ ] Email resolver hardcodes flast@ — needs evidence-based pattern detection
 - [ ] Shared libs (contact-quality.ts, persona-classifier.ts) not yet extracted
 - [ ] Gold standard not updated to reflect current output format

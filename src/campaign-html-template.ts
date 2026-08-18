@@ -987,6 +987,9 @@ const VERB_PATTERN = /\b(?:replaced|consolidated|migrated|deployed|reduced|saved
 
 const HAS_METRIC = /\d+%|\$[\d,.]+|[\d,.]+ (?:million|billion|M|B)\b|\d+x\b|\d+ (?:months?|years?|hours?|days?)\b/i
 
+// Generic peer pattern fallback when no specific proof is available (#1138)
+const GENERIC_PEER_PATTERN = "I've sat with a handful of leaders at this exact stage — and the ones who came out ahead all made one or two early decisions that their peers are still paying to unwind."
+
 function formatPeerProofLine(customer: string, outcome: string): string {
   if (!HAS_METRIC.test(outcome)) {
     console.warn(`[template] Peer proof rejected — no metric: "${customer}: ${outcome.slice(0, 60)}..."`)
@@ -1001,26 +1004,37 @@ export function buildPeerPattern(
   structuredPlays: StructuredPlay[],
   preMatchedProof?: { proof: { customer: string; outcome: string } },
 ): string {
+  // Priority 1: Pre-matched proof from Pass 0 persona briefs
   if (preMatchedProof) {
-    return formatPeerProofLine(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
+    const formatted = formatPeerProofLine(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
+    if (formatted) return formatted
   }
 
+  // Priority 2: Gemini-selected proof from material extraction
   if (peerProof) {
     const target = peerProof.playName.toLowerCase()
     const play = structuredPlays.find(p => p.name === peerProof.playName)
       || structuredPlays.find(p => p.name.toLowerCase().includes(target) || target.includes(p.name.toLowerCase()))
     const example = play?.realWorldExamples?.[peerProof.exampleIndex]
-    if (example) return formatPeerProofLine(example.customer, example.outcome)
+    if (example) {
+      const formatted = formatPeerProofLine(example.customer, example.outcome)
+      if (formatted) return formatted
+    }
     if (!play) console.warn(`[template] PEER PROOF MISS: play "${peerProof.playName}" not found in ${structuredPlays.map(p => p.name).join(', ')}`)
   }
 
+  // Priority 3: Fallback to any available SalesHub play examples
   for (const play of structuredPlays) {
-    if (play.realWorldExamples?.[0]) return formatPeerProofLine(play.realWorldExamples[0].customer, play.realWorldExamples[0].outcome)
+    if (play.realWorldExamples?.[0]) {
+      const formatted = formatPeerProofLine(play.realWorldExamples[0].customer, play.realWorldExamples[0].outcome)
+      if (formatted) return formatted
+    }
     const metric = play.extractedMetrics?.[0]
     if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
   }
 
-  return ''
+  // Priority 4: Generic peer pattern fallback — peer proof must NEVER be empty (#1138)
+  return GENERIC_PEER_PATTERN
 }
 
 /**
