@@ -1809,6 +1809,16 @@ export async function generateCampaign(
     for (const [name, url] of materialUrlMap.entries()) {
       if (isInternalUrl(url) || isHomepageUrl(url)) materialUrlMap.delete(name)
     }
+
+    // Fallback: populate from referenceMaterialData (confirmed URLs from extraction)
+    if (materialUrlMap.size === 0 && referenceMaterialData.length > 0) {
+      for (const ref of referenceMaterialData) {
+        if (ref.url && !isInternalUrl(ref.url) && !isHomepageUrl(ref.url)) {
+          materialUrlMap.set(ref.title, ref.url)
+        }
+      }
+    }
+
     for (const email of selection.emails) {
       if (materialUrlMap.size > 0) {
         if (!email.referenceLine) {
