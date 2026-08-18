@@ -100,7 +100,8 @@ describe('deriveFootprint', () => {
     const result = deriveFootprint([], subSignals as any, registrySignals as any)
     expect(result).toBeDefined()
     expect(result!.expansion).toContain('Cloud migration initiative')
-    expect(result!.expansion).toContain('Kubernetes adoption')
+    // AC-1: Pipeline signals excluded from expansion to prevent data leak (#1124)
+    expect(result!.expansion).not.toContain('Kubernetes adoption')
   })
 
   it('filters out speculative installedBase and omits footprint when all are speculative', () => {
