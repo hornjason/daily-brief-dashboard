@@ -426,10 +426,10 @@ describe('buildPeerPattern — anti-gaming', () => {
     expect(result).toContain('Amadeus')
   })
 
-  it('returns generic fallback when no plays have metrics', () => {
+  it('returns empty when no plays have examples (#1170)', () => {
     const emptyPlays = [{ name: 'Empty', parentTdp: 'TDP-X' }]
     const result = buildPeerPattern(null, emptyPlays).text
-    expect(result).toContain('sat with a handful of leaders')
+    expect(result).toBe('')
   })
 })
 
@@ -1213,6 +1213,126 @@ describe('buildSignalBridge — dedup across emails (#1169)', () => {
     const first = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
     const second = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
     expect(first).toBe(second)
+  })
+})
+
+// ── formatPeerProofLine — tiered rendering (#1170 Track 2) ──────────────────
+
+describe('buildPeerPattern — peer proof quality tiers (#1170)', () => {
+  it('renders peer proof with company name AND metric', () => {
+    const plays = [{
+      name: 'Cloud Migration',
+      parentTdp: 'TDP-001',
+      realWorldExamples: [
+        { customer: 'Amadeus', outcome: 'replaced Chef SaaS with AAP — $5.62M in benefits, 257.9% ROI' },
+      ],
+    }]
+    const result = buildPeerPattern(
+      { playName: 'Cloud Migration', exampleIndex: 0 },
+      plays,
+    ).text
+    expect(result).toContain('Amadeus')
+    expect(result).toContain('$5.62M')
+  })
+
+  it('renders peer proof with company name but NO metric', () => {
+    const plays = [{
+      name: 'Automation',
+      parentTdp: 'TDP-002',
+      realWorldExamples: [
+        { customer: 'Accenture', outcome: 'consolidated automation tooling across their hybrid environment' },
+      ],
+    }]
+    const result = buildPeerPattern(
+      { playName: 'Automation', exampleIndex: 0 },
+      plays,
+    ).text
+    expect(result).toContain('Accenture')
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('returns empty when no company name is available at all', () => {
+    const plays = [{ name: 'Empty', parentTdp: 'TDP-X' }]
+    const result = buildPeerPattern(null, plays).text
+    expect(result).toBe('')
+  })
+
+  it('never returns GENERIC_PEER_PATTERN in render path', () => {
+    const plays = [{ name: 'Empty', parentTdp: 'TDP-X' }]
+    const result = buildPeerPattern(null, plays).text
+    expect(result).not.toContain('sat with a handful of leaders')
+    expect(result).not.toContain('paying to unwind')
+  })
+})
+
+// ── buildRelationshipLine — signal-based anchors (#1170 Track 2) ────────────
+
+describe('buildRelationshipLine — signal-based anchors (#1170)', () => {
+  const techStackSignals: Signal[] = [
+    {
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'Kubernetes (Container Orchestration, Production)',
+      detail: 'Running containerized workloads',
+      rawRelevance: 0.8,
+      timestamp: '2026-08-01',
+      metadata: { redHatProducts: ['OpenShift', 'Advanced Cluster Management'] },
+    },
+  ]
+
+  const caseSignals: Signal[] = [
+    {
+      source: 'cases',
+      type: 'case',
+      headline: 'Case 123: RHEL kernel panic',
+      detail: 'Status: Open | Severity: 2 | Product: Red Hat Enterprise Linux',
+      rawRelevance: 0.7,
+      timestamp: '2026-08-01',
+      metadata: { product: 'Red Hat Enterprise Linux' },
+    },
+  ]
+
+  it('renders anchor from tech-stack signals when subscriptions are empty', () => {
+    const result = buildRelationshipLine([], techStackSignals).text
+    expect(result.length).toBeGreaterThan(0)
+    expect(result).toContain('OpenShift')
+  })
+
+  it('renders anchor from case signals when subscriptions are empty', () => {
+    const result = buildRelationshipLine([], caseSignals).text
+    expect(result.length).toBeGreaterThan(0)
+    expect(result).toContain('Red Hat Enterprise Linux')
+  })
+
+  it('prefers subscription-based anchor over signal-based', () => {
+    const result = buildRelationshipLine(testSubscriptions, techStackSignals).text
+    expect(result).toContain('rely on')
+  })
+
+  it('returns empty when no subscriptions AND no signals have products', () => {
+    const emptySignals: Signal[] = [
+      {
+        source: 'intelligence',
+        type: 'news',
+        headline: 'Some news',
+        detail: 'Details',
+        timestamp: '2026-08-01',
+      },
+    ]
+    const result = buildRelationshipLine([], emptySignals).text
+    expect(result).toBe('')
+  })
+
+  it('returns empty when no data at all — no vague fallback text', () => {
+    const result = buildRelationshipLine([], []).text
+    expect(result).toBe('')
+    expect(result).not.toContain('explored')
+    expect(result).not.toContain('solutions')
+  })
+
+  it('backward compatible — works without signals parameter', () => {
+    const result = buildRelationshipLine(testSubscriptions).text
+    expect(result).toContain('rely on')
   })
 })
 

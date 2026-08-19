@@ -1113,22 +1113,44 @@ function linkProductName(displayName: string): string {
 
 export function buildRelationshipLine(
   subscriptions: Array<{ product?: string; productDescription?: string; sku?: string; status?: string }>,
+  signals?: Array<{ source: string; type: string; metadata?: Record<string, unknown> }>,
 ): BlockOutput {
-  if (!subscriptions || subscriptions.length === 0) return validateBlock('relationshipLine', toBlock(''))
-
-  const activeProducts = subscriptions
+  const activeProducts = (subscriptions || [])
     .filter(s => s.status === 'Active')
     .filter(s => !isFreeTierProduct(s.productDescription || s.product || s.sku || ''))
     .map(s => resolveProductDisplayName(s.productDescription || s.product || s.sku || ''))
     .filter(p => p.length > 0)
 
   const unique = [...new Set(activeProducts)]
-  if (unique.length === 0) return validateBlock('relationshipLine', toBlock(''))
+  if (unique.length > 0) {
+    const linked = unique.map(linkProductName)
+    if (linked.length === 1) return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${linked[0]}.`))
+    const display = linked.slice(0, 3)
+    return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`))
+  }
 
-  const linked = unique.map(linkProductName)
-  if (linked.length === 1) return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${linked[0]}.`))
-  const display = linked.slice(0, 3)
-  return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`))
+  if (signals && signals.length > 0) {
+    const products = new Set<string>()
+    for (const s of signals) {
+      if (s.source === 'tech-stack' || s.type === 'technology') {
+        const rh = s.metadata?.redHatProducts as string[] | undefined
+        if (rh) rh.forEach(p => products.add(p))
+      } else if (s.source === 'cases' || s.type === 'case') {
+        const product = s.metadata?.product as string | undefined
+        if (product) products.add(product)
+      } else if (s.type === 'product-intel') {
+        const product = s.metadata?.product as string | undefined
+        if (product) products.add(product)
+      }
+    }
+    if (products.size > 0) {
+      const list = [...products].slice(0, 3)
+      if (list.length === 1) return validateBlock('relationshipLine', toBlock(`Your teams work with ${list[0]}.`))
+      return validateBlock('relationshipLine', toBlock(`Your teams work with ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}.`))
+    }
+  }
+
+  return validateBlock('relationshipLine', toBlock(''))
 }
 
 /**
@@ -1223,12 +1245,12 @@ const HAS_METRIC = /\d+%|\$[\d,.]+|[\d,.]+ (?:million|billion|M|B)\b|\d+x\b|\d+ 
 const GENERIC_PEER_PATTERN = "I've sat with a handful of leaders at this exact stage — and the ones who came out ahead all made one or two early decisions that their peers are still paying to unwind."
 
 function formatPeerProofLine(customer: string, outcome: string): string {
-  if (!HAS_METRIC.test(outcome)) {
-    console.warn(`[template] Peer proof rejected — no metric: "${customer}: ${outcome.slice(0, 60)}..."`)
-    return ''
+  if (!customer || customer.trim().length === 0) return ''
+  if (HAS_METRIC.test(outcome)) {
+    if (VERB_PATTERN.test(outcome)) return `${customer} ${outcome}`
+    return `${customer} → ${outcome}`
   }
-  if (VERB_PATTERN.test(outcome)) return `${customer} ${outcome}`
-  return `${customer} → ${outcome}`
+  return `${customer} made this move — ${outcome}`
 }
 
 export function buildPeerPattern(
@@ -1277,8 +1299,8 @@ export function buildPeerPattern(
     if (metric) return validateBlock('peerPattern', toBlock(`Organizations in similar positions have seen ${metric.value} — ${metric.context}.`))
   }
 
-  // Priority 4: Generic peer pattern fallback — peer proof must NEVER be empty (#1138)
-  return validateBlock('peerPattern', toBlock(GENERIC_PEER_PATTERN))
+  // Priority 4: No proof available — omit entirely (#1170: never use GENERIC_PEER_PATTERN)
+  return validateBlock('peerPattern', toBlock(''))
 }
 
 /**
@@ -1908,7 +1930,7 @@ export async function generateCampaignFromStructured(
       }
     }
     const signalBridge = objectiveContext ? toBlock(`${rawSignalBridge.text} ${objectiveContext}`) : rawSignalBridge
-    const relationshipLine = buildRelationshipLine(data.subscriptions)
+    const relationshipLine = buildRelationshipLine(data.subscriptions, data.signals)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution, matchedBrief)
     const rawRefLine = buildReferenceLine(data.linkRegistry)
     const referenceLine = toBlock(sanitizeReferenceLine(rawRefLine.text, data.linkRegistry))
