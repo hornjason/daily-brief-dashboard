@@ -23,18 +23,20 @@ import {
   generateCampaign,
   generateCampaignFromPlay,
   CampaignQualityGateError,
-  loadCampaignsFromCache,
-  loadCampaignFromCache,
-  deleteCampaignFromCache,
   extractMaterial,
   deleteMaterialCache,
   getVoiceProfile,
   detectVoiceProfile,
   type CampaignRequest,
   type CampaignResult,
-  type CampaignListItem,
   type PlayContextRequest,
 } from './campaign-service.ts'
+import {
+  loadCampaignsFromCache,
+  loadCampaignFromCache,
+  deleteCampaignFromCache,
+  type CampaignListItem,
+} from './lib/campaign-cache.ts'
 
 // ── In-flight guard ──────────────────────────────────────────────────────────
 

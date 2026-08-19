@@ -4,7 +4,7 @@
  */
 
 // @consumer-contract v1.0
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
@@ -40,6 +40,13 @@ import { callGeminiForUnifiedSelection, type UnifiedSelectionResult, type Unifie
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 import { assertExtractionOutput, assertUnifiedSelectionOutput, assertPass2Output } from './lib/campaign-contracts.ts'
 import { validateCampaignOutput } from './lib/campaign-output-validator.ts'
+import {
+  saveCampaignToCache,
+  findExistingDriveFileIds,
+  enrichSignalsFromCache,
+  isIntelligenceStale,
+  type CampaignCacheEntry,
+} from './lib/campaign-cache.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
 
@@ -152,33 +159,6 @@ export function deriveFootprint(
   return undefined
 }
 
-// ── Signal enrichment (loads intelligence + account plan from cache) ────────
-
-async function enrichSignalsFromCache(
-  signals: CustomerSignals,
-  slug: string,
-  subSignals: Signal[],
-  registrySignals: Signal[],
-): Promise<CustomerSignals> {
-  const enriched: any = { ...signals }
-  try {
-    const { existsSync, readFileSync } = await import('fs')
-    const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
-    if (existsSync(intelPath)) enriched.intelligence = JSON.parse(readFileSync(intelPath, 'utf-8'))
-    const planPath = resolve(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
-    if (existsSync(planPath)) enriched.accountPlan = readFileSync(planPath, 'utf-8')
-  } catch { /* silent */ }
-  if (subSignals.length > 0) {
-    enriched.subscriptions = subSignals.map(s => ({
-      productName: s.metadata?.product ?? s.headline,
-      quantity: s.metadata?.quantity ?? 1,
-      status: 'Active',
-    }))
-  }
-  const caseSignals = registrySignals.filter(s => s.source === 'cases')
-  if (caseSignals.length > 0) enriched.cases = caseSignals
-  return enriched
-}
 
 // ── URL extraction from plain text ──────────────────────────────────────────
 function extractUrlsFromPlainText(text: string): Array<{ url: string; title: string }> {
@@ -340,32 +320,6 @@ export function assessSignalQuality(
   }
 }
 
-export interface CampaignListItem {
-  id: string
-  materialTitle: string
-  generatedAt: string
-  driveUrl: string
-  htmlUrl: string
-}
-
-interface CampaignCacheEntry {
-  id: string
-  materialTitle: string
-  materialUrl: string
-  customerName: string
-  markdown: string
-  htmlContent: string
-  generatedAt: string
-  driveUrl: string
-  htmlUrl: string
-  driveFileId?: string
-  driveHtmlFileId?: string
-  signalsLoaded?: string[]
-  signalsMissing?: string[]
-  signalCompleteness?: number
-  qualityScorecard?: QualityScorecard
-  campaignDirective?: string
-}
 
 // ── Material extraction (moved to google-content-extractor.ts) ──────────────
 import { extractFileId, extractMaterialContent } from './lib/google-content-extractor.ts'
@@ -671,30 +625,6 @@ async function ensureCampaignsSubfolder(customerFolderId: string): Promise<strin
   return driveClient.ensureChildFolder(customerFolderId, 'Campaigns')
 }
 
-function findExistingDriveFileIds(
-  customerSlug: string,
-  materialUrl: string,
-): { driveFileId?: string; driveHtmlFileId?: string } | null {
-  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
-  if (!existsSync(campaignsDir)) return null
-
-  const files = readdirSync(campaignsDir).filter(f => f.startsWith(`${customerSlug}-`) && f.endsWith('.json'))
-  let latest: CampaignCacheEntry | null = null
-
-  for (const file of files) {
-    try {
-      const entry: CampaignCacheEntry = JSON.parse(readFileSync(resolve(campaignsDir, file), 'utf-8'))
-      if (entry.materialUrl === materialUrl && (entry.driveFileId || entry.driveHtmlFileId)) {
-        if (!latest || new Date(entry.generatedAt) > new Date(latest.generatedAt)) {
-          latest = entry
-        }
-      }
-    } catch { /* skip corrupt entries */ }
-  }
-
-  return latest ? { driveFileId: latest.driveFileId, driveHtmlFileId: latest.driveHtmlFileId } : null
-}
-
 async function uploadCampaignToDrive(
   customerFolderId: string,
   customer: Customer,
@@ -814,77 +744,6 @@ async function uploadCampaignToDrive(
   return { driveUrl, htmlUrl, driveFileId, driveHtmlFileId: htmlFileId }
 }
 
-// ── Cache persistence ────────────────────────────────────────────────────────
-
-export function saveCampaignToCache(
-  customerSlug: string,
-  entry: CampaignCacheEntry,
-): void {
-  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
-  mkdirSync(campaignsDir, { recursive: true })
-
-  const campaignPath = resolve(campaignsDir, `${customerSlug}-${entry.id}.json`)
-  writeFileSync(campaignPath, JSON.stringify(entry, null, 2), { mode: 0o600 })
-  console.log(`[campaigns] Saved to cache: ${campaignPath}`)
-}
-
-export function loadCampaignsFromCache(customerSlug: string): CampaignListItem[] {
-  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
-  if (!existsSync(campaignsDir)) return []
-
-  const files = readdirSync(campaignsDir).filter(f => f.startsWith(`${customerSlug}-`) && f.endsWith('.json'))
-  const campaigns: CampaignListItem[] = []
-
-  for (const file of files) {
-    try {
-      const entry: CampaignCacheEntry = JSON.parse(readFileSync(resolve(campaignsDir, file), 'utf-8'))
-      campaigns.push({
-        id: entry.id,
-        materialTitle: entry.materialTitle,
-        generatedAt: entry.generatedAt,
-        driveUrl: entry.driveUrl,
-        htmlUrl: entry.htmlUrl,
-      })
-    } catch (e: any) {
-      console.warn(`[campaigns] Failed to read ${file}:`, e.message)
-    }
-  }
-
-  // Sort by generatedAt desc
-  campaigns.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())
-  return campaigns
-}
-
-export function loadCampaignFromCache(customerSlug: string, campaignId: string): CampaignCacheEntry | null {
-  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
-  const campaignPath = resolve(campaignsDir, `${customerSlug}-${campaignId}.json`)
-
-  if (!existsSync(campaignPath)) return null
-
-  try {
-    return JSON.parse(readFileSync(campaignPath, 'utf-8'))
-  } catch (e: any) {
-    console.error(`[campaigns] Failed to read campaign ${campaignId}:`, e.message)
-    return null
-  }
-}
-
-export function deleteCampaignFromCache(customerSlug: string, campaignId: string): boolean {
-  const campaignsDir = resolve(CACHE_DIR, 'campaigns')
-  const campaignPath = resolve(campaignsDir, `${customerSlug}-${campaignId}.json`)
-
-  if (!existsSync(campaignPath)) return false
-
-  try {
-    unlinkSync(campaignPath)
-    console.log(`[campaigns] Deleted from cache: ${campaignPath}`)
-    return true
-  } catch (e: any) {
-    console.error(`[campaigns] Failed to delete campaign ${campaignId}:`, e.message)
-    return false
-  }
-}
-
 // ── Core generation logic ────────────────────────────────────────────────────
 
 export async function generateCampaign(
@@ -981,25 +840,10 @@ export async function generateCampaign(
   }
 
   // 2. Pre-flight: ensure all intelligence exists and is fresh before loading signals
-  const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
   const planPath = resolve(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
-  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-  // Check intelligence brief — generate if missing or stale (>7 days)
-  let needsIntelRefresh = !existsSync(intelPath)
-  if (!needsIntelRefresh && existsSync(intelPath)) {
-    try {
-      const intelData = JSON.parse(readFileSync(intelPath, 'utf-8'))
-      const cachedAt = intelData.cachedAt ? new Date(intelData.cachedAt).getTime() : 0
-      if (Date.now() - cachedAt > STALE_THRESHOLD_MS) {
-        needsIntelRefresh = true
-        console.log(`[campaigns] Intelligence brief stale for ${customer.name} (cached ${intelData.cachedAt})`)
-      }
-    } catch { needsIntelRefresh = true }
-  }
-
-  if (needsIntelRefresh) {
-    console.log(`[campaigns] Intelligence brief ${existsSync(intelPath) ? 'stale' : 'missing'} for ${customer.name} — generating...`)
+  if (isIntelligenceStale(slug)) {
+    console.log(`[campaigns] Intelligence brief stale/missing for ${customer.name} — generating...`)
     try {
       await runIntelligencePipeline(customer.name, true)
       console.log(`[campaigns] Intelligence brief generated for ${customer.name}`)
@@ -1541,19 +1385,7 @@ export async function generateCampaignFromPlay(
   ].join('\n')
 
   // Pre-flight: ensure intelligence is fresh
-  const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
-  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000
-
-  let needsIntelRefresh = !existsSync(intelPath)
-  if (!needsIntelRefresh && existsSync(intelPath)) {
-    try {
-      const intelData = JSON.parse(readFileSync(intelPath, 'utf-8'))
-      const cachedAt = intelData.cachedAt ? new Date(intelData.cachedAt).getTime() : 0
-      if (Date.now() - cachedAt > STALE_THRESHOLD_MS) needsIntelRefresh = true
-    } catch { needsIntelRefresh = true }
-  }
-
-  if (needsIntelRefresh) {
+  if (isIntelligenceStale(slug)) {
     try {
       await runIntelligencePipeline(customer.name, true)
     } catch (e: any) {
