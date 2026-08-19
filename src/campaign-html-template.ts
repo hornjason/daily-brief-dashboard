@@ -820,6 +820,7 @@ export function buildOpener(
   tier: 'executive' | 'manager' = 'manager',
   matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
   customerName?: string,
+  usedOpeners?: Set<string>,
 ): string {
   const firstName = recipientName.split(' ')[0]
 
@@ -864,7 +865,10 @@ export function buildOpener(
 
     if (fields.length > 0) {
       const field = fields[openerVariant % fields.length]
-      return `${firstName}, ${field}.`
+      if (!usedOpeners || !usedOpeners.has(field.slice(0, 50))) {
+        if (usedOpeners) usedOpeners.add(field.slice(0, 50))
+        return `${firstName}, ${field}.`
+      }
     }
   }
 
@@ -1677,6 +1681,9 @@ export function generateCampaignFromStructured(
   // Track quality check results for dynamic checklist
   const qualityResults: EmailQualityResult[] = []
 
+  // Track used openers for dedup across emails
+  const usedOpeners = new Set<string>()
+
   // Build per-email HTML
   const execEmailsHtml: string[] = []
   const managerEmailsHtml: string[] = []
@@ -1712,7 +1719,7 @@ export function generateCampaignFromStructured(
     const matchedBrief = exactMatch || tierBriefs[tierIndex % tierBriefs.length]
 
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName, usedOpeners)
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier

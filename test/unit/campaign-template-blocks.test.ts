@@ -197,6 +197,47 @@ describe('buildOpener — trailing cleanup (#197)', () => {
   })
 })
 
+describe('buildOpener — dedup across emails (#197)', () => {
+  it('falls back to signal headline when brief opener already used', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
+      timingTrigger: null as any,
+      valueProposition: null as any,
+    })
+    const used = new Set<string>()
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used)
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used)
+    expect(second).not.toBe(first.replace('Alice', 'Bob'))
+    expect(second).toContain('Bob')
+  })
+
+  it('produces unique openers for 3 contacts sharing sparse brief', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'consolidate automation tooling across the enterprise',
+      timingTrigger: null as any,
+      valueProposition: null as any,
+    })
+    const used = new Set<string>()
+    const names = ['Alice Smith', 'Bob Jones', 'Carol White']
+    const openers = names.map((name, i) => {
+      return buildOpener(0, testSignals, i, name, 'manager', brief, undefined, used)
+    })
+    const unique = new Set(openers)
+    expect(unique.size).toBe(3)
+  })
+
+  it('does not dedup when usedOpeners is not provided', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
+      timingTrigger: null as any,
+      valueProposition: null as any,
+    })
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief)
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief)
+    expect(first.replace('Alice', 'Bob')).toBe(second)
+  })
+})
+
 // ── buildSignalBridge ───────────────────────────────────────────────────────
 
 describe('buildSignalBridge — anti-gaming', () => {
