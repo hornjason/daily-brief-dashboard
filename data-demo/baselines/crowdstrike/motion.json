@@ -1,0 +1,1876 @@
+{
+  "id": "motion:crowdstrike",
+  "customerSlug": "crowdstrike",
+  "customerName": "Crowdstrike",
+  "title": "Build and Run Applications for Crowdstrike",
+  "salesPlay": "Build and Run Applications",
+  "phases": [
+    {
+      "id": "phase-1-anchor",
+      "name": "Anchor: Protect: Automation",
+      "category": "anchor",
+      "urgency": "critical",
+      "tactics": [
+        {
+          "name": "Optimize and Modernize IT Ops",
+          "parentTdp": "Automation",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+          "assets": [
+            {
+              "name": "Understand the customer’s current technology, process, and culture with a no-cost Discovery Session",
+              "url": "https://portfoliohub.redhat.com/v3/serviceskit/discovery",
+              "type": "share"
+            },
+            {
+              "name": "Workshop(s): Ansible Infrastructure",
+              "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+infrastructure",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Automate Red Hat Enterprise Linux Management",
+              "url": "https://interact.redhat.com/share/syjTubZthrhueySX9Fo6",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Deploying and Removing RHEL Apps",
+              "url": "https://interact.redhat.com/share/WLz8bjVZ1Tw1ie8KBv7f",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: AI Infrastructure automation with Red Hat Ansible Automation Platform",
+              "url": "https://interact.redhat.com/share/uDQwrwoTItuESXBJEQFK",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Red Hat Ansible unlocks AIOps",
+              "url": "https://interact.redhat.com/share/kCuEEAIeU2a8plQcDALz",
+              "type": "share"
+            },
+            {
+              "name": "Workshop(s): Ansible Cloud",
+              "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+cloud",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: AAP Infra visibility with Cloud Reports (AWS, Azure, Google CLoud)",
+              "url": "https://interact.redhat.com/share/sNQiGC0nlB9jbcr4B3bM",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Ansible Automation on Microsoft Azure",
+              "url": "https://interact.redhat.com/share/liRbTzSPhtuQZwTI3JSV",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Hashi Terraform + Ansible Automation Platform",
+              "url": "https://interact.redhat.com/share/g5FvwGvIJdX9vGQpjrC8",
+              "type": "share"
+            },
+            {
+              "name": "EDA Labs - both customer facing and for your use",
+              "url": "https://www.redhat.com/en/engage/event-driven-ansible-20220907",
+              "type": "share"
+            },
+            {
+              "name": "EDA technical workshop - are for SA/SSA and partner-facing",
+              "url": "https://labs.demoredhat.com/",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Event-Driven Ansible with Red Hat OpenShift",
+              "url": "https://interact.redhat.com/share/vEok7v9v5UbdsIj3ldmp",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Virtual infrastructure automation with Red Hat Ansible",
+              "url": "https://interact.redhat.com/share/v9MTM5cDobhszqL2xVGZ",
+              "type": "share"
+            },
+            {
+              "name": "Interactive Walkthrough: Scaling VM Migration to OpenShift",
+              "url": "https://interact.redhat.com/share/nOMqJgJKjLnHrJTNzwne",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Automation Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Automation Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/590bfb47-7ab0-4a5a-ae08-107474643ac4",
+              "type": "deck"
+            },
+            {
+              "title": "ABU | Red Hat Ansible Automation Platform Technical Deck",
+              "url": "https://catalog.demo.redhat.com/catalog?search=Ansible",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 1.5949351718007572,
+          "evidenceTrail": [
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.3642801792703551
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.35768129060569664
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "15d ago",
+              "weight": 0.3575931118288642
+            },
+            {
+              "fact": "Pipeline: Ansible Expansion",
+              "module": "pipeline",
+              "recency": "-1526h ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Evidence: Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "Automate at Scale",
+          "parentTdp": "Automation",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+          "assets": [
+            {
+              "name": "Learn how Transunion methodically scaled adoption of automation across every part of their IT organization, making teams more empowered and successful with Ansible Automation Platform. Learn more about how Red Hat Services consultants can help you transform your IT culture through automation: https://www.redhat.com/en/consulting/automation",
+              "url": "https://www.redhat.com/en/technologies/management/ansible/trial",
+              "type": "share"
+            },
+            {
+              "name": "Technical",
+              "url": "https://www.redhat.com/en/services/support/technical-account-management",
+              "type": "share"
+            },
+            {
+              "name": "Business Value RAVE tool",
+              "url": "https://content.redhat.com/us/en/sales-enablement/sales-programs-overview/business-value.html#tabs-d9fd69e3c6-item-75b306402b-tab",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Automation Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Automation Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/590bfb47-7ab0-4a5a-ae08-107474643ac4",
+              "type": "deck"
+            },
+            {
+              "title": "ABU | Red Hat Ansible Automation Platform Technical Deck",
+              "url": "https://catalog.demo.redhat.com/catalog?search=Ansible",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 1.5949351718007572,
+          "evidenceTrail": [
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.3642801792703551
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.35768129060569664
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "15d ago",
+              "weight": 0.3575931118288642
+            },
+            {
+              "fact": "Pipeline: Ansible Expansion",
+              "module": "pipeline",
+              "recency": "-1526h ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Evidence: Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "VM Migration & modernization",
+          "parentTdp": "Automation",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+          "assets": [
+            {
+              "name": "Migrate and modernize your VMs with a fully managed platform with Red Hat OpenShift Virtualization on Red Hat OpenShift running on Google Cloud available in public preview. Robert Akerblom and Andy Repton from Red Hat will take you through core capabilities and migration strategies that you can implement with this solution. Learn more about OpenShift Virtualization. https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization?sc_cid=RHCTN0250000435994&gad_source=1&gad_campaignid=21901955479&gbraid=0AAAAADsbVMSBlJ0rnc-3jqKSjpbLQZ9JV&gclid=EAIaIQobChMIv8TlpNCbkQMVmRxECB2LZjMYEAAYASAAEgIdJvD_BwE Read the checklist: https://www.redhat.com/en/resources/migrate-openshift-on-google-cloud-checklist Walk through the arcade: https://interact.redhat.com/share/XMT5zxwurRaGYDpnKR2K",
+              "url": "http://red.ht/virttcoestimator",
+              "type": "share"
+            },
+            {
+              "name": "Automate your migration at scale",
+              "url": "https://www.redhat.com/en/products/interactive-walkthrough/migrate-virtual-machines#automate-your-migration-at-scale",
+              "type": "share"
+            },
+            {
+              "name": "Regional DR for VMs using RHACM and ODF",
+              "url": "https://www.redhat.com/en/products/interactive-walkthrough/migrate-virtual-machines",
+              "type": "share"
+            },
+            {
+              "name": "Mission Critical Application Platform",
+              "url": "https://content.redhat.com/content/rhcc/us/en/product/cross-portfolio-initiatives/architectures.html?#mission-critical-virt",
+              "type": "share"
+            },
+            {
+              "name": "Automate Migration",
+              "url": "https://youtu.be/oaKMF4s3d3s?si=XO5EVgckmhDU8Llw",
+              "type": "share"
+            },
+            {
+              "name": "Day 2 Automation",
+              "url": "https://youtu.be/_cf-7XJvKAY?si=Law4wm7Bvo8wPkcK",
+              "type": "share"
+            },
+            {
+              "name": "Workshop(s): OpenShift",
+              "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?category=Workshops&search=virtualization",
+              "type": "share"
+            },
+            {
+              "name": "Virtualization Migration with RH Services - Customer Pitch Deck",
+              "url": "https://content.redhat.com/content/rhcc/us/en/product/cross-portfolio-initiatives/architectures.html?#open-virt-virt",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Automation Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Automation Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/590bfb47-7ab0-4a5a-ae08-107474643ac4",
+              "type": "deck"
+            },
+            {
+              "title": "ABU | Red Hat Ansible Automation Platform Technical Deck",
+              "url": "https://catalog.demo.redhat.com/catalog?search=Ansible",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 1.3869001493919628,
+          "evidenceTrail": [
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.3642801792703551
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "14d ago",
+              "weight": 0.35768129060569664
+            },
+            {
+              "fact": "Recent engagement: Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+              "module": "engagement",
+              "recency": "15d ago",
+              "weight": 0.3575931118288642
+            },
+            {
+              "fact": "Pipeline: Ansible Expansion",
+              "module": "pipeline",
+              "recency": "-1526h ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Evidence: Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        }
+      ],
+      "targetPersonas": [
+        "VP IT Operations",
+        "Director of Platform Engineering",
+        "IT Operations Lead"
+      ],
+      "evidence": [
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Ansible Expansion (Pipeline, $100000)"
+        },
+        {
+          "module": "subscriptions",
+          "fact": "expired-critical: Ansible Automation Platform",
+          "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+        },
+        {
+          "module": "subscriptions",
+          "fact": "expired: OpenShift Container Platform Standard (2 Cores or 4 vCPUs)",
+          "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Google cloud spend: $210,391.5 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "AWS cloud spend: $239,662.78 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "cloud spend: $460,125.42 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Marketplace: AWS"
+        }
+      ],
+      "flowLedger": {
+        "signalsIngested": 111,
+        "tdpMatched": 39,
+        "corroborationPassed": 4,
+        "corroborationDropped": 0,
+        "crossRefPassed": 35,
+        "crossRefFailed": 4,
+        "evidenceBeforeCap": 39,
+        "finalEvidenceCount": 7,
+        "gateDetails": [
+          {
+            "sourceType": "subscription",
+            "ingested": 5,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "case",
+            "ingested": 8,
+            "tdpMatched": 5,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 5,
+            "crossRefFailed": 0,
+            "evidenceProduced": 5
+          },
+          {
+            "sourceType": "deal",
+            "ingested": 10,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 1,
+            "crossRefFailed": 0,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "play",
+            "ingested": 15,
+            "tdpMatched": 7,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 7,
+            "crossRefFailed": 0,
+            "evidenceProduced": 7
+          },
+          {
+            "sourceType": "program",
+            "ingested": 8,
+            "tdpMatched": 8,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 7,
+            "crossRefFailed": 1,
+            "evidenceProduced": 8
+          },
+          {
+            "sourceType": "product",
+            "ingested": 30,
+            "tdpMatched": 5,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 5,
+            "crossRefFailed": 0,
+            "evidenceProduced": 5
+          },
+          {
+            "sourceType": "engagement",
+            "ingested": 3,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 1,
+            "crossRefFailed": 0,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "intel",
+            "ingested": 11,
+            "tdpMatched": 3,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 1,
+            "evidenceProduced": 3
+          },
+          {
+            "sourceType": "lifecycle",
+            "ingested": 3,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "event",
+            "ingested": 6,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 1,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "evidence",
+            "ingested": 7,
+            "tdpMatched": 4,
+            "corroborationResult": "passed",
+            "crossRefPassed": 3,
+            "crossRefFailed": 1,
+            "evidenceProduced": 4
+          },
+          {
+            "sourceType": "partner",
+            "ingested": 5,
+            "tdpMatched": 0,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          }
+        ]
+      },
+      "brief": "This phase is critical as the customer's $100k pipeline for Ansible expansion confirms that automation is their core strategy for modernizing IT operations across their multi-cloud estate. Their current approach creates a significant attack surface as they rapidly migrate and provision new workloads across AWS and GCP, which legacy security tools cannot keep pace with. By embedding Crowdstrike directly into their Ansible playbooks, we enable them to secure their $460k+ cloud investment at scale, ensuring protection is an automated component of their modernization efforts, not a manual bottleneck."
+    },
+    {
+      "id": "phase-2-expand",
+      "name": "Expand: Server and Cloud Computing",
+      "category": "expand",
+      "urgency": "critical",
+      "tactics": [
+        {
+          "name": "Migrate to the Cloud",
+          "parentTdp": "Server/Cloud OS",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+          "assets": [
+            {
+              "name": "Stop wasting time on manual configurations and inconsistent setups across multiple clouds by adopting cloud-optimized Red Hat Enterprise Linux (RHEL). This consistent platform eliminates hours of repetitive setup work, simplifies management and monitoring, and allows your team to build, deploy, and innovate faster than ever across every platform. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/cloud",
+              "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
+              "type": "share"
+            },
+            {
+              "name": "RHEL in the Cloud hub page",
+              "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/cloud",
+              "type": "share"
+            },
+            {
+              "name": "RHEL Solution Architectures",
+              "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Enterprise Linux demos and labs",
+              "url": "https://source.redhat.com/departments/products_and_global_engineering/infrastructure_rhel/news__wins/massive_rhel_win_at_hmrc_selling_through_the_hyperscalers_with_hybrid_committed_spend_to_make_it_work_for_red_hat",
+              "type": "share"
+            },
+            {
+              "name": "Key items: RHEL 10 demos and labs",
+              "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
+              "type": "share"
+            },
+            {
+              "name": "Undertake a Navigate engagement to better understand the roots of customer challenges with automation and options for moving forward",
+              "url": "https://portfoliohub.redhat.com/v3/serviceskit/navigate",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Consulting: Platform Standardization",
+              "url": "https://www.redhat.com/en/services/consulting/hybrid-cloud",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Services solutions offerings for RHEL and infrastructure",
+              "url": "https://portfoliohub.redhat.com/v3/search-kits?campaign=rhel",
+              "type": "share"
+            },
+            {
+              "name": "Technical Account Management",
+              "url": "https://www.redhat.com/en/services/support/technical-account-management",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Training and Certification",
+              "url": "https://www.redhat.com/en/services/training-and-certification",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat System Administration II",
+              "url": "https://www.redhat.com/en/services/training/rh124-red-hat-system-administration-i",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Certified System Administrator (RHCSA) exam",
+              "url": "https://www.redhat.com/en/services/training/ex200-red-hat-certified-system-administrator-rhcsa-exam",
+              "type": "share"
+            },
+            {
+              "name": "Image mode for RHEL",
+              "url": "https://content.redhat.com/us/en/assets/display.html?id=2501b924-7296-4f9b-afd0-ce705ce6b8e4&fusionQueryId=8qYgrKOFYo&query=partner",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Server/Cloud OS Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Server/Cloud OS Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/f999df65-ec80-4cbc-8da0-d1bcefb303ba",
+              "type": "deck"
+            },
+            {
+              "title": "What is new in Red Hat Enterprise Linux 10 and beyond",
+              "url": "https://content.redhat.com/us/en/assets/display.html?id=fae9bf35-2234-494d-98eb-0216cc13b4da&fusionQueryId=GOQtS4P99m&query=%22RHEL%2010%22",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 0.7583333333333335,
+          "evidenceTrail": [
+            {
+              "fact": "Pipeline: RN - Crowdstrike - RHEL & D4T",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "Standardize & Modernize your Operating System",
+          "parentTdp": "Server/Cloud OS",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+          "assets": [
+            {
+              "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+              "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
+              "type": "share"
+            },
+            {
+              "name": "RHEL Solution Architectures",
+              "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
+              "type": "share"
+            },
+            {
+              "name": "Key items: RHEL 10 demos and labs",
+              "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
+              "type": "share"
+            },
+            {
+              "name": "Interactive experiences",
+              "url": "https://www.redhat.com/en/interactive-experiences#linux-standardization-",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Server/Cloud OS Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Server/Cloud OS Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/f999df65-ec80-4cbc-8da0-d1bcefb303ba",
+              "type": "deck"
+            },
+            {
+              "title": "What is new in Red Hat Enterprise Linux 10 and beyond",
+              "url": "https://content.redhat.com/us/en/assets/display.html?id=fae9bf35-2234-494d-98eb-0216cc13b4da&fusionQueryId=GOQtS4P99m&query=%22RHEL%2010%22",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 0.7583333333333335,
+          "evidenceTrail": [
+            {
+              "fact": "Pipeline: RN - Crowdstrike - RHEL & D4T",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "Secure and Manage RHEL",
+          "parentTdp": "Server/Cloud OS",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+          "assets": [
+            {
+              "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+              "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
+              "type": "share"
+            },
+            {
+              "name": "RHEL Virtual Workshop: OS Security and Management with Red Hat",
+              "url": "https://www.redhat.com/en/events/webinar/os-security-management?sc_cid=RHCTA1250000440819&intcmp=RHCTG0250000458742",
+              "type": "share"
+            },
+            {
+              "name": "Solution architecture: convert from CentOS to Red Hat Enterprise Linux",
+              "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
+              "type": "share"
+            },
+            {
+              "name": "Red Hat Enterprise Linux demos and labs",
+              "url": "https://www.redhat.com/architect/portfolio/detail/59-red-hat-enterprise-linux-demo",
+              "type": "share"
+            },
+            {
+              "name": "Key items:RHEL 10 demos and labs",
+              "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "Server/Cloud OS Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/4a9298e1-0646-47d2-af5b-50cecd0a3587",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "Server/Cloud OS Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/f999df65-ec80-4cbc-8da0-d1bcefb303ba",
+              "type": "deck"
+            },
+            {
+              "title": "What is new in Red Hat Enterprise Linux 10 and beyond",
+              "url": "https://content.redhat.com/us/en/assets/display.html?id=fae9bf35-2234-494d-98eb-0216cc13b4da&fusionQueryId=GOQtS4P99m&query=%22RHEL%2010%22",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 0.7583333333333335,
+          "evidenceTrail": [
+            {
+              "fact": "Pipeline: RN - Crowdstrike - RHEL & D4T",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            },
+            {
+              "fact": "Pipeline: Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026",
+              "module": "pipeline",
+              "recency": "30d+ ago",
+              "weight": 0.15
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        }
+      ],
+      "targetPersonas": [
+        "VP Infrastructure",
+        "Cloud Architect",
+        "Director of IT Operations"
+      ],
+      "evidence": [
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: RN - Crowdstrike - RHEL & D4T (Closed, $753.3)"
+        },
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026 (Closed, $2202.65)"
+        },
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026 (Closed, $1614.9)"
+        },
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE (Closed, $1742.26)"
+        },
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026 (Closed, $821.27)"
+        },
+        {
+          "module": "pipeline",
+          "fact": "Pipeline: Global Royalty-CCSP-AWS ROSA-CY26Q1-M2-US-CrowdStrike-'Public'-Usage Period : February 2026 (Closed, $821.62)"
+        },
+        {
+          "module": "subscriptions",
+          "fact": "active: Enterprise Linux Server",
+          "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+        }
+      ],
+      "flowLedger": {
+        "signalsIngested": 111,
+        "tdpMatched": 35,
+        "corroborationPassed": 0,
+        "corroborationDropped": 1,
+        "crossRefPassed": 29,
+        "crossRefFailed": 5,
+        "evidenceBeforeCap": 34,
+        "finalEvidenceCount": 7,
+        "gateDetails": [
+          {
+            "sourceType": "subscription",
+            "ingested": 5,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "case",
+            "ingested": 8,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "deal",
+            "ingested": 10,
+            "tdpMatched": 6,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 6,
+            "crossRefFailed": 0,
+            "evidenceProduced": 6
+          },
+          {
+            "sourceType": "play",
+            "ingested": 15,
+            "tdpMatched": 6,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 6,
+            "crossRefFailed": 0,
+            "evidenceProduced": 6
+          },
+          {
+            "sourceType": "program",
+            "ingested": 8,
+            "tdpMatched": 8,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 7,
+            "crossRefFailed": 1,
+            "evidenceProduced": 8
+          },
+          {
+            "sourceType": "product",
+            "ingested": 30,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "engagement",
+            "ingested": 3,
+            "tdpMatched": 0,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          },
+          {
+            "sourceType": "intel",
+            "ingested": 11,
+            "tdpMatched": 4,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 3,
+            "crossRefFailed": 1,
+            "evidenceProduced": 4
+          },
+          {
+            "sourceType": "lifecycle",
+            "ingested": 3,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 1,
+            "crossRefFailed": 0,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "event",
+            "ingested": 6,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 2,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "evidence",
+            "ingested": 7,
+            "tdpMatched": 1,
+            "corroborationResult": "dropped",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          },
+          {
+            "sourceType": "partner",
+            "ingested": 5,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 1,
+            "evidenceProduced": 1
+          }
+        ]
+      },
+      "brief": "Crowdstrike is strategically standardizing on Red Hat's hybrid cloud platform (RHEL, ROSA, ARO) as the foundation for its core security offerings across AWS and Azure. This is a critical business dependency, as our technology is embedded directly into their revenue-generating commercial services sold to their end customers. By providing a consistent, secure foundation for their multi-cloud strategy, we enable them to accelerate service delivery and reduce operational complexity, making our partnership essential to their market success."
+    },
+    {
+      "id": "phase-displacement",
+      "name": "Displace: AI Platform + Application Development",
+      "category": "expand",
+      "urgency": "high",
+      "tactics": [
+        {
+          "name": "Red Hat AI Factory with NVIDIA",
+          "parentTdp": "AI Platform",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/c94c80e9-2eab-4ac9-9df9-ff7afd37228a",
+          "assets": [],
+          "materials": [
+            {
+              "title": "AI Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/c94c80e9-2eab-4ac9-9df9-ff7afd37228a",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "AI Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/98b46d28-bd56-494b-bbbc-0ab08848fbfd",
+              "type": "deck"
+            },
+            {
+              "title": "Red Hat AI Platform | Customer Deck",
+              "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&labels=%7B%22product_family%22%3A%5B%22red_hat_ai%22%5D%7D&categories=%5B%22Demos%22%5D",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 1.3,
+          "evidenceTrail": [
+            {
+              "fact": "Evidence: Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Evidence: Training resources available for Red Hat Ansible Automation Platform",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Evidence: ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike",
+              "module": "evidence",
+              "recency": "30d+ ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Intel: The Identity Problem Hiding in AI Agent Deployments",
+              "module": "intel",
+              "recency": "8d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Intel: Red Hat OpenShift Container Platform — OpenShift Container Platform 4.21 is an established release that introduced a wi...",
+              "module": "intel",
+              "recency": "0h ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "Sovereign (Private) AI",
+          "parentTdp": "AI Platform",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/c94c80e9-2eab-4ac9-9df9-ff7afd37228a",
+          "assets": [
+            {
+              "name": "Interactive experiences",
+              "url": "https://www.redhat.com/en/interactive-experiences#ai-platform",
+              "type": "share"
+            },
+            {
+              "name": "Model-as–a-Service",
+              "url": "https://www.redhat.com/architect/portfolio/detail/95-models-as-a-service-interactive-experience?intcmp=RHCTG0250000449876",
+              "type": "share"
+            },
+            {
+              "name": "Hands-on with vLLM",
+              "url": "https://www.redhat.com/architect/portfolio/detail/100-hands-on-vllm-interactive-experience?intcmp=RHCTG0250000449876",
+              "type": "share"
+            },
+            {
+              "name": "Introduction to llm-d",
+              "url": "https://www.redhat.com/architect/portfolio/detail/116-introduction-to-llm-d-interactive-experience?intcmp=RHCTG0250000458741",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "AI Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/c94c80e9-2eab-4ac9-9df9-ff7afd37228a",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "AI Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/98b46d28-bd56-494b-bbbc-0ab08848fbfd",
+              "type": "deck"
+            },
+            {
+              "title": "Red Hat AI Platform | Customer Deck",
+              "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&labels=%7B%22product_family%22%3A%5B%22red_hat_ai%22%5D%7D&categories=%5B%22Demos%22%5D",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 1.3,
+          "evidenceTrail": [
+            {
+              "fact": "Evidence: Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Evidence: Training resources available for Red Hat Ansible Automation Platform",
+              "module": "evidence",
+              "recency": "2d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Evidence: ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike",
+              "module": "evidence",
+              "recency": "30d+ ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Intel: The Identity Problem Hiding in AI Agent Deployments",
+              "module": "intel",
+              "recency": "8d ago",
+              "weight": 0.1
+            },
+            {
+              "fact": "Intel: Red Hat OpenShift Container Platform — OpenShift Container Platform 4.21 is an established release that introduced a wi...",
+              "module": "intel",
+              "recency": "0h ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        },
+        {
+          "name": "DevX & platform engineering to build modern applications",
+          "parentTdp": "App Platform",
+          "tdpUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/62dbf090-0720-442d-a378-6b0cf10056b8",
+          "assets": [
+            {
+              "name": "Reprint link",
+              "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+              "type": "share"
+            },
+            {
+              "name": "Faster Onboarding, Faster Innovation",
+              "url": "https://interact.redhat.com/share/nhCOgF7MupbxG4DzOVXz",
+              "type": "share"
+            },
+            {
+              "name": "Self-service provisioning environments with Red Hat Developer Hub",
+              "url": "https://interact.redhat.com/share/tJrKG4RgoyAUdat2K23R",
+              "type": "share"
+            },
+            {
+              "name": "Solution architecture: Mission Critical Application Platform",
+              "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
+              "type": "share"
+            }
+          ],
+          "materials": [
+            {
+              "title": "App platform Cheat Sheet",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/62dbf090-0720-442d-a378-6b0cf10056b8",
+              "type": "cheatsheet"
+            },
+            {
+              "title": "App platform Customer Deck",
+              "url": "https://saleshub.redhat.com/app/#/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/d290b3d1-7783-4dcc-94ab-e3a4eb9ddfaf",
+              "type": "deck"
+            },
+            {
+              "title": "Reprint link",
+              "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+              "type": "doc"
+            }
+          ],
+          "compositeScore": 0.9999999999999999,
+          "evidenceTrail": [
+            {
+              "fact": "Intel: New Abuse of the ClickOnce Technology, Part 1: The Inner Workings of ClickOnce Application Deployment",
+              "module": "intel",
+              "recency": "14d ago",
+              "weight": 0.1
+            }
+          ],
+          "signalDensity": {
+            "populated": 12,
+            "total": 12
+          }
+        }
+      ],
+      "targetPersonas": [
+        "Head of Data Science",
+        "CTO",
+        "VP AI/ML Engineering",
+        "VP Application Development",
+        "Director of Platform Engineering"
+      ],
+      "evidence": [
+        {
+          "module": "subscriptions",
+          "fact": "expired: OpenShift Container Platform Standard (2 Cores or 4 vCPUs)",
+          "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Google cloud spend: $210,391.5 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "AWS cloud spend: $239,662.78 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "cloud spend: $460,125.42 ACV",
+          "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Marketplace: AWS"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Marketplace: Google"
+        },
+        {
+          "module": "ccsp",
+          "fact": "Marketplace: Microsoft"
+        }
+      ],
+      "flowLedger": {
+        "signalsIngested": 111,
+        "tdpMatched": 33,
+        "corroborationPassed": 9,
+        "corroborationDropped": 0,
+        "crossRefPassed": 26,
+        "crossRefFailed": 7,
+        "evidenceBeforeCap": 33,
+        "finalEvidenceCount": 7,
+        "gateDetails": [
+          {
+            "sourceType": "subscription",
+            "ingested": 5,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 1,
+            "crossRefFailed": 0,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "case",
+            "ingested": 8,
+            "tdpMatched": 3,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 3,
+            "crossRefFailed": 0,
+            "evidenceProduced": 3
+          },
+          {
+            "sourceType": "deal",
+            "ingested": 10,
+            "tdpMatched": 0,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          },
+          {
+            "sourceType": "play",
+            "ingested": 15,
+            "tdpMatched": 7,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 7,
+            "crossRefFailed": 0,
+            "evidenceProduced": 7
+          },
+          {
+            "sourceType": "program",
+            "ingested": 8,
+            "tdpMatched": 8,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 7,
+            "crossRefFailed": 1,
+            "evidenceProduced": 8
+          },
+          {
+            "sourceType": "product",
+            "ingested": 30,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 2,
+            "crossRefFailed": 0,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "engagement",
+            "ingested": 3,
+            "tdpMatched": 0,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          },
+          {
+            "sourceType": "intel",
+            "ingested": 11,
+            "tdpMatched": 6,
+            "corroborationResult": "passed",
+            "crossRefPassed": 2,
+            "crossRefFailed": 4,
+            "evidenceProduced": 6
+          },
+          {
+            "sourceType": "lifecycle",
+            "ingested": 3,
+            "tdpMatched": 1,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 1,
+            "crossRefFailed": 0,
+            "evidenceProduced": 1
+          },
+          {
+            "sourceType": "event",
+            "ingested": 6,
+            "tdpMatched": 2,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 2,
+            "evidenceProduced": 2
+          },
+          {
+            "sourceType": "evidence",
+            "ingested": 7,
+            "tdpMatched": 3,
+            "corroborationResult": "passed",
+            "crossRefPassed": 3,
+            "crossRefFailed": 0,
+            "evidenceProduced": 3
+          },
+          {
+            "sourceType": "partner",
+            "ingested": 5,
+            "tdpMatched": 0,
+            "corroborationResult": "not_required",
+            "crossRefPassed": 0,
+            "crossRefFailed": 0,
+            "evidenceProduced": 0
+          }
+        ]
+      },
+      "brief": "The customer is building a multi-cloud AI factory to create new applications, introducing high-value AI workloads and containerized environments across AWS and Google. This rapid development creates a massive new attack surface and security blind spots that their existing or native cloud tools cannot effectively cover at speed. This is our critical moment to displace siloed tools by demonstrating how a unified platform secures the entire development lifecycle, from code to cloud, positioning Crowdstrike as the foundational security standard for their entire modernization effort."
+    }
+  ],
+  "confidence": "high",
+  "totalEstimatedTcv": 190375.41999999998,
+  "generatedAt": "2026-07-02T10:22:44.608Z",
+  "status": "active",
+  "enhancedRecommendations": [
+    {
+      "name": "Optimize and Modernize IT Ops",
+      "parentTdp": "Automation",
+      "compositeScore": 1,
+      "isNovel": false
+    },
+    {
+      "name": "Automate at Scale",
+      "parentTdp": "Automation",
+      "compositeScore": 0.9,
+      "isNovel": false
+    },
+    {
+      "name": "VM Migration & modernization",
+      "parentTdp": "Automation",
+      "compositeScore": 0.8,
+      "isNovel": false
+    },
+    {
+      "name": "Migrate to the Cloud",
+      "parentTdp": "Server/Cloud OS",
+      "compositeScore": 0.7,
+      "isNovel": false
+    },
+    {
+      "name": "Standardize & Modernize your Operating System",
+      "parentTdp": "Server/Cloud OS",
+      "compositeScore": 0.6,
+      "isNovel": false
+    },
+    {
+      "name": "Red Hat AI Factory with NVIDIA",
+      "parentTdp": "AI Platform",
+      "reasoning": "The customer has a strong, demonstrated interest in AI, confirmed by their use of NVIDIA GPUs, attendance at two separate AI-focused webinars ('Agentic AI series', 'Deploying Agentic AI'), and an active 'AI/ML Platform with OpenShift AI' solution play. This combination of hardware usage, topical engagement, and strategic alignment, when correlated with their existing OpenShift footprint, makes them a prime candidate for a joint Red Hat and NVIDIA AI platform solution.",
+      "confidence": "high",
+      "signalsUsed": [
+        "NVIDIA GPU usage",
+        "AI/ML Platform with OpenShift AI play",
+        "Agentic AI series webinar attendance",
+        "OpenShift Container Platform subscription"
+      ],
+      "isNovel": true,
+      "discoveryReason": "AI interest (webinars, plays) + NVIDIA GPU usage + OpenShift footprint = Prime candidate for Red Hat AI Factory with NVIDIA."
+    },
+    {
+      "name": "Multicluster management & security at scale for Kubernetes",
+      "parentTdp": "Container Mgmt",
+      "reasoning": "Crowdstrike has significant multi-cloud investment, with large spends on AWS ($240K ACV) and GCP ($210K ACV). They are also heavy Kubernetes users and have an expired OpenShift subscription. For a security-focused company like Crowdstrike, managing and securing disparate Kubernetes clusters across multiple public clouds is a critical, complex challenge. This tactic directly addresses that high-level operational and security need which is not covered by a base platform.",
+      "confidence": "high",
+      "signalsUsed": [
+        "Kubernetes usage",
+        "High AWS Cloud Spend",
+        "High Google Cloud Spend",
+        "OpenShift Container Platform subscription",
+        "Customer is a security company"
+      ],
+      "isNovel": true,
+      "discoveryReason": "Multi-cloud spend (AWS, GCP) + Kubernetes usage + Security-focused customer DNA = Clear need for multi-cluster management and security (ACM)."
+    },
+    {
+      "name": "Cloud marketplaces and private offers",
+      "parentTdp": "AI Platform",
+      "reasoning": "The customer has substantial cloud spend with AWS ($240K ACV) and Google ($210K ACV) and participates in their marketplace programs. The intelligence graph explicitly highlights that they have not purchased Red Hat products through these channels, despite having a $100K 'Ansible Expansion' deal in the pipeline. This is a significant untapped opportunity to help them simplify procurement and retire their cloud commitment.",
+      "confidence": "high",
+      "signalsUsed": [
+        "High AWS Cloud Spend",
+        "High Google Cloud Spend",
+        "Marketplace: AWS program",
+        "Marketplace: Google program",
+        "Ansible Expansion deal"
+      ],
+      "isNovel": true,
+      "discoveryReason": "High cloud spend + Marketplace presence + No Red Hat purchases via marketplace = Clear opportunity for CPPO/Marketplace execution."
+    }
+  ],
+  "flowLedger": {
+    "signalsIngested": 333,
+    "tdpMatched": 107,
+    "corroborationPassed": 13,
+    "corroborationDropped": 1,
+    "crossRefPassed": 90,
+    "crossRefFailed": 16,
+    "evidenceBeforeCap": 106,
+    "finalEvidenceCount": 21,
+    "gateDetails": [
+      {
+        "sourceType": "subscription",
+        "ingested": 5,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "case",
+        "ingested": 8,
+        "tdpMatched": 5,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 5,
+        "crossRefFailed": 0,
+        "evidenceProduced": 5
+      },
+      {
+        "sourceType": "deal",
+        "ingested": 10,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 1,
+        "crossRefFailed": 0,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "play",
+        "ingested": 15,
+        "tdpMatched": 7,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 7,
+        "crossRefFailed": 0,
+        "evidenceProduced": 7
+      },
+      {
+        "sourceType": "program",
+        "ingested": 8,
+        "tdpMatched": 8,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 7,
+        "crossRefFailed": 1,
+        "evidenceProduced": 8
+      },
+      {
+        "sourceType": "product",
+        "ingested": 30,
+        "tdpMatched": 5,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 5,
+        "crossRefFailed": 0,
+        "evidenceProduced": 5
+      },
+      {
+        "sourceType": "engagement",
+        "ingested": 3,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 1,
+        "crossRefFailed": 0,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "intel",
+        "ingested": 11,
+        "tdpMatched": 3,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 1,
+        "evidenceProduced": 3
+      },
+      {
+        "sourceType": "lifecycle",
+        "ingested": 3,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "event",
+        "ingested": 6,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 1,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "evidence",
+        "ingested": 7,
+        "tdpMatched": 4,
+        "corroborationResult": "passed",
+        "crossRefPassed": 3,
+        "crossRefFailed": 1,
+        "evidenceProduced": 4
+      },
+      {
+        "sourceType": "partner",
+        "ingested": 5,
+        "tdpMatched": 0,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      },
+      {
+        "sourceType": "subscription",
+        "ingested": 5,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "case",
+        "ingested": 8,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "deal",
+        "ingested": 10,
+        "tdpMatched": 6,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 6,
+        "crossRefFailed": 0,
+        "evidenceProduced": 6
+      },
+      {
+        "sourceType": "play",
+        "ingested": 15,
+        "tdpMatched": 6,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 6,
+        "crossRefFailed": 0,
+        "evidenceProduced": 6
+      },
+      {
+        "sourceType": "program",
+        "ingested": 8,
+        "tdpMatched": 8,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 7,
+        "crossRefFailed": 1,
+        "evidenceProduced": 8
+      },
+      {
+        "sourceType": "product",
+        "ingested": 30,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "engagement",
+        "ingested": 3,
+        "tdpMatched": 0,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      },
+      {
+        "sourceType": "intel",
+        "ingested": 11,
+        "tdpMatched": 4,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 3,
+        "crossRefFailed": 1,
+        "evidenceProduced": 4
+      },
+      {
+        "sourceType": "lifecycle",
+        "ingested": 3,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 1,
+        "crossRefFailed": 0,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "event",
+        "ingested": 6,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 2,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "evidence",
+        "ingested": 7,
+        "tdpMatched": 1,
+        "corroborationResult": "dropped",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      },
+      {
+        "sourceType": "partner",
+        "ingested": 5,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 1,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "subscription",
+        "ingested": 5,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 1,
+        "crossRefFailed": 0,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "case",
+        "ingested": 8,
+        "tdpMatched": 3,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 3,
+        "crossRefFailed": 0,
+        "evidenceProduced": 3
+      },
+      {
+        "sourceType": "deal",
+        "ingested": 10,
+        "tdpMatched": 0,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      },
+      {
+        "sourceType": "play",
+        "ingested": 15,
+        "tdpMatched": 7,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 7,
+        "crossRefFailed": 0,
+        "evidenceProduced": 7
+      },
+      {
+        "sourceType": "program",
+        "ingested": 8,
+        "tdpMatched": 8,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 7,
+        "crossRefFailed": 1,
+        "evidenceProduced": 8
+      },
+      {
+        "sourceType": "product",
+        "ingested": 30,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 2,
+        "crossRefFailed": 0,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "engagement",
+        "ingested": 3,
+        "tdpMatched": 0,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      },
+      {
+        "sourceType": "intel",
+        "ingested": 11,
+        "tdpMatched": 6,
+        "corroborationResult": "passed",
+        "crossRefPassed": 2,
+        "crossRefFailed": 4,
+        "evidenceProduced": 6
+      },
+      {
+        "sourceType": "lifecycle",
+        "ingested": 3,
+        "tdpMatched": 1,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 1,
+        "crossRefFailed": 0,
+        "evidenceProduced": 1
+      },
+      {
+        "sourceType": "event",
+        "ingested": 6,
+        "tdpMatched": 2,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 2,
+        "evidenceProduced": 2
+      },
+      {
+        "sourceType": "evidence",
+        "ingested": 7,
+        "tdpMatched": 3,
+        "corroborationResult": "passed",
+        "crossRefPassed": 3,
+        "crossRefFailed": 0,
+        "evidenceProduced": 3
+      },
+      {
+        "sourceType": "partner",
+        "ingested": 5,
+        "tdpMatched": 0,
+        "corroborationResult": "not_required",
+        "crossRefPassed": 0,
+        "crossRefFailed": 0,
+        "evidenceProduced": 0
+      }
+    ]
+  },
+  "enrichedContacts": [],
+  "unstructuredRecommendations": [
+    {
+      "action": "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike + ABU | AAI | ... → Security Automation and Compliance",
+      "confidence": "high",
+      "triggerCount": 9,
+      "solution": {
+        "name": "Security Automation and Compliance",
+        "type": "play",
+        "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea"
+      },
+      "assets": [
+        {
+          "name": "Automation Cheat Sheet",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/54e5fc06-1531-4abf-85d1-0df6b95079ea",
+          "type": "cheat-sheet"
+        },
+        {
+          "name": "Automation Customer Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/590bfb47-7ab0-4a5a-ae08-107474643ac4",
+          "type": "customer-deck"
+        }
+      ]
+    },
+    {
+      "action": "Case 03751040: I have VMs on an ESXi + Case 03538414: Unable to Perform Ansible VMware Integration +... → VMware to OpenShift Virtualization Migration",
+      "confidence": "high",
+      "triggerCount": 3,
+      "solution": {
+        "name": "VMware to OpenShift Virtualization Migration",
+        "type": "play",
+        "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/8fd73e68-ff5f-429f-9672-ccf055a4756b"
+      },
+      "assets": [
+        {
+          "name": "Virtualization Cheat Sheet",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/8fd73e68-ff5f-429f-9672-ccf055a4756b",
+          "type": "cheat-sheet"
+        },
+        {
+          "name": "Virtualization Customer Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/253dde62-feb5-4a64-9d81-70373f9bf9ba",
+          "type": "customer-deck"
+        },
+        {
+          "name": "VMware to Red Hat OpenShift Virtualization Migration — VMware + Red Hat",
+          "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444501",
+          "type": "ecosystem-catalog",
+          "source": "ecosystem-catalog"
+        },
+        {
+          "name": "VMware NSX Network Automation with Ansible — VMware + Red Hat",
+          "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444502",
+          "type": "ecosystem-catalog",
+          "source": "ecosystem-catalog"
+        },
+        {
+          "name": "Red Hat Enterprise Linux on VMware vSphere — VMware + Red Hat",
+          "url": "https://catalog.redhat.com/en/solutions/detail/b0b0b0b0-1111-2222-3333-444444444503",
+          "type": "ecosystem-catalog",
+          "source": "ecosystem-catalog"
+        },
+        {
+          "name": "PDF: VMware or OpenShift - AI.PDF",
+          "url": "https://drive.google.com/file/d/1p0XHXFiQaq7LpHGjK-CUDbmX94LIs98d",
+          "type": "SalesHub Content",
+          "source": "SalesHub Content"
+        }
+      ]
+    },
+    {
+      "action": "Microsoft cloud spend: $10,071 ACV → Marketplace Azure Acceleration Program (MAAP)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Marketplace Azure Acceleration Program (MAAP)",
+        "type": "program"
+      }
+    },
+    {
+      "action": "Microsoft cloud spend: $10,071 ACV → Azure Sponsorship for POC",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Azure Sponsorship for POC",
+        "type": "program"
+      }
+    },
+    {
+      "action": "Microsoft cloud spend: $10,071 ACV → Azure Consumption Commitment (MACC)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Azure Consumption Commitment (MACC)",
+        "type": "program"
+      }
+    },
+    {
+      "action": "Google cloud spend: $210,392 ACV → Distribution Channel Private Offer (DCPO)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Distribution Channel Private Offer (DCPO)",
+        "type": "program"
+      }
+    },
+    {
+      "action": "Google cloud spend: $210,392 ACV → Marketplace Customer Private Offer (MCPO)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Marketplace Customer Private Offer (MCPO)",
+        "type": "program"
+      }
+    },
+    {
+      "action": "Google cloud spend: $210,392 ACV → Google Cloud Commit",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Google Cloud Commit",
+        "type": "program"
+      }
+    },
+    {
+      "action": "AWS cloud spend: $239,663 ACV → Rainmaker Private offer creation API (AWS)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "Rainmaker Private offer creation API (AWS)",
+        "type": "program"
+      }
+    },
+    {
+      "action": "AWS cloud spend: $239,663 ACV → AWS MPOPP (Marketplace Private Offer Partner Program)",
+      "confidence": "medium",
+      "triggerCount": 1,
+      "solution": {
+        "name": "AWS MPOPP (Marketplace Private Offer Partner Program)",
+        "type": "program"
+      }
+    }
+  ]
+}

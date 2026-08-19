@@ -1,0 +1,4619 @@
+{
+  "customerId": "crowdstrike",
+  "customerName": "Crowdstrike",
+  "version": "1.0",
+  "builtAt": "2026-07-02T04:13:58.157Z",
+  "nodeCount": 89,
+  "edgeCount": 124,
+  "nodes": {
+    "customer:crowdstrike": {
+      "id": "customer:crowdstrike",
+      "type": "customer",
+      "name": "Crowdstrike",
+      "properties": {
+        "customerSlug": "crowdstrike",
+        "docType": "industry",
+        "length": 19856,
+        "companyDocUrl": "https://docs.google.com/document/d/1nkyeY4m4uHT1J7jjTo2ElND7WEiKXWeRBnyZ9BCGAgE/edit",
+        "detectedTechs": [
+          "Falcon Platform",
+          "NVIDIA GPU",
+          "Go",
+          "Python",
+          "Kubernetes",
+          "Amazon Web Services (AWS)",
+          "Google Cloud Platform (GCP)",
+          "Microsoft Azure",
+          "Apache Kafka",
+          "Elasticsearch",
+          "Cassandra",
+          "Terraform",
+          "Prometheus",
+          "Ansible",
+          "Spinnaker",
+          "Splunk",
+          "Apache Pinot"
+        ],
+        "businessObjectives": [],
+        "initiatives": [],
+        "technologyStrategy": "- **Specific Development:** Rapid advancements in Artificial Intelligence (AI) and Machine Learning (ML) for cybersecurity, including generative AI.\n- **Date or Timeframe:** Past 12-18 months, accelerating.\n- **Mechanism of Impact:** CrowdStrike is actively integrating advanced AI into its Falcon platform to enhance threat detection, response, and proactive threat hunting. This requires significant investment in R&D, specialized talent, and scalable infrastructure capable of handling large-scale",
+        "industryDocUrl": "https://docs.google.com/document/d/1WjOrkOk-PojTxTyDvApih6-r7Y4JlsULlKY1WKxF0SM/edit",
+        "industrySegment": "Technology"
+      },
+      "sourceModule": "intelligence-graph",
+      "contentHash": "7d037166",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "event:rhel-in-the-cloud-workshop-wednesday": {
+      "id": "event:rhel-in-the-cloud-workshop-wednesday",
+      "type": "event",
+      "name": "RHEL in the Cloud (workshop Wednesday)",
+      "properties": {
+        "url": "https://www.redhat.com/en/events/webinar/red-hat-enterprise-linux-cloud?sc_cid=RHCTN0250000470285",
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "196553d8",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "play:cloud-marketplace-and-cppo-aws-azure-amazon-web-services-aws-google-cloud-platform-gcp-microsoft-azure-detected": {
+      "id": "play:cloud-marketplace-and-cppo-aws-azure-amazon-web-services-aws-google-cloud-platform-gcp-microsoft-azure-detected",
+      "type": "play",
+      "name": "Cloud Marketplace and CPPO — AWS, Azure, Amazon Web Services (AWS), Google Cloud Platform (GCP), Microsoft Azure detected",
+      "properties": {
+        "matchedTechnologies": [
+          "AWS",
+          "Azure",
+          "Amazon Web Services (AWS)",
+          "Google Cloud Platform (GCP)",
+          "Microsoft Azure"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "450410ba",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:observability-and-monitoring-consolidation-elasticsearch-prometheus-detected": {
+      "id": "play:observability-and-monitoring-consolidation-elasticsearch-prometheus-detected",
+      "type": "play",
+      "name": "Observability and Monitoring Consolidation — Elasticsearch, Prometheus detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Elasticsearch",
+          "Prometheus"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "ed99e6cc",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:cloud-native-application-platform-kubernetes-detected": {
+      "id": "play:cloud-native-application-platform-kubernetes-detected",
+      "type": "play",
+      "name": "Cloud-Native Application Platform — Kubernetes detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Kubernetes"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "d7bbd9f0",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:ai-ml-platform-with-openshift-ai-nvidia-gpu-detected": {
+      "id": "play:ai-ml-platform-with-openshift-ai-nvidia-gpu-detected",
+      "type": "play",
+      "name": "AI/ML Platform with OpenShift AI — NVIDIA GPU detected",
+      "properties": {
+        "matchedTechnologies": [
+          "NVIDIA GPU"
+        ],
+        "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "e6b1142f",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:security-automation-and-compliance-splunk-detected": {
+      "id": "play:security-automation-and-compliance-splunk-detected",
+      "type": "play",
+      "name": "Security Automation and Compliance — Splunk detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Splunk"
+        ],
+        "url": "http://red.ht/virttcoestimator"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "ec7d098c",
+      "updatedAt": "2026-07-02T04:13:58.157Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:aiops-turn-intelligence-into-action-splunk-detected": {
+      "id": "play:aiops-turn-intelligence-into-action-splunk-detected",
+      "type": "play",
+      "name": "AIOps: Turn Intelligence into Action — Splunk detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Splunk"
+        ],
+        "url": "http://red.ht/virttcoestimator"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "4c02cfe3",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:infrastructure-as-code-modernization-terraform-detected": {
+      "id": "play:infrastructure-as-code-modernization-terraform-detected",
+      "type": "play",
+      "name": "Infrastructure-as-Code Modernization — Terraform detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Terraform"
+        ],
+        "url": "http://red.ht/virttcoestimator"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "ff7c9004",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "evidence:value-business-value-context-for-rhe": {
+      "id": "evidence:value-business-value-context-for-rhe",
+      "type": "evidence",
+      "name": "Business value context for RHEL",
+      "properties": {
+        "intelType": "value"
+      },
+      "sourceModule": "value-maps",
+      "contentHash": "92add506",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "intel:product-red-hat-enterprise-linux-red": {
+      "id": "intel:product-red-hat-enterprise-linux-red",
+      "type": "intel",
+      "name": "Red Hat Enterprise Linux — Red Hat Enterprise Linux 10.1 is the first minor release for the RHEL 10 platfor...",
+      "properties": {
+        "intelType": "product",
+        "url": "/dashboard/products/rhel"
+      },
+      "sourceModule": "product-intel",
+      "contentHash": "d9d69748",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "red hat enterprise linux"
+      ]
+    },
+    "program:ccsp-google": {
+      "id": "program:ccsp-google",
+      "type": "program",
+      "name": "CCSP: Google",
+      "properties": {
+        "cloudPartner": "Google",
+        "acvPlus": 210391.50000000003,
+        "programType": "cloud-spend",
+        "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+      },
+      "sourceModule": "ccsp",
+      "contentHash": "15bafa7e",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:ccsp-aws": {
+      "id": "program:ccsp-aws",
+      "type": "program",
+      "name": "CCSP: AWS",
+      "properties": {
+        "cloudPartner": "AWS",
+        "acvPlus": 239662.78,
+        "programType": "cloud-spend",
+        "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+      },
+      "sourceModule": "ccsp",
+      "contentHash": "1e0020e5",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:ccsp-unknown": {
+      "id": "program:ccsp-unknown",
+      "type": "program",
+      "name": "CCSP: unknown",
+      "properties": {
+        "acvPlus": 460125.42000000004,
+        "programType": "cloud-spend",
+        "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+      },
+      "sourceModule": "ccsp",
+      "contentHash": "45ffd94d",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:falcon-platform-proprietary-using": {
+      "id": "product:falcon-platform-proprietary-using",
+      "type": "product",
+      "name": "Falcon Platform (proprietary, using)",
+      "properties": {
+        "category": "proprietary",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "585e1b9c",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:nvidia-gpu-industry-tool-using": {
+      "id": "product:nvidia-gpu-industry-tool-using",
+      "type": "product",
+      "name": "NVIDIA GPU (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "ed98e580",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:go-industry-tool-using": {
+      "id": "product:go-industry-tool-using",
+      "type": "product",
+      "name": "Go (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "cfab0471",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:python-industry-tool-using": {
+      "id": "product:python-industry-tool-using",
+      "type": "product",
+      "name": "Python (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "03615cf8",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:kubernetes-industry-tool-using": {
+      "id": "product:kubernetes-industry-tool-using",
+      "type": "product",
+      "name": "Kubernetes (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "e36c317c",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:amazon-web-services-aws-industry-tool-using": {
+      "id": "product:amazon-web-services-aws-industry-tool-using",
+      "type": "product",
+      "name": "Amazon Web Services (AWS) (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "ce2f8cc8",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:google-cloud-platform-gcp-industry-tool-using": {
+      "id": "product:google-cloud-platform-gcp-industry-tool-using",
+      "type": "product",
+      "name": "Google Cloud Platform (GCP) (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "c1472c29",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:microsoft-azure-industry-tool-using": {
+      "id": "product:microsoft-azure-industry-tool-using",
+      "type": "product",
+      "name": "Microsoft Azure (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "5d2f90db",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:apache-kafka-industry-tool-using": {
+      "id": "product:apache-kafka-industry-tool-using",
+      "type": "product",
+      "name": "Apache Kafka (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "1cd8c09b",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:elasticsearch-industry-tool-using": {
+      "id": "product:elasticsearch-industry-tool-using",
+      "type": "product",
+      "name": "Elasticsearch (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "a342908c",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:cassandra-industry-tool-using": {
+      "id": "product:cassandra-industry-tool-using",
+      "type": "product",
+      "name": "Cassandra (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "90630c2b",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:terraform-industry-tool-using": {
+      "id": "product:terraform-industry-tool-using",
+      "type": "product",
+      "name": "Terraform (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "5d57317e",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:prometheus-industry-tool-using": {
+      "id": "product:prometheus-industry-tool-using",
+      "type": "product",
+      "name": "Prometheus (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "d66ed09b",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:splunk-industry-tool-using": {
+      "id": "product:splunk-industry-tool-using",
+      "type": "product",
+      "name": "Splunk (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "8d9f1088",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:apache-pinot-industry-tool-using": {
+      "id": "product:apache-pinot-industry-tool-using",
+      "type": "product",
+      "name": "Apache Pinot (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "df9c516f",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:marketplace-aws": {
+      "id": "program:marketplace-aws",
+      "type": "program",
+      "name": "Marketplace: AWS",
+      "properties": {
+        "provider": "AWS",
+        "programType": "marketplace"
+      },
+      "sourceModule": "cloud-marketplace",
+      "contentHash": "c91af791",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:marketplace-google": {
+      "id": "program:marketplace-google",
+      "type": "program",
+      "name": "Marketplace: Google",
+      "properties": {
+        "provider": "Google",
+        "programType": "marketplace"
+      },
+      "sourceModule": "cloud-marketplace",
+      "contentHash": "4a6f34d7",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:marketplace-microsoft": {
+      "id": "program:marketplace-microsoft",
+      "type": "program",
+      "name": "Marketplace: Microsoft",
+      "properties": {
+        "provider": "Microsoft",
+        "programType": "marketplace"
+      },
+      "sourceModule": "cloud-marketplace",
+      "contentHash": "40db3bb2",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03610275": {
+      "id": "case:03610275",
+      "type": "case",
+      "name": "Case 03610275: SSL and SAML Configuration for Redhat Ansible Automation Platform",
+      "properties": {
+        "caseNumber": "03610275",
+        "severity": "2",
+        "status": "Closed",
+        "product": "Red Hat Ansible Automation Platform",
+        "url": "https://access.redhat.com/support/cases/#/case/03610275"
+      },
+      "sourceModule": "cases",
+      "contentHash": "a032c8f0",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03626853": {
+      "id": "case:03626853",
+      "type": "case",
+      "name": "Case 03626853: Unable to run Ansible job on AAP",
+      "properties": {
+        "caseNumber": "03626853",
+        "severity": "2",
+        "status": "Closed",
+        "product": "Red Hat Ansible Automation Platform",
+        "url": "https://access.redhat.com/support/cases/#/case/03626853"
+      },
+      "sourceModule": "cases",
+      "contentHash": "ec13e382",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03389442": {
+      "id": "case:03389442",
+      "type": "case",
+      "name": "Case 03389442: HTTP error (400 - Bad Request): None of the subscriptions on the activation key ",
+      "properties": {
+        "caseNumber": "03389442",
+        "severity": "2",
+        "status": "Closed",
+        "product": "Red Hat Enterprise Linux",
+        "url": "https://access.redhat.com/support/cases/#/case/03389442"
+      },
+      "sourceModule": "cases",
+      "contentHash": "b14c3fab",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:ansible-industry-tool-evaluating": {
+      "id": "product:ansible-industry-tool-evaluating",
+      "type": "product",
+      "name": "Ansible (industry-tool, evaluating)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "evaluating",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "e8506bb0",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "product:spinnaker-industry-tool-evaluating": {
+      "id": "product:spinnaker-industry-tool-evaluating",
+      "type": "product",
+      "name": "Spinnaker (industry-tool, evaluating)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "evaluating",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "14466261",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T20:58:50.417Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "subscription:ansible-automation-platform": {
+      "id": "subscription:ansible-automation-platform",
+      "type": "subscription",
+      "name": "Ansible Automation Platform",
+      "properties": {
+        "quantity": 2,
+        "status": "expired-critical",
+        "urgency": "expired-critical",
+        "endDate": "2026-05-10",
+        "productDescription": "Ansible Automation Platform",
+        "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "54304ce6",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:build-and-run-applications": {
+      "id": "play:build-and-run-applications",
+      "type": "play",
+      "name": "Build and Run Applications",
+      "properties": {
+        "tdp": "Automation",
+        "source": "subscription-derived"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "e0bd90c3",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "lifecycle:enterprise-linux-10-2-eol-may-2035": {
+      "id": "lifecycle:enterprise-linux-10-2-eol-may-2035",
+      "type": "lifecycle",
+      "name": "Enterprise Linux 10.2 — EOL May 2035",
+      "properties": {
+        "eolDate": "2035-05-31",
+        "currentVersion": "10.2",
+        "nextVersion": null,
+        "url": "https://access.redhat.com/product-life-cycles#/red_hat_enterprise_linux"
+      },
+      "sourceModule": "product-lifecycle",
+      "contentHash": "dae27836",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "subscription:openshift-container-platform-standard-2-cores-or-4-vcpus": {
+      "id": "subscription:openshift-container-platform-standard-2-cores-or-4-vcpus",
+      "type": "subscription",
+      "name": "OpenShift Container Platform Standard (2 Cores or 4 vCPUs)",
+      "properties": {
+        "quantity": 2,
+        "status": "expired",
+        "urgency": "expired",
+        "endDate": "2026-05-10",
+        "productDescription": "OpenShift Container Platform Standard (2 Cores or 4 vCPUs)",
+        "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "d22bb970",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "intel:news-falcon-cloud-security-june-202": {
+      "id": "intel:news-falcon-cloud-security-june-202",
+      "type": "intel",
+      "name": "Falcon Cloud Security June 2026 Release: Updates for Azure and Google Cloud",
+      "properties": {
+        "intelType": "news",
+        "url": "https://www.crowdstrike.com/blog/category/cybersecurity-blog/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "a82d5ec8",
+      "updatedAt": "2026-07-02T04:13:58.158Z",
+      "history": {
+        "appeared": "2026-07-01T12:57:08.970Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "google"
+      ]
+    },
+    "program:ccsp-microsoft": {
+      "id": "program:ccsp-microsoft",
+      "type": "program",
+      "name": "CCSP: Microsoft",
+      "properties": {
+        "cloudPartner": "Microsoft",
+        "acvPlus": 10071.140000000001,
+        "programType": "cloud-spend",
+        "url": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit"
+      },
+      "sourceModule": "ccsp",
+      "contentHash": "8c0ba47d",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "partner:ahead": {
+      "id": "partner:ahead",
+      "type": "partner",
+      "name": "AHEAD",
+      "properties": {
+        "partnerName": "AHEAD",
+        "specializations": [
+          "Container Mgmt"
+        ],
+        "url": "https://catalog.redhat.com/en/partners/detail/ahead"
+      },
+      "sourceModule": "partner-catalog",
+      "contentHash": "c2b4c61e",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "partner:cdw": {
+      "id": "partner:cdw",
+      "type": "partner",
+      "name": "CDW",
+      "properties": {
+        "partnerName": "CDW",
+        "specializations": [
+          "Mission Critical Automation",
+          "Container Mgmt"
+        ],
+        "url": "https://catalog.redhat.com/en/partners/detail/cdw"
+      },
+      "sourceModule": "partner-catalog",
+      "contentHash": "2c53c8ae",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "partner:crossvale-inc-options-technology": {
+      "id": "partner:crossvale-inc-options-technology",
+      "type": "partner",
+      "name": "Crossvale, Inc. / Options Technology",
+      "properties": {
+        "partnerName": "Crossvale, Inc. / Options Technology",
+        "specializations": [
+          "Mission Critical Automation",
+          "Container Mgmt",
+          "Application Platform"
+        ],
+        "url": "https://catalog.redhat.com/en/partners/detail/crossvale"
+      },
+      "sourceModule": "partner-catalog",
+      "contentHash": "b9601a9e",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "partner:insight-direct-usa": {
+      "id": "partner:insight-direct-usa",
+      "type": "partner",
+      "name": "Insight Direct USA",
+      "properties": {
+        "partnerName": "Insight Direct USA",
+        "specializations": [
+          "Mission Critical Automation"
+        ],
+        "url": "https://catalog.redhat.com/en/partners/detail/insight"
+      },
+      "sourceModule": "partner-catalog",
+      "contentHash": "2b7f17a2",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "partner:li9": {
+      "id": "partner:li9",
+      "type": "partner",
+      "name": "Li9",
+      "properties": {
+        "partnerName": "Li9",
+        "specializations": [
+          "Mission Critical Automation",
+          "Container Mgmt"
+        ],
+        "url": "https://catalog.redhat.com/en/partners/detail/li9"
+      },
+      "sourceModule": "partner-catalog",
+      "contentHash": "afc67fcf",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "case:04127120": {
+      "id": "case:04127120",
+      "type": "case",
+      "name": "Case 04127120: Ansible playbook to reboot fails with a an unknown error",
+      "properties": {
+        "caseNumber": "04127120",
+        "severity": "3",
+        "status": "Closed",
+        "product": "Red Hat Ansible Automation Platform",
+        "url": "https://access.redhat.com/support/cases/#/case/04127120"
+      },
+      "sourceModule": "cases",
+      "contentHash": "24f4ac51",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03957482": {
+      "id": "case:03957482",
+      "type": "case",
+      "name": "Case 03957482: Openshift - Assisted install - Single node - Failed to fetch container images ne",
+      "properties": {
+        "caseNumber": "03957482",
+        "severity": "3",
+        "status": "Closed",
+        "product": "OpenShift Container Platform",
+        "url": "https://access.redhat.com/support/cases/#/case/03957482"
+      },
+      "sourceModule": "cases",
+      "contentHash": "a186001d",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03938740": {
+      "id": "case:03938740",
+      "type": "case",
+      "name": "Case 03938740: unable to rotate registry service account token",
+      "properties": {
+        "caseNumber": "03938740",
+        "severity": "3",
+        "status": "Closed",
+        "product": "Other",
+        "url": "https://access.redhat.com/support/cases/#/case/03938740"
+      },
+      "sourceModule": "cases",
+      "contentHash": "b41408fc",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03751040": {
+      "id": "case:03751040",
+      "type": "case",
+      "name": "Case 03751040: I have VMs on an ESXi",
+      "properties": {
+        "caseNumber": "03751040",
+        "severity": "3",
+        "status": "Closed",
+        "product": "Red Hat Enterprise Linux",
+        "url": "https://access.redhat.com/support/cases/#/case/03751040"
+      },
+      "sourceModule": "cases",
+      "contentHash": "0d50ff53",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "case:03557603": {
+      "id": "case:03557603",
+      "type": "case",
+      "name": "Case 03557603: Unable to run playbooks on Ansible Automation Platform after Migration",
+      "properties": {
+        "caseNumber": "03557603",
+        "severity": "3",
+        "status": "Closed",
+        "product": "Red Hat Ansible Automation Platform",
+        "url": "https://access.redhat.com/support/cases/#/case/03557603"
+      },
+      "sourceModule": "cases",
+      "contentHash": "80e93613",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "subscription:enterprise-linux-server": {
+      "id": "subscription:enterprise-linux-server",
+      "type": "subscription",
+      "name": "Enterprise Linux Server",
+      "properties": {
+        "quantity": 8,
+        "status": "active",
+        "urgency": "active",
+        "endDate": "2027-05-08",
+        "productDescription": "Enterprise Linux Server",
+        "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "9afd959d",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "play:server-and-cloud-computing": {
+      "id": "play:server-and-cloud-computing",
+      "type": "play",
+      "name": "Server and Cloud Computing",
+      "properties": {
+        "tdp": "Server/Cloud OS",
+        "source": "subscription-derived"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "81370c60",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "subscription:enterprise-linux-extended-life-cycle-support-unlimited-guests": {
+      "id": "subscription:enterprise-linux-extended-life-cycle-support-unlimited-guests",
+      "type": "subscription",
+      "name": "Enterprise Linux Extended Life Cycle Support (Unlimited Guests)",
+      "properties": {
+        "quantity": 1,
+        "status": "active",
+        "urgency": "active",
+        "endDate": "2027-05-08",
+        "productDescription": "Enterprise Linux Extended Life Cycle Support (Unlimited Guests)",
+        "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "44d91662",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "subscription:resilient-storage": {
+      "id": "subscription:resilient-storage",
+      "type": "subscription",
+      "name": "Resilient Storage",
+      "properties": {
+        "quantity": 1,
+        "status": "active",
+        "urgency": "active",
+        "endDate": "2027-05-08",
+        "productDescription": "Resilient Storage",
+        "url": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit"
+      },
+      "sourceModule": "subscriptions",
+      "contentHash": "f3ba6549",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "evidence:shp-red-hat-ansible-automation-pla": {
+      "id": "evidence:shp-red-hat-ansible-automation-pla",
+      "type": "evidence",
+      "name": "Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat",
+      "properties": {
+        "docType": "saleshub-product"
+      },
+      "sourceModule": "saleshub-products",
+      "contentHash": "0cebfc5a",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "ansible automation platform",
+        "red hat ansible automation platform",
+        "automation"
+      ]
+    },
+    "intel:news-the-identity-problem-hiding-in": {
+      "id": "intel:news-the-identity-problem-hiding-in",
+      "type": "intel",
+      "name": "The Identity Problem Hiding in AI Agent Deployments",
+      "properties": {
+        "intelType": "news",
+        "url": "https://www.crowdstrike.com/blog/the-identity-problem-hiding-in-ai-agent-deployments/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "b6a09e78",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "evidence:shp-training-resources-available-f": {
+      "id": "evidence:shp-training-resources-available-f",
+      "type": "evidence",
+      "name": "Training resources available for Red Hat Ansible Automation Platform",
+      "properties": {
+        "docType": "saleshub-product"
+      },
+      "sourceModule": "saleshub-products",
+      "contentHash": "175672e5",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "ansible automation platform",
+        "red hat ansible automation platform",
+        "automation"
+      ]
+    },
+    "engagement:email-july-14th-meeting-request-exe": {
+      "id": "engagement:email-july-14th-meeting-request-exe",
+      "type": "engagement",
+      "name": "July 14th Meeting Request: Executive Alignment with Red Hat and Crowdstrike",
+      "properties": {
+        "channel": "email",
+        "techMentions": [
+          "CrowdStrike"
+        ],
+        "classification": "FYI",
+        "from": "Carolanne Farrell <cfarrell@redhat.com>"
+      },
+      "sourceModule": "emails",
+      "contentHash": "130ba2f8",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "intel:news-94-of-organizations-report-cl": {
+      "id": "intel:news-94-of-organizations-report-cl",
+      "type": "intel",
+      "name": "94% of Organizations Report Cloud Breaches: CrowdStrike State of CDR Survey",
+      "properties": {
+        "intelType": "news",
+        "url": "https://www.crowdstrike.com/blog/94-of-organizations-report-cloud-breaches-crowdstrike-state-of-cdr-survey/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "416adca2",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "engagement:email-invitation-jason-carolanne": {
+      "id": "engagement:email-invitation-jason-carolanne",
+      "type": "engagement",
+      "name": "Invitation: Jason / Carolanne- Crowdstrike CTO outreach @ Tue Jun 23, 2026 15:00 - 15:30 (EDT) (Jason Horn)",
+      "properties": {
+        "channel": "email",
+        "techMentions": [
+          "CrowdStrike"
+        ],
+        "classification": "FYI",
+        "from": "Carolanne Farrell <cfarrell@redhat.com>"
+      },
+      "sourceModule": "emails",
+      "contentHash": "67612419",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "engagement:email-re-introduction-request-cro": {
+      "id": "engagement:email-re-introduction-request-cro",
+      "type": "engagement",
+      "name": "Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination",
+      "properties": {
+        "channel": "email",
+        "techMentions": [
+          "CrowdStrike"
+        ],
+        "classification": "RESPONSE_NEEDED",
+        "from": "Carolanne Farrell <cfarrell@redhat.com>"
+      },
+      "sourceModule": "emails",
+      "contentHash": "aabc3692",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "event:agentic-ai-series-webinar-session-3": {
+      "id": "event:agentic-ai-series-webinar-session-3",
+      "type": "event",
+      "name": "Agentic AI series webinar - Session #3",
+      "properties": {
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "33f202b1",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "event:solve-your-toughest-it-challenges-at-the": {
+      "id": "event:solve-your-toughest-it-challenges-at-the",
+      "type": "event",
+      "name": "Solve your toughest IT challenges at the Great Lakes Solution Spotlight",
+      "properties": {
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "6092c39d",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-07-02T04:13:58.157Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "event:deploying-agentic-ai-across-government": {
+      "id": "event:deploying-agentic-ai-across-government",
+      "type": "event",
+      "name": "Deploying Agentic AI Across Government",
+      "properties": {
+        "url": "https://www.redhat.com/en/events/webinar/deploying-agentic-ai-across-government?sc_cid=RHCTN1260000484698",
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "982bb073",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-07-02T04:13:58.157Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "intel:news-new-abuse-of-the-clickonce-tec": {
+      "id": "intel:news-new-abuse-of-the-clickonce-tec",
+      "type": "intel",
+      "name": "New Abuse of the ClickOnce Technology, Part 1: The Inner Workings of ClickOnce Application Deployment",
+      "properties": {
+        "intelType": "news",
+        "url": "https://www.crowdstrike.com/blog/new-abuse-of-the-clickonce-technology-part-1-the-inner-workings-of-clickonce-application-deployment/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "db731051",
+      "updatedAt": "2026-07-02T04:13:58.159Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "lifecycle:openshift-container-platform-4-20-4-eo": {
+      "id": "lifecycle:openshift-container-platform-4-20-4-eo",
+      "type": "lifecycle",
+      "name": "OpenShift Container Platform 4.20.4 — EOL Apr 2027",
+      "properties": {
+        "eolDate": "2027-04-21",
+        "currentVersion": "4.20.4",
+        "nextVersion": null,
+        "url": "https://access.redhat.com/product-life-cycles#/openshift_container_platform"
+      },
+      "sourceModule": "product-lifecycle",
+      "contentHash": "2db4aa3f",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "lifecycle:ansible-automation-platform-2-6-eol-oc": {
+      "id": "lifecycle:ansible-automation-platform-2-6-eol-oc",
+      "type": "lifecycle",
+      "name": "Ansible Automation Platform 2.6 — EOL Oct 2027",
+      "properties": {
+        "eolDate": "2027-10-01",
+        "currentVersion": "2.6",
+        "nextVersion": null,
+        "url": "https://access.redhat.com/product-life-cycles#/ansible_automation_platform"
+      },
+      "sourceModule": "product-lifecycle",
+      "contentHash": "47cec5ea",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "intel:product-red-hat-openshift-container-pl": {
+      "id": "intel:product-red-hat-openshift-container-pl",
+      "type": "intel",
+      "name": "Red Hat OpenShift Container Platform — OpenShift Container Platform 4.21 is an established release that introduced a wi...",
+      "properties": {
+        "intelType": "product",
+        "url": "/dashboard/products/ocp"
+      },
+      "sourceModule": "product-intel",
+      "contentHash": "fff3e942",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "openshift container platform"
+      ]
+    },
+    "intel:product-openshift-virtualization-ope": {
+      "id": "intel:product-openshift-virtualization-ope",
+      "type": "intel",
+      "name": "OpenShift Virtualization — OpenShift Virtualization 4.21 is the version aligned with OpenShift Container Pl...",
+      "properties": {
+        "intelType": "product",
+        "url": "/dashboard/products/ocp-virt"
+      },
+      "sourceModule": "product-intel",
+      "contentHash": "b01c0d19",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "intel:product-red-hat-ansible-automation-pla": {
+      "id": "intel:product-red-hat-ansible-automation-pla",
+      "type": "intel",
+      "name": "Red Hat Ansible Automation Platform — Red Hat Ansible Automation Platform 2.6 introduces new features and enhancements...",
+      "properties": {
+        "intelType": "product",
+        "url": "/dashboard/products/aap"
+      },
+      "sourceModule": "product-intel",
+      "contentHash": "49c5159e",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "ansible automation platform",
+        "red hat ansible automation platform",
+        "automation"
+      ]
+    },
+    "intel:product-red-hat-enterprise-linux-ai": {
+      "id": "intel:product-red-hat-enterprise-linux-ai",
+      "type": "intel",
+      "name": "Red Hat Enterprise Linux AI — Red Hat Enterprise Linux AI 3.0 is a generative AI inference platform for Linux ...",
+      "properties": {
+        "intelType": "product",
+        "url": "/dashboard/products/rhel-ai"
+      },
+      "sourceModule": "product-intel",
+      "contentHash": "7d2ee958",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true,
+      "crossRefEvidence": [
+        "red hat enterprise linux"
+      ]
+    },
+    "evidence:shp-unknown-product-doccenter": {
+      "id": "evidence:shp-unknown-product-doccenter",
+      "type": "evidence",
+      "name": "Unknown Product — DocCenter",
+      "properties": {
+        "docType": "saleshub-product",
+        "url": "https://saleshub.redhat.com/apps/doccenter/"
+      },
+      "sourceModule": "saleshub-products",
+      "contentHash": "f0b7f90a",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "evidence:shp-red-hat-openshift-virtualizati": {
+      "id": "evidence:shp-red-hat-openshift-virtualizati",
+      "type": "evidence",
+      "name": "Red Hat OpenShift Virtualization — Red Hat OpenShift Virtualization",
+      "properties": {
+        "docType": "saleshub-product",
+        "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI%25252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//"
+      },
+      "sourceModule": "saleshub-products",
+      "contentHash": "eb46f973",
+      "updatedAt": "2026-07-02T04:13:58.160Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "deal:ansible-expansion": {
+      "id": "deal:ansible-expansion",
+      "type": "deal",
+      "name": "Ansible Expansion",
+      "properties": {
+        "stage": "Pipeline",
+        "amount": 100000,
+        "closeDate": "9/4/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "b18ad5bc",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "evidence:doc-abu-aai-101-201-ansible": {
+      "id": "evidence:doc-abu-aai-101-201-ansible",
+      "type": "evidence",
+      "name": "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike",
+      "properties": {
+        "docType": "document"
+      },
+      "sourceModule": "customer-docs",
+      "contentHash": "3101b2c5",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "evidence:doc-crowdstrike-account-plan": {
+      "id": "evidence:doc-crowdstrike-account-plan",
+      "type": "evidence",
+      "name": "Crowdstrike - Account Plan",
+      "properties": {
+        "docType": "document"
+      },
+      "sourceModule": "customer-docs",
+      "contentHash": "83a41f68",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "program:ecosystem-cisco": {
+      "id": "program:ecosystem-cisco",
+      "type": "program",
+      "name": "Ecosystem: Cisco",
+      "properties": {
+        "partnerName": "Cisco",
+        "programType": "ecosystem"
+      },
+      "sourceModule": "ecosystem-catalog",
+      "contentHash": "14bd0a60",
+      "updatedAt": "2026-06-30T12:32:35.370Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "deal:renewal-crowdstrike-inc-00543077": {
+      "id": "deal:renewal-crowdstrike-inc-00543077",
+      "type": "deal",
+      "name": "Renewal - Crowdstrike, Inc. - 00543077",
+      "properties": {
+        "stage": "Commit",
+        "amount": 29749.88,
+        "closeDate": "6/19/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "42405e5c",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:rn-crowdstrike-inc-shi-may-2026-00519594": {
+      "id": "deal:rn-crowdstrike-inc-shi-may-2026-00519594",
+      "type": "deal",
+      "name": "RN - Crowdstrike, Inc. - SHI - May 2026 - 00519594",
+      "properties": {
+        "stage": "Closed",
+        "amount": 5050,
+        "closeDate": "4/23/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "f5f6754b",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:rn-crowdstrike-rhel-d4t": {
+      "id": "deal:rn-crowdstrike-rhel-d4t",
+      "type": "deal",
+      "name": "RN - Crowdstrike - RHEL & D4T",
+      "properties": {
+        "stage": "Closed",
+        "amount": 753.3,
+        "closeDate": "1/26/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "8152153d",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m2-us-crowdstrike-usage-period-january-2026": {
+      "id": "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m2-us-crowdstrike-usage-period-january-2026",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026",
+      "properties": {
+        "stage": "Closed",
+        "amount": 2202.65,
+        "closeDate": "2/24/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "16fd9ca6",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m3-us-crowdstrike-usage-period-february-2026": {
+      "id": "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m3-us-crowdstrike-usage-period-february-2026",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026",
+      "properties": {
+        "stage": "Closed",
+        "amount": 1614.9,
+        "closeDate": "3/24/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "2d1ed7b0",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-microsoft-aro-cy26-q2-m1-us-crowdstrike": {
+      "id": "deal:global-royalty-ccsp-microsoft-aro-cy26-q2-m1-us-crowdstrike",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE",
+      "properties": {
+        "stage": "Closed",
+        "amount": 1742.26,
+        "closeDate": "4/27/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "bfa1876b",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-aws-rosa-cy26q1m1-us-crowdstrike-public-usage-period-january-2026": {
+      "id": "deal:global-royalty-ccsp-aws-rosa-cy26q1m1-us-crowdstrike-public-usage-period-january-2026",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026",
+      "properties": {
+        "stage": "Closed",
+        "amount": 821.27,
+        "closeDate": "1/22/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "db25234c",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-aws-rosa-cy26q1-m2-us-crowdstrike-public-usage-period-february-2026": {
+      "id": "deal:global-royalty-ccsp-aws-rosa-cy26q1-m2-us-crowdstrike-public-usage-period-february-2026",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-AWS ROSA-CY26Q1-M2-US-CrowdStrike-'Public'-Usage Period : February 2026",
+      "properties": {
+        "stage": "Closed",
+        "amount": 821.62,
+        "closeDate": "2/20/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "6de07a79",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "deal:global-royalty-ccsp-amazon-cy26q1-us-crowdstrike": {
+      "id": "deal:global-royalty-ccsp-amazon-cy26q1-us-crowdstrike",
+      "type": "deal",
+      "name": "Global Royalty-CCSP-Amazon-CY26Q1-US-CROWDSTRIKE",
+      "properties": {
+        "stage": "Closed",
+        "amount": 47619.54,
+        "closeDate": "3/25/2026"
+      },
+      "sourceModule": "pipeline",
+      "contentHash": "edc2a5ba",
+      "updatedAt": "2026-06-30T06:25:40.716Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-02T04:13:58.157Z",
+        "status": "active"
+      },
+      "crossReferenced": true
+    },
+    "event:finding-future-footing-virtualization-a": {
+      "id": "event:finding-future-footing-virtualization-a",
+      "type": "event",
+      "name": "Finding Future Footing: Virtualization and Beyond with Red Hat & Pellera",
+      "properties": {
+        "url": "https://registration.socio.events/e/findingfuturefootingredhat2026",
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "9bced34c",
+      "updatedAt": "2026-07-01T20:58:50.418Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-01T20:58:50.417Z",
+        "status": "historical"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "event:openshift-cves-distinguishing-real-thre": {
+      "id": "event:openshift-cves-distinguishing-real-thre",
+      "type": "event",
+      "name": "OpenShift CVEs: Distinguishing Real Threats from False Alarms",
+      "properties": {
+        "url": "https://www.redhat.com/en/events/webinar/openshift-cves-distinguishing-real-threats-from-false-alarms",
+        "location": null
+      },
+      "sourceModule": "rh-events",
+      "contentHash": "11af7dc4",
+      "updatedAt": "2026-07-01T20:58:50.418Z",
+      "history": {
+        "appeared": "2026-06-30T06:25:40.715Z",
+        "lastSeen": "2026-07-01T20:58:50.417Z",
+        "status": "historical"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "play:cloud-native-application-platform-kubernetes-docker-detected": {
+      "id": "play:cloud-native-application-platform-kubernetes-docker-detected",
+      "type": "play",
+      "name": "Cloud-Native Application Platform — Kubernetes, Docker detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Kubernetes",
+          "Docker"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "d85c1998",
+      "updatedAt": "2026-07-01T12:57:08.970Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "play:observability-and-monitoring-consolidation-prometheus-grafana-detected": {
+      "id": "play:observability-and-monitoring-consolidation-prometheus-grafana-detected",
+      "type": "play",
+      "name": "Observability and Monitoring Consolidation — Prometheus, Grafana detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Prometheus",
+          "Grafana"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "132b51d5",
+      "updatedAt": "2026-07-01T12:57:08.970Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "play:ai-ml-platform-with-openshift-ai-nvidia-gpus-detected": {
+      "id": "play:ai-ml-platform-with-openshift-ai-nvidia-gpus-detected",
+      "type": "play",
+      "name": "AI/ML Platform with OpenShift AI — NVIDIA GPUs detected",
+      "properties": {
+        "matchedTechnologies": [
+          "NVIDIA GPUs"
+        ],
+        "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "c707aa6d",
+      "updatedAt": "2026-07-01T12:57:08.970Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "play:cloud-marketplace-and-cppo-aws-detected": {
+      "id": "play:cloud-marketplace-and-cppo-aws-detected",
+      "type": "play",
+      "name": "Cloud Marketplace and CPPO — AWS detected",
+      "properties": {
+        "matchedTechnologies": [
+          "AWS"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "11c3c267",
+      "updatedAt": "2026-07-01T12:57:08.970Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:logscale-formerly-humio-proprietary-using": {
+      "id": "product:logscale-formerly-humio-proprietary-using",
+      "type": "product",
+      "name": "LogScale (formerly Humio) (proprietary, using)",
+      "properties": {
+        "category": "proprietary",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "e6462ee5",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:falcon-platform-proprietary-developing": {
+      "id": "product:falcon-platform-proprietary-developing",
+      "type": "product",
+      "name": "Falcon Platform (proprietary, developing)",
+      "properties": {
+        "category": "proprietary",
+        "context": "developing",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "909e7e3f",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:nvidia-gpus-industry-tool-using": {
+      "id": "product:nvidia-gpus-industry-tool-using",
+      "type": "product",
+      "name": "NVIDIA GPUs (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "2d9711b3",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:aws-industry-tool-using": {
+      "id": "product:aws-industry-tool-using",
+      "type": "product",
+      "name": "AWS (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "e0944d10",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:gcp-industry-tool-using": {
+      "id": "product:gcp-industry-tool-using",
+      "type": "product",
+      "name": "GCP (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "c1f74d54",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:go-golang-industry-tool-using": {
+      "id": "product:go-golang-industry-tool-using",
+      "type": "product",
+      "name": "Go (Golang) (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "f2b6e2f0",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:ci-cd-industry-tool-using": {
+      "id": "product:ci-cd-industry-tool-using",
+      "type": "product",
+      "name": "CI/CD (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "f576df5a",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:okta-industry-tool-using": {
+      "id": "product:okta-industry-tool-using",
+      "type": "product",
+      "name": "Okta (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "2839cfc8",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:docker-industry-tool-using": {
+      "id": "product:docker-industry-tool-using",
+      "type": "product",
+      "name": "Docker (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "75e7e79b",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T18:39:34.676Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:grafana-industry-tool-using": {
+      "id": "product:grafana-industry-tool-using",
+      "type": "product",
+      "name": "Grafana (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "d1adb465",
+      "updatedAt": "2026-07-01T12:57:08.971Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T12:57:08.970Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "intel:news-crowdstrike-jumps-as-investors": {
+      "id": "intel:news-crowdstrike-jumps-as-investors",
+      "type": "intel",
+      "name": "CrowdStrike Jumps as Investors Appear to Revisit Split and Growth Story",
+      "properties": {
+        "intelType": "news",
+        "url": "https://quiverquant.com/story/crowdstrike-jumps-as-investors-appear-to-revisit-split-and-growth-story/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "32576042",
+      "updatedAt": "2026-07-01T06:50:47.932Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T06:50:47.931Z",
+        "status": "historical"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "intel:news-crowdstrike-named-a-leader-in": {
+      "id": "intel:news-crowdstrike-named-a-leader-in",
+      "type": "intel",
+      "name": "CrowdStrike Named a Leader in the 2026 IDC MarketScape for Worldwide SIEM",
+      "properties": {
+        "intelType": "news",
+        "url": "https://www.crowdstrike.com/press-releases/crowdstrike-named-a-leader-in-the-2026-idc-marketscape-for-worldwide-siem/"
+      },
+      "sourceModule": "news-radar",
+      "contentHash": "18c04949",
+      "updatedAt": "2026-07-01T06:50:47.932Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-07-01T06:50:47.931Z",
+        "status": "historical"
+      },
+      "crossReferenced": false,
+      "crossRefEvidence": []
+    },
+    "play:cloud-marketplace-and-cppo-amazon-web-services-aws-google-cloud-platform-gcp-aws-detected": {
+      "id": "play:cloud-marketplace-and-cppo-amazon-web-services-aws-google-cloud-platform-gcp-aws-detected",
+      "type": "play",
+      "name": "Cloud Marketplace and CPPO — Amazon Web Services (AWS), Google Cloud Platform (GCP), AWS detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Amazon Web Services (AWS)",
+          "Google Cloud Platform (GCP)",
+          "AWS"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "7a96c764",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "play:ci-cd-pipeline-modernization-jenkins-detected": {
+      "id": "play:ci-cd-pipeline-modernization-jenkins-detected",
+      "type": "play",
+      "name": "CI/CD Pipeline Modernization — Jenkins detected",
+      "properties": {
+        "matchedTechnologies": [
+          "Jenkins"
+        ],
+        "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb"
+      },
+      "sourceModule": "solution-intelligence",
+      "contentHash": "f3952d27",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:go-industry-tool-developing": {
+      "id": "product:go-industry-tool-developing",
+      "type": "product",
+      "name": "Go (industry-tool, developing)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "developing",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "53a0cb4a",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:argo-cd-industry-tool-using": {
+      "id": "product:argo-cd-industry-tool-using",
+      "type": "product",
+      "name": "Argo CD (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "b90856ff",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:jenkins-industry-tool-using": {
+      "id": "product:jenkins-industry-tool-using",
+      "type": "product",
+      "name": "Jenkins (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "8cdfe6e1",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:python-industry-tool-developing": {
+      "id": "product:python-industry-tool-developing",
+      "type": "product",
+      "name": "Python (industry-tool, developing)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "developing",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "6c3ffdb1",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:ansible-industry-tool-using": {
+      "id": "product:ansible-industry-tool-using",
+      "type": "product",
+      "name": "Ansible (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "ca2f7606",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:snowflake-industry-tool-using": {
+      "id": "product:snowflake-industry-tool-using",
+      "type": "product",
+      "name": "Snowflake (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "0cde706e",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:spark-industry-tool-using": {
+      "id": "product:spark-industry-tool-using",
+      "type": "product",
+      "name": "Spark (industry-tool, using)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "using",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "04030dc8",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    },
+    "product:istio-industry-tool-evaluating": {
+      "id": "product:istio-industry-tool-evaluating",
+      "type": "product",
+      "name": "Istio (industry-tool, evaluating)",
+      "properties": {
+        "category": "industry-tool",
+        "context": "evaluating",
+        "isRedHat": false
+      },
+      "sourceModule": "tech-stack",
+      "contentHash": "82f7f6d2",
+      "updatedAt": "2026-06-30T12:32:35.369Z",
+      "history": {
+        "appeared": "2026-06-30T12:32:35.369Z",
+        "lastSeen": "2026-06-30T12:32:35.369Z",
+        "status": "historical"
+      },
+      "crossReferenced": true
+    }
+  },
+  "edges": [
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:rhel-in-the-cloud-workshop-wednesday",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 1.4274544147376542,
+      "evidence": [
+        "RHEL in the Cloud (workshop Wednesday)"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/red-hat-enterprise-linux-cloud?sc_cid=RHCTN0250000470285",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-15",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:cloud-marketplace-and-cppo-aws-azure-amazon-web-services-aws-google-cloud-platform-gcp-microsoft-azure-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "Cloud Marketplace and CPPO — AWS, Azure, Amazon Web Services (AWS), Google Cloud Platform (GCP), Microsoft Azure detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:observability-and-monitoring-consolidation-elasticsearch-prometheus-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "Observability and Monitoring Consolidation — Elasticsearch, Prometheus detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:cloud-native-application-platform-kubernetes-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "Cloud-Native Application Platform — Kubernetes detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:ai-ml-platform-with-openshift-ai-nvidia-gpu-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "AI/ML Platform with OpenShift AI — NVIDIA GPU detected"
+      ],
+      "sourceUrl": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:security-automation-and-compliance-splunk-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "Security Automation and Compliance — Splunk detected"
+      ],
+      "sourceUrl": "http://red.ht/virttcoestimator",
+      "scoredAt": "2026-07-02T04:13:58.157Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:aiops-turn-intelligence-into-action-splunk-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "AIOps: Turn Intelligence into Action — Splunk detected"
+      ],
+      "sourceUrl": "http://red.ht/virttcoestimator",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:infrastructure-as-code-modernization-terraform-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999490740741,
+      "evidence": [
+        "Infrastructure-as-Code Modernization — Terraform detected"
+      ],
+      "sourceUrl": "http://red.ht/virttcoestimator",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:58.025Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:value-business-value-context-for-rhe",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.9999999378858024,
+      "evidence": [
+        "Business value context for RHEL"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:57.996Z",
+      "sourceType": "value-maps",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:product-red-hat-enterprise-linux-red",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.9999999371141975,
+      "evidence": [
+        "Red Hat Enterprise Linux — Red Hat Enterprise Linux 10.1 is the first minor release for the RHEL 10 platfor..."
+      ],
+      "sourceUrl": "/dashboard/products/rhel",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:57.994Z",
+      "sourceType": "product-intel",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ccsp-google",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9950950898919753,
+      "evidence": [
+        "Google cloud spend: $210,392 ACV"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T00:42:04.630Z",
+      "sourceType": "ccsp",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ccsp-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9950950898919753,
+      "evidence": [
+        "AWS cloud spend: $239,663 ACV"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T00:42:04.630Z",
+      "sourceType": "ccsp",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ccsp-unknown",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9950950898919753,
+      "evidence": [
+        "Total cloud spend: $460,125 ACV across Microsoft, Google, AWS"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T00:42:04.630Z",
+      "sourceType": "ccsp",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:falcon-platform-proprietary-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787851716820988,
+      "evidence": [
+        "Falcon Platform (proprietary, using)"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:29.322Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:nvidia-gpu-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "NVIDIA GPU (industry-tool, using)"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:go-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Go (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.myworkdayjobs.com/crowdstrike/d/inst/1$9925/9925$100249.htmld",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:python-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Python (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.opentalen.ai/job/crowdstrike-site-reliability-engineer-ii-karnataka-india-2024-06-24",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:kubernetes-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Kubernetes (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.jobgether.com/offer/sr-infrastructure-engineer-kubernetes-remote--crowdstrike--a8a2a53715",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:amazon-web-services-aws-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Amazon Web Services (AWS) (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/partners/strategic-technology-partners/",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:google-cloud-platform-gcp-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Google Cloud Platform (GCP) (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/partners/strategic-technology-partners/",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:microsoft-azure-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Microsoft Azure (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/partners/strategic-technology-partners/",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:apache-kafka-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Apache Kafka (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/how-we-improved-scale-and-reliability-by-sharding-kafka/",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:elasticsearch-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Elasticsearch (industry-tool, using)"
+      ],
+      "sourceUrl": "https://bebee.com/job/20260626-a00639f76a08405a8f4c39176374f673",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:cassandra-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Cassandra (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.accel.com/jobs/crowdstrike/43792-software-engineer-iii-windows-kernel-remote",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:terraform-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Terraform (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.opentalen.ai/job/crowdstrike-site-reliability-engineer-ii-karnataka-india-2024-06-24",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:prometheus-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Prometheus (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.jobgether.com/offer/sr-infrastructure-engineer-kubernetes-remote--crowdstrike--a8a2a53715",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:splunk-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Splunk (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.indeed.com/q-Crowdstrike-Edr-jobs.html",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:apache-pinot-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9787815204475309,
+      "evidence": [
+        "Apache Pinot (industry-tool, using)"
+      ],
+      "sourceUrl": "https://startree.ai/blog/taming-the-kafka-firehose-how-crowdstrike-is-scaling-real-time-security-analytics-with-pinot",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9748725362654321,
+      "evidence": [
+        "AWS Marketplace: 8 offerings, 9 programs — customer has $239,663 AWS spend"
+      ],
+      "sourceUrl": "https://aws.amazon.com/rosa/",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-google",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9748725362654321,
+      "evidence": [
+        "Google Marketplace: 4 offerings, 3 programs — customer has $210,392 Google spend"
+      ],
+      "sourceUrl": "https://console.cloud.google.com/marketplace/product/rhel-cloud/rhel",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-microsoft",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.9748725362654321,
+      "evidence": [
+        "Microsoft Marketplace: 5 offerings, 3 programs — customer has $10,071 Microsoft spend"
+      ],
+      "sourceUrl": "https://azuremarketplace.microsoft.com/en-us/marketplace/apps/redhat.rhel-20190605",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03610275",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.9499999413580247,
+      "evidence": [
+        "Case 03610275: SSL and SAML Configuration for Redhat Ansible Automation Platform"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03610275",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03626853",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.9499999413580247,
+      "evidence": [
+        "Case 03626853: Unable to run Ansible job on AAP"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03626853",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03389442",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.9499999413580247,
+      "evidence": [
+        "Case 03389442: HTTP error (400 - Bad Request): None of the subscriptions on the activation key "
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03389442",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:ansible-industry-tool-evaluating",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9298424444251543,
+      "evidence": [
+        "Ansible (industry-tool, evaluating)"
+      ],
+      "sourceUrl": "https://remotive.com/remote-jobs/software-dev/hiring-senior-software-engineer-product-security-crowdstrike-1893323",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:spinnaker-industry-tool-evaluating",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9298424444251543,
+      "evidence": [
+        "Spinnaker (industry-tool, evaluating)"
+      ],
+      "sourceUrl": "https://unstop.com/jobs/infrastructure-engineer-crowdstrike-653664",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T12:57:19.858Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "subscription:ansible-automation-platform",
+      "relation": "HAS_SUBSCRIPTION",
+      "tier": "factual",
+      "strength": 0.9051566698206018,
+      "evidence": [
+        "Ansible Automation Platform — 2 subscriptions"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-05-10",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:build-and-run-applications",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.8,
+      "evidence": [
+        "Active subscription: Ansible Automation Platform — 2 subscriptions"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-05-10",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "lifecycle:enterprise-linux-10-2-eol-may-2035",
+      "relation": "HAS_LIFECYCLE",
+      "tier": "factual",
+      "strength": 0.8816051212770061,
+      "evidence": [
+        "Enterprise Linux 10.2 — EOL May 2035"
+      ],
+      "sourceUrl": "https://access.redhat.com/product-life-cycles#/red_hat_enterprise_linux",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2035-05-31",
+      "sourceType": "product-lifecycle",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "subscription:openshift-container-platform-standard-2-cores-or-4-vcpus",
+      "relation": "HAS_SUBSCRIPTION",
+      "tier": "factual",
+      "strength": 0.858738379060571,
+      "evidence": [
+        "OpenShift Container Platform Standard (2 Cores or 4 vCPUs) — 2 subscriptions"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-05-10",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:build-and-run-applications",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.8,
+      "evidence": [
+        "Active subscription: OpenShift Container Platform Standard (2 Cores or 4 vCPUs) — 2 subscriptions"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-05-10",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-google",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.8530134692322531,
+      "evidence": [
+        "Customer spends $210,392 on Google but hasn't purchased Red Hat OpenShift via marketplace"
+      ],
+      "sourceUrl": "https://console.cloud.google.com/marketplace/product/redhat-marketplace/red-hat-openshift",
+      "scoredAt": "2026-07-02T04:13:58.158Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-falcon-cloud-security-june-202",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.8494150273341049,
+      "evidence": [
+        "Falcon Cloud Security June 2026 Release: Updates for Azure and Google Cloud"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/category/cybersecurity-blog/",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-29T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ccsp-microsoft",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.845830826408179,
+      "evidence": [
+        "Microsoft cloud spend: $10,071 ACV"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1eGh1Ixs2ixM2laMqlJBdaM2VtATBXh_TnmJZscgqIws/edit",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T00:42:04.630Z",
+      "sourceType": "ccsp",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "partner:ahead",
+      "relation": "HAS_PARTNER",
+      "tier": "factual",
+      "strength": 0.7999999595679013,
+      "evidence": [
+        "AHEAD — matches OpenShift Container Platform"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/partners/detail/ahead",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:58.026Z",
+      "sourceType": "partner-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "partner:cdw",
+      "relation": "HAS_PARTNER",
+      "tier": "factual",
+      "strength": 0.7999999595679013,
+      "evidence": [
+        "CDW — matches Ansible Automation Platform, OpenShift Container Platform"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/partners/detail/cdw",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:58.026Z",
+      "sourceType": "partner-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "partner:crossvale-inc-options-technology",
+      "relation": "HAS_PARTNER",
+      "tier": "factual",
+      "strength": 0.7999999595679013,
+      "evidence": [
+        "Crossvale, Inc. / Options Technology — matches Ansible Automation Platform, OpenShift Container Platform"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/partners/detail/crossvale",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:58.026Z",
+      "sourceType": "partner-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "partner:insight-direct-usa",
+      "relation": "HAS_PARTNER",
+      "tier": "factual",
+      "strength": 0.7999999595679013,
+      "evidence": [
+        "Insight Direct USA — matches Ansible Automation Platform"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/partners/detail/insight",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:58.026Z",
+      "sourceType": "partner-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "partner:li9",
+      "relation": "HAS_PARTNER",
+      "tier": "factual",
+      "strength": 0.7999999595679013,
+      "evidence": [
+        "Li9 — matches Ansible Automation Platform, OpenShift Container Platform"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/partners/detail/li9",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:58.026Z",
+      "sourceType": "partner-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased Red Hat Enterprise Linux for SAP via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased RHEL Arm via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased RHLS (Red Hat Learning Subscription) via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased Red Hat Enterprise Linux AI (RHEL AI) via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased Red Hat Ansible Automation Platform via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:marketplace-aws",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.7798980290123457,
+      "evidence": [
+        "Customer spends $239,663 on AWS but hasn't purchased Red Hat Advanced Cluster Management via marketplace"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-01T10:08:27.771Z",
+      "sourceType": "cloud-marketplace",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:04127120",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.7499999537037036,
+      "evidence": [
+        "Case 04127120: Ansible playbook to reboot fails with a an unknown error"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/04127120",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03957482",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.7499999537037036,
+      "evidence": [
+        "Case 03957482: Openshift - Assisted install - Single node - Failed to fetch container images ne"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03957482",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03938740",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.7499999537037036,
+      "evidence": [
+        "Case 03938740: unable to rotate registry service account token"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03938740",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03751040",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.7499999537037036,
+      "evidence": [
+        "Case 03751040: I have VMs on an ESXi"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03751040",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "case:03557603",
+      "relation": "HAS_CASE",
+      "tier": "factual",
+      "strength": 0.7499999537037036,
+      "evidence": [
+        "Case 03557603: Unable to run playbooks on Ansible Automation Platform after Migration"
+      ],
+      "sourceUrl": "https://access.redhat.com/support/cases/#/case/03557603",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-02T04:13:57.997Z",
+      "sourceType": "cases",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "subscription:enterprise-linux-server",
+      "relation": "HAS_SUBSCRIPTION",
+      "tier": "factual",
+      "strength": 0.696274361400463,
+      "evidence": [
+        "Enterprise Linux Server — 8 subscriptions"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2027-05-08",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:server-and-cloud-computing",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.8,
+      "evidence": [
+        "Active subscription: Enterprise Linux Server — 8 subscriptions"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2027-05-08",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "subscription:enterprise-linux-extended-life-cycle-support-unlimited-guests",
+      "relation": "HAS_SUBSCRIPTION",
+      "tier": "factual",
+      "strength": 0.696274361400463,
+      "evidence": [
+        "Enterprise Linux Extended Life Cycle Support (Unlimited Guests) — 1 subscription"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2027-05-08",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:server-and-cloud-computing",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.8,
+      "evidence": [
+        "Active subscription: Enterprise Linux Extended Life Cycle Support (Unlimited Guests) — 1 subscription"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2027-05-08",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "subscription:resilient-storage",
+      "relation": "HAS_SUBSCRIPTION",
+      "tier": "factual",
+      "strength": 0.696274361400463,
+      "evidence": [
+        "Resilient Storage — 1 subscription"
+      ],
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1sdA5ilga-uqDXA8Dg-UjgXhEHF5rlqE_fr4ZzaRpaMM/edit",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2027-05-08",
+      "sourceType": "subscriptions",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6636239528549382,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — What's new in AAP webpage"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/whats-new-red-hat-ansible-automation-platform",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6636239528549382,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Red Hat Summit press release"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/about/press-releases/red-hat-establishes-ansible-automation-platform-trusted-execution-layer-it-operations-agentic-era",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6636239528549382,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Website"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/technologies/management/ansible",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6636239528549382,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Release notes"
+      ],
+      "sourceUrl": "https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/release_notes/index",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-the-identity-problem-hiding-in",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.6547089732638889,
+      "evidence": [
+        "The Identity Problem Hiding in AI Agent Deployments"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/the-identity-problem-hiding-in-ai-agent-deployments/",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-24T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — What's new in AAP 2.7 webinar"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/whats-new-with-red-hat-ansible-automation-platform-2-7",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — What's new in AAP 2.6 webinar"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/whats-new-red-hat-ansible-automation-platform-2.6",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Press release"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/about/press-releases/red-hat-ansible-automation-platform-established-leader-infrastructure-automation-industry-research-firm",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Overview slide"
+      ],
+      "sourceUrl": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/abu-2024-forrester-wave-for-infrastructure-automation-slide.pptx",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Automation webinars"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/red-hat-webinars?on-demand=automation",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6399230973958334,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Self-paced labs for AAP"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/interactive-labs/ansible",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-ansible-automation-pla",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.6162222419367285,
+      "evidence": [
+        "Red Hat Ansible Automation Platform -- June 2026 - AAP 2.7 is now available! Please use the following resources to initiate sales conversat"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-training-resources-available-f",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.5925213864776234,
+      "evidence": [
+        "Training resources available for Red Hat Ansible Automation Platform"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-30T14:49:02.851Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "engagement:email-july-14th-meeting-request-exe",
+      "relation": "HAS_ENGAGEMENT",
+      "tier": "factual",
+      "strength": 0.563490134384645,
+      "evidence": [
+        "July 14th Meeting Request: Executive Alignment with Red Hat and Crowdstrike"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "Tue, 23 Jun 2026 16:44:00 -0700",
+      "sourceType": "emails",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-94-of-organizations-report-cl",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.5616695858603394,
+      "evidence": [
+        "94% of Organizations Report Cloud Breaches: CrowdStrike State of CDR Survey"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/94-of-organizations-report-cloud-breaches-crowdstrike-state-of-cdr-survey/",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-22T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "engagement:email-invitation-jason-carolanne",
+      "relation": "HAS_ENGAGEMENT",
+      "tier": "factual",
+      "strength": 0.5576782323784722,
+      "evidence": [
+        "Invitation: Jason / Carolanne- Crowdstrike CTO outreach @ Tue Jun 23, 2026 15:00 - 15:30 (EDT) (Jason Horn)"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "Tue, 23 Jun 2026 18:20:02 +0000",
+      "sourceType": "emails",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "engagement:email-re-introduction-request-cro",
+      "relation": "HAS_ENGAGEMENT",
+      "tier": "factual",
+      "strength": 0.5378410867766205,
+      "evidence": [
+        "Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "Thu, 18 Jun 2026 10:24:28 -0700",
+      "sourceType": "emails",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:agentic-ai-series-webinar-session-3",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.5117166307195216,
+      "evidence": [
+        "Agentic AI series webinar - Session #3"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-28",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:solve-your-toughest-it-challenges-at-the",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.47475601812307094,
+      "evidence": [
+        "Solve your toughest IT challenges at the Great Lakes Solution Spotlight"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-16",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:deploying-agentic-ai-across-government",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.47475601812307094,
+      "evidence": [
+        "Deploying Agentic AI Across Government"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/deploying-agentic-ai-across-government?sc_cid=RHCTN1260000484698",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-16",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:deploying-agentic-ai-across-government",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.47475601812307094,
+      "evidence": [
+        "Deploying Agentic AI Across Government"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/deploying-agentic-ai-across-government?sc_cid=RHCTN1260000484698",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-07-16",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-new-abuse-of-the-clickonce-tec",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.4747089732638889,
+      "evidence": [
+        "New Abuse of the ClickOnce Technology, Part 2: Stop Threat Actors from Clicking Once and Staying Forever"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/new-abuse-of-the-clickonce-technology-part-2-stop-threat-actors-from-clicking-once-and-staying-forever/",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-18T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-new-abuse-of-the-clickonce-tec",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.4747089732638889,
+      "evidence": [
+        "New Abuse of the ClickOnce Technology, Part 1: The Inner Workings of ClickOnce Application Deployment"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/blog/new-abuse-of-the-clickonce-technology-part-1-the-inner-workings-of-clickonce-application-deployment/",
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "2026-06-18T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "engagement:email-re-introduction-request-cro",
+      "relation": "HAS_ENGAGEMENT",
+      "tier": "factual",
+      "strength": 0.45960078612075617,
+      "evidence": [
+        "Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "Wed, 17 Jun 2026 15:25:07 -0700",
+      "sourceType": "emails",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "engagement:email-re-introduction-request-cro",
+      "relation": "HAS_ENGAGEMENT",
+      "tier": "factual",
+      "strength": 0.45928953997878086,
+      "evidence": [
+        "Re: Introduction Request - CrowdStrike Ansible Automation Platform Team & TAM Coordination"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.159Z",
+      "createdAt": "Wed, 17 Jun 2026 15:09:45 -0700",
+      "sourceType": "emails",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "lifecycle:openshift-container-platform-4-20-4-eo",
+      "relation": "HAS_LIFECYCLE",
+      "tier": "factual",
+      "strength": 0.30160175201581785,
+      "evidence": [
+        "OpenShift Container Platform 4.20.4 — EOL Apr 2027"
+      ],
+      "sourceUrl": "https://access.redhat.com/product-life-cycles#/openshift_container_platform",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2027-04-21",
+      "sourceType": "product-lifecycle",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "lifecycle:ansible-automation-platform-2-6-eol-oc",
+      "relation": "HAS_LIFECYCLE",
+      "tier": "factual",
+      "strength": 0.30160175201581785,
+      "evidence": [
+        "Ansible Automation Platform 2.6 — EOL Oct 2027"
+      ],
+      "sourceUrl": "https://access.redhat.com/product-life-cycles#/ansible_automation_platform",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2027-10-01",
+      "sourceType": "product-lifecycle",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:product-red-hat-openshift-container-pl",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.22499998585069442,
+      "evidence": [
+        "Red Hat OpenShift Container Platform — OpenShift Container Platform 4.21 is an established release that introduced a wi..."
+      ],
+      "sourceUrl": "/dashboard/products/ocp",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-07-02T04:13:57.994Z",
+      "sourceType": "product-intel",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:product-openshift-virtualization-ope",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.22499998585069442,
+      "evidence": [
+        "OpenShift Virtualization — OpenShift Virtualization 4.21 is the version aligned with OpenShift Container Pl..."
+      ],
+      "sourceUrl": "/dashboard/products/ocp-virt",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-07-02T04:13:57.994Z",
+      "sourceType": "product-intel",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:product-red-hat-ansible-automation-pla",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.22499998585069442,
+      "evidence": [
+        "Red Hat Ansible Automation Platform — Red Hat Ansible Automation Platform 2.6 introduces new features and enhancements..."
+      ],
+      "sourceUrl": "/dashboard/products/aap",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-07-02T04:13:57.994Z",
+      "sourceType": "product-intel",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:product-red-hat-enterprise-linux-ai",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.22499998585069442,
+      "evidence": [
+        "Red Hat Enterprise Linux AI — Red Hat Enterprise Linux AI 3.0 is a generative AI inference platform for Linux ..."
+      ],
+      "sourceUrl": "/dashboard/products/rhel-ai",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-07-02T04:13:57.994Z",
+      "sourceType": "product-intel",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-unknown-product-doccenter",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.17250936863425925,
+      "evidence": [
+        "Unknown Product — DocCenter"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/doccenter/",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-29T18:40:07.669Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — Home"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/home",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — DocCenter"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/doccenter/",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — Insights"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/insights",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — HomePage"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/home",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — All Sales Content"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/profileview-landing",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — Page RHSH"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/main/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI//",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:shp-red-hat-openshift-virtualizati",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.13973864894386573,
+      "evidence": [
+        "Red Hat OpenShift Virtualization — Red Hat OpenShift Virtualization"
+      ],
+      "sourceUrl": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI%25252Flf65319736-66ee-4ac2-92d5-6f720eb20d0d//",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-06-24T12:49:45.240Z",
+      "sourceType": "saleshub-products",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:ansible-expansion",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.085,
+      "evidence": [
+        "Ansible Expansion — Pipeline"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00000u9k1l/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "9/4/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:doc-abu-aai-101-201-ansible",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.08000000000000002,
+      "evidence": [
+        "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-05-14T18:59:08.232Z",
+      "sourceType": "customer-docs",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:doc-abu-aai-101-201-ansible",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.08000000000000002,
+      "evidence": [
+        "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-05-14T18:31:14.297Z",
+      "sourceType": "customer-docs",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:doc-abu-aai-101-201-ansible",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.08000000000000002,
+      "evidence": [
+        "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-05-14T17:22:24.623Z",
+      "sourceType": "customer-docs",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:doc-abu-aai-101-201-ansible",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.08000000000000002,
+      "evidence": [
+        "ABU | AAI | 101 /201 - Ansible Automation Platform and AI  - Campaign for Crowdstrike"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-05-14T17:02:22.537Z",
+      "sourceType": "customer-docs",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "evidence:doc-crowdstrike-account-plan",
+      "relation": "HAS_EVIDENCE",
+      "tier": "factual",
+      "strength": 0.08000000000000002,
+      "evidence": [
+        "Crowdstrike - Account Plan"
+      ],
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-05-14T16:49:53.308Z",
+      "sourceType": "customer-docs",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ecosystem-cisco",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.07500000000000001,
+      "evidence": [
+        "Cisco ACI and Red Hat Ansible Automation Platform — Cisco + Red Hat"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444401",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2025-11-01T00:00:00.000Z",
+      "sourceType": "ecosystem-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ecosystem-cisco",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.07500000000000001,
+      "evidence": [
+        "Cisco IOS Network Automation with Ansible — Cisco + Red Hat"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444402",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2025-09-15T00:00:00.000Z",
+      "sourceType": "ecosystem-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ecosystem-cisco",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.07500000000000001,
+      "evidence": [
+        "Cisco Nexus Data Center Automation with Ansible — Cisco + Red Hat"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444403",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2025-10-01T00:00:00.000Z",
+      "sourceType": "ecosystem-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ecosystem-cisco",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.07500000000000001,
+      "evidence": [
+        "Cisco Intersight and Red Hat OpenShift — Cisco + Red Hat"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444404",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2025-12-01T00:00:00.000Z",
+      "sourceType": "ecosystem-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "program:ecosystem-cisco",
+      "relation": "PARTICIPATES_IN",
+      "tier": "factual",
+      "strength": 0.07500000000000001,
+      "evidence": [
+        "Cisco ThousandEyes Network Observability with Ansible — Cisco + Red Hat"
+      ],
+      "sourceUrl": "https://catalog.redhat.com/en/solutions/detail/a0a0a0a0-1111-2222-3333-444444444405",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2026-01-15T00:00:00.000Z",
+      "sourceType": "ecosystem-catalog",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:renewal-crowdstrike-inc-00543077",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Renewal - Crowdstrike, Inc. - 00543077 — Commit"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/0066e00001w3iWt/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "6/19/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:rn-crowdstrike-inc-shi-may-2026-00519594",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "RN - Crowdstrike, Inc. - SHI - May 2026 - 00519594 — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/0066e00001w2l8T/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "4/23/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:rn-crowdstrike-rhel-d4t",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "RN - Crowdstrike - RHEL & D4T — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00000nLKsL/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "1/26/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m2-us-crowdstrike-usage-period-january-2026",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-Microsoft ARO-CY26Q1-M2-US-CROWDSTRIKE- usage period: January 2026 — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00000w2FVc/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2/24/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-microsoft-aro-cy26q1-m3-us-crowdstrike-usage-period-february-2026",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-Microsoft ARO-CY26Q1-M3-US-CROWDSTRIKE- usage period: February 2026 — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe000010wrpS/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "3/24/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-microsoft-aro-cy26-q2-m1-us-crowdstrike",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-Microsoft ARO-CY26-Q2-M1-US-CROWDSTRIKE — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00001517DO/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "4/27/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-aws-rosa-cy26q1m1-us-crowdstrike-public-usage-period-january-2026",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-CrowdStrike-'Public'-Usage Period : January 2026 — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00000sA6kL/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "1/22/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-aws-rosa-cy26q1-m2-us-crowdstrike-public-usage-period-february-2026",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-AWS ROSA-CY26Q1-M2-US-CrowdStrike-'Public'-Usage Period : February 2026 — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe00000wUDQt/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "2/20/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "deal:global-royalty-ccsp-amazon-cy26q1-us-crowdstrike",
+      "relation": "HAS_DEAL",
+      "tier": "factual",
+      "strength": 0.05,
+      "evidence": [
+        "Global Royalty-CCSP-Amazon-CY26Q1-US-CROWDSTRIKE — Closed"
+      ],
+      "sourceUrl": "https://redhatcrm.lightning.force.com/lightning/r/Opportunity/006Pe000010Yhd9/view",
+      "scoredAt": "2026-07-02T04:13:58.160Z",
+      "createdAt": "3/25/2026",
+      "sourceType": "pipeline",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:finding-future-footing-virtualization-a",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.46865321589506165,
+      "evidence": [
+        "Finding Future Footing: Virtualization and Beyond with Red Hat & Pellera"
+      ],
+      "sourceUrl": "https://registration.socio.events/e/findingfuturefootingredhat2026",
+      "scoredAt": "2026-07-01T20:58:50.418Z",
+      "createdAt": "2026-07-23",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:finding-future-footing-virtualization-a",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.46865321589506165,
+      "evidence": [
+        "Finding Future Footing: Virtualization and Beyond with Red Hat & Pellera"
+      ],
+      "sourceUrl": "https://registration.socio.events/e/findingfuturefootingredhat2026",
+      "scoredAt": "2026-07-01T20:58:50.418Z",
+      "createdAt": "2026-07-23",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "event:openshift-cves-distinguishing-real-thre",
+      "relation": "ATTENDED_EVENT",
+      "tier": "factual",
+      "strength": 0.459486549228395,
+      "evidence": [
+        "OpenShift CVEs: Distinguishing Real Threats from False Alarms"
+      ],
+      "sourceUrl": "https://www.redhat.com/en/events/webinar/openshift-cves-distinguishing-real-threats-from-false-alarms",
+      "scoredAt": "2026-07-01T20:58:50.418Z",
+      "createdAt": "2026-07-22",
+      "sourceType": "rh-events",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:cloud-native-application-platform-kubernetes-docker-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.999999924382716,
+      "evidence": [
+        "Cloud-Native Application Platform — Kubernetes, Docker detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-01T12:57:08.970Z",
+      "createdAt": "2026-07-01T12:57:08.774Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:observability-and-monitoring-consolidation-prometheus-grafana-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.999999924382716,
+      "evidence": [
+        "Observability and Monitoring Consolidation — Prometheus, Grafana detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-01T12:57:08.970Z",
+      "createdAt": "2026-07-01T12:57:08.774Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:ai-ml-platform-with-openshift-ai-nvidia-gpus-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.999999924382716,
+      "evidence": [
+        "AI/ML Platform with OpenShift AI — NVIDIA GPUs detected"
+      ],
+      "sourceUrl": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
+      "scoredAt": "2026-07-01T12:57:08.970Z",
+      "createdAt": "2026-07-01T12:57:08.774Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:cloud-marketplace-and-cppo-aws-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.999999924382716,
+      "evidence": [
+        "Cloud Marketplace and CPPO — AWS detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-07-01T12:57:08.970Z",
+      "createdAt": "2026-07-01T12:57:08.774Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:logscale-formerly-humio-proprietary-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9661135486111111,
+      "evidence": [
+        "LogScale (formerly Humio) (proprietary, using)"
+      ],
+      "sourceUrl": "https://www.hirezen.io/jobs/remote-crowdstrike-platform-engineer-at-tekgence-inc-in-usa-06-25-2026",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:33:15.288Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:falcon-platform-proprietary-developing",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9661095698302469,
+      "evidence": [
+        "Falcon Platform (proprietary, developing)"
+      ],
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:33:04.975Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:nvidia-gpus-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "NVIDIA GPUs (industry-tool, using)"
+      ],
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:aws-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "AWS (industry-tool, using)"
+      ],
+      "sourceUrl": "https://jobs.lever.co/crowdstrike/15d68803-e849-47d6-a05e-c4b1249b5969",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:gcp-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "GCP (industry-tool, using)"
+      ],
+      "sourceUrl": "https://jobs.lever.co/crowdstrike/15d68803-e849-47d6-a05e-c4b1249b5969",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:go-golang-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "Go (Golang) (industry-tool, using)"
+      ],
+      "sourceUrl": "https://us.bebee.com/job/20240531-01b315629c922a94a974013470769301",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:ci-cd-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "CI/CD (industry-tool, using)"
+      ],
+      "sourceUrl": "https://myworkdayjobs.com/crowdstrike/job/USA---CA---Sunnyvale---Hybrid/SRE-Dev-Ops-Engineer--Hybrid--Sunnyvale-_R16480",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:okta-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "Okta (industry-tool, using)"
+      ],
+      "sourceUrl": "https://remote-rocketship.com/job/details/107773",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:docker-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "Docker (industry-tool, using)"
+      ],
+      "sourceUrl": "https://remote-rocketship.com/job/details/107773",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:grafana-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9660981724537037,
+      "evidence": [
+        "Grafana (industry-tool, using)"
+      ],
+      "sourceUrl": "https://myworkdayjobs.com/crowdstrike/job/USA---CA---Sunnyvale---Hybrid/SRE-Dev-Ops-Engineer--Hybrid--Sunnyvale-_R16480",
+      "scoredAt": "2026-07-01T12:57:08.971Z",
+      "createdAt": "2026-06-30T12:32:35.433Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-crowdstrike-jumps-as-investors",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.8776328956597221,
+      "evidence": [
+        "CrowdStrike Jumps as Investors Appear to Revisit Split and Growth Story"
+      ],
+      "sourceUrl": "https://quiverquant.com/story/crowdstrike-jumps-as-investors-appear-to-revisit-split-and-growth-story/",
+      "scoredAt": "2026-07-01T06:50:47.932Z",
+      "createdAt": "2026-06-29T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "intel:news-crowdstrike-named-a-leader-in",
+      "relation": "HAS_INTEL",
+      "tier": "factual",
+      "strength": 0.6152504855902777,
+      "evidence": [
+        "CrowdStrike Named a Leader in the 2026 IDC MarketScape for Worldwide SIEM"
+      ],
+      "sourceUrl": "https://www.crowdstrike.com/press-releases/crowdstrike-named-a-leader-in-the-2026-idc-marketscape-for-worldwide-siem/",
+      "scoredAt": "2026-07-01T06:50:47.932Z",
+      "createdAt": "2026-06-23T00:00:00Z",
+      "sourceType": "news-radar",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:cloud-marketplace-and-cppo-amazon-web-services-aws-google-cloud-platform-gcp-aws-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999579475308,
+      "evidence": [
+        "Cloud Marketplace and CPPO — Amazon Web Services (AWS), Google Cloud Platform (GCP), AWS detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T12:32:35.259Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "play:ci-cd-pipeline-modernization-jenkins-detected",
+      "relation": "MATCHES_PLAY",
+      "tier": "derived",
+      "strength": 0.9999999579475308,
+      "evidence": [
+        "CI/CD Pipeline Modernization — Jenkins detected"
+      ],
+      "sourceUrl": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T12:32:35.259Z",
+      "sourceType": "solution-intelligence",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:go-industry-tool-developing",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Go (industry-tool, developing)"
+      ],
+      "sourceUrl": "https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/details/SRE-Dev-Ops-Engineer--Hybrid--Sunnyvale-_R19055",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:argo-cd-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Argo CD (industry-tool, using)"
+      ],
+      "sourceUrl": "https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/details/Engineer-II---TechOps-CICD-SRE---Services-Focused--2-00-PM---11-00-PM-IST-_R18839",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:jenkins-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Jenkins (industry-tool, using)"
+      ],
+      "sourceUrl": "https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/details/SRE-Dev-Ops-Engineer--Hybrid--Sunnyvale-_R19055",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:python-industry-tool-developing",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Python (industry-tool, developing)"
+      ],
+      "sourceUrl": "https://www.builtinchicago.org/job/engineer/sr-devops-engineer-log-platform-remote/210515",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:ansible-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Ansible (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.builtinchicago.org/job/engineer/sr-devops-engineer-log-platform-remote/210515",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:snowflake-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Snowflake (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.lensa.com/lead-data-scientist-remote-jobs/us/jd/d863f64c0175b5b2713f044948a4365b",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:spark-industry-tool-using",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9915102928240741,
+      "evidence": [
+        "Spark (industry-tool, using)"
+      ],
+      "sourceUrl": "https://www.builtinsf.com/job/data-scientist/sr-data-scientist-hybrid/210634",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    },
+    {
+      "from": "customer:crowdstrike",
+      "to": "product:istio-industry-tool-evaluating",
+      "relation": "USES_PRODUCT",
+      "tier": "factual",
+      "strength": 0.9419347781828703,
+      "evidence": [
+        "Istio (industry-tool, evaluating)"
+      ],
+      "sourceUrl": "https://crowdstrike.wd5.myworkdayjobs.com/en-US/crowdstrikecareers/details/SRE-Dev-Ops-Engineer--Hybrid--Sunnyvale-_R19055",
+      "scoredAt": "2026-06-30T12:32:35.369Z",
+      "createdAt": "2026-06-30T06:25:50.047Z",
+      "sourceType": "tech-stack",
+      "timestampSource": "signal"
+    }
+  ],
+  "rebuiltBy": "scheduled"
+}

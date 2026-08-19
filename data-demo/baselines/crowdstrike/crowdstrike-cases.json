@@ -1,0 +1,198 @@
+{
+  "scrapedAt": "2026-07-02T11:42:21.896Z",
+  "accounts": [
+    "5311018"
+  ],
+  "cases": [
+    {
+      "caseNumber": "04459393",
+      "summary": "Add New Users to Red Hat Support Portal & Request TAM Introduction for Ansible Automation Platform",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03775230",
+      "summary": "Need a mechanism to alert when subscription is near expiration",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Subscription Watch"
+    },
+    {
+      "caseNumber": "04127120",
+      "summary": "Ansible playbook to reboot fails with a an unknown error",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03998544",
+      "summary": "Cluster operator machine-config is degraded",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "OpenShift Container Platform"
+    },
+    {
+      "caseNumber": "03981063",
+      "summary": "Openshift - Subscription costs - cwpp-openshift-01 cluster",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "OpenShift Container Platform"
+    },
+    {
+      "caseNumber": "03981907",
+      "summary": "Openshift Container Registry - Create token that never expires",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "OpenShift Container Platform"
+    },
+    {
+      "caseNumber": "03977311",
+      "summary": "Openshift Container Registry - v2/_catalog - UNAUTHORIZED",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "OpenShift Container Platform"
+    },
+    {
+      "caseNumber": "03957482",
+      "summary": "Openshift - Assisted install - Single node - Failed to fetch container images needed for installation",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "OpenShift Container Platform"
+    },
+    {
+      "caseNumber": "03938740",
+      "summary": "unable to rotate registry service account token",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Other"
+    },
+    {
+      "caseNumber": "03751040",
+      "summary": "I have VMs on an ESXi",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Enterprise Linux"
+    },
+    {
+      "caseNumber": "03610275",
+      "summary": "SSL and SAML Configuration for Redhat Ansible Automation Platform",
+      "status": "Closed",
+      "severity": "2",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03678504",
+      "summary": "Credential type for bitbucket Ansible Integration",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03626853",
+      "summary": "Unable to run Ansible job on AAP",
+      "status": "Closed",
+      "severity": "2",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03575987",
+      "summary": "Unable to setup logging on Ansible Automation Platform",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03557603",
+      "summary": "Unable to run playbooks on Ansible Automation Platform after Migration",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03538414",
+      "summary": "Unable to Perform Ansible VMware Integration",
+      "status": "Closed",
+      "severity": "4",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03480543",
+      "summary": "Unable to Upgrade to Ansible AAP",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Ansible Automation Platform"
+    },
+    {
+      "caseNumber": "03494007",
+      "summary": "No network connectivity on rhel9.1 arm64 on esxi 7",
+      "status": "Closed",
+      "severity": "3",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Enterprise Linux"
+    },
+    {
+      "caseNumber": "03389442",
+      "summary": "HTTP error (400 - Bad Request): None of the subscriptions on the activation key were available for attaching",
+      "status": "Closed",
+      "severity": "2",
+      "accountNumber": "5311018",
+      "customerName": "Crowdstrike",
+      "daysOpen": 0,
+      "product": "Red Hat Enterprise Linux"
+    }
+  ]
+}
