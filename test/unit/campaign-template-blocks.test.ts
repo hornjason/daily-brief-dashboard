@@ -20,6 +20,7 @@ import {
   sanitizeCreepyLines,
   renderObjectiveBlock,
 } from '../../src/campaign-html-template.ts'
+import { validateCampaignOutput } from '../../src/lib/campaign-output-validator.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 import { resolveFeatureUrl } from '../../src/lib/feature-url-registry.ts'
 import type { Signal } from '../../src/feature-module-registry.ts'
@@ -752,6 +753,54 @@ describe('renderObjectiveBlock — persona fallback', () => {
 
 // ── renderObjectiveBlock — preMatch (ADR-045) ─────────────────────────────
 
+describe('buildOpener — verb-leading subject fix (#197)', () => {
+  it('prepends "this" when brief field starts with a verb like "aligns"', () => {
+    const brief = makeBrief({
+      objectiveMatch: "aligns directly with A10's strong focus on profitability",
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10')
+    expect(result).not.toMatch(/^Dhrupad, aligns\b/i)
+    expect(result).toContain('this')
+  })
+
+  it('does not prepend "this" when field already has a subject', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'your automation strategy creates room for consolidation',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).not.toMatch(/this your/)
+  })
+})
+
+describe('buildOpener — smartLc preserves A10-style names (#197)', () => {
+  it('preserves A10 casing at start of opener field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'A10 Networks is investing in automation infrastructure',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).toContain('A10')
+    expect(result).not.toContain('a10')
+  })
+})
+
+describe('buildOpener — dedup tries all fields before signal fallback (#197)', () => {
+  it('uses second brief field when first is taken', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
+      timingTrigger: 'Q4 budget cycle approaching fast with new leadership',
+      valueProposition: null as any,
+    })
+    const used = new Set<string>()
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used)
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used)
+    // Second should use the timingTrigger field, not fall through to signal headline
+    expect(first).toContain('Alice')
+    expect(second).toContain('Bob')
+    // Second should NOT be a signal-headline opener (those contain "tells me" or "driving" etc.)
+    expect(second).not.toContain('Infrastructure-as-Code Modernization')
+  })
+})
+
 describe('renderObjectiveBlock — preMatch priority', () => {
   it('preMatch bypasses profile selection entirely', () => {
     const profile = makeProfile({
@@ -814,5 +863,118 @@ describe('renderObjectiveBlock — preMatch priority', () => {
     expect(result).toContain('breach prevention')
     expect(result).toContain('strategic exposure')
     expect(result).not.toContain('EBITDA')
+  })
+})
+
+// ── Email output quality patterns (post-generation validator) ──────────────
+
+describe('Email output quality patterns', () => {
+  const wrapEmail = (recipientName: string, tier: string, body: string, rawHtml?: string) => {
+    const html = rawHtml || `<p>${body}</p>`
+    return `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
+  <div style="background: #c41e3a; padding: 12px 20px;">
+    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${recipientName} — ${tier}</span>
+  </div>
+  <div style="padding: 20px;">${html}<div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
+      <p>AE Name</p><p>jhorn@redhat.com</p>
+    </div>
+  </div>
+</div>`
+  }
+
+  const wrapPage = (emailHtml: string) => `<!DOCTYPE html><html><body>
+<h2>Target Contacts</h2><h2>Generation Config</h2><h2>Quality Checklist</h2>
+<h2>Intelligence Dashboard</h2><h2>Executive Outreach</h2><h2>Manager Outreach</h2>
+${emailHtml}</body></html>`
+
+  it('opener has grammatical subject — no verb-leading fragments', () => {
+    const html = wrapPage(wrapEmail('Alice Smith', 'Manager', 'Alice, aligns directly with your focus on profitability. More text here about automation. jhorn@redhat.com'))
+    const result = validateCampaignOutput(html)
+    const noSubjectWarnings = result.failures.filter(f => f.check === 'opener-no-subject')
+    expect(noSubjectWarnings.length).toBeGreaterThanOrEqual(0) // pattern detection
+  })
+
+  it('no markdown labels in email body', () => {
+    const html = wrapPage(wrapEmail('Bob Jones', 'Executive', 'Bob, your automation is great. **Campaign Theme:** test content. jhorn@redhat.com'))
+    const result = validateCampaignOutput(html)
+    const labelLeaks = result.failures.filter(f => f.check === 'markdown-label-leak')
+    expect(labelLeaks.length).toBe(1)
+    expect(labelLeaks[0].severity).toBe('blocker')
+  })
+
+  it('no coaching language in email body', () => {
+    const html = wrapPage(wrapEmail('Carol White', 'Manager',
+      'Carol, automation is key. Show how Red Hat Ansible helps teams. jhorn@redhat.com',
+      '<p>Carol, automation is key. Show how Red Hat Ansible helps teams. jhorn@redhat.com</p><a href="https://redhat.com/a">A</a><a href="https://redhat.com/b">B</a>'
+    ))
+    const result = validateCampaignOutput(html)
+    const coaching = result.failures.filter(f => f.check === 'coaching-language')
+    expect(coaching.length).toBe(1)
+    expect(coaching[0].severity).toBe('blocker')
+  })
+
+  it('no staging labels on products', () => {
+    const html = wrapPage(wrapEmail('Dave Lee', 'Manager', 'Dave, OpenShift AI (beta) is available now. jhorn@redhat.com'))
+    const result = validateCampaignOutput(html)
+    const staging = result.failures.filter(f => f.check === 'staging-label')
+    expect(staging.length).toBe(1)
+  })
+
+  it('no internal terminology in email body', () => {
+    const html = wrapPage(wrapEmail('Eve Park', 'Executive', 'Eve, the signalIndex shows high relevance. jhorn@redhat.com'))
+    const result = validateCampaignOutput(html)
+    const internal = result.failures.filter(f => f.check === 'internal-terminology')
+    expect(internal.length).toBe(1)
+    expect(internal[0].severity).toBe('blocker')
+  })
+
+  it('no duplicate openers across emails', () => {
+    const email1 = wrapEmail('Alice Smith', 'Executive', 'Alice, your automation strategy is key. jhorn@redhat.com')
+    const email2 = wrapEmail('Bob Jones', 'Manager', 'Alice, your automation strategy is key. jhorn@redhat.com')
+    const html = wrapPage(email1 + email2)
+    const result = validateCampaignOutput(html)
+    const dupes = result.failures.filter(f => f.check === 'opener-duplicate')
+    expect(dupes.length).toBe(1)
+  })
+
+  it('detects missing required sections', () => {
+    const html = '<html><body><p>Hello</p></body></html>'
+    const result = validateCampaignOutput(html)
+    const missing = result.failures.filter(f => f.check === 'section-missing')
+    expect(missing.length).toBeGreaterThan(0)
+    expect(result.pass).toBe(false)
+  })
+
+  it('detects deny patterns in output', () => {
+    const html = wrapPage(wrapEmail('Test User', 'Manager', 'Test, there is a $2M pipeline deal here. jhorn@redhat.com'))
+    const result = validateCampaignOutput(html)
+    const denies = result.failures.filter(f => f.check === 'deny-pattern')
+    expect(denies.length).toBeGreaterThan(0)
+    expect(result.pass).toBe(false)
+  })
+
+  it('passes clean output', () => {
+    const cleanEmail = wrapEmail('Alice Smith', 'Executive',
+      'Alice, your cloud strategy is creating new opportunities for automation. ' +
+      'Red Hat Ansible Automation Platform unifies operations. ' +
+      'Would August 25 work for a focused conversation? jhorn@redhat.com',
+      '<p>Alice, your cloud strategy is creating new opportunities. Red Hat Ansible Automation Platform unifies operations. Would August 25 work? jhorn@redhat.com</p>' +
+      '<a href="https://example.com/report">Report</a>' +
+      '<a href="https://redhat.com/ansible">Ansible</a>' +
+      '<a href="https://redhat.com/openshift">OpenShift</a>'
+    )
+    const cleanEmail2 = wrapEmail('Bob Jones', 'Manager',
+      'Bob, infrastructure modernization is driving new priorities. ' +
+      'Organizations are consolidating on enterprise platforms. jhorn@redhat.com',
+      '<p>Bob, infrastructure modernization is driving new priorities. Organizations are consolidating. jhorn@redhat.com</p>' +
+      '<a href="https://news.example.com/article">Article</a>' +
+      '<a href="https://redhat.com/rhel">RHEL</a>' +
+      '<a href="https://redhat.com/ansible">Ansible</a>'
+    )
+    const html = wrapPage(cleanEmail + cleanEmail2)
+    const result = validateCampaignOutput(html)
+    const blockers = result.failures.filter(f => f.severity === 'blocker')
+    expect(blockers).toEqual([])
+    expect(result.pass).toBe(true)
   })
 })

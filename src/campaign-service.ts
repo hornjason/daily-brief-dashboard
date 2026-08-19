@@ -42,6 +42,7 @@ import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type Pre
 import { selectPersonas, formatBriefsForPrompt, type Pass0Result, type PersonaBrief } from './lib/persona-selector.ts'
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 import { assertExtractionOutput, assertPass0Output, assertExecResolutionOutput, assertPass1Output, assertPass2Output } from './lib/campaign-contracts.ts'
+import { validateCampaignOutput } from './lib/campaign-output-validator.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
 
@@ -1907,6 +1908,20 @@ export async function generateCampaign(
     } catch (e: any) {
       if (process.env.NODE_ENV === 'test') throw e
       console.warn(`[campaigns] Pass 2 contract warning:`, e?.message)
+    }
+
+    // ── Post-generation quality validation ──
+    const outputValidation = validateCampaignOutput(htmlContent)
+    if (!outputValidation.pass) {
+      console.warn(`[campaigns] Output validation FAILED: ${outputValidation.failures.filter((f: { severity: string }) => f.severity === 'blocker').length} blockers`)
+      for (const f of outputValidation.failures) {
+        console.warn(`[campaigns]   [${f.severity}] ${f.check}: ${f.detail}`)
+      }
+    } else if (outputValidation.failures.length > 0) {
+      console.log(`[campaigns] Output validation passed with ${outputValidation.failures.length} warnings`)
+      for (const f of outputValidation.failures) {
+        console.log(`[campaigns]   [warning] ${f.check}: ${f.detail}`)
+      }
     }
 
     // Upload to Drive with pre-built HTML

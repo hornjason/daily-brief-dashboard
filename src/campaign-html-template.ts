@@ -842,6 +842,10 @@ export function buildOpener(
         cleaned = cleaned.replace(possessivePattern, 'your')
       }
       cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at)\s*\.?\s*$/, '').trim()
+      // Ensure sentence has a grammatical subject — verb-leading fragments read broken
+      if (/^[a-z]+(s|es|ed|ing)\b/.test(cleaned)) {
+        cleaned = 'this ' + cleaned
+      }
       if (cleaned.length < 20) return null
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
       if (sentenceMatch && sentenceMatch[1].length <= 80) return sentenceMatch[1].replace(/[.!?]$/, '')
@@ -853,6 +857,7 @@ export function buildOpener(
       const firstWord = s.split(/\s/)[0]
       if (/^[A-Z]{2,}/.test(firstWord)) return s
       if (/^[A-Z][a-z]+[A-Z]/.test(firstWord)) return s
+      if (/^[A-Z]+\d/.test(firstWord)) return s
       if (/^(?:Red|Ansible|OpenShift|Kubernetes|Docker|Azure|Google|Amazon|AWS|IBM|VMware|Terraform|Linux|GitHub|Microsoft|Oracle|SAP|Cisco|Dell|Intel|NVIDIA|MongoDB|PostgreSQL|Salesforce|ServiceNow)\b/.test(firstWord)) return s
       return s.charAt(0).toLowerCase() + s.slice(1)
     }
@@ -864,10 +869,13 @@ export function buildOpener(
     ].filter((f): f is string => f != null).map(f => smartLc(f))
 
     if (fields.length > 0) {
-      const field = fields[openerVariant % fields.length]
-      if (!usedOpeners || !usedOpeners.has(field.slice(0, 50))) {
-        if (usedOpeners) usedOpeners.add(field.slice(0, 50))
-        return `${firstName}, ${field}.`
+      for (let f = 0; f < fields.length; f++) {
+        const field = fields[(openerVariant + f) % fields.length]
+        const key = field.slice(0, 50)
+        if (!usedOpeners || !usedOpeners.has(key)) {
+          if (usedOpeners) usedOpeners.add(key)
+          return `${firstName}, ${field}.`
+        }
       }
     }
   }
