@@ -571,6 +571,9 @@ const CREEPY_SENTENCE_PATTERNS = [
   /workforce\s+reduction/i,
   /\$\d[\d,.]*[kKmMbB]?\s+renewal/i,
   /renewal\s+of\s+\$/i,
+  /\bCase\s+\d{4,}/i,
+  /\bCS-\d{3,}/i,
+  /\bescalation\s+#?\d/i,
 ]
 
 const SKU_PATTERN = /\b[A-Z]{2,4}\d{4,6}\b/g
