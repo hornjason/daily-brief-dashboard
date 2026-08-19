@@ -22,7 +22,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignFromStructured, cleanCampaignTitle, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignFromStructured, cleanCampaignTitle, isFreeTierProduct, type BVTalkingPoint } from './campaign-html-template.ts'
 import { isHomepageUrl, LinkRegistry } from './lib/link-registry.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
@@ -100,7 +100,7 @@ export function deriveFootprint(
   const rawSubProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
   if (rawSubProducts.length > 0) {
     // AC-2: Deduplicate product names and strip subscription count text (#1124)
-    const subProducts = [...new Set(rawSubProducts.map(p => p.replace(/\s*\d+\s*subscriptions?\s*total\s*/gi, '').trim()))]
+    const subProducts = [...new Set(rawSubProducts.map(p => p.replace(/\s*\d+\s*subscriptions?\s*total\s*/gi, '').trim()))].filter(p => !isFreeTierProduct(p))
 
     // Build expansion from multiple sources (priority order):
     // 1. Pass 0 briefs valueProposition (persona-specific expansion opportunities)

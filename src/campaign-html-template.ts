@@ -1068,7 +1068,7 @@ const FREE_TIER_PATTERNS = [
   'learning subscription',
 ]
 
-function isFreeTierProduct(desc: string): boolean {
+export function isFreeTierProduct(desc: string): boolean {
   const lower = desc.toLowerCase()
   return FREE_TIER_PATTERNS.some(p => lower.includes(p))
 }
