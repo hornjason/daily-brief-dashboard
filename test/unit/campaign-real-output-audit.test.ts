@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test'
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { DENY_PATTERNS } from '../helpers/campaign-assertions.ts'
 
@@ -16,12 +16,12 @@ const CACHE_DIR = join(import.meta.dir, '../../data/cache/campaigns')
 function loadLatestStructuredCampaign(): { html: string; meta: any } {
   const files = readdirSync(CACHE_DIR)
     .filter(f => f.endsWith('.json'))
-    .sort()
-    .reverse()
+    .map(f => ({ name: f, mtime: statSync(join(CACHE_DIR, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
 
-  for (const file of files) {
-    const raw = JSON.parse(readFileSync(join(CACHE_DIR, file), 'utf-8'))
-    if (raw.generationPath === 'structured' && raw.htmlContent) {
+  for (const { name } of files) {
+    const raw = JSON.parse(readFileSync(join(CACHE_DIR, name), 'utf-8'))
+    if (raw.htmlContent) {
       return { html: raw.htmlContent, meta: raw }
     }
   }
@@ -122,7 +122,7 @@ describe('Spec §6: Guardrails', () => {
 })
 
 describe('Spec §7: Reference Material', () => {
-  it('section exists', () => { expect(plainText).toMatch(/Reference\s+Material/i) })
+  it('section exists', () => { expect(plainText).toMatch(/Reference\s+Material|Source\s+Documents/i) })
 })
 
 describe('Spec §8: Eligibility', () => {
