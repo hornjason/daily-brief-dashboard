@@ -1856,7 +1856,7 @@ export async function generateCampaign(
     }
 
     // Pass 2: Template assembly (deterministic, no LLM)
-    htmlContent = generateCampaignFromStructured(selection, {
+    htmlContent = await generateCampaignFromStructured(selection, {
       resolvedExecs: resolvedExecs.map(e => ({
         name: e.name,
         title: e.title,

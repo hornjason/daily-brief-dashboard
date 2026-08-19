@@ -133,6 +133,7 @@ export function buildHappyFixture(): { data: StructuredCampaignData; selection: 
     aePhone: '503-555-0199',
     campaignThreat: 'rising SaaS licensing costs',
     campaignSolution: 'self-managed automation platform',
+    enablePolish: false,
     objectiveProfile: makeObjectiveProfile(),
     preMatchedMetrics: [
       {
@@ -214,6 +215,7 @@ export function buildMinimalFixture(): { data: StructuredCampaignData; selection
     materialTitle: 'Cloud Strategy Assessment',
     materialUrl: 'https://docs.google.com/document/d/minimal123',
     generatedDate: '2026-08-17',
+    enablePolish: false,
   }
 
   const selection: StructuredCampaignSelection = {
@@ -280,6 +282,7 @@ export function buildPoisonedFixture(): { data: StructuredCampaignData; selectio
     signalsLoaded: ['intelligence'],
     aeEmail: 'jhorn@redhat.com',
     aePhone: '503-555-0199',
+    enablePolish: false,
     campaignThreat: 'rising infrastructure costs',
     campaignSolution: 'self-managed automation platform',
     objectiveProfile: {

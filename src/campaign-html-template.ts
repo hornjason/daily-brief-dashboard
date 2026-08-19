@@ -804,6 +804,7 @@ export interface StructuredCampaignData {
   productFitSections?: Record<string, string>
   signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
   materialUrlMap?: Map<string, string>
+  enablePolish?: boolean
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1640,10 +1641,69 @@ ${structured.differentiation ? `<p style="font-size: 14px; color: #5f6368; margi
   return sections
 }
 
-export function generateCampaignFromStructured(
+async function polishEmailBody(
+  rawBody: string,
+  recipientName: string,
+  recipientTitle: string,
+  tier: 'executive' | 'manager',
+  customerName: string,
+  campaignTheme: string,
+  wordLimit: number,
+): Promise<string> {
+  const { callGemini } = await import('./gemini-call.ts')
+
+  const prompt = `Rewrite this sales email body to read naturally — like a brief colleague's note, not a template.
+
+RULES:
+- Use ONLY facts already present in the text below. Do NOT add any new information, metrics, or claims.
+- Keep the same structure: greeting, context, product bullets, peer proof, call to action.
+- The greeting must start with "${recipientName.split(' ')[0]}," followed by a specific observation about their business.
+- Include any metrics or numbers that appear in the original (revenue figures, percentages, dollar amounts).
+- Keep bullet points as bullet points (use • character).
+- Maximum ${wordLimit} words.
+- Write as an AE peer, not a marketer. Conversational, not formal.
+- Do NOT include the sign-off (name, title, email, phone) — that's added separately.
+- Tier: ${tier} — ${tier === 'executive' ? 'brief, high-level, designed to be forwarded down with "thoughts?"' : 'more technical depth, designed to be forwarded up with "we should look at this"'}
+
+CUSTOMER: ${customerName}
+RECIPIENT: ${recipientName}, ${recipientTitle}
+THEME: ${campaignTheme}
+
+EMAIL TO POLISH:
+${rawBody}`
+
+  try {
+    const result = await callGemini(
+      'You are a sales email editor. You polish raw template output into natural prose. You never add facts — only rearrange and smooth what is given.',
+      prompt,
+      {
+        callType: 'email-polish',
+        customerName,
+        temperature: 0.1,
+        timeoutMs: 15_000,
+      },
+    )
+
+    const polished = result.text.trim()
+
+    if (!polished || polished.length < 50) return rawBody
+    if (polished.split(/\s+/).length > wordLimit * 1.3) return rawBody
+
+    const rawWordCount = rawBody.split(/\s+/).length
+    const polishedWordCount = polished.split(/\s+/).length
+    console.log(`[template] Polish pass: ${recipientName} — ${rawWordCount}w raw → ${polishedWordCount}w polished`)
+
+    return polished
+  } catch (e: any) {
+    console.warn(`[template] Polish pass failed for ${recipientName}: ${e?.message}`)
+    return rawBody
+  }
+}
+
+export async function generateCampaignFromStructured(
   selection: StructuredCampaignSelection,
   data: StructuredCampaignData,
-): string {
+): Promise<string> {
   const voiceTokens = getVoiceTokens(data.voiceProfile)
 
   // Sanitize customer-facing fields from Gemini selection output
@@ -1786,9 +1846,29 @@ export function generateCampaignFromStructured(
       email.recipientName,
     )
 
-    // Run quality checks on assembled email
+    // Pass 3: Polish the assembled email body via Gemini
+    let finalBody = assembled.body
+    if (data.enablePolish !== false) {
+      const wordLimit = email.tier === 'executive'
+        ? voiceTokens.wordBudget.exec
+        : voiceTokens.wordBudget.manager
+      const theme = data.campaignThreat && data.campaignSolution
+        ? `${data.campaignThreat} → ${data.campaignSolution}`
+        : data.materialTitle || ''
+      finalBody = await polishEmailBody(
+        assembled.body,
+        email.recipientName,
+        recipientExec?.title || email.tier,
+        email.tier,
+        data.customerName,
+        theme,
+        wordLimit,
+      )
+    }
+
+    // Run quality checks on polished email
     const qualityInput: EmailCheckInput = {
-      body: assembled.body,
+      body: finalBody,
       subject: email.subject,
       tier: email.tier,
       wordBudget: voiceTokens.wordBudget,
@@ -1799,7 +1879,7 @@ export function generateCampaignFromStructured(
       email.recipientName,
       email.tier,
       email.subject,
-      assembled.body,
+      finalBody,
       assembled.signOff,
       aeName,
       data.aeEmail,
@@ -1858,7 +1938,7 @@ ${renderContactsSection(contacts)}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
-  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Two-Pass (ADR-043): Gemini selection + deterministic assembly</td></tr>
+  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Three-Pass (ADR-043): Gemini selection + deterministic assembly + Gemini polish</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(aeName)} (${voiceTokens.formality}, ${voiceTokens.assertionLevel})</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
     data.accountTeam.length > 0
@@ -1868,7 +1948,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">${execEmailsHtml.length} Executive (${voiceTokens.wordBudget.exec} words) + ${managerEmailsHtml.length} Manager (${voiceTokens.wordBudget.manager} words)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${personaList}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">${data.signals.length} signals loaded</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa;">Assembly</td><td>8-block deterministic template — zero LLM in email body</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa;">Assembly</td><td>8-block deterministic template + Gemini polish (facts-only rewrite, 0.1 temp)</td></tr>
 </table>
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>

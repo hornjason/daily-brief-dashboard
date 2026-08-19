@@ -22,10 +22,11 @@ describe('generateCampaignFromStructured — core behavior', () => {
     materialTitle: 'Test Material',
     materialUrl: 'https://test.com',
     generatedDate: 'May 13, 2026',
+    enablePolish: false,
   }
 
-  it('should generate HTML with core structure and branding', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('should generate HTML with core structure and branding', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...minimalData,
       materialTitle: 'Cloud Migration Strategy Guide',
       materialUrl: 'https://docs.google.com/document/d/test123/edit',
@@ -41,8 +42,8 @@ describe('generateCampaignFromStructured — core behavior', () => {
     expect(html).toContain('Email Templates by Role')
   })
 
-  it('should escape HTML special characters', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('should escape HTML special characters', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...minimalData,
       materialTitle: 'Test <script>',
       customerName: 'Test & Co.',
@@ -53,21 +54,21 @@ describe('generateCampaignFromStructured — core behavior', () => {
     expect(html).toContain('&amp;')
   })
 
-  it('should include intelligence dashboard metrics', () => {
-    const html = generateCampaignFromStructured(minimalSelection, minimalData)
+  it('should include intelligence dashboard metrics', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, minimalData)
     expect(html).toContain('Annual Revenue')
     expect(html).toContain('Employees')
   })
 
-  it('should apply Red Hat brand color throughout template', () => {
-    const html = generateCampaignFromStructured(minimalSelection, minimalData)
+  it('should apply Red Hat brand color throughout template', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, minimalData)
     const colorMatches = html.match(/#c41e3a/g)
     expect(colorMatches).not.toBeNull()
     expect(colorMatches!.length).toBeGreaterThan(5)
   })
 
-  it('should handle missing sections without throwing errors', () => {
-    const html = generateCampaignFromStructured(minimalSelection, minimalData)
+  it('should handle missing sections without throwing errors', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, minimalData)
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('</html>')
   })
@@ -281,10 +282,11 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
     preMatchedMetrics: undefined,
     preMatchedPeerProofs: undefined,
     sourceAttributions: undefined,
+    enablePolish: false,
   })
 
-  it('includes voice profile email/phone in sign-off when no named AE exists', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('includes voice profile email/phone in sign-off when no named AE exists', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...createMinimalData(),
       aeEmail: 'test@redhat.com',
       aePhone: '555-1234',
@@ -295,8 +297,8 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
     expect(html).toContain('M: 555-1234')
   })
 
-  it('includes fallback contact when no named AE and no voice profile contact info', () => {
-    const html = generateCampaignFromStructured(minimalSelection, createMinimalData())
+  it('includes fallback contact when no named AE and no voice profile contact info', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, createMinimalData())
 
     expect(html).toContain('Account Executive')
     // Should have SOME contact info - either a fallback email or message
@@ -304,8 +306,8 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
     expect(hasContactInfo).toBe(true)
   })
 
-  it('derives email from name when named AE exists', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('derives email from name when named AE exists', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...createMinimalData(),
       accountTeam: [{ name: 'Jane Doe', role: 'ae', title: 'Account Executive' }],
     })
@@ -377,8 +379,8 @@ describe('email body formatting — bullets and links (#1149)', () => {
     }
   })
 
-  it('feature bullets render as styled elements with anchor tags in full pipeline', () => {
-    const html = generateCampaignFromStructured(
+  it('feature bullets render as styled elements with anchor tags in full pipeline', async () => {
+    const html = await generateCampaignFromStructured(
       {
         customerContext: 'Test',
         emails: [{
@@ -401,6 +403,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
         subscriptions: [],
         sourceUrls: ['https://www.redhat.com/en/resources/guide'],
         structuredPlays: [],
+        enablePolish: false,
       },
     )
 
@@ -411,8 +414,8 @@ describe('email body formatting — bullets and links (#1149)', () => {
     expect(anchorMatches.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('referenceLine from sourceUrls renders as clickable anchor tags', () => {
-    const html = generateCampaignFromStructured(
+  it('referenceLine from sourceUrls renders as clickable anchor tags', async () => {
+    const html = await generateCampaignFromStructured(
       {
         customerContext: 'Test',
         emails: [{
@@ -435,6 +438,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
         subscriptions: [],
         sourceUrls: ['https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis'],
         structuredPlays: [],
+        enablePolish: false,
       },
     )
 

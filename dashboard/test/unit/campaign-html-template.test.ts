@@ -20,10 +20,11 @@ describe('generateCampaignFromStructured (dashboard)', () => {
     materialTitle: 'Test Material',
     materialUrl: 'https://test.com',
     generatedDate: 'May 13, 2026',
+    enablePolish: false,
   }
 
-  it('should generate HTML with core structure and branding', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('should generate HTML with core structure and branding', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...minimalData,
       materialTitle: 'Cloud Migration Strategy Guide',
       materialUrl: 'https://docs.google.com/document/d/test123/edit',
@@ -39,8 +40,8 @@ describe('generateCampaignFromStructured (dashboard)', () => {
     expect(html).toContain('Email Templates by Role')
   })
 
-  it('should escape HTML special characters', () => {
-    const html = generateCampaignFromStructured(minimalSelection, {
+  it('should escape HTML special characters', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, {
       ...minimalData,
       materialTitle: 'Test <script>',
       customerName: 'Test & Co.',
@@ -51,8 +52,8 @@ describe('generateCampaignFromStructured (dashboard)', () => {
     expect(html).toContain('&amp;')
   })
 
-  it('should include all intelligence dashboard metrics', () => {
-    const html = generateCampaignFromStructured(minimalSelection, minimalData)
+  it('should include all intelligence dashboard metrics', async () => {
+    const html = await generateCampaignFromStructured(minimalSelection, minimalData)
 
     expect(html).toContain('Annual Revenue')
     expect(html).toContain('Employees')

@@ -36,18 +36,18 @@ let poisonedHtml: string
 const FIXED_DATE = new Date('2026-08-17T12:00:00Z').getTime()
 let originalDateNow: () => number
 
-beforeAll(() => {
+beforeAll(async () => {
   originalDateNow = Date.now
   Date.now = () => FIXED_DATE
 
   const happy = buildHappyFixture()
-  happyHtml = generateCampaignFromStructured(happy.selection, happy.data)
+  happyHtml = await generateCampaignFromStructured(happy.selection, happy.data)
 
   const minimal = buildMinimalFixture()
-  minimalHtml = generateCampaignFromStructured(minimal.selection, minimal.data)
+  minimalHtml = await generateCampaignFromStructured(minimal.selection, minimal.data)
 
   const poisoned = buildPoisonedFixture()
-  poisonedHtml = generateCampaignFromStructured(poisoned.selection, poisoned.data)
+  poisonedHtml = await generateCampaignFromStructured(poisoned.selection, poisoned.data)
 })
 
 afterAll(() => {
@@ -223,8 +223,10 @@ describe('3. Static analysis — template is a pure display layer', () => {
     )
   })
 
-  it('template source contains no callGemini references', () => {
-    expect(templateSource).not.toMatch(/callGemini/i)
+  it('template source callGemini usage is limited to polishEmailBody only', () => {
+    const matches = templateSource.match(/callGemini/gi) || []
+    // polishEmailBody has exactly 2 refs: dynamic import + call
+    expect(matches.length).toBe(2)
   })
 
   it('template source contains no fetch() calls', () => {
@@ -255,7 +257,7 @@ describe('3. Static analysis — template is a pure display layer', () => {
   })
 
   it('template exports generateCampaignFromStructured as the primary entry point', () => {
-    expect(templateSource).toMatch(/export\s+function\s+generateCampaignFromStructured/)
+    expect(templateSource).toMatch(/export\s+async\s+function\s+generateCampaignFromStructured/)
   })
 })
 
@@ -502,12 +504,12 @@ describe('5. Adversarial/poisoned input handling', () => {
     expect(result).toBe(input)
   })
 
-  it('generateCampaignFromStructured applies cleanObjectivePrefix to context fields', () => {
+  it('generateCampaignFromStructured applies cleanObjectivePrefix to context fields', async () => {
     const fixture = buildHappyFixture()
     fixture.selection.customerContext = 'Revenue Trajectory: strong Q4 performance'
     fixture.selection.positioning = 'Profitability: margin expansion opportunity'
 
-    const html = generateCampaignFromStructured(fixture.selection, fixture.data)
+    const html = await generateCampaignFromStructured(fixture.selection, fixture.data)
     const plain = html.replace(/<[^>]+>/g, ' ')
 
     expect(plain).not.toMatch(/Revenue Trajectory:/i)
@@ -588,14 +590,14 @@ describe('6. Graceful degradation — minimal fixture', () => {
 // ── 7. Fixture purity + CREEPY_PATTERNS parity ──────────────────────────────
 
 describe('7. Fixture purity assertions + CREEPY_PATTERNS parity', () => {
-  it('all 3 fixtures generate output in under 3 seconds', () => {
+  it('all 3 fixtures generate output in under 3 seconds', async () => {
     const start = performance.now()
     const h = buildHappyFixture()
-    generateCampaignFromStructured(h.selection, h.data)
+    await generateCampaignFromStructured(h.selection, h.data)
     const m = buildMinimalFixture()
-    generateCampaignFromStructured(m.selection, m.data)
+    await generateCampaignFromStructured(m.selection, m.data)
     const p = buildPoisonedFixture()
-    generateCampaignFromStructured(p.selection, p.data)
+    await generateCampaignFromStructured(p.selection, p.data)
     const elapsed = performance.now() - start
     expect(elapsed).toBeLessThan(3000)
   })

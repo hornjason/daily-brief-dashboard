@@ -44,12 +44,13 @@ describe('account-team', () => {
     it('filters specialists by product when filter provided', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(
+      const html = await generateCampaignFromStructured(
         { campaignSummary: 'Test', customerContext: 'Test', positioning: 'Test', emails: [] },
         {
           resolvedExecs: [], signals: [], voiceProfile: null, subscriptions: [],
           structuredPlays: [], customerName: 'Test Corp', materialTitle: 'Test',
           materialUrl: 'https://test.com', generatedDate: 'May 14, 2026',
+          enablePolish: false,
           accountTeam: [
             { name: 'Test AE', title: 'Account Executive', role: 'ae' },
             { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
@@ -435,12 +436,13 @@ describe('account-team', () => {
       resolvedExecs: [] as any[], signals: [] as any[], voiceProfile: null as any, subscriptions: [] as any[],
       structuredPlays: [] as any[], customerName: 'Test Corp', materialTitle: 'Test',
       materialUrl: 'https://test.com', generatedDate: 'May 14, 2026',
+      enablePolish: false,
     }
 
     it('renders team members in metadata line when accountTeam provided', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(baseSelection, {
+      const html = await generateCampaignFromStructured(baseSelection, {
         ...baseData, materialTitle: 'Test Material',
         accountTeam: [
           { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
@@ -455,7 +457,7 @@ describe('account-team', () => {
     it('renders SSP role correctly when title contains SSP', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(baseSelection, {
+      const html = await generateCampaignFromStructured(baseSelection, {
         ...baseData,
         accountTeam: [
           { name: 'Test AE', title: 'Account Executive', role: 'ae' },
@@ -469,7 +471,7 @@ describe('account-team', () => {
     it('renders Account Team row in config table', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(baseSelection, {
+      const html = await generateCampaignFromStructured(baseSelection, {
         ...baseData,
         accountTeam: [
           { name: 'Elmer Alvarez', title: 'Account Executive', role: 'ae' },
@@ -485,7 +487,7 @@ describe('account-team', () => {
     it('falls back to "Account Executive" when no accountTeam provided', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(baseSelection, {
+      const html = await generateCampaignFromStructured(baseSelection, {
         ...baseData, accountTeam: [],
       })
 
@@ -495,7 +497,7 @@ describe('account-team', () => {
     it('keeps email signatures as AE-only even with accountTeam', async () => {
       const { generateCampaignFromStructured } = await import('../../src/campaign-html-template.ts')
 
-      const html = generateCampaignFromStructured(
+      const html = await generateCampaignFromStructured(
         {
           ...baseSelection,
           emails: [{

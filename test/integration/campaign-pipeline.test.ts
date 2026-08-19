@@ -305,6 +305,7 @@ function buildFullPipelineFixture(): { data: StructuredCampaignData; selection: 
     preMatchedPeerProofs,
     pass0Briefs,
     signalQuality: { disposition: 'PROCEED', signalCompleteness: 87, missing: ['cases'] },
+    enablePolish: false,
   }
 
   const emails: StructuredEmailSelection[] = [
@@ -400,6 +401,7 @@ function buildThinMaterialFixture(): { data: StructuredCampaignData; selection: 
     signalsLoaded: ['intelligence'],
     campaignThreat: 'rising infrastructure costs',
     campaignSolution: 'consolidated infrastructure',
+    enablePolish: false,
   }
 
   const selection: StructuredCampaignSelection = {
@@ -436,15 +438,15 @@ function buildThinMaterialFixture(): { data: StructuredCampaignData; selection: 
 let fullHtml: string
 let thinHtml: string
 
-beforeAll(() => {
+beforeAll(async () => {
   originalDateNow = Date.now
   Date.now = () => FIXED_DATE
 
   const full = buildFullPipelineFixture()
-  fullHtml = generateCampaignFromStructured(full.selection, full.data)
+  fullHtml = await generateCampaignFromStructured(full.selection, full.data)
 
   const thin = buildThinMaterialFixture()
-  thinHtml = generateCampaignFromStructured(thin.selection, thin.data)
+  thinHtml = await generateCampaignFromStructured(thin.selection, thin.data)
 })
 
 afterAll(() => {
@@ -823,10 +825,10 @@ describe('Pipeline wiring — upstream data reaches rendered output', () => {
     expect(plain).toMatch(/Chef|Puppet|VMware|AWS|Backstage/i)
   })
 
-  it('signal quality status appears when not PROCEED', () => {
+  it('signal quality status appears when not PROCEED', async () => {
     const fixture = buildFullPipelineFixture()
     fixture.data.signalQuality = { disposition: 'DEGRADED', signalCompleteness: 75, missing: ['cases', 'tech-stack'] }
-    const html = generateCampaignFromStructured(fixture.selection, fixture.data)
+    const html = await generateCampaignFromStructured(fixture.selection, fixture.data)
     expect(html).toMatch(/75%\s*coverage/i)
   })
 })
@@ -886,27 +888,27 @@ describe('Thin material — sparse data graceful degradation', () => {
 // ── Performance ───────────────────────────────────────────────────────────
 
 describe('Performance — all tests run without external API calls', () => {
-  it('full pipeline fixture generates in under 500ms', () => {
+  it('full pipeline fixture generates in under 500ms', async () => {
     const start = performance.now()
     const fixture = buildFullPipelineFixture()
-    generateCampaignFromStructured(fixture.selection, fixture.data)
+    await generateCampaignFromStructured(fixture.selection, fixture.data)
     const elapsed = performance.now() - start
     expect(elapsed).toBeLessThan(500)
   })
 
-  it('thin fixture generates in under 200ms', () => {
+  it('thin fixture generates in under 200ms', async () => {
     const start = performance.now()
     const fixture = buildThinMaterialFixture()
-    generateCampaignFromStructured(fixture.selection, fixture.data)
+    await generateCampaignFromStructured(fixture.selection, fixture.data)
     const elapsed = performance.now() - start
     expect(elapsed).toBeLessThan(200)
   })
 
-  it('total test file runtime under 30s', () => {
+  it('total test file runtime under 30s', async () => {
     const totalStart = performance.now()
     for (let i = 0; i < 10; i++) {
       const f = buildFullPipelineFixture()
-      generateCampaignFromStructured(f.selection, f.data)
+      await generateCampaignFromStructured(f.selection, f.data)
     }
     const elapsed = performance.now() - totalStart
     expect(elapsed).toBeLessThan(30000)
