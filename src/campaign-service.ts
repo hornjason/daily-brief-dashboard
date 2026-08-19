@@ -27,7 +27,8 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, isInternalUrl, isHomepageUrl, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, type BVTalkingPoint } from './campaign-html-template.ts'
+import { isHomepageUrl, LinkRegistry } from './lib/link-registry.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
@@ -1701,52 +1702,16 @@ export async function generateCampaign(
       console.warn(`[campaigns] Pass 1 contract warning:`, e?.message)
     }
 
-    // ── Deterministic fallback: extract URLs from materialContent for backfill ──
-    const materialUrlMap = new Map<string, string>()
-    for (const match of augmentedMaterial.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)) {
-      materialUrlMap.set(match[1], match[2])
-    }
-    for (const match of augmentedMaterial.matchAll(/([\w\s&']+(?:analysis|guide|breakdown|report|study))\s*(?::|—|-)?\s*(https?:\/\/[^\s)"<>]+)/gi)) {
-      materialUrlMap.set(match[1].trim(), match[2])
-    }
-    // Extract from "### Title\nURL" or "### Title\nexcerpt" patterns (email sourceLinks format)
-    for (const match of augmentedMaterial.matchAll(/###\s+(.+)\n(https?:\/\/[^\s]+)/g)) {
-      materialUrlMap.set(match[1].trim(), match[2].trim())
-    }
-    // Filter internal URLs and homepage/generic URLs from materialUrlMap
-    for (const [name, url] of materialUrlMap.entries()) {
-      if (isHomepageUrl(url)) materialUrlMap.delete(name)
-    }
+    // ── LinkRegistry: single source of truth for link lifecycle ──
+    const linkRegistry = new LinkRegistry(referenceMaterialData)
+    const excerptMap = new Map(referenceMaterialData.filter(r => r.excerpt).map(r => [r.title, r.excerpt]))
+    const deterministicRefMaterials = linkRegistry.getReferenceMaterials(excerptMap)
 
-    // Fallback: populate from referenceMaterialData (confirmed URLs from extraction)
-    if (materialUrlMap.size === 0 && referenceMaterialData.length > 0) {
-      for (const ref of referenceMaterialData) {
-        if (ref.url && !isHomepageUrl(ref.url)) {
-          materialUrlMap.set(ref.title, ref.url)
-        }
-      }
-    }
-
-    // Build deterministic reference materials from extraction data
-    const deterministicRefMaterials: Array<{ resource: string; url?: string; keyTakeaway: string }> = []
-    if (referenceMaterialData.length > 0) {
-      for (const ref of referenceMaterialData) {
-        if (ref.url && ref.title && !isHomepageUrl(ref.url)) {
-          deterministicRefMaterials.push({ resource: ref.title, url: ref.url, keyTakeaway: ref.excerpt ? (ref.excerpt.length > 200 ? ref.excerpt.slice(0, 200) + '...' : ref.excerpt) : 'Source document referenced in campaign material.' })
-        }
-      }
-    }
-    if (deterministicRefMaterials.length === 0) {
-      for (const [name, url] of materialUrlMap.entries()) {
-        deterministicRefMaterials.push({ resource: name, url, keyTakeaway: 'Source document referenced in campaign material.' })
-      }
-    }
-
-    // Build deterministic source attributions
+    // Build deterministic source attributions from registry
     const deterministicSourceAttrs: Array<{ name: string; description: string }> = []
     if (materialTitle) deterministicSourceAttrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
-    for (const [name] of materialUrlMap.entries()) {
-      if (name !== materialTitle) deterministicSourceAttrs.push({ name, description: 'Referenced source document.' })
+    for (const link of linkRegistry.getExternalLinks()) {
+      if (link.anchor !== materialTitle) deterministicSourceAttrs.push({ name: link.anchor, description: 'Referenced source document.' })
     }
 
     // ── Gold-standard validation gate ──
@@ -1884,10 +1849,9 @@ export async function generateCampaign(
       eligibilityHeading: 'Deployment Eligibility',
       footprint,
       sourceAttributions: deterministicSourceAttrs.length > 0 ? deterministicSourceAttrs : undefined,
-      materialUrlMap,
+      linkRegistry,
       aeEmail,
       aePhone,
-      sourceUrls: (materialContent.match(/https?:\/\/[^\s)"<>]+/g) || []).filter((u: string) => !u.includes('redhat.com')),
       campaignThreat: threat,
       campaignSolution: solution,
       objectiveProfile,

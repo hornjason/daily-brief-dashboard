@@ -18,6 +18,7 @@ import { parseSections } from './modules/intelligence-module.ts'
 import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 import { type BlockOutput, type MetricRef, validateBlock, extractLinks, toBlock } from './lib/block-output.ts'
+import { isInternalUrl, isHomepageUrl, isolateLinks, restoreLinks, LinkRegistry } from './lib/link-registry.ts'
 
 const BRAND_RED = '#c41e3a'
 const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
@@ -816,7 +817,7 @@ export interface StructuredCampaignData {
   sourceAttributions?: Array<{ name: string; description: string }>
   aeEmail?: string
   aePhone?: string
-  sourceUrls?: string[]
+  linkRegistry?: LinkRegistry
   campaignThreat?: string
   campaignSolution?: string
   objectiveProfile?: CustomerObjectiveProfile
@@ -825,7 +826,6 @@ export interface StructuredCampaignData {
   pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]
   productFitSections?: Record<string, string>
   signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
-  materialUrlMap?: Map<string, string>
   enablePolish?: boolean
 }
 
@@ -1259,26 +1259,13 @@ function shortenTitle(name: string): string {
   return base.length > 40 ? base.slice(0, 37) + '...' : base
 }
 
-export function buildReferenceLine(sourceUrls: string[], materialUrlMap?: Map<string, string>): BlockOutput {
-  if ((!sourceUrls || sourceUrls.length === 0) && (!materialUrlMap || materialUrlMap.size === 0)) return validateBlock('referenceLine', toBlock(''))
+export function buildReferenceLine(registry?: LinkRegistry): BlockOutput {
+  if (!registry || registry.size === 0) return validateBlock('referenceLine', toBlock(''))
 
-  const entries: Array<[string, string]> = []
+  const refs = registry.getExternalLinks()
+  if (refs.length === 0) return validateBlock('referenceLine', toBlock(''))
 
-  if (materialUrlMap && materialUrlMap.size > 0) {
-    for (const [name, url] of materialUrlMap.entries()) {
-      if (entries.length >= 2) break
-      entries.push([shortenTitle(name), url])
-    }
-  }
-
-  if (entries.length === 0 && sourceUrls.length > 0) {
-    for (const url of sourceUrls.slice(0, 2)) {
-      const domain = url.replace(/^https?:\/\/(?:www\.)?/, '').split('/')[0]
-      entries.push([domain, url])
-    }
-  }
-
-  if (entries.length === 0) return validateBlock('referenceLine', toBlock(''))
+  const entries = refs.slice(0, 2).map(r => [shortenTitle(r.anchor), r.url] as [string, string])
   return validateBlock('referenceLine', toBlock(`For context: ${entries.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`))
 }
 
@@ -1324,40 +1311,11 @@ export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string)
 
 const TRUSTED_URL_DOMAINS = ['redhat.com', 'developers.redhat.com']
 
-const INTERNAL_URL_PATTERNS = [
-  /docs\.google\.com/,
-  /drive\.google\.com/,
-  /slides\.google\.com/,
-  /access\.redhat\.com/,
-  /content\.redhat\.com/,
-  /source\.redhat\.com/,
-  /mojo\.redhat\.com/,
-  /salesforce\.com/,
-  /seismic\.com/,
-]
+export { isInternalUrl, isHomepageUrl } from './lib/link-registry.ts'
 
-export function isInternalUrl(url: string): boolean {
-  return INTERNAL_URL_PATTERNS.some(p => p.test(url))
-}
-
-export function isHomepageUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    const path = u.pathname.replace(/\/$/, '')
-    return path.length < 5 || path === '/en'
-  } catch {
-    return true
-  }
-}
-
-function sanitizeReferenceLine(line: string, sourceUrls?: string[]): string {
+function sanitizeReferenceLine(line: string, registry?: LinkRegistry): string {
   if (!line) return ''
-  const sourceDomains = new Set<string>()
-  for (const u of sourceUrls ?? []) {
-    try {
-      if (!isInternalUrl(u)) sourceDomains.add(new URL(u).hostname)
-    } catch {}
-  }
+  const sourceDomains = registry?.getSourceDomains() ?? new Set<string>()
   return line.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_match, text, url) => {
     try {
       if (isInternalUrl(url)) return text
@@ -1701,6 +1659,8 @@ async function polishEmailBody(
 ): Promise<string> {
   const { callGemini } = await import('./gemini-call.ts')
 
+  const { cleanBody, placeholders } = isolateLinks(rawBody)
+
   const prompt = `Rewrite this sales email body to read naturally — like a brief colleague's note, not a template.
 
 RULES:
@@ -1709,7 +1669,7 @@ RULES:
 - The greeting must start with "${recipientName.split(' ')[0]}," followed by a specific observation about their business.
 - Include any metrics or numbers that appear in the original (revenue figures, percentages, dollar amounts).
 - Keep bullet points as bullet points (use • character).
-- Preserve ALL URLs and markdown links exactly as they appear — do not remove, shorten, or paraphrase any [text](url) links. These are verified product page and source article links.
+- Keep all REF markers (REF1, REF2, etc.) exactly in place — they are placeholders for verified links that will be restored after polishing.
 - Maximum ${wordLimit} words.
 - Write as an AE peer, not a marketer. Conversational, not formal.
 - Do NOT include the sign-off (name, title, email, phone) — that's added separately.
@@ -1720,7 +1680,7 @@ RECIPIENT: ${recipientName}, ${recipientTitle}
 THEME: ${campaignTheme}
 
 EMAIL TO POLISH:
-${rawBody}`
+${cleanBody}`
 
   try {
     const result = await callGemini(
@@ -1739,24 +1699,13 @@ ${rawBody}`
     if (!polished || polished.length < 50) return rawBody
     if (polished.split(/\s+/).length > wordLimit * 1.3) return rawBody
 
-    // Re-inject links that Gemini stripped — match product/article names and restore markdown links
-    const rawLinks = [...rawBody.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)]
-    for (const [, linkText, url] of rawLinks) {
-      if (!polished.includes(linkText)) continue
-      if (polished.includes(`[${linkText}](`)) continue
-      // Skip if text is already inside an HTML <a> tag
-      const htmlTagPattern = new RegExp(`<a\\b[^>]*>[^<]*${linkText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*</a>`, 'i')
-      if (htmlTagPattern.test(polished)) continue
-      // Clean any partial/broken markdown syntax around the text before re-injecting
-      const escapedText = linkText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      // Strip unmatched brackets/parens surrounding the link text (Gemini garbling)
-      polished = polished.replace(new RegExp(`[\\[\\]]*${escapedText}[\\]\\[]*\\(?[^)\\s]{0,5}\\)?`, 'g'), linkText)
-      // Only re-inject if the text appears as standalone (not part of a longer word/phrase)
-      const standalonePattern = new RegExp(`(?<![\\[\\(])${escapedText}(?![\\]\\)])`)
-      if (standalonePattern.test(polished)) {
-        polished = polished.replace(standalonePattern, `[${linkText}](${url})`)
-      }
+    const missingRefs = placeholders.filter(p => !polished.includes(p.marker))
+    if (missingRefs.length > 0) {
+      console.warn(`[template] Polish dropped ${missingRefs.length} REF markers for ${recipientName} — falling back to raw`)
+      return rawBody
     }
+
+    polished = restoreLinks(polished, placeholders)
 
     const rawWordCount = rawBody.split(/\s+/).length
     const polishedWordCount = polished.split(/\s+/).length
@@ -1901,8 +1850,8 @@ export async function generateCampaignFromStructured(
     const signalBridge = objectiveContext ? toBlock(`${rawSignalBridge.text} ${objectiveContext}`) : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution, matchedBrief)
-    const rawRefLine = buildReferenceLine(data.sourceUrls || [], data.materialUrlMap)
-    const referenceLine = toBlock(sanitizeReferenceLine(rawRefLine.text, data.sourceUrls))
+    const rawRefLine = buildReferenceLine(data.linkRegistry)
+    const referenceLine = toBlock(sanitizeReferenceLine(rawRefLine.text, data.linkRegistry))
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof, usedPeerCompanies)
     const challengerFrame = buildChallengerFrame(signal, i)

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, assembleEmail, isInternalUrl, type UsedObjective } from '../../src/campaign-html-template.ts'
 import { toBlock } from '../../src/lib/block-output.ts'
+import { LinkRegistry } from '../../src/lib/link-registry.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -270,7 +271,6 @@ describe('generateCampaignFromStructured — sign-off contact info (#1129)', () 
     resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@example.com', linkedIn: '' }],
     signals: [{ headline: 'Test Signal', metadata: {} }],
     subscriptions: [],
-    sourceUrls: [],
     structuredPlays: [],
     voiceProfile: undefined,
     objectiveProfile: undefined,
@@ -402,7 +402,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
         resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@test.com', linkedIn: '' }],
         signals: [{ headline: 'Test Signal', metadata: {} }],
         subscriptions: [],
-        sourceUrls: ['https://www.redhat.com/en/resources/guide'],
+        linkRegistry: new LinkRegistry([{ url: 'https://www.redhat.com/en/resources/guide', title: 'Red Hat Guide' }]),
         structuredPlays: [],
         enablePolish: false,
       },
@@ -415,7 +415,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
     expect(anchorMatches.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('referenceLine from sourceUrls renders as clickable anchor tags', async () => {
+  it('referenceLine from linkRegistry renders as clickable anchor tags', async () => {
     const html = await generateCampaignFromStructured(
       {
         customerContext: 'Test',
@@ -437,7 +437,7 @@ describe('email body formatting — bullets and links (#1149)', () => {
         resolvedExecs: [{ name: 'John Smith', title: 'CTO', email: 'john@test.com', linkedIn: '' }],
         signals: [{ headline: 'Test Signal', metadata: {} }],
         subscriptions: [],
-        sourceUrls: ['https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis'],
+        linkRegistry: new LinkRegistry([{ url: 'https://www.hklaw.com/en/insights/publications/2026/sb-122-analysis', title: 'SB 122 Analysis' }]),
         structuredPlays: [],
         enablePolish: false,
       },
