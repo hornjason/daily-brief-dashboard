@@ -1,0 +1,23 @@
+{
+  "description": "Sample support case for demo injection. This case is designed to trigger cross-references with CrowdStrike's existing signals: OpenShift subscriptions, AAP automation workflows, and active email coordination threads.",
+  "case": {
+    "caseNumber": "99900001",
+    "summary": "OpenShift SDN pod-to-pod networking failure after cluster upgrade to 4.16 — CrowdStrike Falcon sensor DaemonSet unable to reach API server",
+    "status": "Waiting on Red Hat",
+    "severity": "1",
+    "accountNumber": "11823554",
+    "daysOpen": 2,
+    "product": "OpenShift Container Platform",
+    "customerName": "CrowdStrike",
+    "casesSource": "account_number",
+    "description": "After upgrading our production OpenShift cluster from 4.15 to 4.16, pod-to-pod networking is intermittently failing across worker nodes. The CrowdStrike Falcon sensor DaemonSet pods cannot reach the Kubernetes API server, causing our endpoint detection agent to lose visibility on approximately 40% of nodes.\n\nSymptoms:\n- Falcon sensor pods on affected nodes log: 'connection refused: api.cwpp-openshift-01.crowdstrike.internal:6443'\n- OVN-Kubernetes pods show restart loops on 3 of 8 worker nodes\n- NetworkPolicy objects are not being enforced consistently\n- The issue started within 2 hours of completing the cluster upgrade\n\nEnvironment:\n- OpenShift 4.16.2 (upgraded from 4.15.18)\n- OVN-Kubernetes network plugin\n- 3 control plane + 8 worker nodes on bare metal\n- CrowdStrike Falcon Operator v1.3.0 deployed via OLM\n\nBusiness impact: Our security operations center has reduced visibility into container workloads. This is a P1 for our security team as it affects our ability to detect threats in the containerized environment.\n\nWe need guidance on:\n1. Whether this is a known regression in OVN-Kubernetes for 4.16\n2. Steps to restore network connectivity without a full rollback\n3. Whether the Falcon DaemonSet needs updated network policies for 4.16",
+    "contactName": "Sri Harsha Panchali"
+  },
+  "crossReferenceTargets": {
+    "subscriptions": "MCT2736 — OpenShift Container Platform Standard (2 Cores or 4 vCPUs), currently expired. This case demonstrates urgency for renewal.",
+    "emails": "Matches the CTO outreach thread (June 23) discussing OpenShift Virtualization evaluation and the AAP TAM coordination thread with Sri Harsha Panchali as contact.",
+    "existingCases": "Relates to case 03998544 (machine-config degraded), 03981063 (subscription costs for cwpp-openshift-01), and 03977311 (registry unauthorized). Same cluster name pattern.",
+    "graph": "Expected to create new edges: case→subscription (OCP renewal urgency), case→email (Sri Harsha contact match), case→case (cwpp-openshift-01 cluster reference)."
+  },
+  "injectionInstructions": "To inject this case into the demo pipeline, add the 'case' object above to the 'cases' array in data-demo/cache/cases.json. Then trigger a pipeline refresh via the dashboard admin panel to see the cross-reference engine process the new signal."
+}

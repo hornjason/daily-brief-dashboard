@@ -65,7 +65,12 @@ dashboard/.playwright-cli/
 
 # Dev/demo data directories — ephemeral snapshots of production data (BKL-UX59)
 data-dev/
-data-demo/
+data-demo/*
+# Exception: demo baselines and samples are canonical reference data, must be committed
+!data-demo/baselines/
+!data-demo/baselines/**
+!data-demo/samples/
+!data-demo/samples/**
 
 # Unsanctioned deploy files — make rebuild is the only sanctioned deploy method (BKL-H01)
 docker-compose.yml
