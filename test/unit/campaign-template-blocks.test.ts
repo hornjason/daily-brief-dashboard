@@ -1160,3 +1160,59 @@ describe('buildOpener — no trailing space before punctuation (#1165)', () => {
     expect(result).not.toMatch(/\s+\./)
   })
 })
+
+// ── buildOpener — tier-aware truncation (#1169) ─────────────────────────────
+
+describe('buildOpener — tier-aware sentence truncation (#1169)', () => {
+  it('executive tier truncates at sentence boundary within 100 chars', () => {
+    const longText = 'Streamlining infrastructure operations across hybrid cloud environments to reduce deployment cycles. This extra sentence should be cut for executives.'
+    const brief = makeBrief({ objectiveMatch: longText })
+    const result = buildOpener(0, testSignals, 0, 'Alice Chen', 'executive', brief).text
+    const afterName = result.replace(/^Alice, /, '')
+    expect(afterName.length).toBeLessThanOrEqual(105)
+    expect(afterName).not.toMatch(/[a-z]…$/)
+  })
+
+  it('manager tier allows up to 120 chars', () => {
+    const longText = 'Operational efficiency gains from consolidating automation tooling into a single enterprise platform for consistency across teams and regions.'
+    const brief = makeBrief({ objectiveMatch: longText })
+    const result = buildOpener(0, testSignals, 0, 'Bob Smith', 'manager', brief).text
+    const afterName = result.replace(/^Bob, /, '')
+    expect(afterName.length).toBeLessThanOrEqual(125)
+  })
+
+  it('does not cut mid-sentence when text is under tier limit', () => {
+    const shortText = 'Reducing deployment time by forty percent.'
+    const brief = makeBrief({ objectiveMatch: shortText })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'executive', brief).text
+    expect(result).toContain('reducing deployment time')
+  })
+})
+
+// ── buildSignalBridge — dedup across emails (#1169) ─────────────────────────
+
+describe('buildSignalBridge — dedup across emails (#1169)', () => {
+  it('same bridge not returned twice when usedBridges Set is passed', () => {
+    const used = new Set<string>()
+    const first = buildSignalBridge(testSignals[0], ['ansible-automation-platform'], undefined, used).text
+    const second = buildSignalBridge(testSignals[0], ['ansible-automation-platform'], undefined, used).text
+    expect(first).toBeTruthy()
+    expect(second).not.toBe(first)
+  })
+
+  it('returns a block when all variants exhausted', () => {
+    const used = new Set<string>()
+    for (let i = 0; i < 20; i++) {
+      buildSignalBridge(testSignals[0], ['ansible-automation-platform'], undefined, used)
+    }
+    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform'], undefined, used)
+    expect(result).toBeDefined()
+  })
+
+  it('does not dedup when usedBridges is not provided', () => {
+    const first = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
+    const second = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
+    expect(first).toBe(second)
+  })
+})
+
