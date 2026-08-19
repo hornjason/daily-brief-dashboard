@@ -286,6 +286,35 @@ describe('buildRelationshipLine — anti-gaming', () => {
   it('returns empty string for no subscriptions', () => {
     expect(buildRelationshipLine([]).text).toBe('')
   })
+
+  it('excludes free-tier subscriptions from output', () => {
+    const mixed = [
+      { product: 'RHEL', productDescription: 'Red Hat Enterprise Linux Server', status: 'Active' },
+      { product: 'DEV', productDescription: 'Red Hat Developer Subscription for Individuals', status: 'Active' },
+      { product: 'BETA', productDescription: 'Red Hat Beta Access', status: 'Active' },
+      { product: 'QUAY', productDescription: 'Red Hat Quay.io (Free Tier)', status: 'Active' },
+      { product: 'OCP', productDescription: 'Red Hat OpenShift Container Platform', status: 'Active' },
+      { product: 'LEARN', productDescription: 'Red Hat Learning Subscription', status: 'Active' },
+      { product: 'DEVTEAM', productDescription: 'Red Hat Developer for Teams', status: 'Active' },
+    ]
+    const result = buildRelationshipLine(mixed).text
+    expect(result).toContain('Red Hat Enterprise Linux')
+    expect(result).toContain('Red Hat OpenShift')
+    expect(result).not.toContain('Developer Subscription')
+    expect(result).not.toContain('Beta Access')
+    expect(result).not.toContain('Quay.io')
+    expect(result).not.toContain('Learning Subscription')
+    expect(result).not.toContain('Developer for Teams')
+  })
+
+  it('returns empty when all subscriptions are free-tier', () => {
+    const freeTierOnly = [
+      { product: 'DEV', productDescription: 'Red Hat Developer Subscription for Individuals', status: 'Active' },
+      { product: 'BETA', productDescription: 'Red Hat Beta Access', status: 'Active' },
+    ]
+    const result = buildRelationshipLine(freeTierOnly).text
+    expect(result).toBe('')
+  })
 })
 
 // ── buildFeatureBullets ─────────────────────────────────────────────────────

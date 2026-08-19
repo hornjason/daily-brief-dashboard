@@ -1053,6 +1053,20 @@ const PRODUCT_URLS: Record<string, string> = {
   'Red Hat Developer Hub': 'https://www.redhat.com/en/products/developer-hub',
 }
 
+const FREE_TIER_PATTERNS = [
+  'developer subscription',
+  'beta access',
+  'quay.io',
+  'free tier',
+  'developer for teams',
+  'learning subscription',
+]
+
+function isFreeTierProduct(desc: string): boolean {
+  const lower = desc.toLowerCase()
+  return FREE_TIER_PATTERNS.some(p => lower.includes(p))
+}
+
 function resolveProductDisplayName(desc: string): string {
   const stripped = desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').trim()
   const key = stripped.toLowerCase()
@@ -1074,6 +1088,7 @@ export function buildRelationshipLine(
 
   const activeProducts = subscriptions
     .filter(s => s.status === 'Active')
+    .filter(s => !isFreeTierProduct(s.productDescription || s.product || s.sku || ''))
     .map(s => resolveProductDisplayName(s.productDescription || s.product || s.sku || ''))
     .filter(p => p.length > 0)
 
