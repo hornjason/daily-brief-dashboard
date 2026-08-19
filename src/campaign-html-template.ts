@@ -1660,6 +1660,7 @@ RULES:
 - The greeting must start with "${recipientName.split(' ')[0]}," followed by a specific observation about their business.
 - Include any metrics or numbers that appear in the original (revenue figures, percentages, dollar amounts).
 - Keep bullet points as bullet points (use • character).
+- Preserve ALL URLs and markdown links exactly as they appear — do not remove, shorten, or paraphrase any [text](url) links. These are verified product page and source article links.
 - Maximum ${wordLimit} words.
 - Write as an AE peer, not a marketer. Conversational, not formal.
 - Do NOT include the sign-off (name, title, email, phone) — that's added separately.
@@ -1680,14 +1681,22 @@ ${rawBody}`
         callType: 'email-polish',
         customerName,
         temperature: 0.1,
-        timeoutMs: 15_000,
+        timeoutMs: 45_000,
       },
     )
 
-    const polished = result.text.trim()
+    let polished = result.text.trim()
 
     if (!polished || polished.length < 50) return rawBody
     if (polished.split(/\s+/).length > wordLimit * 1.3) return rawBody
+
+    // Re-inject links that Gemini stripped — match product/article names and restore markdown links
+    const rawLinks = [...rawBody.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)]
+    for (const [, linkText, url] of rawLinks) {
+      if (polished.includes(linkText) && !polished.includes(`[${linkText}](`)) {
+        polished = polished.replace(linkText, `[${linkText}](${url})`)
+      }
+    }
 
     const rawWordCount = rawBody.split(/\s+/).length
     const polishedWordCount = polished.split(/\s+/).length
