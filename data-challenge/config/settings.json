@@ -1,0 +1,94 @@
+{
+  "refreshIntervalMinutes": 30,
+  "regions": [
+    {
+      "id": "west-commercial",
+      "label": "West Commercial",
+      "type": "commercial",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "parentFolderId": "1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq",
+      "pods": {
+        "WEST_COMM_CORP_NORTHWEST": {
+          "sfReportId": "00OPe00000jyo86MAA",
+          "label": "Northwest Corp"
+        },
+        "WEST_COMM_CORP_SOUTHWEST": {
+          "sfReportId": "00OPe00000k5m9ZMAQ",
+          "label": "Southwest Corp"
+        },
+        "WEST_COMM_CORP_NORTH_CENTRAL": {
+          "sfReportId": "00OPe00000kSeCwMAK",
+          "label": "North Central Corp"
+        },
+        "WEST_COMM_CORP_SOUTH_CENTRAL": {
+          "sfReportId": "00OPe00000kSlCnMAK",
+          "label": "South Central Corp"
+        }
+      }
+    },
+    {
+      "id": "east-commercial",
+      "label": "East Commercial",
+      "type": "commercial",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0/edit?gid=1703062703#gid=1703062703",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "parentFolderId": "",
+      "pods": {
+        "EAST_COMM_CORP_POD01": {
+          "sfReportId": "00OPe00000m23W2MAI",
+          "label": "Rough Riders"
+        },
+        "EAST_COMM_CORP_POD02": {
+          "sfReportId": "",
+          "label": "Big Apple Ballers"
+        },
+        "EAST_COMM_CORP_POD03": {
+          "sfReportId": "",
+          "label": "Pythons"
+        },
+        "EAST_COMM_CORP_POD05": {
+          "sfReportId": "",
+          "label": "Mad Hatters"
+        }
+      }
+    },
+    {
+      "id": "central-enterprise-tola",
+      "label": "Central Enterprise - TOLA",
+      "type": "enterprise",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=677438728#gid=677438728",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "parentFolderId": "1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq",
+      "pods": {
+        "CENTRAL_ENT_TOLA": {
+          "sfReportId": "00OPe00000odJCVMA2",
+          "label": "TOLA"
+        },
+        "CENTRAL_ENT_HIGH_PLAINS": {
+          "sfReportId": "00OPe00000odJCVMA2",
+          "label": "High Plains",
+          "hidden": true,
+          "prefixes": ["High_Plains"]
+        }
+      }
+    }
+  ],
+  "podBookingsFolderId": "1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq",
+  "enabledRegions": [
+    "west-commercial",
+    "east-commercial",
+    "central-enterprise-tola"
+  ],
+  "enabledPods": [
+    "west-commercial.WEST_COMM_CORP_NORTHWEST",
+    "west-commercial.WEST_COMM_CORP_SOUTHWEST",
+    "west-commercial.WEST_COMM_CORP_NORTH_CENTRAL",
+    "west-commercial.WEST_COMM_CORP_SOUTH_CENTRAL",
+    "east-commercial.EAST_COMM_CORP_POD01",
+    "east-commercial.EAST_COMM_CORP_POD02",
+    "east-commercial.EAST_COMM_CORP_POD03",
+    "east-commercial.EAST_COMM_CORP_POD05",
+    "central-enterprise-tola.CENTRAL_ENT_TOLA"
+  ]
+}

@@ -704,10 +704,17 @@ export function initBackgroundScheduler(opts: {
   // Run health probes early — after defaults load, before module catch-up (#746)
   runHealthProbes().catch((e: any) => console.error('[health] probe run failed:', e?.message ?? e))
 
+  // CHALLENGE_MODE: skip startup cascade, refreshAll, and scraper scheduling.
+  // Drive reader and Gemini intelligence remain active for on-demand manual refresh.
+  const isChallengeMode = process.env.CHALLENGE_MODE === 'true'
+  if (isChallengeMode) {
+    console.log('[startup] CHALLENGE_MODE=true — skipping startup cascade and scraper schedulers')
+  }
+
   // On startup: check if this is a fresh install or normal restart
   // If any module has no timestamp, run the cascade
   // Otherwise, run a full refresh for existing install
-  if (customers.length > 0) {
+  if (customers.length > 0 && !isChallengeMode) {
     (async () => {
       // GitHub #678: Check config freshness before cascade/refresh
       const { checkConfigFreshness, runStartupCascade } = await import('./startup-cascade.ts')
@@ -741,9 +748,13 @@ export function initBackgroundScheduler(opts: {
   // Email brief delivery — NOT migrated to registry (requires live config re-read)
   // This stays as a standalone function because it needs to re-read email-settings.json
   // on each cycle to support live config changes, which can't be expressed in the registry.
-  scheduleEmailDelivery()
+  if (!isChallengeMode) {
+    scheduleEmailDelivery()
+  }
 
   // ── Phase 2: Feature module schedules migrated to scheduler registry (ADR-028) ─────
+  // CHALLENGE_MODE: skip all scraper/scheduler registrations
+  if (isChallengeMode) { return }
 
   // Product Intelligence — weekly Sunday 6am ET
   schedulerRegistry.register({
