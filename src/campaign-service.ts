@@ -1,11 +1,6 @@
 /**
  * Campaign Service — Domain Logic for Campaign Generation
- *
- * Pure business logic extracted from campaigns-routes.ts.
- * All Gemini prompts, signal processing, intelligence gathering,
- * material extraction, and campaign orchestration live here.
- *
- * Routes file (campaigns-routes.ts) is now a thin HTTP adapter.
+ * Routes file (campaigns-routes.ts) is the thin HTTP adapter.
  */
 
 // @consumer-contract v1.0
@@ -27,7 +22,7 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignFromStructured, cleanCampaignTitle, isRealPersonName, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignFromStructured, cleanCampaignTitle, type BVTalkingPoint } from './campaign-html-template.ts'
 import { isHomepageUrl, LinkRegistry } from './lib/link-registry.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
 import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
@@ -38,11 +33,12 @@ import { getFeatureKeys } from './lib/feature-url-registry.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
-import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
+import type { ResolvedExecutive } from './lib/executive-resolver.ts'
+import { resolveAllContacts } from './lib/exec-resolver.ts'
 import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
 import { callGeminiForUnifiedSelection, type UnifiedSelectionResult, type UnifiedPersona, type PersonaBrief } from './lib/persona-selector.ts'
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
-import { assertExtractionOutput, assertExecResolutionOutput, assertUnifiedSelectionOutput, assertPass2Output } from './lib/campaign-contracts.ts'
+import { assertExtractionOutput, assertUnifiedSelectionOutput, assertPass2Output } from './lib/campaign-contracts.ts'
 import { validateCampaignOutput } from './lib/campaign-output-validator.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
@@ -156,7 +152,6 @@ export function deriveFootprint(
   return undefined
 }
 
-
 // ── Signal enrichment (loads intelligence + account plan from cache) ────────
 
 async function enrichSignalsFromCache(
@@ -210,7 +205,6 @@ export function scoreStructuredOutput(html: string): { sections: number; emails:
 }
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
-
 const CAMPAIGN_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -277,7 +271,6 @@ export interface CampaignResult {
 }
 
 // ── Signal Quality Gate (#1120) ──────────────────────────────────────────────
-
 export interface SignalQualityAssessment {
   disposition: 'PROCEED' | 'DEGRADED' | 'BLOCKED'
   signalCompleteness: number
@@ -374,13 +367,11 @@ interface CampaignCacheEntry {
   campaignDirective?: string
 }
 
-// ── Material extraction ──────────────────────────────────────────────────────
-// Moved to src/lib/google-content-extractor.ts — imported for local use, re-exported for consumers
+// ── Material extraction (moved to google-content-extractor.ts) ──────────────
 import { extractFileId, extractMaterialContent } from './lib/google-content-extractor.ts'
 export { extractFileId, extractMaterialContent }
 
 // ── Gemini campaign generation ───────────────────────────────────────────────
-
 const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating deeply personalized email campaigns.
 
 ## GROUNDING RULES (MANDATORY — ZERO EXCEPTIONS)
@@ -1105,295 +1096,13 @@ export async function generateCampaign(
     }
   })
 
-  // 3c. Executive resolution — resolve contacts for ALL 5 buying committee roles
-  // The unified selection call (below) handles persona analysis + data selection in one shot.
-  const userPersonas = config?.personas?.filter(p => p.enabled)
-
-  let enabledPersonas: Array<{ role: string; enabled: boolean; linkedinUrl?: string; name?: string }>
-  if (userPersonas?.length) {
-    enabledPersonas = userPersonas
-  } else {
-    enabledPersonas = [
-      { role: 'CIO', enabled: true },
-      { role: 'CTO', enabled: true },
-      { role: 'VP Engineering', enabled: true },
-      { role: 'Solutions Architect', enabled: true },
-      { role: 'Director of IT', enabled: true },
-      { role: 'Director of Platform Engineering', enabled: true },
-      { role: 'CFO', enabled: true },
-      { role: 'DevOps Engineer', enabled: true },
-    ]
-  }
-  let resolvedExecs: ResolvedExecutive[] = []
-  try {
-    const namedPersonas = enabledPersonas.filter(p => p.name)
-    for (const p of namedPersonas) {
-      resolvedExecs.push({ name: p.name!, title: p.role, role: p.role, resolvedAt: new Date().toISOString(), ...(p.linkedinUrl ? { linkedinUrl: p.linkedinUrl } : {}) })
-    }
-    const rolesToResolve = enabledPersonas
-      .filter(p => !p.linkedinUrl && !p.name)
-      .map(p => p.role)
-    if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name, customer.domain)
-      resolvedExecs.push(...resolved)
-    }
-    if (resolvedExecs.length < 6) {
-      const resolvedRoles = new Set(resolvedExecs.map(r => r.role.toLowerCase()))
-      const paddingRoles = enabledPersonas
-        .map(p => p.role)
-        .filter(r => !resolvedRoles.has(r.toLowerCase()))
-      for (const role of paddingRoles) {
-        if (resolvedExecs.length >= 6) break
-        resolvedExecs.push({ name: `${role} at ${customer.name}`, title: role, role, resolvedAt: new Date().toISOString() })
-      }
-      if (resolvedExecs.length < 6) {
-        const fallbackPad = ['VP Engineering', 'Director of Security', 'Head of Cloud Operations', 'CTO', 'Sr. Director IT', 'VP Digital Transformation']
-        for (const role of fallbackPad) {
-          if (resolvedExecs.length >= 6) break
-          if (!resolvedRoles.has(role.toLowerCase())) {
-            resolvedExecs.push({ name: `${role} at ${customer.name}`, title: role, role, resolvedAt: new Date().toISOString() })
-          }
-        }
-      }
-      console.log(`[campaigns] Padded contacts to ${resolvedExecs.length} for ${customer.name}`)
-    }
-    const prePadCount = resolvedExecs.length
-    resolvedExecs = resolvedExecs.filter(e => isRealPersonName(e.name))
-    if (resolvedExecs.length < prePadCount) {
-      console.log(`[campaigns] Filtered ${prePadCount - resolvedExecs.length} placeholder contacts for ${customer.name}`)
-    }
-
-    // AC-1: Re-pad with Tier 2 contacts if filter dropped count below 6
-    if (resolvedExecs.length < 6) {
-      const needed = 6 - resolvedExecs.length
-      console.log(`[campaigns] Contact count ${resolvedExecs.length}/6 after filter — attempting to re-resolve ${needed} additional contacts via Tier 2`)
-      try {
-        // Use fallback roles from executive-resolver.ts
-        const fallbackRoles = [
-          'IT Operations Manager',
-          'Cloud Architect',
-          'Head of Engineering',
-          'VP Engineering',
-          'Director of Infrastructure',
-          'Engineering Manager',
-        ]
-        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
-        const additionalContacts = await resolveExecutivesByRole(fallbackRoles, customer.name, customer.domain)
-
-        // Filter out duplicates and add up to needed count
-        let added = 0
-        for (const contact of additionalContacts) {
-          if (added >= needed) break
-          if (!existingNames.has(contact.name.toLowerCase())) {
-            resolvedExecs.push(contact)
-            existingNames.add(contact.name.toLowerCase())
-            added++
-          }
-        }
-        if (added > 0) {
-          console.log(`[campaigns] Re-padded with ${added} Tier 2 contacts for ${customer.name}`)
-        } else {
-          console.log(`[campaigns] No additional Tier 2 contacts found — proceeding with ${resolvedExecs.length} contacts`)
-        }
-      } catch (e: any) {
-        console.warn(`[campaigns] Tier 2 re-resolution failed (non-fatal):`, e?.message ?? e)
-      }
-    }
-
-    // #1137: Tier split enforcement — ensure 3+ executive and 3+ manager tier contacts
-    if (resolvedExecs.length > 0) {
-      // Classify contacts by email tier (executive vs manager)
-      const classifyEmailTier = (title: string): 'executive' | 'manager' => {
-        const titleLower = title.toLowerCase()
-        // Executive tier: C-level and VPs
-        if (/\b(ceo|cfo|cto|cio|ciso|chief|c-level)\b/i.test(titleLower)) return 'executive'
-        if (/\bvp\b|vice president/i.test(titleLower)) return 'executive'
-        // Manager tier: Directors, Heads, Sr. Managers
-        return 'manager'
-      }
-
-      const execTierContacts = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive')
-      const managerTierContacts = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager')
-
-      console.log(`[campaigns] Tier split before enforcement: ${execTierContacts.length} executive, ${managerTierContacts.length} manager`)
-
-      // If all contacts are executive-level, force-include manager-level roles
-      if (managerTierContacts.length < 3 && resolvedExecs.length >= 3) {
-        const needed = 3 - managerTierContacts.length
-        console.log(`[campaigns] Insufficient manager tier contacts (${managerTierContacts.length}/3) — adding ${needed} manager-level roles`)
-
-        const managerRoles = [
-          'Director of IT',
-          'Director of Infrastructure',
-          'Director of Platform Engineering',
-          'Sr. Manager, Cloud Operations',
-          'Head of DevOps',
-          'Director of Security',
-        ]
-
-        // AC-1: Deduplicate by name to prevent same person appearing in both tiers (#1143)
-        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
-        const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
-        let added = 0
-
-        for (const role of managerRoles) {
-          if (added >= needed) break
-          if (!existingTitles.has(role.toLowerCase())) {
-            try {
-              const additionalManager = await resolveExecutivesByRole([role], customer.name, customer.domain)
-              if (additionalManager.length > 0) {
-                // AC-1: Check if this person is already in resolvedExecs (any tier)
-                if (!existingNames.has(additionalManager[0].name.toLowerCase())) {
-                  resolvedExecs.push(additionalManager[0])
-                  existingNames.add(additionalManager[0].name.toLowerCase())
-                  existingTitles.add(role.toLowerCase())
-                  added++
-                } else {
-                  console.log(`[campaigns] Skipping duplicate contact ${additionalManager[0].name} for role ${role}`)
-                }
-              } else {
-                // Fallback: create placeholder contact if resolution fails
-                resolvedExecs.push({
-                  name: `${role} at ${customer.name}`,
-                  title: role,
-                  role,
-                  resolvedAt: new Date().toISOString(),
-                })
-                existingNames.add(`${role} at ${customer.name}`.toLowerCase())
-                existingTitles.add(role.toLowerCase())
-                added++
-              }
-            } catch (e: any) {
-              console.warn(`[campaigns] Failed to resolve ${role} (non-fatal):`, e?.message)
-              // Fallback: create placeholder contact
-              resolvedExecs.push({
-                name: `${role} at ${customer.name}`,
-                title: role,
-                role,
-                resolvedAt: new Date().toISOString(),
-              })
-              existingNames.add(`${role} at ${customer.name}`.toLowerCase())
-              existingTitles.add(role.toLowerCase())
-              added++
-            }
-          }
-        }
-
-        console.log(`[campaigns] Added ${added} manager-level contacts — new split: ${execTierContacts.length} executive, ${resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager').length} manager`)
-      }
-
-      // If we have too few executive contacts (and enough manager contacts), add executive roles
-      const currentExecCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length
-      if (currentExecCount < 3 && resolvedExecs.length >= 3) {
-        const needed = 3 - currentExecCount
-        console.log(`[campaigns] Insufficient executive tier contacts (${currentExecCount}/3) — adding ${needed} executive-level roles`)
-
-        const executiveRoles = [
-          'CIO',
-          'CTO',
-          'VP Engineering',
-          'VP Operations',
-          'Chief Information Officer',
-          'VP Infrastructure',
-        ]
-
-        // AC-1: Deduplicate by name to prevent same person appearing in both tiers (#1143)
-        const existingNames = new Set(resolvedExecs.map(e => e.name.toLowerCase()))
-        const existingTitles = new Set(resolvedExecs.map(e => e.title.toLowerCase()))
-        let added = 0
-
-        for (const role of executiveRoles) {
-          if (added >= needed) break
-          if (!existingTitles.has(role.toLowerCase())) {
-            try {
-              const additionalExec = await resolveExecutivesByRole([role], customer.name, customer.domain)
-              if (additionalExec.length > 0) {
-                // AC-1: Check if this person is already in resolvedExecs (any tier)
-                if (!existingNames.has(additionalExec[0].name.toLowerCase())) {
-                  resolvedExecs.push(additionalExec[0])
-                  existingNames.add(additionalExec[0].name.toLowerCase())
-                  existingTitles.add(role.toLowerCase())
-                  added++
-                } else {
-                  console.log(`[campaigns] Skipping duplicate contact ${additionalExec[0].name} for role ${role}`)
-                }
-              } else {
-                resolvedExecs.push({
-                  name: `${role} at ${customer.name}`,
-                  title: role,
-                  role,
-                  resolvedAt: new Date().toISOString(),
-                })
-                existingNames.add(`${role} at ${customer.name}`.toLowerCase())
-                existingTitles.add(role.toLowerCase())
-                added++
-              }
-            } catch (e: any) {
-              console.warn(`[campaigns] Failed to resolve ${role} (non-fatal):`, e?.message)
-              resolvedExecs.push({
-                name: `${role} at ${customer.name}`,
-                title: role,
-                role,
-                resolvedAt: new Date().toISOString(),
-              })
-              existingNames.add(`${role} at ${customer.name}`.toLowerCase())
-              existingTitles.add(role.toLowerCase())
-              added++
-            }
-          }
-        }
-
-        console.log(`[campaigns] Added ${added} executive-level contacts — new split: ${resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length} executive, ${managerTierContacts.length} manager`)
-      }
-
-      // AC-2: Log final tier breakdown
-      const finalExecCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'executive').length
-      const finalManagerCount = resolvedExecs.filter(e => classifyEmailTier(e.title) === 'manager').length
-      const tier1Count = resolvedExecs.filter(e => e.leadershipContext).length
-      const tier2Count = resolvedExecs.length - tier1Count
-      console.log(`[campaigns] Final contact distribution: ${resolvedExecs.length} total (${tier1Count} Tier 1 intel, ${tier2Count} Tier 2 Gemini) — Email tiers: ${finalExecCount} executive, ${finalManagerCount} manager`)
-
-    }
-  } catch (e: any) {
-    console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
-  }
-
-  // Backfill inferred emails for any contacts missing them
-  // customer.domain may be undefined at runtime despite being in config — read fresh
-  let emailDomain = customer.domain
-  if (!emailDomain) {
-    try {
-      const cfg = JSON.parse(readFileSync(resolve(CONFIG_DIR, 'customers.json'), 'utf-8'))
-      const lowerName = customer.name.toLowerCase()
-      const cfgCustomer = (cfg.customers ?? []).find((c: any) => c.name?.toLowerCase() === lowerName || c.name?.toLowerCase().includes(lowerName) || lowerName.includes(c.name?.toLowerCase()))
-      emailDomain = cfgCustomer?.domain
-    } catch (e: any) { console.warn(`[campaigns] Domain lookup failed: ${e?.message}`) }
-  }
-  console.log(`[campaigns] Email domain: ${emailDomain ?? 'NONE'}, contacts: ${resolvedExecs.length}, missing email: ${resolvedExecs.filter(e => !e.email).length}`)
-  if (emailDomain) {
-    let backfilled = 0
-    for (const exec of resolvedExecs) {
-      if (exec.email) continue
-      const realName = exec.name.replace(/ at .+$/, '').trim()
-      const nameParts = realName.split(/\s+/)
-      const isRoleName = /^(VP|Director|Head|Sr\.|Chief|Manager|CIO|CFO|CEO|CTO|CISO)\b/i.test(nameParts[0])
-      if (nameParts.length >= 2 && !isRoleName && /^[A-Za-z]/.test(nameParts[0]) && /^[A-Za-z]/.test(nameParts[nameParts.length - 1])) {
-        const firstInitial = nameParts[0][0].toLowerCase()
-        const lastName = nameParts[nameParts.length - 1].toLowerCase()
-        exec.email = `${firstInitial}${lastName}@${emailDomain}`
-        backfilled++
-      }
-    }
-    console.log(`[campaigns] Email backfill: ${backfilled} new, ${resolvedExecs.filter(e => e.email).length}/${resolvedExecs.length} have email for ${customer.name}`)
-  }
-
-  // ── Contract assertion: Exec Resolution → Pass 1 ──
-  try {
-    assertExecResolutionOutput(resolvedExecs)
-  } catch (e: any) {
-    if (process.env.NODE_ENV === 'test') throw e
-    console.warn(`[campaigns] Exec resolution contract warning:`, e?.message)
-  }
+  // 3c. Executive resolution — resolve contacts for ALL buying committee roles
+  // Extracted to exec-resolver.ts (#1162, ADR-046 §4)
+  const resolvedExecs = await resolveAllContacts({
+    personas: config?.personas,
+    customerName: customer.name,
+    customerDomain: customer.domain,
+  })
 
   // 4a. Check for SalesHub email template base (#372, #439 — signal-based lookup)
   // Uses solution-intelligence signals from loadCustomerSignals() instead of
@@ -1922,29 +1631,16 @@ export async function generateCampaignFromPlay(
     ? `\n## Available Partner & Ecosystem Resources\n${resourceLinks}\n\nInclude 1-2 of these partner/ecosystem links in each email where relevant to the persona's concerns.\n`
     : ''
 
-  // #670: Resolve real executives for campaign personas
-  const enabledPersonas = config?.personas?.filter(p => p.enabled) ?? [
-    { role: 'CIO', enabled: true },
-    { role: 'VP Infrastructure', enabled: true },
-    { role: 'VP Operations', enabled: true },
-    { role: 'Director of IT', enabled: true },
-    { role: 'Sr. Manager, Cloud Operations', enabled: true },
-    { role: 'Director of Platform Engineering', enabled: true },
-  ]
+  // #670: Resolve real executives for campaign personas (via exec-resolver #1162)
   let resolvedContactsContext = ''
   try {
-    const rolesToResolve = enabledPersonas
-      .filter(p => !p.linkedinUrl && !p.name)  // Only resolve generic personas
-      .map(p => p.role)
-    if (rolesToResolve.length > 0) {
-      const resolved = await resolveExecutivesByRole(rolesToResolve, customer.name)
-      if (resolved.length > 0) {
-        const contactLines = resolved.map(r =>
-          `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
-        )
-        resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
-        console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
-      }
+    const resolved = await resolveAllContacts({ personas: config?.personas, customerName: customer.name, customerDomain: customer.domain })
+    if (resolved.length > 0) {
+      const contactLines = resolved.map(r =>
+        `- ${r.role}: ${r.name}, ${r.title}${r.linkedinUrl ? ` (${r.linkedinUrl})` : ''}`
+      )
+      resolvedContactsContext = `\n## Target Contacts (resolved)\nThese are real executives at ${customer.name}. Personalize emails for them by name and title:\n${contactLines.join('\n')}\n`
+      console.log(`[campaigns] Resolved ${resolved.length} executives for ${customer.name}`)
     }
   } catch (e: any) {
     console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
@@ -2048,11 +1744,7 @@ export async function generateCampaignFromPlay(
   }
 }
 
-// ── AE Voice Profile Service ────────────────────────────────────────────────
-
+// ── Re-exports ──────────────────────────────────────────────────────────────
 export { getVoiceProfile, detectVoiceProfile }
-
-// ── Material extraction re-exports ──────────────────────────────────────────
-
 export { extractMaterial, deleteMaterialCache }
 export { extractFromEmail } from './lib/email-extractor.ts'
