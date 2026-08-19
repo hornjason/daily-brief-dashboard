@@ -702,7 +702,12 @@ export function renderObjectiveBlock(
     const rawObjText = cleanObj.length > 80
       ? truncateAtSentence(cleanObj.split(/[.;]/)[0]?.trim() || cleanObj, 80)
       : cleanObj
-    const objText = repairTruncatedCurrency(rawObjText, objective)
+    let objText = repairTruncatedCurrency(rawObjText, objective)
+    if (/^\$[\d,.]+\s*(?:million|billion|[BMK])?$/i.test(objText.trim())) {
+      const qualifierMatch = objective.match(/\$[\d,.]+\s*(?:million|billion|[BMK])?\s+(?:in\s+)?(\w+(?:\s+\w+)?)/i)
+      const qualifier = qualifierMatch?.[1]?.match(/^(?:revenue|budget|spend|ARR|investment|acquisition|deal|contract)/i)?.[0]
+      objText = qualifier ? `${objText.trim()} in ${qualifier.toLowerCase()}` : `${objText.trim()} in annual investment`
+    }
     const { threat, solution } = campaignTheme
     const templates: Record<string, string> = {
       financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
@@ -1054,6 +1059,17 @@ const PRODUCT_DISPLAY_NAMES: Record<string, string> = {
   'smart management': 'Red Hat Smart Management',
 }
 
+const SIGNAL_PRODUCT_MAP: Record<string, string> = {
+  'ocp': 'Red Hat OpenShift',
+  'rhel': 'Red Hat Enterprise Linux',
+  'ansible': 'Red Hat Ansible Automation Platform',
+  'aap': 'Red Hat Ansible Automation Platform',
+  'acs': 'Red Hat Advanced Cluster Security',
+  'acm': 'Red Hat Advanced Cluster Management',
+  'satellite': 'Red Hat Satellite',
+  'quay': 'Red Hat Quay',
+}
+
 const PRODUCT_URLS: Record<string, string> = {
   'Red Hat Enterprise Linux': 'https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux',
   'Red Hat OpenShift': 'https://www.redhat.com/en/technologies/cloud-computing/openshift',
@@ -1116,13 +1132,13 @@ export function buildRelationshipLine(
     for (const s of signals) {
       if (s.source === 'tech-stack' || s.type === 'technology') {
         const rh = s.metadata?.redHatProducts as string[] | undefined
-        if (rh) rh.forEach(p => products.add(p))
+        if (rh) rh.forEach(p => products.add(SIGNAL_PRODUCT_MAP[p.toLowerCase()] || resolveProductDisplayName(p)))
       } else if (s.source === 'cases' || s.type === 'case') {
         const product = s.metadata?.product as string | undefined
-        if (product) products.add(product)
+        if (product) products.add(SIGNAL_PRODUCT_MAP[product.toLowerCase()] || resolveProductDisplayName(product))
       } else if (s.type === 'product-intel') {
         const product = s.metadata?.product as string | undefined
-        if (product) products.add(product)
+        if (product) products.add(SIGNAL_PRODUCT_MAP[product.toLowerCase()] || resolveProductDisplayName(product))
       }
     }
     if (products.size > 0) {
@@ -1226,13 +1242,34 @@ const HAS_METRIC = /\d+%|\$[\d,.]+|[\d,.]+ (?:million|billion|M|B)\b|\d+x\b|\d+ 
 // Generic peer pattern fallback when no specific proof is available (#1138)
 const GENERIC_PEER_PATTERN = "I've sat with a handful of leaders at this exact stage — and the ones who came out ahead all made one or two early decisions that their peers are still paying to unwind."
 
+function cleanPeerOutcome(raw: string): string {
+  let cleaned = raw
+    .replace(/^Solution:\s*/i, '')
+    .replace(/\.\s*[^.]*\b(?:AE|SE|TAM)\s+worked\b[^.]*\./gi, '.')
+    .replace(/[^.]*\b(?:AE|SE|TAM)\s+worked\b[^.]*/gi, '')
+    .replace(/\bpaid\s+up\s*front\b[^.]*/gi, '')
+    .replace(/\bpaid\s+upfront\b[^.]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\.\s*\./g, '.')
+    .trim()
+  if (cleaned.length === 0) return ''
+  const words = cleaned.split(/\s+/)
+  if (words.length <= 25) return cleaned
+  const truncated = words.slice(0, 25).join(' ')
+  const lastBoundary = truncated.search(/[.;,—]\s*\S+$/)
+  if (lastBoundary > 0) return truncated.slice(0, lastBoundary + 1).trim()
+  return truncated.replace(/\s+\S*$/, '').trim()
+}
+
 function formatPeerProofLine(customer: string, outcome: string): string {
   if (!customer || customer.trim().length === 0) return ''
-  if (HAS_METRIC.test(outcome)) {
-    if (VERB_PATTERN.test(outcome)) return `${customer} ${outcome}`
-    return `${customer} → ${outcome}`
+  const cleaned = cleanPeerOutcome(outcome)
+  if (cleaned.split(/\s+/).length < 3) return ''
+  if (HAS_METRIC.test(cleaned)) {
+    if (VERB_PATTERN.test(cleaned)) return `${customer} ${cleaned}`
+    return `${customer} → ${cleaned}`
   }
-  return `${customer} made this move — ${outcome}`
+  return `${customer} made this move — ${cleaned}`
 }
 
 export function buildPeerPattern(
@@ -1290,10 +1327,10 @@ export function buildPeerPattern(
  * Fixed framing structure, selected data fills in.
  */
 const CHALLENGER_CLOSERS = [
-  'That distinction creates measurable advantage for organizations that act on it.',
-  'This creates a clear window for organizations that move first.',
-  'Companies that recognize this early gain a structural cost advantage.',
-  'The organizations that address this proactively will carry a permanent cost advantage.',
+  'Organizations that act on this early carry a measurable advantage.',
+  'The window to move first on this is narrow — and closing.',
+  'Companies that address this proactively gain a structural cost edge.',
+  'Early movers here will carry a permanent advantage their peers are still paying to unwind.',
 ]
 
 export function buildChallengerFrame(
