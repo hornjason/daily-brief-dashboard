@@ -478,6 +478,133 @@ The dashboard is built with React + TypeScript on the frontend and Bun + TypeScr
 
 **System requirements:** 4GB RAM minimum (8GB recommended), 5GB disk, 2+ cores.
 
+### Signal Pipeline
+
+How raw data becomes actionable intelligence — end to end:
+
+```mermaid
+flowchart TD
+    subgraph Bootstrap["BOOTSTRAP"]
+        B1[Drive Folder Structure]
+        B2[Salesforce Bookings Import]
+        B3[Customer Discovery]
+    end
+
+    subgraph Intel["INTELLIGENCE GENERATION"]
+        IG1["Gemini + Google Search Grounding"]
+        IG2[Company Intelligence Doc]
+        IG3[Industry Analysis Doc]
+        IG1 --> IG2
+        IG1 --> IG3
+    end
+
+    subgraph Signals["SIGNAL PIPELINE (7 Sources)"]
+        direction LR
+        SIG1["Support Cases"]
+        SIG2["Subscriptions"]
+        SIG3["Cloud Spend"]
+        SIG4["Pipeline"]
+        SIG5["Emails"]
+        SIG6["Meetings"]
+        SIG7["Drive Docs"]
+    end
+
+    subgraph Scoring["CROSS-REFERENCE ENGINE"]
+        CR1["Specificity Detection\n(customer · industry · general)"]
+        CR2["Confidence Scoring\n(revenue · severity · renewal · products)"]
+        CR3["Budget Caps & Time Decay"]
+        CR1 --> CR2 --> CR3
+    end
+
+    subgraph Gate["QUALITY GATE"]
+        QG["11-Check Validator\nsignal completeness · freshness\ncross-source consistency"]
+    end
+
+    subgraph Output["THE BRIEF"]
+        OUT1["Morning Summary"]
+        OUT2["Account Briefs"]
+        OUT3["Strategic Motions"]
+        OUT4["Campaign Generator"]
+        OUT5["Account Plans"]
+    end
+
+    Bootstrap --> Intel
+    Intel --> Signals
+    Signals --> Scoring
+    Scoring --> Gate
+    Gate --> Output
+
+    style Bootstrap fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style Intel fill:#1a2332,stroke:#ff9800,color:#e0e0e0
+    style Signals fill:#1a2332,stroke:#2196f3,color:#e0e0e0
+    style Scoring fill:#1a2332,stroke:#4caf50,color:#e0e0e0
+    style Gate fill:#1a2332,stroke:#ff5722,color:#e0e0e0
+    style Output fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
+```
+
+**Day 1:** Bootstrap imports your customers and generates intelligence docs. **Day 30:** Seven signal sources are accumulating context. **Day 90:** The cross-reference engine knows your customer — briefs surface patterns you haven't noticed yet.
+
+---
+
+## AI Challenge Themes
+
+Three themes guide where the team focuses improvements. Each maps to a specific stage in the pipeline above.
+
+### Theme A: "Show Your Work"
+
+Make the intelligence pipeline transparent. Users should see *why* the platform recommends what it recommends.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| Signal provenance trails | Cross-Reference Engine | "This recommendation comes from 3 cases + 1 renewal + marketplace data" |
+| Quality score visibility | Quality Gate | Show the 11-check validator score on each brief section |
+| Data maturity indicators | Signal Pipeline | "Cloud spend: 90 days of history" vs "Cloud spend: first sync today" |
+| Account plan showcase | The Brief | Structured output with evidence chains visible |
+
+**Judging criteria:** Innovation, Technical Excellence, User Experience
+
+### Theme B: "Make It Smarter"
+
+Improve the recommendations themselves — better signals, better reasoning, better timing.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| "Why now" reasoning | Cross-Reference Engine | "Renewal in 45 days + open Sev1 = risk. Act before renewal conversation" |
+| Signal chain visualization | Scoring Engine | Show which signals combined to produce a strategic motion |
+| Trend indicators | Signal Pipeline | "Support cases trending up 3x over 60 days" |
+| Delta tracking | The Brief | "Since your last brief: 2 new cases, pipeline moved from Stage 3 to 4" |
+
+**Judging criteria:** Innovation, Technical Excellence
+
+### Theme C: "Make It Shine"
+
+Polish the experience — make it intuitive for someone who's never seen it before.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| Morning Summary hierarchy | The Brief | Visual priority ranking — critical actions above context |
+| Loading states | All stages | Skeleton screens instead of spinners during signal ingestion |
+| First-time user experience | Bootstrap | Guided walkthrough from install to first brief |
+| Navigation cleanup | The Brief | Active sidebar states, remove dead tabs |
+
+**Judging criteria:** User Experience, Feasibility
+
+---
+
+## Who Uses This
+
+The platform serves different roles differently. Here's what each person sees:
+
+**Account Solution Architect** — Your daily operating system. Morning summary tells you which customer needs attention *today*. Account briefs give you the full story before every call. Strategic motions show you the play, the evidence, and the estimated TCV — so you walk in with a plan, not a question.
+
+**Ansible Evangelist** — Filter by AAP across the entire portfolio. See which customers have Ansible subscriptions expiring, which ones opened automation-related cases, and where the product intelligence radar spotted a new AAP feature that maps to a customer's tech stack. Turn product knowledge into customer-specific talking points.
+
+**Fleet Console Manager** — Portfolio-level triage across hundreds of accounts. The Book of Business view shows health scores, case trends, and renewal urgency at a glance. Morning synthesis highlights cross-customer patterns — "3 accounts in manufacturing sector all opened storage-related cases this week" — that individual ASAs might miss.
+
+**Performance & Scale Engineers** — The signal pipeline processes thousands of data points per sync cycle. Latency budgets enforce sub-200ms API responses. The scoring engine evaluates every signal in real time. For engineers interested in AI pipeline architecture: the three-layer design (signal production, centralized scoring, template routing) is documented in ARCHITECTURE.md with full data flow diagrams.
+
+**Ecosystem Marketing** — Track which Red Hat partner integrations and certifications matter to real customers. The ecosystem catalog and marketplace modules surface AWS/Azure/GCP offers, CPPO eligibility, and partner certification status — mapped to actual customer cloud spend data. Campaign generation produces role-specific outreach with value propositions tied to the customer's business context.
+
 ---
 
 <p align="center">
