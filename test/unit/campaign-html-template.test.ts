@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test'
 import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, assembleEmail, isInternalUrl, type UsedObjective } from '../../src/campaign-html-template.ts'
+import { toBlock } from '../../src/lib/block-output.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -326,15 +327,15 @@ describe('email body formatting — bullets and links (#1149)', () => {
     ].join('\n')
 
     const blocks = {
-      opener: 'Hi Sarah, I noticed your team is expanding automation initiatives across multiple business units.',
-      signalBridge: 'Your recent investment in hybrid cloud infrastructure creates an opportunity to consolidate automation tooling.',
-      relationshipLine: 'Your teams already rely on OpenShift and RHEL.',
-      featureBullets,
-      referenceLine: 'For a deeper look, see [Automation Strategy Guide](https://www.redhat.com/en/resources/automation-guide).',
-      peerPattern: 'Teams in financial services have reduced deployment time by 60% using a unified automation platform. The pattern is consistent across regulated industries.',
-      challengerFrame: 'Without consolidation, automation sprawl typically increases operational costs by 30% within 18 months.',
-      cta: 'Worth a 15-minute conversation to map this to your environment?',
-      signOff: 'Best,\nCarolanne Farrell',
+      opener: toBlock('Hi Sarah, I noticed your team is expanding automation initiatives across multiple business units.'),
+      signalBridge: toBlock('Your recent investment in hybrid cloud infrastructure creates an opportunity to consolidate automation tooling.'),
+      relationshipLine: toBlock('Your teams already rely on OpenShift and RHEL.'),
+      featureBullets: toBlock(featureBullets),
+      referenceLine: toBlock('For a deeper look, see [Automation Strategy Guide](https://www.redhat.com/en/resources/automation-guide).'),
+      peerPattern: toBlock('Teams in financial services have reduced deployment time by 60% using a unified automation platform. The pattern is consistent across regulated industries.'),
+      challengerFrame: toBlock('Without consolidation, automation sprawl typically increases operational costs by 30% within 18 months.'),
+      cta: toBlock('Worth a 15-minute conversation to map this to your environment?'),
+      signOff: toBlock('Best,\nCarolanne Farrell'),
     }
 
     const voiceTokens = {
@@ -354,15 +355,15 @@ describe('email body formatting — bullets and links (#1149)', () => {
     ].join('\n')
 
     const blocks = {
-      opener: 'Hi Sarah, expanding automation.',
-      signalBridge: 'Investment in hybrid cloud creates opportunity.',
-      relationshipLine: 'Your teams rely on OpenShift.',
-      featureBullets,
-      referenceLine: '',
-      peerPattern: 'Financial services reduced deploy time by 60%.',
-      challengerFrame: 'Sprawl increases costs by 30%.',
-      cta: 'Worth a call?',
-      signOff: 'Best,\nCarolanne',
+      opener: toBlock('Hi Sarah, expanding automation.'),
+      signalBridge: toBlock('Investment in hybrid cloud creates opportunity.'),
+      relationshipLine: toBlock('Your teams rely on OpenShift.'),
+      featureBullets: toBlock(featureBullets),
+      referenceLine: toBlock(''),
+      peerPattern: toBlock('Financial services reduced deploy time by 60%.'),
+      challengerFrame: toBlock('Sprawl increases costs by 30%.'),
+      cta: toBlock('Worth a call?'),
+      signOff: toBlock('Best,\nCarolanne'),
     }
 
     const voiceTokens = {

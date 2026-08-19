@@ -65,30 +65,30 @@ const testPlays = [
 
 describe('buildOpener — anti-gaming', () => {
   it('strips internal metadata tokens from signal headline', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi').text
     expect(result).not.toContain('Terraform detected')
     expect(result).not.toContain('identified')
     expect(result).not.toContain('flagged')
   })
 
   it('uses the business observation part of the headline', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi').text
     expect(result).toContain('Dhrupad')
     // Should contain something about IaC modernization, not the raw "— Terraform detected" part
     expect(result.toLowerCase()).toContain('infrastructure')
   })
 
   it('produces 3 distinct variants', () => {
-    const v0 = buildOpener(0, testSignals, 0, 'Test User')
-    const v1 = buildOpener(0, testSignals, 1, 'Test User')
-    const v2 = buildOpener(0, testSignals, 2, 'Test User')
+    const v0 = buildOpener(0, testSignals, 0, 'Test User').text
+    const v1 = buildOpener(0, testSignals, 1, 'Test User').text
+    const v2 = buildOpener(0, testSignals, 2, 'Test User').text
     const unique = new Set([v0, v1, v2])
     expect(unique.size).toBe(3)
   })
 
   it('gracefully handles signal with no em-dash separator', () => {
     const simpleSignal = [makeSignal('Cloud cost optimization strategy')]
-    const result = buildOpener(0, simpleSignal, 0, 'Jane Doe')
+    const result = buildOpener(0, simpleSignal, 0, 'Jane Doe').text
     expect(result).toContain('Jane')
     expect(result.length).toBeGreaterThan(20)
   })
@@ -118,7 +118,7 @@ describe('buildOpener — imperative verb stripping (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'lead a strategic initiative to modernize A10\'s automation stack, delivering operational efficiency',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).not.toMatch(/^Dhrupad, lead\b/i)
   })
 
@@ -126,7 +126,7 @@ describe('buildOpener — imperative verb stripping (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'empower your teams with a single, powerful automation platform that unifies operations',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).not.toMatch(/^Dhrupad, empower\b/i)
   })
 
@@ -135,7 +135,7 @@ describe('buildOpener — imperative verb stripping (#197)', () => {
       objectiveMatch: 'deploy it quickly',
       timingTrigger: 'Q4 budget cycle approaching fast',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).not.toContain('deploy')
   })
 })
@@ -145,7 +145,7 @@ describe('buildOpener — third-person replacement (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'their goal is to provide developers with self-service infrastructure',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).not.toContain('their')
     expect(result).toContain('your')
   })
@@ -154,7 +154,7 @@ describe('buildOpener — third-person replacement (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: "A10's strong financial discipline creates room for automation investment",
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
     expect(result).not.toContain("A10's")
     expect(result).toContain('your')
   })
@@ -165,7 +165,7 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'IBM partnership accelerates their cloud migration',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('IBM')
     expect(result).not.toContain('iBM')
   })
@@ -174,7 +174,7 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Kubernetes adoption is driving infrastructure consolidation',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('Kubernetes')
     expect(result).not.toContain('kubernetes')
   })
@@ -183,7 +183,7 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Growing demand for automation across the enterprise',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toMatch(/Dhrupad, growing/)
   })
 })
@@ -193,7 +193,7 @@ describe('buildOpener — trailing cleanup (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'modernize the tools they depend on.',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).not.toMatch(/\b(on|with|for|and|to)\.\s*$/)
   })
 })
@@ -206,8 +206,8 @@ describe('buildOpener — dedup across emails (#197)', () => {
       valueProposition: null as any,
     })
     const used = new Set<string>()
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used)
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used)
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used).text
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used).text
     expect(second).not.toBe(first.replace('Alice', 'Bob'))
     expect(second).toContain('Bob')
   })
@@ -221,7 +221,7 @@ describe('buildOpener — dedup across emails (#197)', () => {
     const used = new Set<string>()
     const names = ['Alice Smith', 'Bob Jones', 'Carol White']
     const openers = names.map((name, i) => {
-      return buildOpener(0, testSignals, i, name, 'manager', brief, undefined, used)
+      return buildOpener(0, testSignals, i, name, 'manager', brief, undefined, used).text
     })
     const unique = new Set(openers)
     expect(unique.size).toBe(3)
@@ -233,8 +233,8 @@ describe('buildOpener — dedup across emails (#197)', () => {
       timingTrigger: null as any,
       valueProposition: null as any,
     })
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief)
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief)
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief).text
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief).text
     expect(first.replace('Alice', 'Bob')).toBe(second)
   })
 })
@@ -243,9 +243,9 @@ describe('buildOpener — dedup across emails (#197)', () => {
 
 describe('buildSignalBridge — anti-gaming', () => {
   it('produces different bridges for ansible vs openshift vs rhel features', () => {
-    const ansibleBridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform'])
-    const openshiftBridge = buildSignalBridge(testSignals[0], ['openshift-container-platform'])
-    const rhelBridge = buildSignalBridge(testSignals[0], ['red-hat-enterprise-linux'])
+    const ansibleBridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
+    const openshiftBridge = buildSignalBridge(testSignals[0], ['openshift-container-platform']).text
+    const rhelBridge = buildSignalBridge(testSignals[0], ['red-hat-enterprise-linux']).text
 
     // All three must be different — not the same generic pattern
     const bridges = new Set([ansibleBridge, openshiftBridge, rhelBridge])
@@ -253,8 +253,8 @@ describe('buildSignalBridge — anti-gaming', () => {
   })
 
   it('never returns the exact same text for different product categories', () => {
-    const ansibleBridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform'])
-    const openshiftBridge = buildSignalBridge(testSignals[0], ['openshift-container-platform'])
+    const ansibleBridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
+    const openshiftBridge = buildSignalBridge(testSignals[0], ['openshift-container-platform']).text
     expect(ansibleBridge).not.toBe(openshiftBridge)
   })
 })
@@ -263,13 +263,13 @@ describe('buildSignalBridge — anti-gaming', () => {
 
 describe('buildRelationshipLine — anti-gaming', () => {
   it('renders complete sentence without dangling prepositions', () => {
-    const result = buildRelationshipLine(testSubscriptions)
+    const result = buildRelationshipLine(testSubscriptions).text
     // Must not end with "for." or "with." or other dangling preposition
     expect(result).not.toMatch(/\b(for|with|to|from|by|in|on|at)\.\s*$/)
   })
 
   it('includes "Red Hat" prefix on known products', () => {
-    const result = buildRelationshipLine(testSubscriptions)
+    const result = buildRelationshipLine(testSubscriptions).text
     // Should say "Red Hat Enterprise Linux" not just "Enterprise Linux Server"
     expect(result).not.toContain('Enterprise Linux Server')
     if (result.toLowerCase().includes('enterprise linux')) {
@@ -278,13 +278,13 @@ describe('buildRelationshipLine — anti-gaming', () => {
   })
 
   it('only includes active subscriptions', () => {
-    const result = buildRelationshipLine(testSubscriptions)
+    const result = buildRelationshipLine(testSubscriptions).text
     // Ansible Automation Platform is inactive — should not appear
     expect(result).not.toContain('Ansible Automation Platform')
   })
 
   it('returns empty string for no subscriptions', () => {
-    expect(buildRelationshipLine([])).toBe('')
+    expect(buildRelationshipLine([]).text).toBe('')
   })
 })
 
@@ -294,7 +294,7 @@ describe('buildFeatureBullets — anti-gaming', () => {
   const featureKeys = ['ansible-automation-platform', 'event-driven-ansible', 'openshift-ai']
 
   it('uses correct product name casing from registry', () => {
-    const result = buildFeatureBullets(featureKeys, 'manager')
+    const result = buildFeatureBullets(featureKeys, 'manager').text
     // Must use registry names, not key-derived names
     expect(result).not.toContain('Aiops')
     expect(result).not.toContain('Openshift Ai')
@@ -305,7 +305,7 @@ describe('buildFeatureBullets — anti-gaming', () => {
   })
 
   it('exec tier produces flowing prose, not pseudo-bullets', () => {
-    const result = buildFeatureBullets(featureKeys, 'executive')
+    const result = buildFeatureBullets(featureKeys, 'executive').text
     // Exec tier must NOT have bare "FeatureName (url) description" pattern
     // But markdown links [Name](url) are fine — only catch unlinked bare URLs in parens
     expect(result).not.toMatch(/[A-Z][a-z]+\s+\(https?:\/\/[^)]+\)\s+[a-z]/)
@@ -314,13 +314,13 @@ describe('buildFeatureBullets — anti-gaming', () => {
   })
 
   it('manager tier has proper markdown links', () => {
-    const result = buildFeatureBullets(featureKeys, 'manager')
+    const result = buildFeatureBullets(featureKeys, 'manager').text
     // Manager tier should have markdown links [Name](url)
     expect(result).toMatch(/\[.+\]\(https?:\/\/.+\)/)
   })
 
   it('exec tier embeds URLs as markdown links, not bare parenthetical', () => {
-    const result = buildFeatureBullets(featureKeys, 'executive')
+    const result = buildFeatureBullets(featureKeys, 'executive').text
     // Should have [Name](url) format, not "Name (url)"
     expect(result).toMatch(/\[.+\]\(https?:\/\/.+\)/)
   })
@@ -330,19 +330,19 @@ describe('buildFeatureBullets — anti-gaming', () => {
 
 describe('buildChallengerFrame — anti-gaming', () => {
   it('does not use generic "While many organizations" wrapper', () => {
-    const result = buildChallengerFrame(testSignals[0])
+    const result = buildChallengerFrame(testSignals[0]).text
     expect(result).not.toContain('While many organizations')
     expect(result).not.toContain('broad digital transformation')
   })
 
   it('derives insight from signal headline', () => {
-    const result = buildChallengerFrame(testSignals[0])
+    const result = buildChallengerFrame(testSignals[0]).text
     expect(result).toContain('Infrastructure-as-Code Modernization')
     expect(result.length).toBeGreaterThan(0)
   })
 
   it('returns empty string for undefined signal', () => {
-    expect(buildChallengerFrame(undefined)).toBe('')
+    expect(buildChallengerFrame(undefined).text).toBe('')
   })
 })
 
@@ -352,7 +352,7 @@ describe('buildCTA — anti-gaming', () => {
   it('produces different CTAs for different email indices', () => {
     // buildCTA accepts optional emailIndex as 4th param
     const ctas = Array.from({ length: 6 }, (_, i) =>
-      (buildCTA as any)('Carolanne Farrell', 'Dhrupad Trivedi', 'A10 Networks', i)
+      (buildCTA as any)('Carolanne Farrell', 'Dhrupad Trivedi', 'A10 Networks', i).text
     )
 
     // All 6 should be unique — identical CTAs across emails is a dead giveaway of automation
@@ -361,8 +361,8 @@ describe('buildCTA — anti-gaming', () => {
   })
 
   it('varies the deliverable across emails', () => {
-    const cta0 = (buildCTA as any)('AE Name', 'Recipient Name', 'Customer', 0)
-    const cta1 = (buildCTA as any)('AE Name', 'Recipient Name', 'Customer', 1)
+    const cta0 = (buildCTA as any)('AE Name', 'Recipient Name', 'Customer', 0).text
+    const cta1 = (buildCTA as any)('AE Name', 'Recipient Name', 'Customer', 1).text
     // At minimum, the deliverable phrasing should differ
     expect(cta0).not.toBe(cta1)
   })
@@ -370,9 +370,9 @@ describe('buildCTA — anti-gaming', () => {
   it('includes a specific deliverable, not just generic "conversation"', () => {
     // At least some CTAs should have specific deliverables beyond just "conversation"
     const ctas = Array.from({ length: 6 }, (_, i) =>
-      (buildCTA as any)('Carolanne Farrell', 'Dhrupad Trivedi', 'A10 Networks', i)
+      (buildCTA as any)('Carolanne Farrell', 'Dhrupad Trivedi', 'A10 Networks', i).text
     )
-    const hasSpecific = ctas.some(c =>
+    const hasSpecific = ctas.some((c: string) =>
       /overview|analysis|review|session|alignment/i.test(c)
     )
     expect(hasSpecific).toBe(true)
@@ -386,20 +386,20 @@ describe('buildPeerPattern — anti-gaming', () => {
     const result = buildPeerPattern(
       { playName: 'Cloud Migration', exampleIndex: 0 },
       testPlays,
-    )
+    ).text
     expect(result).toContain('Amadeus')
     expect(result).toContain('$5.62M')
   })
 
   it('returns fallback from realWorldExamples when peerProof is null', () => {
-    const result = buildPeerPattern(null, testPlays)
+    const result = buildPeerPattern(null, testPlays).text
     expect(result.length).toBeGreaterThan(0)
     expect(result).toContain('Amadeus')
   })
 
   it('returns generic fallback when no plays have metrics', () => {
     const emptyPlays = [{ name: 'Empty', parentTdp: 'TDP-X' }]
-    const result = buildPeerPattern(null, emptyPlays)
+    const result = buildPeerPattern(null, emptyPlays).text
     expect(result).toContain('sat with a handful of leaders')
   })
 })
@@ -408,24 +408,24 @@ describe('buildPeerPattern — anti-gaming', () => {
 
 describe('deterministic content generation', () => {
   it('buildOpener uses tier-aware variants for executive', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'executive')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'executive').text
     expect(result).toContain('Dhrupad')
     expect(result).toContain('Infrastructure-as-Code Modernization')
   })
 
   it('buildOpener uses tier-aware variants for manager', () => {
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager').text
     expect(result).toContain('Dhrupad')
     expect(result).toContain('Infrastructure-as-Code Modernization')
   })
 
   it('buildSignalBridge uses SIGNAL_BRIDGES lookup', () => {
-    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform'])
+    const result = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
     expect(result).toContain('automation')
   })
 
   it('buildFeatureBullets uses getCapabilityDescription deterministically', () => {
-    const result = buildFeatureBullets(['ansible-automation-platform', 'event-driven-ansible', 'execution-environments'], 'manager')
+    const result = buildFeatureBullets(['ansible-automation-platform', 'event-driven-ansible', 'execution-environments'], 'manager').text
     expect(result).toContain('unifies automation')
     expect(result).toContain('triggers automated responses')
   })
@@ -437,7 +437,7 @@ describe('buildFeatureBullets — every bullet always linked', () => {
   const featureKeys = ['ansible-automation-platform', 'event-driven-ansible', 'openshift-ai']
 
   it('links all products in deterministic output', () => {
-    const result = buildFeatureBullets(featureKeys, 'manager')
+    const result = buildFeatureBullets(featureKeys, 'manager').text
     const lines = result.split('\n')
     expect(lines[0]).toContain('[Ansible Automation Platform]')
     expect(lines[1]).toContain('[Event-Driven Ansible]')
@@ -445,7 +445,7 @@ describe('buildFeatureBullets — every bullet always linked', () => {
   })
 
   it('links all products with theme modifier', () => {
-    const result = buildFeatureBullets(featureKeys, 'manager', 'SaaS tax')
+    const result = buildFeatureBullets(featureKeys, 'manager', 'SaaS tax').text
     expect(result).toContain('[Ansible Automation Platform]')
     expect(result).toContain('[Event-Driven Ansible]')
     expect(result).toContain('[OpenShift AI]')
@@ -457,9 +457,9 @@ describe('buildFeatureBullets — every bullet always linked', () => {
 
 describe('cross-email quality properties', () => {
   it('competitor-swap test: output contains Red Hat-specific language', () => {
-    const opener = buildOpener(0, testSignals, 0, 'Test User')
-    const bridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform'])
-    const relationship = buildRelationshipLine(testSubscriptions)
+    const opener = buildOpener(0, testSignals, 0, 'Test User').text
+    const bridge = buildSignalBridge(testSignals[0], ['ansible-automation-platform']).text
+    const relationship = buildRelationshipLine(testSubscriptions).text
     const combined = [opener, bridge, relationship].join(' ')
 
     // Should contain at least one Red Hat-specific term
@@ -758,7 +758,7 @@ describe('buildOpener — verb-leading subject fix (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: "aligns directly with A10's strong focus on profitability",
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10')
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
     expect(result).not.toMatch(/^Dhrupad, aligns\b/i)
     expect(result).toContain('this')
   })
@@ -767,7 +767,7 @@ describe('buildOpener — verb-leading subject fix (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Aligns perfectly with your infrastructure modernization goals',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).toContain('this aligns')
     expect(result).not.toMatch(/^Test, Aligns\b/)
   })
@@ -776,7 +776,7 @@ describe('buildOpener — verb-leading subject fix (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Directly addresses your challenge with infrastructure sprawl',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).not.toMatch(/^Test, [Dd]irectly\b/)
   })
 
@@ -784,7 +784,7 @@ describe('buildOpener — verb-leading subject fix (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'your automation strategy creates room for consolidation',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).not.toMatch(/this your/)
   })
 })
@@ -794,7 +794,7 @@ describe('buildOpener — coaching language strip (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'the SaaS tax is the catalyst this persona needs to get executive buy-in and',
     })
-    const result = buildOpener(0, testSignals, 0, 'Aris Chen', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Aris Chen', 'manager', brief).text
     expect(result).not.toContain('this persona')
     expect(result).toContain('Aris')
   })
@@ -805,7 +805,7 @@ describe('buildOpener — trailing conjunction cleanup (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'your platform consolidation drives efficiency and',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
     expect(result).not.toMatch(/\band\.\s*$/)
     expect(result).not.toMatch(/\band\s*$/)
   })
@@ -816,7 +816,7 @@ describe('buildOpener — smartLc preserves A10-style names (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'A10 Networks is investing in automation infrastructure',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('A10')
     expect(result).not.toContain('a10')
   })
@@ -830,8 +830,8 @@ describe('buildOpener — dedup tries all fields before signal fallback (#197)',
       valueProposition: null as any,
     })
     const used = new Set<string>()
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used)
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used)
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used).text
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used).text
     // Second should use the timingTrigger field, not fall through to signal headline
     expect(first).toContain('Alice')
     expect(second).toContain('Bob')

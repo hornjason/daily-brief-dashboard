@@ -17,6 +17,7 @@ import type { CustomerObjectiveProfile, ObjectiveCategory } from './modules/inte
 import { parseSections } from './modules/intelligence-module.ts'
 import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
+import { type BlockOutput, type MetricRef, validateBlock, extractLinks, toBlock } from './lib/block-output.ts'
 
 const BRAND_RED = '#c41e3a'
 const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
@@ -843,7 +844,7 @@ export function buildOpener(
   matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
   customerName?: string,
   usedOpeners?: Set<string>,
-): string {
+): BlockOutput {
   const firstName = recipientName.split(' ')[0]
 
   // Signal-driven: use persona's intelligence from Pass 0 — rotate which field for variety
@@ -901,7 +902,7 @@ export function buildOpener(
         const key = field.slice(0, 50)
         if (!usedOpeners || !usedOpeners.has(key)) {
           if (usedOpeners) usedOpeners.add(key)
-          return `${firstName}, ${field}.`
+          return validateBlock('opener', toBlock(`${firstName}, ${field}.`))
         }
       }
     }
@@ -909,7 +910,7 @@ export function buildOpener(
 
   // Fallback: signal headline + rotation
   const signal = signals[signalIndex]
-  if (!signal) return `Hi ${firstName},`
+  if (!signal) return validateBlock('opener', toBlock(`Hi ${firstName},`))
 
   let observation = signal.headline
   if (observation.includes(' — ')) {
@@ -946,10 +947,10 @@ export function buildOpener(
     const key = candidate.slice(0, 50)
     if (!usedOpeners || !usedOpeners.has(key)) {
       if (usedOpeners) usedOpeners.add(key)
-      return candidate
+      return validateBlock('opener', toBlock(candidate))
     }
   }
-  return variants[openerVariant % variants.length]
+  return validateBlock('opener', toBlock(variants[openerVariant % variants.length]))
 }
 
 /**
@@ -975,8 +976,8 @@ export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
   productFitSections?: Record<string, string>,
-): string {
-  if (!signal || featureKeys.length === 0) return ''
+): BlockOutput {
+  if (!signal || featureKeys.length === 0) return validateBlock('signalBridge', toBlock(''))
 
   const primaryKey = featureKeys[0]
   const product = primaryKey.includes('ansible') ? 'ansible'
@@ -994,15 +995,15 @@ export function buildSignalBridge(
       .trim()
     const firstSentence = fitText.split(/[.!?]\s/)[0]
     if (firstSentence && firstSentence.length > 20) {
-      return firstSentence.trim() + '.'
+      return validateBlock('signalBridge', toBlock(firstSentence.trim() + '.'))
     }
   }
 
   // Fallback: existing SIGNAL_BRIDGES lookup
   const signalType = signal.type === 'news' ? 'news' : 'default'
 
-  if (product) return SIGNAL_BRIDGES[`${product}-${signalType}`]
-  return `This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of change'} into operational advantage.`
+  if (product) return validateBlock('signalBridge', toBlock(SIGNAL_BRIDGES[`${product}-${signalType}`]))
+  return validateBlock('signalBridge', toBlock(`This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of change'} into operational advantage.`))
 }
 
 /**
@@ -1054,8 +1055,8 @@ function linkProductName(displayName: string): string {
 
 export function buildRelationshipLine(
   subscriptions: Array<{ product?: string; productDescription?: string; sku?: string; status?: string }>,
-): string {
-  if (!subscriptions || subscriptions.length === 0) return ''
+): BlockOutput {
+  if (!subscriptions || subscriptions.length === 0) return validateBlock('relationshipLine', toBlock(''))
 
   const activeProducts = subscriptions
     .filter(s => s.status === 'Active')
@@ -1063,12 +1064,12 @@ export function buildRelationshipLine(
     .filter(p => p.length > 0)
 
   const unique = [...new Set(activeProducts)]
-  if (unique.length === 0) return ''
+  if (unique.length === 0) return validateBlock('relationshipLine', toBlock(''))
 
   const linked = unique.map(linkProductName)
-  if (linked.length === 1) return `Your teams already rely on ${linked[0]}.`
+  if (linked.length === 1) return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${linked[0]}.`))
   const display = linked.slice(0, 3)
-  return `Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`
+  return validateBlock('relationshipLine', toBlock(`Your teams already rely on ${display.slice(0, -1).join(', ')} and ${display[display.length - 1]}.`))
 }
 
 /**
@@ -1080,7 +1081,7 @@ export function buildFeatureBullets(
   tier: 'executive' | 'manager',
   campaignTheme?: string,
   matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
-): string {
+): BlockOutput {
   const bullets: Array<{ featureName: string; url: string; applicationSentence: string }> = []
   for (let i = 0; i < featureKeys.slice(0, 3).length; i++) {
     const key = featureKeys[i]
@@ -1112,11 +1113,12 @@ export function buildFeatureBullets(
     bullets.push({ featureName: entry.featureName, url: entry.url, applicationSentence })
   }
 
-  if (bullets.length === 0) return ''
+  if (bullets.length === 0) return validateBlock('featureBullets', toBlock(''))
 
-  return bullets.map(b =>
+  const text = bullets.map(b =>
     `• [${b.featureName}](${b.url}) — ${b.applicationSentence}`
   ).join('\n')
+  return validateBlock('featureBullets', toBlock(text))
 }
 
 /**
@@ -1175,7 +1177,7 @@ export function buildPeerPattern(
   structuredPlays: StructuredPlay[],
   preMatchedProof?: { proof: { customer: string; outcome: string } },
   usedPeerCompanies?: Set<string>,
-): string {
+): BlockOutput {
   const tryFormat = (customer: string, outcome: string): string | null => {
     if (usedPeerCompanies?.has(customer)) return null
     const formatted = formatPeerProofLine(customer, outcome)
@@ -1189,7 +1191,7 @@ export function buildPeerPattern(
   // Priority 1: Pre-matched proof from Pass 0 persona briefs
   if (preMatchedProof) {
     const result = tryFormat(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
-    if (result) return result
+    if (result) return validateBlock('peerPattern', toBlock(result))
   }
 
   // Priority 2: Gemini-selected proof from material extraction
@@ -1200,7 +1202,7 @@ export function buildPeerPattern(
     const example = play?.realWorldExamples?.[peerProof.exampleIndex]
     if (example) {
       const result = tryFormat(example.customer, example.outcome)
-      if (result) return result
+      if (result) return validateBlock('peerPattern', toBlock(result))
     }
     if (!play) console.warn(`[template] PEER PROOF MISS: play "${peerProof.playName}" not found in ${structuredPlays.map(p => p.name).join(', ')}`)
   }
@@ -1210,14 +1212,14 @@ export function buildPeerPattern(
     const examples = play.realWorldExamples || []
     for (const ex of examples) {
       const result = tryFormat(ex.customer, ex.outcome)
-      if (result) return result
+      if (result) return validateBlock('peerPattern', toBlock(result))
     }
     const metric = play.extractedMetrics?.[0]
-    if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
+    if (metric) return validateBlock('peerPattern', toBlock(`Organizations in similar positions have seen ${metric.value} — ${metric.context}.`))
   }
 
   // Priority 4: Generic peer pattern fallback — peer proof must NEVER be empty (#1138)
-  return GENERIC_PEER_PATTERN
+  return validateBlock('peerPattern', toBlock(GENERIC_PEER_PATTERN))
 }
 
 /**
@@ -1234,9 +1236,9 @@ const CHALLENGER_CLOSERS = [
 export function buildChallengerFrame(
   signal: Signal | undefined,
   emailIndex: number = 0,
-): string {
+): BlockOutput {
   // Signal headline only — competitive context belongs in Call Prep, not emails
-  if (!signal) return ''
+  if (!signal) return validateBlock('challengerFrame', toBlock(''))
   let insight = signal.headline
   if (insight.includes(' — ')) {
     insight = insight.split(' — ')[0]
@@ -1245,10 +1247,10 @@ export function buildChallengerFrame(
     .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
-  if (!insight) return ''
+  if (!insight) return validateBlock('challengerFrame', toBlock(''))
   const closer = CHALLENGER_CLOSERS[emailIndex % CHALLENGER_CLOSERS.length]
-  if (insight.endsWith('.')) return `${insight} ${closer}`
-  return `${insight}. ${closer}`
+  if (insight.endsWith('.')) return validateBlock('challengerFrame', toBlock(`${insight} ${closer}`))
+  return validateBlock('challengerFrame', toBlock(`${insight}. ${closer}`))
 }
 
 function shortenTitle(name: string): string {
@@ -1257,8 +1259,8 @@ function shortenTitle(name: string): string {
   return base.length > 40 ? base.slice(0, 37) + '...' : base
 }
 
-export function buildReferenceLine(sourceUrls: string[], materialUrlMap?: Map<string, string>): string {
-  if ((!sourceUrls || sourceUrls.length === 0) && (!materialUrlMap || materialUrlMap.size === 0)) return ''
+export function buildReferenceLine(sourceUrls: string[], materialUrlMap?: Map<string, string>): BlockOutput {
+  if ((!sourceUrls || sourceUrls.length === 0) && (!materialUrlMap || materialUrlMap.size === 0)) return validateBlock('referenceLine', toBlock(''))
 
   const entries: Array<[string, string]> = []
 
@@ -1276,8 +1278,8 @@ export function buildReferenceLine(sourceUrls: string[], materialUrlMap?: Map<st
     }
   }
 
-  if (entries.length === 0) return ''
-  return `For context: ${entries.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`
+  if (entries.length === 0) return validateBlock('referenceLine', toBlock(''))
+  return validateBlock('referenceLine', toBlock(`For context: ${entries.map(([name, url]) => `[${name}](${url})`).join(' and ')}.`))
 }
 
 /**
@@ -1297,7 +1299,7 @@ export function buildCTA(
   recipientName: string,
   _customerName: string,
   emailIndex: number = 0,
-): string {
+): BlockOutput {
   const firstName = recipientName.split(' ')[0]
   const { deliverable, verb } = CTA_OPTIONS[emailIndex % CTA_OPTIONS.length]
 
@@ -1307,17 +1309,17 @@ export function buildCTA(
   const date2 = new Date(date1.getTime() + 7 * 24 * 60 * 60 * 1000)
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
 
-  return `${verb} ${fmt(date1)} work for ${deliverable}? If that week is tight, ${fmt(date2)} works just as well.`
+  return validateBlock('cta', toBlock(`${verb} ${fmt(date1)} work for ${deliverable}? If that week is tight, ${fmt(date2)} works just as well.`))
 }
 
 /**
  * Block 8: Sign-off — AE name + title.
  */
-export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string): string {
+export function buildSignOff(aeName: string, aeEmail?: string, aePhone?: string): BlockOutput {
   let signOff = `${aeName}\nAccount Executive · Red Hat`
   if (aeEmail) signOff += `\n${aeEmail}`
   if (aePhone) signOff += ` | M: ${aePhone}`
-  return signOff
+  return validateBlock('signOff', toBlock(signOff))
 }
 
 const TRUSTED_URL_DOMAINS = ['redhat.com', 'developers.redhat.com']
@@ -1463,29 +1465,30 @@ function trimToWordLimit(text: string, maxWords: number): string {
  */
 export function assembleEmail(
   blocks: {
-    opener: string
-    signalBridge: string
-    relationshipLine: string
-    featureBullets: string
-    referenceLine: string
-    peerPattern: string
-    challengerFrame: string
-    cta: string
-    signOff: string
+    opener: BlockOutput
+    signalBridge: BlockOutput
+    relationshipLine: BlockOutput
+    featureBullets: BlockOutput
+    referenceLine: BlockOutput
+    peerPattern: BlockOutput
+    challengerFrame: BlockOutput
+    cta: BlockOutput
+    signOff: BlockOutput
   },
   tier: 'executive' | 'manager',
   voiceTokens: ReturnType<typeof getVoiceTokens>,
   recipientName?: string,
 ): { body: string; signOff: string } {
+  const t = (b: BlockOutput) => b.text
   const bodyParts = [
-    blocks.opener,
-    blocks.signalBridge,
-    blocks.relationshipLine,
-    blocks.featureBullets,
-    blocks.referenceLine,
-    blocks.peerPattern,
-    blocks.challengerFrame,
-    blocks.cta,
+    t(blocks.opener),
+    t(blocks.signalBridge),
+    t(blocks.relationshipLine),
+    t(blocks.featureBullets),
+    t(blocks.referenceLine),
+    t(blocks.peerPattern),
+    t(blocks.challengerFrame),
+    t(blocks.cta),
   ].filter(b => b.length > 0)
 
   let body = bodyParts.join('\n\n')
@@ -1501,35 +1504,39 @@ export function assembleEmail(
 
   // Enforce word limit with trim cascade for both tiers (#1144, #1147)
   if (wordCount > tolerance) {
+    const challengerText = t(blocks.challengerFrame)
+    const peerText = t(blocks.peerPattern)
+    const featureText = t(blocks.featureBullets)
+
     // Trim cascade: challengerFrame → peerPattern → featureBullets
     // Step 1: Remove challengerFrame (supplementary, not core)
-    if (blocks.challengerFrame && wordCount > tolerance) {
-      const trimmedParts = bodyParts.filter(b => b !== blocks.challengerFrame)
+    if (challengerText && wordCount > tolerance) {
+      const trimmedParts = bodyParts.filter(b => b !== challengerText)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
       wordCount = countWords(body)
     }
 
     // Step 2: Trim peerPattern to one sentence
-    if (blocks.peerPattern && wordCount > tolerance) {
-      const trimmedPeerPattern = trimPeerPatternToOneSentence(blocks.peerPattern)
-      const trimmedParts = bodyParts.map(b => b === blocks.peerPattern ? trimmedPeerPattern : b).filter(b => b !== blocks.challengerFrame)
+    if (peerText && wordCount > tolerance) {
+      const trimmedPeerPattern = trimPeerPatternToOneSentence(peerText)
+      const trimmedParts = bodyParts.map(b => b === peerText ? trimmedPeerPattern : b).filter(b => b !== challengerText)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
       wordCount = countWords(body)
     }
 
     // Step 3: Trim featureBullets from 3 to 2
-    if (blocks.featureBullets && wordCount > tolerance) {
-      const trimmedBullets = trimFeatureBulletsToTwo(blocks.featureBullets)
-      const peerPatternContent = blocks.peerPattern ? trimPeerPatternToOneSentence(blocks.peerPattern) : blocks.peerPattern
+    if (featureText && wordCount > tolerance) {
+      const trimmedBullets = trimFeatureBulletsToTwo(featureText)
+      const peerPatternContent = peerText ? trimPeerPatternToOneSentence(peerText) : peerText
       const trimmedParts = bodyParts
         .map(b => {
-          if (b === blocks.featureBullets) return trimmedBullets
-          if (b === blocks.peerPattern) return peerPatternContent
+          if (b === featureText) return trimmedBullets
+          if (b === peerText) return peerPatternContent
           return b
         })
-        .filter(b => b !== blocks.challengerFrame)
+        .filter(b => b !== challengerText)
       body = trimmedParts.join('\n\n')
       body = applyFormality(body, voiceTokens.formality, voiceTokens.assertionLevel)
       wordCount = countWords(body)
@@ -1551,7 +1558,7 @@ export function assembleEmail(
     }
   }
 
-  return { body, signOff: blocks.signOff }
+  return { body, signOff: t(blocks.signOff) }
 }
 
 // ── Structured Email Box Renderer ───────────────────────────────────────────
@@ -1891,10 +1898,11 @@ export async function generateCampaignFromStructured(
         })
       }
     }
-    const signalBridge = objectiveContext ? `${rawSignalBridge} ${objectiveContext}` : rawSignalBridge
+    const signalBridge = objectiveContext ? toBlock(`${rawSignalBridge.text} ${objectiveContext}`) : rawSignalBridge
     const relationshipLine = buildRelationshipLine(data.subscriptions)
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution, matchedBrief)
-    const referenceLine = sanitizeReferenceLine(buildReferenceLine(data.sourceUrls || [], data.materialUrlMap), data.sourceUrls)
+    const rawRefLine = buildReferenceLine(data.sourceUrls || [], data.materialUrlMap)
+    const referenceLine = toBlock(sanitizeReferenceLine(rawRefLine.text, data.sourceUrls))
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
     const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof, usedPeerCompanies)
     const challengerFrame = buildChallengerFrame(signal, i)

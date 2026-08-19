@@ -212,7 +212,7 @@ consolidating 500 nodes in the first phase.
         }]
       }]
 
-      const result = buildPeerPattern(null, structuredPlays, undefined)
+      const result = buildPeerPattern(null, structuredPlays, undefined).text
 
       // SC-1: Should be a natural sentence with company + context + key metric
       expect(result).toMatch(/Amadeus/)
