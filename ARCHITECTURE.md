@@ -1593,6 +1593,8 @@ Refresh: `POST /api/refresh/cloud-marketplace`. Budget cap: 10 signals per custo
 
 ## §24. Signal Template Engine (#326, 2026-05-20)
 
+`src/lib/block-output.ts` — typed output contract for consumer template blocks (ADR-046 Phase 1). Every `build*` function returns `BlockOutput { text, links: LinkRef[], metrics: MetricRef[] }` instead of raw string. `validateBlock()` checks word count, speculation, coaching language, and URL format at the block level. `extractLinks()` and `toBlock()` are convenience helpers. See #1152 for the full consumer pipeline simplification plan.
+
 `src/lib/signal-templates.ts` — shared deterministic template engine for all signal consumers. Replaces per-consumer inline signal formatting with a centralized module.
 
 Signals arrive already scored from the registry (§22). The template engine ONLY formats — no scoring, no Gemini calls. Returns:
