@@ -881,11 +881,13 @@ export function buildOpener(
         }
       }
       if (cleaned.length < 20) return null
+      const tierLimit = tier === 'executive' ? 100 : 120
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
-      if (sentenceMatch && sentenceMatch[1].length <= 80) return sentenceMatch[1].replace(/[.!?]$/, '')
+      if (sentenceMatch && sentenceMatch[1].length <= tierLimit) return sentenceMatch[1].replace(/[.!?]$/, '')
       const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
       if (first.length < 20) return null
-      let result = first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
+      let result = truncateAtSentence(first, tierLimit)
+      result = result.replace(/…$/, '').trim()
       result = result.replace(/\s+\b(?:that|which|where|who)\s+\S+\s*$/, '').trim()
       result = result.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|or|the|a|an|that|which|where|who|this|is|are|was|were)\s*\.?\s*$/, '').trim()
       return result
@@ -999,6 +1001,7 @@ export function buildSignalBridge(
   signal: Signal | undefined,
   featureKeys: string[],
   productFitSections?: Record<string, string>,
+  usedBridges?: Set<string>,
 ): BlockOutput {
   if (!signal || featureKeys.length === 0) return validateBlock('signalBridge', toBlock(''))
 
@@ -1018,15 +1021,33 @@ export function buildSignalBridge(
       .trim()
     const firstSentence = fitText.split(/[.!?]\s/)[0]
     if (firstSentence && firstSentence.length > 20) {
-      return validateBlock('signalBridge', toBlock(firstSentence.trim() + '.'))
+      const fitBridge = firstSentence.trim() + '.'
+      const fitKey = fitBridge.slice(0, 50)
+      if (!usedBridges || !usedBridges.has(fitKey)) {
+        if (usedBridges) usedBridges.add(fitKey)
+        return validateBlock('signalBridge', toBlock(fitBridge))
+      }
     }
   }
 
   // Fallback: existing SIGNAL_BRIDGES lookup
   const signalType = signal.type === 'news' ? 'news' : 'default'
+  const candidates: string[] = []
+  if (product) {
+    candidates.push(SIGNAL_BRIDGES[`${product}-${signalType}`])
+    const altType = signalType === 'news' ? 'default' : 'news'
+    if (SIGNAL_BRIDGES[`${product}-${altType}`]) candidates.push(SIGNAL_BRIDGES[`${product}-${altType}`])
+  }
+  candidates.push(`This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of change'} into operational advantage.`)
 
-  if (product) return validateBlock('signalBridge', toBlock(SIGNAL_BRIDGES[`${product}-${signalType}`]))
-  return validateBlock('signalBridge', toBlock(`This aligns with how organizations are using Red Hat infrastructure to turn ${signalType === 'news' ? 'these shifts' : 'this kind of change'} into operational advantage.`))
+  for (const candidate of candidates) {
+    const key = candidate.slice(0, 50)
+    if (!usedBridges || !usedBridges.has(key)) {
+      if (usedBridges) usedBridges.add(key)
+      return validateBlock('signalBridge', toBlock(candidate))
+    }
+  }
+  return validateBlock('signalBridge', toBlock(candidates[0]))
 }
 
 /**
@@ -1812,6 +1833,7 @@ export async function generateCampaignFromStructured(
 
   // Track used openers and peer companies for dedup across emails
   const usedOpeners = new Set<string>()
+  const usedBridges = new Set<string>()
   const usedPeerCompanies = new Set<string>()
 
   // Build per-email HTML
@@ -1850,7 +1872,7 @@ export async function generateCampaignFromStructured(
 
     // Build all 8 blocks
     const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName, usedOpeners)
-    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections)
+    const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections, usedBridges)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
     const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
