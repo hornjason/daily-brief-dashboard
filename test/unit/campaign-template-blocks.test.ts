@@ -113,30 +113,31 @@ const makeBrief = (overrides: Partial<import('../../src/lib/persona-selector.ts'
   ...overrides,
 })
 
-describe('buildOpener — imperative verb stripping (#197)', () => {
-  it('strips imperative coaching instructions from openers', () => {
+describe('buildOpener — signal-first priority (#1173)', () => {
+  it('uses signal headline when both signal and brief are available', () => {
     const brief = makeBrief({
-      objectiveMatch: 'lead a strategic initiative to modernize A10\'s automation stack, delivering operational efficiency',
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
     })
     const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
-    expect(result).not.toMatch(/^Dhrupad, lead\b/i)
+    expect(result).toContain('Infrastructure-as-Code Modernization')
   })
 
-  it('strips "empower" imperative from openers', () => {
+  it('falls back to brief field when no signal available', () => {
     const brief = makeBrief({
-      objectiveMatch: 'empower your teams with a single, powerful automation platform that unifies operations',
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
-    expect(result).not.toMatch(/^Dhrupad, empower\b/i)
+    const result = buildOpener(0, [], 0, 'Next Person', 'manager', brief).text
+    expect(result).toContain('Next')
+    expect(result).toContain('modernize the automation stack')
   })
 
-  it('skips to next field when imperative stripping leaves <20 chars', () => {
+  it('uses brief field when no signal is available', () => {
     const brief = makeBrief({
-      objectiveMatch: 'deploy it quickly',
-      timingTrigger: 'Q4 budget cycle approaching fast',
+      objectiveMatch: 'modernize the automation stack for operational efficiency',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toContain('deploy')
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
+    expect(result).toContain('Dhrupad')
+    expect(result).toContain('modernize the automation stack')
   })
 })
 
@@ -145,7 +146,7 @@ describe('buildOpener — third-person replacement (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'their goal is to provide developers with self-service infrastructure',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).not.toContain('their')
     expect(result).toContain('your')
   })
@@ -154,7 +155,7 @@ describe('buildOpener — third-person replacement (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: "A10's strong financial discipline creates room for automation investment",
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
     expect(result).not.toContain("A10's")
     expect(result).toContain('your')
   })
@@ -165,7 +166,7 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'IBM partnership accelerates their cloud migration',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('IBM')
     expect(result).not.toContain('iBM')
   })
@@ -174,7 +175,7 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Kubernetes adoption is driving infrastructure consolidation',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('Kubernetes')
     expect(result).not.toContain('kubernetes')
   })
@@ -183,59 +184,46 @@ describe('buildOpener — smart lowercase (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'Growing demand for automation across the enterprise',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toMatch(/Dhrupad, growing/)
   })
 })
 
-describe('buildOpener — trailing cleanup (#197)', () => {
-  it('strips trailing prepositions from opener sentences', () => {
+describe('buildOpener — brief-field truncation (#1173)', () => {
+  it('truncates at sentence boundary in brief fallback path', () => {
     const brief = makeBrief({
-      objectiveMatch: 'modernize the tools they depend on.',
+      objectiveMatch: 'modernize the tools your team depends on. This second sentence should be cut.',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/\b(on|with|for|and|to)\.\s*$/)
+    const result = buildOpener(0, [], 0, 'Test User', 'manager', brief).text
+    expect(result).toContain('modernize the tools')
+    expect(result).not.toContain('second sentence')
   })
 })
 
-describe('buildOpener — dedup across emails (#197)', () => {
-  it('falls back to signal headline when brief opener already used', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'modernize the automation stack for operational efficiency',
-      timingTrigger: null as any,
-      valueProposition: null as any,
-    })
-    const used = new Set<string>()
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used).text
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used).text
-    expect(second).not.toBe(first.replace('Alice', 'Bob'))
-    expect(second).toContain('Bob')
-  })
-
-  it('produces unique openers for 3 contacts sharing sparse brief', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'consolidate automation tooling across the enterprise',
-      timingTrigger: null as any,
-      valueProposition: null as any,
-    })
+describe('buildOpener — dedup across emails (#1173)', () => {
+  it('produces unique signal-based openers for 3 contacts', () => {
     const used = new Set<string>()
     const names = ['Alice Smith', 'Bob Jones', 'Carol White']
     const openers = names.map((name, i) => {
-      return buildOpener(0, testSignals, i, name, 'manager', brief, undefined, used).text
+      return buildOpener(0, testSignals, i, name, 'manager', undefined, undefined, used).text
     })
     const unique = new Set(openers)
     expect(unique.size).toBe(3)
   })
 
   it('does not dedup when usedOpeners is not provided', () => {
+    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager').text
+    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager').text
+    expect(first.replace('Alice', 'Bob')).toBe(second)
+  })
+
+  it('falls back to brief field when no signal available', () => {
     const brief = makeBrief({
       objectiveMatch: 'modernize the automation stack for operational efficiency',
-      timingTrigger: null as any,
-      valueProposition: null as any,
     })
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief).text
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief).text
-    expect(first.replace('Alice', 'Bob')).toBe(second)
+    const result = buildOpener(0, [], 0, 'Fallback User', 'manager', brief).text
+    expect(result).toContain('Fallback')
+    expect(result).toContain('modernize the automation stack')
   })
 })
 
@@ -807,62 +795,35 @@ describe('renderObjectiveBlock — persona fallback', () => {
 
 // ── renderObjectiveBlock — preMatch (ADR-045) ─────────────────────────────
 
-describe('buildOpener — verb-leading subject fix (#197, #1165)', () => {
-  it('strips verb-leading text and keeps the meaningful content', () => {
-    const brief = makeBrief({
-      objectiveMatch: "aligns directly with A10's strong focus on profitability",
-    })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
-    expect(result).not.toMatch(/^Dhrupad, aligns\b/i)
-    expect(result).not.toContain('this aligns')
-    expect(result).toContain('your strong focus on profitability')
-  })
-
-  it('strips uppercase verb-leading text like "Aligns"', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'Aligns perfectly with your infrastructure modernization goals',
-    })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/^Test, Aligns\b/)
-    expect(result).toContain('your infrastructure modernization goals')
-  })
-
-  it('catches "Directly addresses" as verb-leading', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'Directly addresses your challenge with infrastructure sprawl',
-    })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/^Test, [Dd]irectly\b/)
-  })
-
-  it('does not prepend "this" when field already has a subject', () => {
+describe('buildOpener — brief-field as fallback (#1173)', () => {
+  it('uses brief field text as-is when no signal available', () => {
     const brief = makeBrief({
       objectiveMatch: 'your automation strategy creates room for consolidation',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/this your/)
+    const result = buildOpener(0, [], 0, 'Test User', 'manager', brief).text
+    expect(result).toContain('Test')
+    expect(result).toContain('your automation strategy')
+  })
+
+  it('brief text with subject reads naturally', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'your engineering teams need a unified automation platform for consistency',
+    })
+    const result = buildOpener(0, [], 0, 'Michelle Lee', 'manager', brief).text
+    expect(result).toContain('Michelle')
+    expect(result).toContain('your engineering teams')
   })
 })
 
-describe('buildOpener — coaching language strip (#197)', () => {
-  it('strips "this persona" and trailing text from opener', () => {
+describe('buildOpener — brief-field pronoun cleanup (#1173)', () => {
+  it('replaces company possessive in brief fallback', () => {
     const brief = makeBrief({
-      objectiveMatch: 'the SaaS tax is the catalyst this persona needs to get executive buy-in and',
+      objectiveMatch: "the company's automation goals align with market trends",
     })
-    const result = buildOpener(0, testSignals, 0, 'Aris Chen', 'manager', brief).text
-    expect(result).not.toContain('this persona')
+    const result = buildOpener(0, [], 0, 'Aris Chen', 'manager', brief).text
+    expect(result).not.toContain("the company's")
+    expect(result).toContain('your')
     expect(result).toContain('Aris')
-  })
-})
-
-describe('buildOpener — trailing conjunction cleanup (#197)', () => {
-  it('strips trailing "and" from truncated openers', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'your platform consolidation drives efficiency and',
-    })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/\band\.\s*$/)
-    expect(result).not.toMatch(/\band\s*$/)
   })
 })
 
@@ -871,27 +832,25 @@ describe('buildOpener — smartLc preserves A10-style names (#197)', () => {
     const brief = makeBrief({
       objectiveMatch: 'A10 Networks is investing in automation infrastructure',
     })
-    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Dhrupad Trivedi', 'manager', brief).text
     expect(result).toContain('A10')
     expect(result).not.toContain('a10')
   })
 })
 
-describe('buildOpener — dedup tries all fields before signal fallback (#197)', () => {
-  it('uses second brief field when first is taken', () => {
+describe('buildOpener — brief-field dedup tries all fields (#1173)', () => {
+  it('uses second brief field when first is taken in fallback path', () => {
     const brief = makeBrief({
       objectiveMatch: 'modernize the automation stack for operational efficiency',
       timingTrigger: 'Q4 budget cycle approaching fast with new leadership',
       valueProposition: null as any,
     })
     const used = new Set<string>()
-    const first = buildOpener(0, testSignals, 0, 'Alice Smith', 'manager', brief, undefined, used).text
-    const second = buildOpener(0, testSignals, 0, 'Bob Jones', 'manager', brief, undefined, used).text
-    // Second should use the timingTrigger field, not fall through to signal headline
+    const first = buildOpener(0, [], 0, 'Alice Smith', 'manager', brief, undefined, used).text
+    const second = buildOpener(0, [], 0, 'Bob Jones', 'manager', brief, undefined, used).text
     expect(first).toContain('Alice')
     expect(second).toContain('Bob')
-    // Second should NOT be a signal-headline opener (those contain "tells me" or "driving" etc.)
-    expect(second).not.toContain('Infrastructure-as-Code Modernization')
+    expect(first).not.toBe(second.replace('Bob', 'Alice'))
   })
 })
 
@@ -1080,7 +1039,7 @@ describe('buildOpener — his/her pronoun replacement (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'aligns with his security objective to reduce risk',
     })
-    const result = buildOpener(0, testSignals, 0, 'Sean Pike', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Sean Pike', 'manager', brief).text
     expect(result).not.toContain('his')
     expect(result).toContain('your')
   })
@@ -1089,7 +1048,7 @@ describe('buildOpener — his/her pronoun replacement (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'supports her operational goals for automation across the enterprise',
     })
-    const result = buildOpener(0, testSignals, 0, 'Michelle Chen', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Michelle Chen', 'manager', brief).text
     expect(result).not.toContain('her')
     expect(result).toContain('your')
   })
@@ -1098,7 +1057,7 @@ describe('buildOpener — his/her pronoun replacement (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'the history of infrastructure modernization drives urgency',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Test User', 'manager', brief).text
     expect(result).toContain('history')
   })
 
@@ -1106,39 +1065,31 @@ describe('buildOpener — his/her pronoun replacement (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'there is strong alignment with automation goals here',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Test User', 'manager', brief).text
     expect(result).toContain('there')
   })
 })
 
-describe('buildOpener — verb-leading natural construction (#1165)', () => {
-  it('verb-leading text reads naturally without awkward "this" prefix', () => {
+describe('buildOpener — brief fallback renders correctly (#1173)', () => {
+  it('brief field text rendered when no signals available', () => {
     const brief = makeBrief({
-      objectiveMatch: 'aligns with your security objectives across the enterprise',
+      objectiveMatch: 'your security objectives across the enterprise are evolving',
     })
-    const result = buildOpener(0, testSignals, 0, 'Sean Pike', 'manager', brief).text
-    expect(result).not.toMatch(/^Sean, this aligns/i)
+    const result = buildOpener(0, [], 0, 'Sean Pike', 'manager', brief).text
     expect(result).toContain('Sean')
+    expect(result).toContain('your security objectives')
   })
 })
 
-describe('buildOpener — truncation does not leave mid-clause fragments (#1165)', () => {
-  it('does not end with dangling "that"', () => {
+describe('buildOpener — brief fallback truncation (#1173)', () => {
+  it('truncates long brief field at tier limit', () => {
     const brief = makeBrief({
-      objectiveMatch: 'your engineering teams with a unified automation platform that boosts operational efficiency across all data centers and regions permanently',
+      objectiveMatch: 'your engineering teams need a unified automation platform that boosts operational efficiency across all data centers and regions permanently for the long term',
     })
-    const result = buildOpener(0, testSignals, 0, 'Michelle Lee', 'manager', brief).text
-    expect(result).not.toMatch(/\bthat\.\s*$/)
-    expect(result).not.toMatch(/\bthat\s*$/)
-  })
-
-  it('does not end with dangling "which"', () => {
-    const brief = makeBrief({
-      objectiveMatch: 'infrastructure consolidation strategy which reduces complexity across environments and improves the overall team productivity significantly',
-    })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).not.toMatch(/\bwhich\.\s*$/)
-    expect(result).not.toMatch(/\bwhich\s*$/)
+    const result = buildOpener(0, [], 0, 'Michelle Lee', 'manager', brief).text
+    expect(result).toContain('Michelle')
+    const afterName = result.replace(/^Michelle, /, '')
+    expect(afterName.length).toBeLessThanOrEqual(125)
   })
 })
 
@@ -1147,7 +1098,7 @@ describe('buildOpener — no trailing space before punctuation (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'the state of California has set a deadline ',
     })
-    const result = buildOpener(0, testSignals, 0, 'Michelle Tran', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Michelle Tran', 'manager', brief).text
     expect(result).not.toMatch(/\s+\./)
     expect(result).not.toMatch(/\s\.$/)
   })
@@ -1156,7 +1107,7 @@ describe('buildOpener — no trailing space before punctuation (#1165)', () => {
     const brief = makeBrief({
       objectiveMatch: 'modernize the automation stack   ',
     })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Test User', 'manager', brief).text
     expect(result).not.toMatch(/\s+\./)
   })
 })
@@ -1167,7 +1118,7 @@ describe('buildOpener — tier-aware sentence truncation (#1169)', () => {
   it('executive tier truncates at sentence boundary within 100 chars', () => {
     const longText = 'Streamlining infrastructure operations across hybrid cloud environments to reduce deployment cycles. This extra sentence should be cut for executives.'
     const brief = makeBrief({ objectiveMatch: longText })
-    const result = buildOpener(0, testSignals, 0, 'Alice Chen', 'executive', brief).text
+    const result = buildOpener(0, [], 0, 'Alice Chen', 'executive', brief).text
     const afterName = result.replace(/^Alice, /, '')
     expect(afterName.length).toBeLessThanOrEqual(105)
     expect(afterName).not.toMatch(/[a-z]…$/)
@@ -1176,7 +1127,7 @@ describe('buildOpener — tier-aware sentence truncation (#1169)', () => {
   it('manager tier allows up to 120 chars', () => {
     const longText = 'Operational efficiency gains from consolidating automation tooling into a single enterprise platform for consistency across teams and regions.'
     const brief = makeBrief({ objectiveMatch: longText })
-    const result = buildOpener(0, testSignals, 0, 'Bob Smith', 'manager', brief).text
+    const result = buildOpener(0, [], 0, 'Bob Smith', 'manager', brief).text
     const afterName = result.replace(/^Bob, /, '')
     expect(afterName.length).toBeLessThanOrEqual(125)
   })
@@ -1184,7 +1135,7 @@ describe('buildOpener — tier-aware sentence truncation (#1169)', () => {
   it('does not cut mid-sentence when text is under tier limit', () => {
     const shortText = 'Reducing deployment time by forty percent.'
     const brief = makeBrief({ objectiveMatch: shortText })
-    const result = buildOpener(0, testSignals, 0, 'Test User', 'executive', brief).text
+    const result = buildOpener(0, [], 0, 'Test User', 'executive', brief).text
     expect(result).toContain('reducing deployment time')
   })
 })

@@ -849,8 +849,64 @@ export function buildOpener(
   usedOpeners?: Set<string>,
 ): BlockOutput {
   const firstName = recipientName.split(' ')[0]
+  const signal = signals[signalIndex]
 
-  // Signal-driven: use persona's intelligence from Pass 0 — rotate which field for variety
+  // ── PRIMARY: signal-headline path ──────────────────────────────────────────
+  if (signal) {
+    let observation = signal.headline
+    if (observation.includes(' — ')) {
+      observation = observation.split(' — ')[0]
+    }
+    observation = observation
+      .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+    if (observation && /^[a-z]/.test(observation)) {
+      observation = observation.charAt(0).toUpperCase() + observation.slice(1)
+    }
+
+    const EXEC_GREETINGS = [
+      `${firstName}, I noticed ${observation} and thought of your team immediately.`,
+      `Hi ${firstName} — saw ${observation} and wanted to share a quick thought.`,
+      `${firstName}, a few of us were discussing ${observation} and your name came up.`,
+    ]
+
+    const EXEC_OPENERS = [
+      ...EXEC_GREETINGS,
+      `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`,
+      `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`,
+      `${firstName}, ${observation} is creating a window that closes faster than most planning cycles account for.`,
+      `${firstName}, ${observation} is the kind of shift that separates the organizations that act early from those that react late.`,
+      `Hi ${firstName}, ${observation} is already changing how your peers allocate infrastructure investment.`,
+    ]
+
+    const MGR_GREETINGS = [
+      `Hi ${firstName} — ${observation} caught my eye and I think it's relevant to what your team is working on.`,
+      `${firstName}, wanted to flag ${observation} — it has some practical implications worth a look.`,
+      `Hi ${firstName}, came across ${observation} and thought it was worth a quick note.`,
+    ]
+
+    const MGR_OPENERS = [
+      ...MGR_GREETINGS,
+      `Hi ${firstName}, ${observation} is driving new priorities for leaders in your position.`,
+      `Hi ${firstName}, ${observation} has direct implications for how your team operates day to day.`,
+      `${firstName}, ${observation} is worth a closer look — the technical implications run deeper than the headline.`,
+      `Hi ${firstName}, ${observation} is accelerating timelines for teams running infrastructure like yours.`,
+      `${firstName}, ${observation} means the playbook your team is running today may need an update sooner than planned.`,
+    ]
+
+    const variants = tier === 'executive' ? EXEC_OPENERS : MGR_OPENERS
+    for (let v = 0; v < variants.length; v++) {
+      const candidate = variants[(openerVariant + v) % variants.length]
+      const key = candidate.slice(0, 50)
+      if (!usedOpeners || !usedOpeners.has(key)) {
+        if (usedOpeners) usedOpeners.add(key)
+        return validateBlock('opener', toBlock(candidate))
+      }
+    }
+  }
+
+  // ── FALLBACK: brief-field path (simplified) ────────────────────────────────
   if (matchedBrief) {
     const cleanBriefField = (text: string): string | null => {
       let cleaned = text
@@ -858,9 +914,6 @@ export function buildOpener(
         .replace(/\s*\(.*?\)\s*/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-      cleaned = cleaned.replace(/\b(?:show how|highlight|position|demonstrate|emphasize)\b.*$/i, '').trim()
-      cleaned = cleaned.replace(/\bthis persona\b.*$/i, '').trim()
-      cleaned = cleaned.replace(/^(lead|empower|drive|enable|accelerate|build|deploy|implement|consolidate|modernize|migrate|transform)\b\s*/i, '').trim()
       cleaned = cleaned.replace(/\btheir\b/gi, 'your')
       cleaned = cleaned.replace(/\bhis\b/gi, 'your')
       cleaned = cleaned.replace(/\bher\b/gi, 'your')
@@ -870,27 +923,11 @@ export function buildOpener(
         const possessivePattern = new RegExp(`\\b${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s\\b`, 'gi')
         cleaned = cleaned.replace(possessivePattern, 'your')
       }
-      cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|high|low)\s*\.?\s*$/, '').trim()
-      const VERB_LEADING = /^(?:directly\s+)?(?:aligns|addresses|creates|drives|enables|supports|delivers|provides|positions|represents|demonstrates|offers|reduces|increases|improves|ensures|complements|connects|targets|reflects|highlights|leverages|reinforces|strengthens|validates|confirms|correlates|resonates|maps|speaks|opens|builds|extends|integrates|unifies|consolidates)\b\s*(?:\w+ly\s+)?(?:with\s+)?/i
-      if (VERB_LEADING.test(cleaned)) {
-        const stripped = cleaned.replace(VERB_LEADING, '').trim()
-        if (stripped.length >= 20) {
-          cleaned = stripped
-        } else {
-          return null
-        }
-      }
       if (cleaned.length < 20) return null
       const tierLimit = tier === 'executive' ? 100 : 120
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
       if (sentenceMatch && sentenceMatch[1].length <= tierLimit) return sentenceMatch[1].replace(/[.!?]$/, '')
-      const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
-      if (first.length < 20) return null
-      let result = truncateAtSentence(first, tierLimit)
-      result = result.replace(/…$/, '').trim()
-      result = result.replace(/\s+\b(?:that|which|where|who)\s+\S+\s*$/, '').trim()
-      result = result.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|or|the|a|an|that|which|where|who|this|is|are|was|were)\s*\.?\s*$/, '').trim()
-      return result
+      return truncateAtSentence(cleaned, tierLimit)
     }
     const smartLc = (s: string): string => {
       const firstWord = s.split(/\s/)[0]
@@ -919,63 +956,8 @@ export function buildOpener(
     }
   }
 
-  // Fallback: signal headline + rotation
-  const signal = signals[signalIndex]
-  if (!signal) return validateBlock('opener', toBlock(`Hi ${firstName},`))
-
-  let observation = signal.headline
-  if (observation.includes(' — ')) {
-    observation = observation.split(' — ')[0]
-  }
-  observation = observation
-    .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-  if (observation && /^[a-z]/.test(observation)) {
-    observation = observation.charAt(0).toUpperCase() + observation.slice(1)
-  }
-
-  const EXEC_GREETINGS = [
-    `${firstName}, I noticed ${observation} and thought of your team immediately.`,
-    `Hi ${firstName} — saw ${observation} and wanted to share a quick thought.`,
-    `${firstName}, a few of us were discussing ${observation} and your name came up.`,
-  ]
-
-  const EXEC_OPENERS = [
-    ...EXEC_GREETINGS,
-    `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`,
-    `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`,
-    `${firstName}, ${observation} is creating a window that closes faster than most planning cycles account for.`,
-    `${firstName}, ${observation} is the kind of shift that separates the organizations that act early from those that react late.`,
-    `Hi ${firstName}, ${observation} is already changing how your peers allocate infrastructure investment.`,
-  ]
-
-  const MGR_GREETINGS = [
-    `Hi ${firstName} — ${observation} caught my eye and I think it's relevant to what your team is working on.`,
-    `${firstName}, wanted to flag ${observation} — it has some practical implications worth a look.`,
-    `Hi ${firstName}, came across ${observation} and thought it was worth a quick note.`,
-  ]
-
-  const MGR_OPENERS = [
-    ...MGR_GREETINGS,
-    `Hi ${firstName}, ${observation} is driving new priorities for leaders in your position.`,
-    `Hi ${firstName}, ${observation} has direct implications for how your team operates day to day.`,
-    `${firstName}, ${observation} is worth a closer look — the technical implications run deeper than the headline.`,
-    `Hi ${firstName}, ${observation} is accelerating timelines for teams running infrastructure like yours.`,
-    `${firstName}, ${observation} means the playbook your team is running today may need an update sooner than planned.`,
-  ]
-
-  const variants = tier === 'executive' ? EXEC_OPENERS : MGR_OPENERS
-  // Dedup signal-based openers the same way brief-field openers are deduped
-  for (let v = 0; v < variants.length; v++) {
-    const candidate = variants[(openerVariant + v) % variants.length]
-    const key = candidate.slice(0, 50)
-    if (!usedOpeners || !usedOpeners.has(key)) {
-      if (usedOpeners) usedOpeners.add(key)
-      return validateBlock('opener', toBlock(candidate))
-    }
-  }
-  return validateBlock('opener', toBlock(variants[openerVariant % variants.length]))
+  // ── ULTIMATE FALLBACK ──────────────────────────────────────────────────────
+  return validateBlock('opener', toBlock(`Hi ${firstName},`))
 }
 
 /**
