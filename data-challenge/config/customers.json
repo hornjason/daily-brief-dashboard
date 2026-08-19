@@ -1,0 +1,20 @@
+{
+  "customers": [
+    {
+      "name": "Crowdstrike",
+      "ae": "Carolanne Farrell",
+      "accountNumbers": [
+        "5311018"
+      ],
+      "accountProvenance": [
+        {
+          "accountNumber": "5311018",
+          "discoveredBy": "rh-cases-api",
+          "appVersion": "1.7.1",
+          "discoveredAt": "2026-07-02T11:42:04.086Z"
+        }
+      ],
+      "ccspCustomer": false
+    }
+  ]
+}

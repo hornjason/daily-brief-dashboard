@@ -69,9 +69,11 @@ fi
 
 # ── Force-update machine-generated configs (always overwrite from template) ────
 # saleshub-knowledge.json is scraped, not user-edited — always use the latest baked into the image
+if [ "$CHALLENGE_MODE" != "true" ]; then
 if [ -f /app/config-templates/saleshub-knowledge.json ]; then
   cp /app/config-templates/saleshub-knowledge.json /data/config/saleshub-knowledge.json
   echo "[entrypoint] Updated saleshub-knowledge.json from template"
+fi
 fi
 
 # ── Seed value maps on first boot ──────────────────────────────────────────────

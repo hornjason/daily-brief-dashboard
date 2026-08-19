@@ -1,0 +1,23 @@
+{
+  "podConfig": {
+    "territorySheetId": "1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8",
+    "sfReportId": "00OPe00000jyo86MAA",
+    "parentFolderId": "1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq",
+    "podTabTitle": "Northwest Corp"
+  },
+  "scaffoldCache": {
+    "1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq": {
+      "configFolderId": "1qBvALwumGPtXX2KNTWlM2Pk1jTV9Y1f4",
+      "productsFolderId": "1JL5wdtgpP4-2oeWVNE075VvBL_GRCSJV",
+      "productSubfolders": {
+        "rhel": "1qt6Hdvi7ez_tDL1B1C5Fpk6lSccLXV3Z",
+        "ocp": "1gkELMVEVfDJ6BWsX8_h-GVEUQ1XAfT95",
+        "ocp-virt": "104N88_zrAABY69hhW51VoBoJRvKIpPXB",
+        "aap": "1wmbi5b5-Xsvsz2-XSDwIFGiRTVZSMEfY",
+        "rhel-ai": "1pHMkWLYMmvZU45GgHttP6LBHdexJBlXh",
+        "rh-ai-inference": "1xxvWbAQktobvjL5euRm9-PZv5_a6WdHJ",
+        "rhoai": "1SL-U_rWmMYJJXuFlmVLzNuQ0uAAZjl0R"
+      }
+    }
+  }
+}
