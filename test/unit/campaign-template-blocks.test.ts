@@ -608,6 +608,31 @@ describe('sanitizeCreepyLines — creepy line sanitizer', () => {
     expect(result).not.toContain('workforce reduction')
     expect(result).toContain('Automation is critical')
   })
+
+  it('strips "Case NNNNN:" format leaked by Gemini (#1168)', () => {
+    const input = 'Their platform team is expanding. Case 04308663: Discovery ISO Ignoring IPv4 & Forcing IPv6 Rendezvous (OCP 4.19, Air-Gapped). The CTO wants to consolidate tooling.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('Case 04308663')
+    expect(result).not.toContain('Discovery ISO')
+    expect(result).toContain('platform team is expanding')
+    expect(result).toContain('CTO wants')
+  })
+
+  it('strips "CS-NNN" case reference format (#1168)', () => {
+    const input = 'Strong adoption of RHEL. CS-4521 was escalated last week. Leadership is aligned on modernization.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('CS-4521')
+    expect(result).toContain('Strong adoption')
+    expect(result).toContain('Leadership is aligned')
+  })
+
+  it('strips "escalation #N" references (#1168)', () => {
+    const input = 'Good momentum on automation. There was escalation #3 about kernel compatibility. Their team is growing.'
+    const result = sanitizeCreepyLines(input)
+    expect(result).not.toContain('escalation #3')
+    expect(result).toContain('Good momentum')
+    expect(result).toContain('team is growing')
+  })
 })
 
 // ── renderObjectiveBlock (ADR-044) ────────────────────────────────────────
