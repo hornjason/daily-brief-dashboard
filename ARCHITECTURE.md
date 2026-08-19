@@ -847,6 +847,8 @@ All 5 major route files have been extracted into service modules. Route files ar
 
 **Adding new endpoints:** Create the domain function in the service module, then add a thin route handler.
 
+**Extracted campaign modules (ADR-046):** `exec-resolver.ts` — campaign-specific executive resolution orchestrator (role resolution, tier split, dedup, backfill). Calls `executive-resolver.ts` for low-level contact lookup. `block-output.ts` — typed block returns for template assembly. `link-registry.ts` — structured link lifecycle.
+
 ## §28. Scheduler Registry (ADR-028, 2026-05-20)
 
 <!-- ASSERTION: grep("schedulerRegistry.register", "src/background-scheduler.ts") -->
