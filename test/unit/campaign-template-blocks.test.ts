@@ -93,6 +93,110 @@ describe('buildOpener — anti-gaming', () => {
   })
 })
 
+// ── buildOpener — opener polish (#197) ────────────────────────────────────
+
+const makeBrief = (overrides: Partial<import('../../src/lib/persona-selector.ts').PersonaBrief> = {}): import('../../src/lib/persona-selector.ts').PersonaBrief => ({
+  role: 'automation-champion' as any,
+  suggestedTitle: 'VP Infrastructure',
+  why: 'test',
+  objectiveMatch: overrides.objectiveMatch ?? 'modernize the automation stack',
+  peerProofCandidates: [],
+  timingTrigger: overrides.timingTrigger ?? 'Q4 budget cycle approaching',
+  valueProposition: overrides.valueProposition ?? 'unified platform for operations',
+  featureKeys: ['ansible-automation-platform'],
+  competitiveContext: null,
+  relationshipPath: 'existing customer',
+  installedBase: 'RHEL',
+  suppressTriggers: [],
+  confidence: { overall: 'HIGH' },
+  ...overrides,
+})
+
+describe('buildOpener — imperative verb stripping (#197)', () => {
+  it('strips imperative coaching instructions from openers', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'lead a strategic initiative to modernize A10\'s automation stack, delivering operational efficiency',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).not.toMatch(/^Dhrupad, lead\b/i)
+  })
+
+  it('strips "empower" imperative from openers', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'empower your teams with a single, powerful automation platform that unifies operations',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).not.toMatch(/^Dhrupad, empower\b/i)
+  })
+
+  it('skips to next field when imperative stripping leaves <20 chars', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'deploy it quickly',
+      timingTrigger: 'Q4 budget cycle approaching fast',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).not.toContain('deploy')
+  })
+})
+
+describe('buildOpener — third-person replacement (#197)', () => {
+  it('replaces "their" with "your" in direct emails', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'their goal is to provide developers with self-service infrastructure',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).not.toContain('their')
+    expect(result).toContain('your')
+  })
+
+  it('replaces customer name possessive with "your"', () => {
+    const brief = makeBrief({
+      objectiveMatch: "A10's strong financial discipline creates room for automation investment",
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10')
+    expect(result).not.toContain("A10's")
+    expect(result).toContain('your')
+  })
+})
+
+describe('buildOpener — smart lowercase (#197)', () => {
+  it('preserves acronym casing at start of opener field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'IBM partnership accelerates their cloud migration',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).toContain('IBM')
+    expect(result).not.toContain('iBM')
+  })
+
+  it('preserves proper noun casing at start of opener field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'Kubernetes adoption is driving infrastructure consolidation',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).toContain('Kubernetes')
+    expect(result).not.toContain('kubernetes')
+  })
+
+  it('lowercases generic words at start of opener field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'Growing demand for automation across the enterprise',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief)
+    expect(result).toMatch(/Dhrupad, growing/)
+  })
+})
+
+describe('buildOpener — trailing cleanup (#197)', () => {
+  it('strips trailing prepositions from opener sentences', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'modernize the tools they depend on.',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).not.toMatch(/\b(on|with|for|and|to)\.\s*$/)
+  })
+})
+
 // ── buildSignalBridge ───────────────────────────────────────────────────────
 
 describe('buildSignalBridge — anti-gaming', () => {

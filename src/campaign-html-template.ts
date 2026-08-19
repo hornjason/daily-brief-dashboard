@@ -819,30 +819,48 @@ export function buildOpener(
   recipientName: string,
   tier: 'executive' | 'manager' = 'manager',
   matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
+  customerName?: string,
 ): string {
   const firstName = recipientName.split(' ')[0]
 
   // Signal-driven: use persona's intelligence from Pass 0 — rotate which field for variety
   if (matchedBrief) {
-    const cleanBriefField = (text: string): string => {
+    const cleanBriefField = (text: string): string | null => {
       let cleaned = text
         .replace(/\*\*[^*]+\*\*:?\s*/g, '')
         .replace(/\s*\(.*?\)\s*/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
       cleaned = cleaned.replace(/\b(?:show how|highlight|position|demonstrate|emphasize)\b.*$/i, '').trim()
+      cleaned = cleaned.replace(/^(lead|empower|drive|enable|accelerate|build|deploy|implement|consolidate|modernize|migrate|transform)\b\s*/i, '').trim()
+      cleaned = cleaned.replace(/\btheir\b/gi, 'your')
+      cleaned = cleaned.replace(/\bthe company's\b/gi, 'your')
+      cleaned = cleaned.replace(/\bthe organization's\b/gi, 'your')
+      if (customerName) {
+        const possessivePattern = new RegExp(`\\b${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s\\b`, 'gi')
+        cleaned = cleaned.replace(possessivePattern, 'your')
+      }
+      cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at)\s*\.?\s*$/, '').trim()
+      if (cleaned.length < 20) return null
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
       if (sentenceMatch && sentenceMatch[1].length <= 80) return sentenceMatch[1].replace(/[.!?]$/, '')
       const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
+      if (first.length < 20) return null
       return first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
     }
-    const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
+    const smartLc = (s: string): string => {
+      const firstWord = s.split(/\s/)[0]
+      if (/^[A-Z]{2,}/.test(firstWord)) return s
+      if (/^[A-Z][a-z]+[A-Z]/.test(firstWord)) return s
+      if (/^(?:Red|Ansible|OpenShift|Kubernetes|Docker|Azure|Google|Amazon|AWS|IBM|VMware|Terraform|Linux|GitHub|Microsoft|Oracle|SAP|Cisco|Dell|Intel|NVIDIA|MongoDB|PostgreSQL|Salesforce|ServiceNow)\b/.test(firstWord)) return s
+      return s.charAt(0).toLowerCase() + s.slice(1)
+    }
 
     const fields = [
-      matchedBrief.objectiveMatch ? `${lc(cleanBriefField(matchedBrief.objectiveMatch))}` : null,
-      matchedBrief.timingTrigger ? `${lc(cleanBriefField(matchedBrief.timingTrigger))}` : null,
-      matchedBrief.valueProposition ? `${lc(cleanBriefField(matchedBrief.valueProposition))}` : null,
-    ].filter(Boolean) as string[]
+      matchedBrief.objectiveMatch ? cleanBriefField(matchedBrief.objectiveMatch) : null,
+      matchedBrief.timingTrigger ? cleanBriefField(matchedBrief.timingTrigger) : null,
+      matchedBrief.valueProposition ? cleanBriefField(matchedBrief.valueProposition) : null,
+    ].filter((f): f is string => f != null).map(f => smartLc(f))
 
     if (fields.length > 0) {
       const field = fields[openerVariant % fields.length]
@@ -1694,7 +1712,7 @@ export function generateCampaignFromStructured(
     const matchedBrief = exactMatch || tierBriefs[tierIndex % tierBriefs.length]
 
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName)
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
