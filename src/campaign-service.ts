@@ -6,15 +6,11 @@
 // @consumer-contract v1.0
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
-import { google } from 'googleapis'
-import { Readable } from 'stream'
 import { callGemini } from './gemini-call.ts'
 import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
 import { campaignValidator, validateCampaignSelection } from './quality-validators/campaign-validator.ts'
-import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { toSlug } from './cache-layer.ts'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
 import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
 import { extractFromEmail } from './lib/email-extractor.ts'
@@ -22,20 +18,19 @@ import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
-import { generateCampaignFromStructured, cleanCampaignTitle, isFreeTierProduct, type BVTalkingPoint } from './campaign-html-template.ts'
+import { generateCampaignFromStructured, cleanCampaignTitle, type BVTalkingPoint } from './campaign-html-template.ts'
 import { isHomepageUrl, LinkRegistry } from './lib/link-registry.ts'
 import { extractPeerProofsFromMaterial } from './lib/source-material-parser.ts'
-import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-loader.ts'
-import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
+import type { CustomerSignals } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
 import { getFeatureKeys } from './lib/feature-url-registry.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
-import type { ResolvedExecutive } from './lib/executive-resolver.ts'
 import { resolveAllContacts } from './lib/exec-resolver.ts'
-import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
+import { preMatchObjectives, preMatchPeerProofs } from './lib/persona-classifier.ts'
 import { callGeminiForUnifiedSelection, type UnifiedSelectionResult, type UnifiedPersona, type PersonaBrief } from './lib/persona-selector.ts'
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
 import { assertExtractionOutput, assertUnifiedSelectionOutput, assertPass2Output } from './lib/campaign-contracts.ts'
@@ -45,120 +40,15 @@ import {
   findExistingDriveFileIds,
   enrichSignalsFromCache,
   isIntelligenceStale,
-  type CampaignCacheEntry,
 } from './lib/campaign-cache.ts'
-
-// ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
-
-const THREAT_PATTERNS: Array<{ pattern: RegExp; threat: string }> = [
-  { pattern: /saas tax|sb 122|sales tax/, threat: 'the SaaS tax' },
-  { pattern: /security breach|data breach|cyber attack/, threat: 'security breach exposure' },
-  { pattern: /vendor lock-in|vmware|broadcom/, threat: 'vendor lock-in and rising licensing costs' },
-  { pattern: /cloud cost|cloud spend|cloud migration/, threat: 'uncontrolled cloud costs' },
-  { pattern: /compliance|regulation|audit/, threat: 'compliance requirements' },
-  { pattern: /technical debt|legacy|moderniz/, threat: 'technical debt' },
-]
-
-const SOLUTION_PATTERNS: Array<{ pattern: RegExp; solution: string }> = [
-  { pattern: /ansible|automation/, solution: 'self-managed automation' },
-  { pattern: /openshift|container|kubernetes/, solution: 'a unified container platform' },
-  { pattern: /rhel|enterprise linux/, solution: 'a standardized enterprise Linux foundation' },
-  { pattern: /security|acs|stackrox/, solution: 'integrated security across the stack' },
-  { pattern: /ai|ml|model/, solution: 'an enterprise AI platform' },
-]
-
-export function deriveThreatSolution(materialTitle: string, materialContent: string): { threat: string; solution: string } {
-  const lower = (materialTitle + ' ' + materialContent).toLowerCase()
-  const matched = THREAT_PATTERNS.find(tp => tp.pattern.test(lower))
-  const threat = matched?.threat || 'rising infrastructure costs'
-  const solMatched = SOLUTION_PATTERNS.find(sp => sp.pattern.test(lower))
-  const solution = solMatched?.solution || 'consolidated infrastructure'
-  return { threat, solution }
-}
-
-const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
-
-/** Returns true when text looks like Gemini speculation rather than real product names */
-export function isSpeculativeInstalledBase(text: string, customerName?: string): boolean {
-  if (customerName) {
-    if (text.includes(customerName)) return true
-    const firstName = customerName.split(/\s+/)[0]
-    if (firstName.length > 2 && text.startsWith(firstName + ' ')) return true
-  }
-  if (text.length > 40 && SPECULATION_PATTERN.test(text)) return true
-  if (text.length > 120 && !text.includes(',')) return true
-  return false
-}
-
-export function deriveFootprint(
-  pass0Briefs: PersonaBrief[],
-  subSignals: Signal[],
-  registrySignals: Signal[],
-  customerName?: string,
-): { current: string; expansion: string } | undefined {
-  // Subscription signals are authoritative — use them first
-  const rawSubProducts = subSignals.map(s => s.metadata?.product as string ?? s.headline).filter(Boolean)
-  if (rawSubProducts.length > 0) {
-    // AC-2: Deduplicate product names and strip subscription count text (#1124)
-    const subProducts = [...new Set(rawSubProducts.map(p => p.replace(/\s*\d+\s*subscriptions?\s*total\s*/gi, '').trim()))].filter(p => !isFreeTierProduct(p))
-
-    // Build expansion from multiple sources (priority order):
-    // 1. Pass 0 briefs valueProposition (persona-specific expansion opportunities)
-    // 2. Intelligence brief growth areas (intelligence signals)
-    // 3. Generic fallback
-    let expansion = ''
-
-    // Try Pass 0 briefs valueProposition first
-    if (pass0Briefs.length > 0) {
-      const valueProps = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
-      if (valueProps.length > 0) {
-        expansion = valueProps[0] // Use first value proposition
-      }
-    }
-
-    // Fall back to intelligence signals if no Pass 0 expansion
-    if (!expansion) {
-      // AC-1: Filter out pipeline source signals from expansion (#1124)
-      const intelSignals = registrySignals.filter(s => s.source === 'intelligence')
-      if (intelSignals.length > 0) {
-        expansion = intelSignals.slice(0, 3).map(s => s.headline).join(', ')
-      }
-    }
-
-    // Final fallback
-    if (!expansion) {
-      expansion = 'Expansion opportunities under evaluation'
-    }
-
-    return {
-      current: subProducts.join(', '),
-      expansion,
-    }
-  }
-
-  // Fall back to Pass 0 installedBase for prospects without subscription data
-  if (pass0Briefs.length > 0) {
-    const installedBases = pass0Briefs.map(b => b.installedBase).filter(Boolean)
-      .filter(b => !isSpeculativeInstalledBase(b, customerName))
-    const uniqueBases = [...new Set(installedBases)]
-    const expansions = pass0Briefs.map(b => b.valueProposition).filter(Boolean)
-    const competitive = pass0Briefs
-      .map(b => b.competitiveContext)
-      .filter((c): c is string => c !== null && c.length > 0)
-
-    if (uniqueBases.length > 0) {
-      return {
-        current: uniqueBases.join(' · '),
-        expansion: competitive.length > 0
-          ? `${expansions[0] || 'Expansion under evaluation'} (Competitive: ${competitive[0]})`
-          : expansions[0] || 'Expansion opportunities under evaluation',
-      }
-    }
-  }
-
-  return undefined
-}
-
+import {
+  assessSignalQuality,
+  CampaignQualityGateError,
+  deriveFootprint,
+  deriveThreatSolution,
+  type SignalQualityAssessment,
+} from './lib/campaign-quality.ts'
+import { uploadCampaignToDrive } from './lib/campaign-drive.ts'
 
 // ── URL extraction from plain text ──────────────────────────────────────────
 function extractUrlsFromPlainText(text: string): Array<{ url: string; title: string }> {
@@ -174,14 +64,6 @@ function extractUrlsFromPlainText(text: string): Array<{ url: string; title: str
     }
   }
   return results
-}
-
-// ── Structured HTML quality scoring (parallel validation) ───────────────────
-export function scoreStructuredOutput(html: string): { sections: number; emails: number; words: number } {
-  const sections = (html.match(/<h[23][^>]*>/g) || []).length
-  const emails = (html.match(/📧/g) || []).length
-  const words = html.replace(/<[^>]*>/g, '').split(/\s+/).filter(w => w.length > 0).length
-  return { sections, emails, words }
 }
 
 // ── Structured output schema (ADR-040) ───────────────────────────────────────
@@ -249,77 +131,6 @@ export interface CampaignResult {
   signalsMissing?: string[]
   signalCompleteness?: number
 }
-
-// ── Signal Quality Gate (#1120) ──────────────────────────────────────────────
-export interface SignalQualityAssessment {
-  disposition: 'PROCEED' | 'DEGRADED' | 'BLOCKED'
-  signalCompleteness: number
-  missing: string[]
-  stale: string[]
-  reasons: Record<string, string>
-}
-
-export class CampaignQualityGateError extends Error {
-  constructor(
-    public assessment: SignalQualityAssessment,
-    public customerName: string,
-  ) {
-    const missingList = assessment.missing.map(s => `  - ${s}: ${assessment.reasons[s] || 'not available'}`).join('\n')
-    super(`Campaign generation blocked for ${customerName} — missing critical signals:\n${missingList}\n\nTo override: add forceGenerate: true to request. Warning banner will be injected into output.`)
-    this.name = 'CampaignQualityGateError'
-  }
-}
-
-export function assessSignalQuality(
-  loaded: string[],
-  missing: string[],
-): SignalQualityAssessment {
-  const loadedSet = new Set(loaded)
-  const missingSet = new Set(missing)
-  const reasons: Record<string, string> = {}
-  const stale: string[] = []
-
-  const criticalMissing: string[] = []
-  for (const source of SIGNAL_TIERS.CRITICAL) {
-    if (missingSet.has(source) || !loadedSet.has(source)) {
-      criticalMissing.push(source)
-      reasons[source] = 'not loaded — no data available for this customer'
-    }
-  }
-
-  const contextMissing: string[] = []
-  for (const source of SIGNAL_TIERS.CONTEXT) {
-    if (missingSet.has(source) || !loadedSet.has(source)) {
-      contextMissing.push(source)
-      reasons[source] = 'not loaded'
-    }
-  }
-
-  const criticalScore = ((SIGNAL_TIERS.CRITICAL.length - criticalMissing.length) / SIGNAL_TIERS.CRITICAL.length) * 60
-  const contextScore = ((SIGNAL_TIERS.CONTEXT.length - contextMissing.length) / SIGNAL_TIERS.CONTEXT.length) * 30
-  const enrichmentTotal = SIGNAL_TIERS.ENRICHMENT.length
-  const enrichmentLoaded = SIGNAL_TIERS.ENRICHMENT.filter(s => loadedSet.has(s)).length
-  const enrichmentScore = (enrichmentLoaded / enrichmentTotal) * 10
-  const signalCompleteness = Math.round(criticalScore + contextScore + enrichmentScore)
-
-  let disposition: 'PROCEED' | 'DEGRADED' | 'BLOCKED'
-  if (criticalMissing.length > 0) {
-    disposition = 'BLOCKED'
-  } else if (contextMissing.length > 0) {
-    disposition = 'DEGRADED'
-  } else {
-    disposition = 'PROCEED'
-  }
-
-  return {
-    disposition,
-    signalCompleteness,
-    missing: [...criticalMissing, ...contextMissing],
-    stale,
-    reasons,
-  }
-}
-
 
 // ── Material extraction (moved to google-content-extractor.ts) ──────────────
 import { extractFileId, extractMaterialContent } from './lib/google-content-extractor.ts'
@@ -617,131 +428,6 @@ function extractBriefsFromUnified(personas: UnifiedPersona[]): PersonaBrief[] {
     suppressTriggers: p.suppressTriggers,
     confidence: p.confidence,
   }))
-}
-
-// ── Drive persistence ────────────────────────────────────────────────────────
-
-async function ensureCampaignsSubfolder(customerFolderId: string): Promise<string> {
-  return driveClient.ensureChildFolder(customerFolderId, 'Campaigns')
-}
-
-async function uploadCampaignToDrive(
-  customerFolderId: string,
-  customer: Customer,
-  materialTitle: string,
-  materialUrl: string,
-  markdown: string,
-  aeName: string,
-  signals: CustomerSignals,
-  accountTeamOverride?: import('./types.ts').AccountTeamMember[],
-  existingFileIds?: { driveFileId?: string; driveHtmlFileId?: string },
-  campaignDirective?: string,
-  prebuiltHtml?: string,
-): Promise<{ driveUrl: string; htmlUrl: string; driveFileId: string; driveHtmlFileId: string }> {
-  const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
-  // Use campaign directive for doc name when available, fall back to material title
-  const campaignLabel = campaignDirective
-    ? campaignDirective.split(/[.!?\n]/)[0].trim().substring(0, 60)
-    : materialTitle
-  const docName = `${campaignLabel} - ${customer.name}`
-
-  const accountTeam = accountTeamOverride ?? getAccountTeam(customer)
-  const htmlContent = prebuiltHtml ?? ''
-
-  // Google Doc: upload HTML (not markdown) so all template sections render (#1054)
-  // HTML-to-Google-Doc conversion preserves formatting, tables, and styling
-  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
-  let driveFileId = ''
-  let driveUrl = ''
-
-  if (existingFileIds?.driveFileId) {
-    try {
-      await drive.files.update({
-        fileId: existingFileIds.driveFileId,
-        media: {
-          mimeType: 'text/html',
-          body: Readable.from(Buffer.from(htmlContent)),
-        },
-        supportsAllDrives: true,
-      })
-      driveFileId = existingFileIds.driveFileId
-      driveUrl = `https://docs.google.com/document/d/${driveFileId}/edit`
-      console.log(`[campaigns] Updated Google Doc in-place (PATCH): ${driveUrl}`)
-    } catch (e: any) {
-      if (e?.code === 404 || e?.status === 404) {
-        console.warn(`[campaigns] Cached doc ${existingFileIds.driveFileId} not found — creating new`)
-      } else {
-        console.warn(`[campaigns] Doc update failed — creating new:`, e?.message)
-      }
-    }
-  }
-
-  if (!driveFileId) {
-    const docResponse = await drive.files.create({
-      requestBody: {
-        name: docName,
-        mimeType: 'application/vnd.google-apps.document',
-        parents: [campaignsFolderId],
-      },
-      media: {
-        mimeType: 'text/html',
-        body: Readable.from(Buffer.from(htmlContent)),
-      },
-      fields: 'id,webViewLink',
-      supportsAllDrives: true,
-    })
-    driveFileId = docResponse.data.id ?? ''
-    driveUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${driveFileId}/edit`
-    console.log(`[campaigns] Created Google Doc from HTML: ${docName} → ${driveUrl}`)
-  }
-
-  let htmlFileId = ''
-  let htmlUrl = ''
-
-  if (existingFileIds?.driveHtmlFileId) {
-    try {
-      const updateResponse = await drive.files.update({
-        fileId: existingFileIds.driveHtmlFileId,
-        media: {
-          mimeType: 'text/html',
-          body: Readable.from(Buffer.from(htmlContent)),
-        },
-        fields: 'id,webViewLink',
-        supportsAllDrives: true,
-      })
-      htmlFileId = updateResponse.data.id ?? existingFileIds.driveHtmlFileId
-      htmlUrl = updateResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlFileId}/view`
-      console.log(`[campaigns] Updated HTML file in-place (PATCH): ${htmlFileId}`)
-    } catch (e: any) {
-      if (e?.code === 404 || e?.status === 404) {
-        console.warn(`[campaigns] Cached HTML file ${existingFileIds.driveHtmlFileId} not found (404) — creating new`)
-      } else {
-        console.warn(`[campaigns] HTML update failed — creating new:`, e?.message)
-      }
-    }
-  }
-
-  if (!htmlFileId) {
-    const htmlResponse = await drive.files.create({
-      requestBody: {
-        name: `${docName}.html`,
-        parents: [campaignsFolderId],
-      },
-      media: {
-        mimeType: 'text/html',
-        body: Readable.from(Buffer.from(htmlContent)),
-      },
-      fields: 'id,webViewLink',
-      supportsAllDrives: true,
-    })
-    htmlFileId = htmlResponse.data.id ?? ''
-    htmlUrl = htmlResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlFileId}/view`
-    console.log(`[campaigns] Created HTML file: ${docName}.html → ${htmlUrl}`)
-  }
-
-  return { driveUrl, htmlUrl, driveFileId, driveHtmlFileId: htmlFileId }
 }
 
 // ── Core generation logic ────────────────────────────────────────────────────
@@ -1580,3 +1266,13 @@ export async function generateCampaignFromPlay(
 export { getVoiceProfile, detectVoiceProfile }
 export { extractMaterial, deleteMaterialCache }
 export { extractFromEmail } from './lib/email-extractor.ts'
+export {
+  assessSignalQuality,
+  CampaignQualityGateError,
+  deriveFootprint,
+  deriveThreatSolution,
+  isSpeculativeInstalledBase,
+  scoreStructuredOutput,
+  type SignalQualityAssessment,
+} from './lib/campaign-quality.ts'
+export { uploadCampaignToDrive, ensureCampaignsSubfolder } from './lib/campaign-drive.ts'
