@@ -34,15 +34,15 @@ import { loadCustomerSignals, SIGNAL_TIERS, getSignalTier } from './lib/signal-l
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
-import { getFeatureKeys, getFeatureUrlMap } from './lib/feature-url-registry.ts'
+import { getFeatureKeys } from './lib/feature-url-registry.ts'
 import { CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
 import { getSalesPlayByName } from './lib/saleshub-knowledge-loader.ts'
 import { buildConsumerContext } from './lib/context-orchestrator.ts'
 import { resolveExecutivesByRole, type ResolvedExecutive } from './lib/executive-resolver.ts'
 import { preMatchObjectives, preMatchPeerProofs, type PreMatchedMetric, type PreMatchedPeerProof } from './lib/persona-classifier.ts'
-import { selectPersonas, formatBriefsForPrompt, type Pass0Result, type PersonaBrief } from './lib/persona-selector.ts'
+import { callGeminiForUnifiedSelection, type UnifiedSelectionResult, type UnifiedPersona, type PersonaBrief } from './lib/persona-selector.ts'
 import { extractObjectiveProfile, type CustomerObjectiveProfile } from './modules/intelligence-module.ts'
-import { assertExtractionOutput, assertPass0Output, assertExecResolutionOutput, assertPass1Output, assertPass2Output } from './lib/campaign-contracts.ts'
+import { assertExtractionOutput, assertExecResolutionOutput, assertUnifiedSelectionOutput, assertPass2Output } from './lib/campaign-contracts.ts'
 import { validateCampaignOutput } from './lib/campaign-output-validator.ts'
 
 // ── Threat/solution derivation (ADR-044 Phase 2) ───────────────────────────
@@ -246,34 +246,6 @@ const CAMPAIGN_RESPONSE_SCHEMA = {
           },
         },
         required: ['persona', 'tier', 'subject', 'body', 'actionStep'],
-      },
-    },
-  },
-  required: ['campaignSummary', 'customerContext', 'positioning', 'emails'],
-}
-
-// ── Data selection schema (ADR-043 two-pass) ────────────────────────────────
-
-const CAMPAIGN_SELECTION_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    campaignSummary: { type: 'STRING', description: 'Campaign strategy overview grounded in loaded signals.' },
-    customerContext: { type: 'STRING', description: 'What is happening NOW with this customer.' },
-    positioning: { type: 'STRING', description: 'Red Hat value prop mapping. Include one Challenger Insight.' },
-    emails: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          recipientName: { type: 'STRING', description: 'MUST match exactly one resolved contact name.' },
-          tier: { type: 'STRING', enum: ['executive', 'manager'] },
-          intent: { type: 'STRING', enum: ['nurture', 'expand', 're-engage'] },
-          subject: { type: 'STRING', description: '2-4 word observation, no product/company names.' },
-          signalIndex: { type: 'INTEGER', description: 'Zero-based index into signals array.' },
-          featureKeys: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Exactly 3 keys from URL registry.' },
-          peerProof: { type: 'OBJECT', nullable: true, properties: { playName: { type: 'STRING' }, exampleIndex: { type: 'INTEGER' } } },
-        },
-        required: ['recipientName', 'tier', 'intent', 'subject', 'signalIndex', 'featureKeys'],
       },
     },
   },
@@ -650,29 +622,7 @@ ${personasStr}`
   return markdownParts.join('\n')
 }
 
-// ── Campaign selection (ADR-043 two-pass: Pass 1) ────────────────────────────
-
-const CAMPAIGN_SELECTION_SYSTEM_PROMPT = `You are selecting data points for personalized B2B email campaigns. You are NOT writing emails — you are choosing which data points the template engine should use.
-
-For each resolved contact, select:
-1. The most relevant signal (by index) from the loaded signals
-2. Exactly 3 feature keys from the URL registry enum — each key must be different and relevant to the recipient's role. CRITICAL DIVERSITY RULE: Do NOT reuse the same feature key in the same position (1st, 2nd, or 3rd) across more than 2 emails. Each email's 3 features should be a unique combination. Distribute ansible-automation-platform across different slots — it should NOT be the 2nd key in every email. Aim for at least 8 distinct feature keys across all 6 emails.
-3. A peer proof reference (play name + example index) if one exists in the VERIFIED SOLUTION PLAYS data, otherwise null
-
-GROUNDING RULES:
-- recipientName MUST exactly match one of the resolved contact names provided
-- featureKeys MUST be selected from the provided feature key enum — no invented keys
-- signalIndex MUST be a valid zero-based index into the signals array
-- peerProof.playName MUST match a play from VERIFIED SOLUTION PLAYS — never invent
-- Do NOT write email body text, CTAs, opener prose, signal bridges, feature descriptions, challenger insights, or reference lines — the template engine handles ALL prose generation deterministically
-- Your job is DATA SELECTION ONLY: which signal, which features, which peer proof
-
-CRITICAL: You MUST generate one email entry for EVERY resolved contact provided. Do NOT skip any contacts. If 6 contacts are listed, produce exactly 6 email entries.
-
-TIER DISTRIBUTION: Assign exactly 3 contacts as 'executive' tier and 3 as 'manager' tier. C-level officers (CEO, CFO, CTO, CIO) and VPs are executive tier. Directors, Heads, and Sr. Managers are manager tier.
-
-
-`
+// ── Campaign selection types (used by Pass 2 template assembly) ──────────────
 
 export interface CampaignSelectionResult {
   campaignSummary: string
@@ -689,100 +639,39 @@ export interface CampaignSelectionResult {
   }>
 }
 
-export async function callGeminiForCampaignSelection(opts: {
-  materialTitle: string
-  materialContent: string
-  customerName: string
-  customerSignals: CustomerSignals
-  registrySignals: Signal[]
-  deterministicContext?: string
-  resolvedContacts: Array<{ name: string; title: string; role: string }>
-  structuredPlays?: Array<{ name: string; parentTdp: string; customerWins?: string[]; realWorldExamples?: Array<{ customer: string; outcome: string }>; extractedMetrics?: Array<{ value: string; context: string }>; talkTrack?: string }>
-  campaignDirective?: string
-  temperature?: number
-  objectiveProfile?: CustomerObjectiveProfile
-  preMatchedMetrics?: PreMatchedMetric[]
-  preMatchedPeerProofs?: PreMatchedPeerProof[]
-  pass0Briefs?: PersonaBrief[]
-}): Promise<CampaignSelectionResult> {
-  const featureKeys = getFeatureKeys()
-
-  const signalsSummary = opts.registrySignals.length > 0
-    ? opts.registrySignals
-        .slice(0, 30)
-        .map((s, i) => `[${i}] [${s.type}] ${s.headline}${s.detail ? ' — ' + s.detail.substring(0, 200) : ''}`)
-        .join('\n')
-    : 'No signals available.'
-
-  const contactLines = opts.resolvedContacts.map(c => `- ${c.name}, ${c.title} (role: ${c.role})`).join('\n')
-
-  let solutionPlaysContext = '\n## VERIFIED SOLUTION PLAYS (cite by playName + exampleIndex)\n\n'
-
-  // Source material customer wins go FIRST — these are directly relevant to the campaign topic
-  const materialPeerProofs = extractPeerProofsFromMaterial(opts.materialContent)
-  if (materialPeerProofs.length > 0) {
-    console.log(`[campaigns] Extracted ${materialPeerProofs.length} peer proofs from source material: ${materialPeerProofs.map(p => p.customer).join(', ')}`)
-    solutionPlaysContext += `### Play: "Source Material Customer Wins" ⭐ USE THESE FIRST\n`
-    solutionPlaysContext += `- TDP: Campaign Source Material\n`
-    solutionPlaysContext += `- Real-World Examples:\n`
-    materialPeerProofs.forEach((proof, i) => {
-      solutionPlaysContext += `  [${i}] ${proof.customer}: ${proof.outcome}\n`
-    })
-    solutionPlaysContext += '\n'
-  } else {
-    console.log(`[campaigns] No peer proofs found in source material (${opts.materialContent.length} chars)`)
+function mapUnifiedToSelection(result: UnifiedSelectionResult): CampaignSelectionResult {
+  return {
+    campaignSummary: result.campaignSummary,
+    customerContext: result.customerContext,
+    positioning: result.positioning,
+    emails: result.personas.map(p => ({
+      recipientName: p.recipientName,
+      tier: p.tier,
+      intent: p.intent,
+      subject: p.subject,
+      signalIndex: p.signalIndex,
+      featureKeys: p.featureKeys,
+      peerProof: p.peerProof,
+    })),
   }
+}
 
-  if (opts.structuredPlays && opts.structuredPlays.length > 0) {
-    for (const play of opts.structuredPlays) {
-      solutionPlaysContext += `### Play: "${play.name}"\n`
-      solutionPlaysContext += `- TDP: ${play.parentTdp}\n`
-      if (play.realWorldExamples?.length) {
-        solutionPlaysContext += `- Real-World Examples:\n`
-        play.realWorldExamples.forEach((ex, i) => {
-          solutionPlaysContext += `  [${i}] ${ex.customer}: ${ex.outcome}\n`
-        })
-      }
-      if (play.extractedMetrics?.length) solutionPlaysContext += `- Verified Metrics: ${JSON.stringify(play.extractedMetrics)}\n`
-      solutionPlaysContext += '\n'
-    }
-  }
-
-  const featureUrlMap = getFeatureUrlMap()
-
-  let preMatchContext = ''
-  if (opts.preMatchedMetrics && opts.preMatchedMetrics.length > 0) {
-    preMatchContext = '\n## PRE-MATCHED BUSINESS METRICS (use these data points in the emails — DO NOT select different ones)\n\n'
-    for (const pm of opts.preMatchedMetrics) {
-      preMatchContext += `- ${pm.recipientName} (${pm.recipientTitle}): USE THIS DATA POINT: "${pm.entry.objective}" [${pm.category}]\n`
-    }
-    preMatchContext += '\nThese pre-matched metrics inform signal selection — choose the signal index most relevant to each recipient\'s matched data point.\n'
-  }
-
-  let peerProofContext = ''
-  if (opts.preMatchedPeerProofs && opts.preMatchedPeerProofs.length > 0) {
-    peerProofContext = '\n## PRE-MATCHED PEER PROOFS (use these — DO NOT select different ones)\n\n'
-    for (const pp of opts.preMatchedPeerProofs) {
-      peerProofContext += `- ${pp.recipientName}: ${pp.proof.customer} → ${pp.proof.outcome}\n`
-    }
-    peerProofContext += '\nSet each recipient\'s peerProof to playName: "Source Material Customer Wins" with the matching exampleIndex.\n'
-  }
-
-  const pass0BriefContext = opts.pass0Briefs ? formatBriefsForPrompt(opts.pass0Briefs) : ''
-
-  const userPrompt = `## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}\n\n## Customer: ${opts.customerName}\n\n${opts.deterministicContext ? `### Customer Intelligence (Deterministic):\n${opts.deterministicContext}\n` : ''}${preMatchContext}${peerProofContext}${pass0BriefContext}\n### Loaded Signals (reference by index number):\n${signalsSummary}\n${solutionPlaysContext}${opts.campaignDirective ? `\n## Campaign Directive:\n${opts.campaignDirective}\n` : ''}\n## RESOLVED CONTACTS — select data for EXACTLY these people (use EXACT names):\n${contactLines}\n\n## AVAILABLE FEATURE KEYS — select exactly 3 per email from this list ONLY:\n${featureKeys.join(', ')}\n\n---\nFor EACH of the ${opts.resolvedContacts.length} resolved contacts below, select the most relevant signal, 3 feature keys, and peer proof (if available). Return exactly ${opts.resolvedContacts.length} email entries — one per resolved contact. Do NOT skip any contacts. Return structured selections — do NOT write any prose.`
-
-  const result = await callGemini(CAMPAIGN_SELECTION_SYSTEM_PROMPT, userPrompt, {
-    callType: 'campaign-selection',
-    customerName: opts.customerName,
-    temperature: opts.temperature ?? 0.1,
-    responseSchema: CAMPAIGN_SELECTION_SCHEMA,
-  })
-
-  if (!result.text) throw new Error('Gemini returned empty response for campaign selection')
-
-  const parsed: CampaignSelectionResult = JSON.parse(result.text)
-  return parsed
+function extractBriefsFromUnified(personas: UnifiedPersona[]): PersonaBrief[] {
+  return personas.map(p => ({
+    role: p.role,
+    suggestedTitle: p.suggestedTitle,
+    why: p.why,
+    objectiveMatch: p.objectiveMatch,
+    peerProofCandidates: p.peerProofCandidates,
+    timingTrigger: p.timingTrigger,
+    valueProposition: p.valueProposition,
+    featureKeys: p.featureKeys,
+    competitiveContext: p.competitiveContext,
+    relationshipPath: p.relationshipPath,
+    installedBase: p.installedBase,
+    suppressTriggers: p.suppressTriggers,
+    confidence: p.confidence,
+  }))
 }
 
 // ── Drive persistence ────────────────────────────────────────────────────────
@@ -1216,93 +1105,25 @@ export async function generateCampaign(
     }
   })
 
-  // 3c. AI-powered persona selection via Pass 0 (#1097)
-  let pass0Result: Pass0Result | null = null
-  let pass0Briefs: PersonaBrief[] = []
-
-  // User-provided personas take priority — skip Pass 0 entirely
+  // 3c. Executive resolution — resolve contacts for ALL 5 buying committee roles
+  // The unified selection call (below) handles persona analysis + data selection in one shot.
   const userPersonas = config?.personas?.filter(p => p.enabled)
-  if (!userPersonas?.length && (materialContent || config?.campaignDirective)) {
-    try {
-      const intelligenceText = typeof signals.intelligence === 'string'
-        ? signals.intelligence
-        : (signals.intelligence?.company || '')
-      const accountPlanText = typeof signals.accountPlan === 'string'
-        ? signals.accountPlan
-        : ''
-      const featureKeysList = getFeatureKeys()
-      pass0Result = await selectPersonas({
-        materialTitle,
-        materialContent,
-        campaignDirective: config?.campaignDirective,
-        intelligenceText: intelligenceText || undefined,
-        accountPlanText: accountPlanText || undefined,
-        objectiveProfile: objectiveProfile || undefined,
-        subscriptionSignals: registrySignals.filter(s => s.source === 'subscriptions'),
-        structuredPlays: structuredPlays.map(sp => ({ name: sp.name, parentTdp: sp.parentTdp })),
-        customerName: customer.name,
-        featureKeys: featureKeysList,
-      })
-      if (pass0Result) {
-        pass0Briefs = pass0Result.briefs
-        console.log(`[campaigns] Pass 0 selected ${pass0Result.selectedRoles.length} roles: ${pass0Result.selectedRoles.join(', ')}`)
-
-        // ── Contract assertion: Pass 0 → Exec Resolution ──
-        try {
-          assertPass0Output(pass0Briefs)
-        } catch (e: any) {
-          if (process.env.NODE_ENV === 'test') throw e
-          console.warn(`[campaigns] Pass 0 contract warning:`, e?.message)
-        }
-      } else if (!config?.forceGenerate) {
-        throw new Error(`Pass 0 persona selection returned no results for ${customer.name}. Use forceGenerate to bypass.`)
-      } else {
-        console.warn(`[campaigns] Pass 0 returned null — forceGenerate active, continuing with fallback personas`)
-      }
-    } catch (e: any) {
-      if (e.message?.includes('Pass 0 persona selection returned no results')) throw e
-      if (!config?.forceGenerate) {
-        throw new Error(`Pass 0 persona selection failed for ${customer.name}: ${e?.message}. Use forceGenerate to bypass.`)
-      }
-      console.warn(`[campaigns] Pass 0 failed — forceGenerate active, continuing with fallback: ${e?.message}`)
-    }
-  }
-
-  // Persona cascade: user-provided → Pass 0 → directiveRoleMap → defaults
-  const directiveRoleMap: Record<string, string[]> = {
-    'tax': ['CEO', 'CFO', 'VP Engineering', 'Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
-    'cost': ['Director of Finance', 'VP Finance', 'Head of Procurement'],
-    'saas': ['CEO', 'CFO', 'VP Engineering', 'Director of Finance', 'Sr. Director, Enterprise Info Mgmt', 'Head of IT'],
-    'security': ['CISO', 'Head of Information Security', 'VP Security'],
-    'compliance': ['Director of Finance', 'Head of Compliance', 'General Counsel'],
-  }
-  let directiveRoles: string[] = []
-  if (!pass0Result && !userPersonas?.length && config?.campaignDirective) {
-    const directiveLower = config.campaignDirective.toLowerCase()
-    for (const [keyword, roles] of Object.entries(directiveRoleMap)) {
-      if (directiveLower.includes(keyword)) directiveRoles.push(...roles)
-    }
-    directiveRoles = [...new Set(directiveRoles)]
-  }
 
   let enabledPersonas: Array<{ role: string; enabled: boolean; linkedinUrl?: string; name?: string }>
   if (userPersonas?.length) {
     enabledPersonas = userPersonas
-  } else if (pass0Result) {
-    enabledPersonas = pass0Result.briefs.map(b => ({ role: b.suggestedTitle, enabled: true }))
-  } else if (directiveRoles.length > 0) {
-    enabledPersonas = directiveRoles.slice(0, 6).map(r => ({ role: r, enabled: true }))
   } else {
     enabledPersonas = [
       { role: 'CIO', enabled: true },
-      { role: 'VP Infrastructure', enabled: true },
-      { role: 'VP Operations', enabled: true },
+      { role: 'CTO', enabled: true },
+      { role: 'VP Engineering', enabled: true },
+      { role: 'Solutions Architect', enabled: true },
       { role: 'Director of IT', enabled: true },
-      { role: 'Sr. Manager, Cloud Operations', enabled: true },
       { role: 'Director of Platform Engineering', enabled: true },
+      { role: 'CFO', enabled: true },
+      { role: 'DevOps Engineer', enabled: true },
     ]
   }
-  let resolvedContactsContext = ''
   let resolvedExecs: ResolvedExecutive[] = []
   try {
     const namedPersonas = enabledPersonas.filter(p => p.name)
@@ -1532,10 +1353,6 @@ export async function generateCampaign(
       const tier2Count = resolvedExecs.length - tier1Count
       console.log(`[campaigns] Final contact distribution: ${resolvedExecs.length} total (${tier1Count} Tier 1 intel, ${tier2Count} Tier 2 Gemini) — Email tiers: ${finalExecCount} executive, ${finalManagerCount} manager`)
 
-      const contactLines = resolvedExecs.map(r =>
-        `- ${r.name}, ${r.title}${r.email ? ` (${r.email})` : ''}${r.linkedinUrl ? ` | LinkedIn: ${r.linkedinUrl}` : ''}`
-      )
-      resolvedContactsContext = `\n## RESOLVED TARGET CONTACTS — MANDATORY\nGenerate EXACTLY one email per person below. Use their EXACT name.\n${contactLines.join('\n')}\n`
     }
   } catch (e: any) {
     console.warn(`[campaigns] Executive resolution failed (non-fatal):`, e?.message ?? e)
@@ -1605,8 +1422,7 @@ export async function generateCampaign(
   }
 
   // 4a. Inject source material peer proofs into structuredPlays so buildPeerPattern() can resolve them
-  const augmentedMaterial = materialContent + resolvedContactsContext
-  const materialPeerProofs = extractPeerProofsFromMaterial(augmentedMaterial)
+  const materialPeerProofs = extractPeerProofsFromMaterial(materialContent)
   if (materialPeerProofs.length > 0) {
     structuredPlays.unshift({
       name: 'Source Material Customer Wins',
@@ -1641,8 +1457,8 @@ export async function generateCampaign(
   // Build subscription signals for template data
   const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
 
-  // ── Structured two-pass path (ADR-043) ──────────────────────────────────
-  console.log(`[campaigns] Using STRUCTURED generation path for ${customer.name}`)
+  // ── Unified selection path (ADR-046 Phase 4) ──────────────────────────────
+  console.log(`[campaigns] Using UNIFIED generation path for ${customer.name}`)
 
     // Pre-match objectives deterministically (ADR-045 Phase 4)
     const preMatchedMetrics = objectiveProfile
@@ -1664,28 +1480,54 @@ export async function generateCampaign(
       console.log(`[campaigns] Pre-matched ${preMatchedPeerProofs.length} peer proofs for ${customer.name}`)
     }
 
-    // Pass 1: Gemini data selection
-    const selection = await callGeminiForCampaignSelection({
+    // Unified selection: persona analysis + data selection in one call (ADR-046 Phase 4)
+    const intelligenceText = typeof signals.intelligence === 'string'
+      ? signals.intelligence
+      : (signals.intelligence?.company || '')
+    const accountPlanText = typeof signals.accountPlan === 'string'
+      ? signals.accountPlan
+      : ''
+    const featureKeysList = getFeatureKeys()
+
+    let unifiedResult = await callGeminiForUnifiedSelection({
       materialTitle,
-      materialContent: augmentedMaterial,
+      materialContent,
       customerName: customer.name,
-      customerSignals: signals,
+      campaignDirective: config?.campaignDirective,
+      intelligenceText: intelligenceText || undefined,
+      accountPlanText: accountPlanText || undefined,
+      objectiveProfile: objectiveProfile || undefined,
+      subscriptionSignals: registrySignals.filter(s => s.source === 'subscriptions'),
+      structuredPlays,
+      featureKeys: featureKeysList,
       registrySignals,
       deterministicContext: templateResult.deterministic,
       resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
-      structuredPlays,
-      campaignDirective: config?.campaignDirective,
-      objectiveProfile,
       preMatchedMetrics,
       preMatchedPeerProofs,
-      pass0Briefs,
     })
+
+    if (!unifiedResult) {
+      if (!config?.forceGenerate) {
+        throw new Error(`Unified selection returned no results for ${customer.name}. Use forceGenerate to bypass.`)
+      }
+      console.warn(`[campaigns] Unified selection returned null — forceGenerate active`)
+      throw new Error(`Unified selection returned null for ${customer.name} even with forceGenerate`)
+    }
+
+    console.log(`[campaigns] Unified selection: ${unifiedResult.personas.length} personas, theme="${unifiedResult.campaignTheme}"`)
+
+    // Map unified result to CampaignSelectionResult for Pass 2 compatibility
+    let selection = mapUnifiedToSelection(unifiedResult)
+
+    // Extract PersonaBrief[] from unified personas for downstream consumers
+    let pass0Briefs = extractBriefsFromUnified(unifiedResult.personas)
 
     // Validate selection
     const validationResult = validateCampaignSelection(
       selection,
       resolvedExecs.map(e => e.name),
-      getFeatureKeys(),
+      featureKeysList,
       registrySignals.length,
     )
     if (!validationResult.valid) {
@@ -1694,12 +1536,12 @@ export async function generateCampaign(
       console.log(`[campaigns] Selection validation passed for ${customer.name}`)
     }
 
-    // ── Contract assertion: Pass 1 → Pass 2 ──
+    // ── Contract assertion: Unified Selection → Pass 2 ──
     try {
-      assertPass1Output(selection, resolvedExecs.length)
+      assertUnifiedSelectionOutput(unifiedResult, resolvedExecs.length)
     } catch (e: any) {
       if (process.env.NODE_ENV === 'test') throw e
-      console.warn(`[campaigns] Pass 1 contract warning:`, e?.message)
+      console.warn(`[campaigns] Unified selection contract warning:`, e?.message)
     }
 
     // ── LinkRegistry: single source of truth for link lifecycle ──
@@ -1724,30 +1566,37 @@ export async function generateCampaign(
     }
 
     if (selection.emails.length < resolvedExecs.length && selection.emails.length < 6) {
-      console.warn(`[campaigns] Email count ${selection.emails.length}/${resolvedExecs.length} — retrying at temperature 0.05`)
+      console.warn(`[campaigns] Email count ${selection.emails.length}/${resolvedExecs.length} — retrying unified call`)
       try {
-        const retrySelection = await callGeminiForCampaignSelection({
+        const retryResult = await callGeminiForUnifiedSelection({
           materialTitle,
-          materialContent: augmentedMaterial,
+          materialContent,
           customerName: customer.name,
-          customerSignals: signals,
+          campaignDirective: config?.campaignDirective,
+          intelligenceText: intelligenceText || undefined,
+          accountPlanText: accountPlanText || undefined,
+          objectiveProfile: objectiveProfile || undefined,
+          subscriptionSignals: registrySignals.filter(s => s.source === 'subscriptions'),
+          structuredPlays,
+          featureKeys: featureKeysList,
           registrySignals,
           deterministicContext: templateResult.deterministic,
           resolvedContacts: resolvedExecs.map(e => ({ name: e.name, title: e.title, role: e.role })),
-          structuredPlays,
-          campaignDirective: config?.campaignDirective,
-          temperature: 0.05,
+          preMatchedMetrics,
+          preMatchedPeerProofs,
         })
-        if (retrySelection.emails.length > selection.emails.length) {
-          selection.emails = retrySelection.emails
-          console.log(`[campaigns] Retry produced ${retrySelection.emails.length} emails — using retry`)
+        if (retryResult && retryResult.personas.length > selection.emails.length) {
+          unifiedResult = retryResult
+          selection = mapUnifiedToSelection(retryResult)
+          pass0Briefs = extractBriefsFromUnified(retryResult.personas)
+          console.log(`[campaigns] Retry produced ${retryResult.personas.length} personas — using retry`)
         }
       } catch (e: any) {
         console.warn(`[campaigns] Retry failed (using original): ${e?.message}`)
       }
     }
 
-    // Derive BV Talking Points deterministically — Pass 0 briefs first, then plays
+    // Derive BV Talking Points deterministically — unified briefs first, then plays
     let bvTalkingPoints: BVTalkingPoint[] = []
     if (pass0Briefs.length > 0) {
       for (const brief of pass0Briefs) {

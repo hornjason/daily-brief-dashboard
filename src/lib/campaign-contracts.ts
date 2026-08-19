@@ -71,30 +71,70 @@ export function assertExtractionOutput(data: { materialContent: string; material
 }
 
 /**
- * Boundary: Pass 0 → Executive Resolution
+ * Boundary: Unified Selection → Pass 2
  *
- * Validates that Pass 0 generated persona briefs with required fields.
+ * Validates that the unified selection produced persona entries with all required
+ * fields for template assembly: role, suggestedTitle, recipientName, subject,
+ * signalIndex, featureKeys, and count matching.
  *
- * @param briefs - Pass 0 persona briefs
+ * @param result - Unified selection result
+ * @param expectedContactCount - Number of resolved contacts (for persona count validation)
  */
-export function assertPass0Output(briefs: Array<{ role: string; suggestedTitle?: string; valueProposition?: string }>): void {
-  const boundary = 'Pass 0 → Exec Resolution'
+export function assertUnifiedSelectionOutput(
+  result: {
+    personas: Array<{
+      role: string
+      suggestedTitle: string
+      recipientName: string
+      subject: string
+      signalIndex: number
+      featureKeys: string[]
+      tier?: string
+      intent?: string
+    }>
+  },
+  expectedContactCount: number,
+): void {
+  const boundary = 'Unified Selection → Pass 2'
 
-  if (!briefs || briefs.length < 3) {
-    contractViolation(boundary, `Expected at least 3 persona briefs, got ${briefs?.length ?? 0} — executive resolution needs personas to target`)
+  if (!result.personas || result.personas.length === 0) {
+    contractViolation(boundary, `No personas in unified selection output — Pass 2 has nothing to assemble`)
     return
   }
 
-  // Check each brief has required fields
-  for (let i = 0; i < briefs.length; i++) {
-    const brief = briefs[i]
+  if (result.personas.length < 3) {
+    contractViolation(boundary, `Expected at least 3 personas, got ${result.personas.length}`)
+  }
 
-    if (!brief.role || brief.role.trim().length === 0) {
-      contractViolation(boundary, `Brief ${i} missing role field — executive resolution needs role to match contacts`)
+  if (result.personas.length !== expectedContactCount) {
+    contractViolation(boundary, `Persona count mismatch: ${result.personas.length} personas for ${expectedContactCount} contacts — should be 1:1`)
+  }
+
+  for (let i = 0; i < result.personas.length; i++) {
+    const persona = result.personas[i]
+
+    if (!persona.role || persona.role.trim().length === 0) {
+      contractViolation(boundary, `Persona ${i} missing role — template needs role for personalization`)
     }
 
-    if (!brief.suggestedTitle || brief.suggestedTitle.trim().length === 0) {
-      contractViolation(boundary, `Brief ${i} missing suggestedTitle — email personalization needs title`)
+    if (!persona.suggestedTitle || persona.suggestedTitle.trim().length === 0) {
+      contractViolation(boundary, `Persona ${i} missing suggestedTitle — email personalization needs title`)
+    }
+
+    if (!persona.recipientName || persona.recipientName.trim().length === 0) {
+      contractViolation(boundary, `Persona ${i} missing recipientName — template needs recipient to personalize`)
+    }
+
+    if (!persona.subject || persona.subject.trim().length === 0) {
+      contractViolation(boundary, `Persona ${i} missing subject — template needs subject line`)
+    }
+
+    if (typeof persona.signalIndex !== 'number' || persona.signalIndex < 0) {
+      contractViolation(boundary, `Persona ${i} has invalid signalIndex: ${persona.signalIndex} — template needs valid signal reference`)
+    }
+
+    if (!persona.featureKeys || persona.featureKeys.length !== 3) {
+      contractViolation(boundary, `Persona ${i} has ${persona.featureKeys?.length ?? 0} featureKeys, expected exactly 3 — template needs 3 feature bullets`)
     }
   }
 }
@@ -148,59 +188,6 @@ export function assertExecResolutionOutput(execs: Array<{ name: string; title: s
   }
 }
 
-/**
- * Boundary: Pass 1 (Gemini Selection) → Pass 2 (Template Assembly)
- *
- * Validates that Pass 1 selection output has all required fields for template assembly.
- *
- * @param selection - Structured campaign selection from Pass 1
- * @param execCount - Number of resolved executives (for email count validation)
- */
-export function assertPass1Output(
-  selection: {
-    emails: Array<{
-      recipientName: string
-      subject: string
-      signalIndex: number
-      featureKeys: string[]
-      tier?: string
-      intent?: string
-    }>
-  },
-  execCount: number,
-): void {
-  const boundary = 'Pass 1 → Pass 2'
-
-  if (!selection.emails || selection.emails.length === 0) {
-    contractViolation(boundary, `No emails in selection output — Pass 2 has nothing to assemble`)
-    return
-  }
-
-  if (selection.emails.length !== execCount) {
-    contractViolation(boundary, `Email count mismatch: ${selection.emails.length} emails for ${execCount} contacts — should be 1:1`)
-  }
-
-  // Check each email has required fields for template assembly
-  for (let i = 0; i < selection.emails.length; i++) {
-    const email = selection.emails[i]
-
-    if (!email.recipientName || email.recipientName.trim().length === 0) {
-      contractViolation(boundary, `Email ${i} missing recipientName — template needs recipient to personalize`)
-    }
-
-    if (!email.subject || email.subject.trim().length === 0) {
-      contractViolation(boundary, `Email ${i} missing subject — template needs subject line`)
-    }
-
-    if (typeof email.signalIndex !== 'number' || email.signalIndex < 0) {
-      contractViolation(boundary, `Email ${i} has invalid signalIndex: ${email.signalIndex} — template needs valid signal reference`)
-    }
-
-    if (!email.featureKeys || email.featureKeys.length !== 3) {
-      contractViolation(boundary, `Email ${i} has ${email.featureKeys?.length ?? 0} featureKeys, expected exactly 3 — template needs 3 feature bullets`)
-    }
-  }
-}
 
 /**
  * Boundary: Pass 2 (Template Assembly) → Drive Upload

@@ -167,19 +167,6 @@ function extractRelevantSections(text: string, targetSections: string[], heading
   return relevant.length > 0 ? `\n## ${heading}\n${relevant.join('\n\n')}` : ''
 }
 
-export function formatBriefsForPrompt(briefs: PersonaBrief[]): string {
-  if (briefs.length === 0) return ''
-  const briefSection = briefs.map(b =>
-    `### ${b.role} (${b.suggestedTitle})\n` +
-    `Why: ${b.why}\n` +
-    `Value prop: ${b.valueProposition}\n` +
-    `Objective: ${b.objectiveMatch}\n` +
-    `Feature keys: ${b.featureKeys.join(', ')}\n` +
-    (b.timingTrigger ? `Timing: ${b.timingTrigger}\n` : '') +
-    (b.peerProofCandidates.length > 0 ? `Proof candidates: ${b.peerProofCandidates.map(p => `${p.company}: ${p.outcome}`).join('; ')}\n` : ''),
-  ).join('\n')
-  return `\n## PERSONA BRIEFS (constraints)\nUse these pre-selected personas. Select peer proofs from candidates. Use pre-selected feature keys.\n${briefSection}\n`
-}
 
 export function buildPass0Prompt(opts: Pass0PromptInput): string {
   const parts: string[] = []
