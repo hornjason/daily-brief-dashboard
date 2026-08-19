@@ -102,6 +102,25 @@ function truncateAtSentence(text: string, maxChars: number): string {
   return upToLimit + '…'
 }
 
+function repairTruncatedCurrency(text: string, fullSource?: string): string {
+  // If text ends with a bare dollar amount ($39, $2.5), try to restore the unit from fullSource
+  const trailingDollar = text.match(/\$[\d,.]+\s*[…]?$/)
+  if (!trailingDollar) return text
+  if (fullSource) {
+    const dollarVal = trailingDollar[0].replace(/[…\s]/g, '')
+    const unitMatch = fullSource.match(new RegExp(`\\${dollarVal.replace('.', '\\.')}\\s*(million|billion|M|B)\\b`, 'i'))
+    if (unitMatch) {
+      return text.replace(/[…]?$/, '') + ` ${unitMatch[1]}`
+    }
+  }
+  // Heuristic: bare dollar amounts without "million/billion" are almost always truncated
+  const amt = parseFloat(trailingDollar[0].replace(/[$,…]/g, ''))
+  if (amt > 0 && amt < 1000 && !text.match(/\$[\d,.]+\s*(?:million|billion|M|B)\b/i)) {
+    return text.replace(/[…]?$/, '') + ' million'
+  }
+  return text
+}
+
 function convertMarkdownBullets(text: string): string {
   const lines = text.split('\n')
   let html = ''
@@ -675,9 +694,10 @@ export function renderObjectiveBlock(
 
     cleanObj = cleanObj.trim()
 
-    const objText = cleanObj.length > 80
+    const rawObjText = cleanObj.length > 80
       ? truncateAtSentence(cleanObj.split(/[.;]/)[0]?.trim() || cleanObj, 80)
       : cleanObj
+    const objText = repairTruncatedCurrency(rawObjText, objective)
     const { threat, solution } = campaignTheme
     const templates: Record<string, string> = {
       financial: `With ${objText}, ${threat} creates a direct headwind — ${solution} protects this trajectory.`,
@@ -690,9 +710,10 @@ export function renderObjectiveBlock(
   }
 
   if (preMatch) {
-    const text = preMatch.entry.metric
+    const rawText = preMatch.entry.metric
       ? `${preMatch.entry.metric} ${preMatch.entry.objective.replace(/^[^:]+:\s*/, '').replace(preMatch.entry.metric, '').trim()}`
       : preMatch.entry.objective
+    const text = repairTruncatedCurrency(rawText, preMatch.entry.objective)
     return renderTemplate(preMatch.category, text)
   }
 
@@ -919,6 +940,15 @@ export function buildOpener(
   ]
 
   const variants = tier === 'executive' ? EXEC_OPENERS : MGR_OPENERS
+  // Dedup signal-based openers the same way brief-field openers are deduped
+  for (let v = 0; v < variants.length; v++) {
+    const candidate = variants[(openerVariant + v) % variants.length]
+    const key = candidate.slice(0, 50)
+    if (!usedOpeners || !usedOpeners.has(key)) {
+      if (usedOpeners) usedOpeners.add(key)
+      return candidate
+    }
+  }
   return variants[openerVariant % variants.length]
 }
 
@@ -1071,7 +1101,7 @@ export function buildFeatureBullets(
       applicationSentence = getCapabilityDescription(key)
     }
 
-    if (campaignTheme) {
+    if (campaignTheme && i === 0) {
       const theme = campaignTheme.toLowerCase()
       if (theme.includes('tax') || theme.includes('cost')) {
         applicationSentence += ' — with self-managed deployment, zero SaaS tax exposure'
@@ -1144,11 +1174,22 @@ export function buildPeerPattern(
   peerProof: { playName: string; exampleIndex: number } | null,
   structuredPlays: StructuredPlay[],
   preMatchedProof?: { proof: { customer: string; outcome: string } },
+  usedPeerCompanies?: Set<string>,
 ): string {
+  const tryFormat = (customer: string, outcome: string): string | null => {
+    if (usedPeerCompanies?.has(customer)) return null
+    const formatted = formatPeerProofLine(customer, outcome)
+    if (formatted) {
+      usedPeerCompanies?.add(customer)
+      return formatted
+    }
+    return null
+  }
+
   // Priority 1: Pre-matched proof from Pass 0 persona briefs
   if (preMatchedProof) {
-    const formatted = formatPeerProofLine(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
-    if (formatted) return formatted
+    const result = tryFormat(preMatchedProof.proof.customer, preMatchedProof.proof.outcome)
+    if (result) return result
   }
 
   // Priority 2: Gemini-selected proof from material extraction
@@ -1158,17 +1199,18 @@ export function buildPeerPattern(
       || structuredPlays.find(p => p.name.toLowerCase().includes(target) || target.includes(p.name.toLowerCase()))
     const example = play?.realWorldExamples?.[peerProof.exampleIndex]
     if (example) {
-      const formatted = formatPeerProofLine(example.customer, example.outcome)
-      if (formatted) return formatted
+      const result = tryFormat(example.customer, example.outcome)
+      if (result) return result
     }
     if (!play) console.warn(`[template] PEER PROOF MISS: play "${peerProof.playName}" not found in ${structuredPlays.map(p => p.name).join(', ')}`)
   }
 
-  // Priority 3: Fallback to any available SalesHub play examples
+  // Priority 3: Fallback to any available SalesHub play examples — rotate through all examples
   for (const play of structuredPlays) {
-    if (play.realWorldExamples?.[0]) {
-      const formatted = formatPeerProofLine(play.realWorldExamples[0].customer, play.realWorldExamples[0].outcome)
-      if (formatted) return formatted
+    const examples = play.realWorldExamples || []
+    for (const ex of examples) {
+      const result = tryFormat(ex.customer, ex.outcome)
+      if (result) return result
     }
     const metric = play.extractedMetrics?.[0]
     if (metric) return `Organizations in similar positions have seen ${metric.value} — ${metric.context}.`
@@ -1693,8 +1735,19 @@ ${rawBody}`
     // Re-inject links that Gemini stripped — match product/article names and restore markdown links
     const rawLinks = [...rawBody.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)]
     for (const [, linkText, url] of rawLinks) {
-      if (polished.includes(linkText) && !polished.includes(`[${linkText}](`)) {
-        polished = polished.replace(linkText, `[${linkText}](${url})`)
+      if (!polished.includes(linkText)) continue
+      if (polished.includes(`[${linkText}](`)) continue
+      // Skip if text is already inside an HTML <a> tag
+      const htmlTagPattern = new RegExp(`<a\\b[^>]*>[^<]*${linkText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*</a>`, 'i')
+      if (htmlTagPattern.test(polished)) continue
+      // Clean any partial/broken markdown syntax around the text before re-injecting
+      const escapedText = linkText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      // Strip unmatched brackets/parens surrounding the link text (Gemini garbling)
+      polished = polished.replace(new RegExp(`[\\[\\]]*${escapedText}[\\]\\[]*\\(?[^)\\s]{0,5}\\)?`, 'g'), linkText)
+      // Only re-inject if the text appears as standalone (not part of a longer word/phrase)
+      const standalonePattern = new RegExp(`(?<![\\[\\(])${escapedText}(?![\\]\\)])`)
+      if (standalonePattern.test(polished)) {
+        polished = polished.replace(standalonePattern, `[${linkText}](${url})`)
       }
     }
 
@@ -1763,8 +1816,9 @@ export async function generateCampaignFromStructured(
   // Track quality check results for dynamic checklist
   const qualityResults: EmailQualityResult[] = []
 
-  // Track used openers for dedup across emails
+  // Track used openers and peer companies for dedup across emails
   const usedOpeners = new Set<string>()
+  const usedPeerCompanies = new Set<string>()
 
   // Build per-email HTML
   const execEmailsHtml: string[] = []
@@ -1842,7 +1896,7 @@ export async function generateCampaignFromStructured(
     const featureBullets = buildFeatureBullets(email.featureKeys, email.tier, data.campaignThreat || data.campaignSolution, matchedBrief)
     const referenceLine = sanitizeReferenceLine(buildReferenceLine(data.sourceUrls || [], data.materialUrlMap), data.sourceUrls)
     const preMatchedProof = data.preMatchedPeerProofs?.find(p => p.recipientName === email.recipientName)
-    const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof)
+    const peerPattern = buildPeerPattern(email.peerProof, data.structuredPlays, preMatchedProof, usedPeerCompanies)
     const challengerFrame = buildChallengerFrame(signal, i)
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
