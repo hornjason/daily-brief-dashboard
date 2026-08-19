@@ -859,6 +859,8 @@ export function buildOpener(
       cleaned = cleaned.replace(/\bthis persona\b.*$/i, '').trim()
       cleaned = cleaned.replace(/^(lead|empower|drive|enable|accelerate|build|deploy|implement|consolidate|modernize|migrate|transform)\b\s*/i, '').trim()
       cleaned = cleaned.replace(/\btheir\b/gi, 'your')
+      cleaned = cleaned.replace(/\bhis\b/gi, 'your')
+      cleaned = cleaned.replace(/\bher\b/gi, 'your')
       cleaned = cleaned.replace(/\bthe company's\b/gi, 'your')
       cleaned = cleaned.replace(/\bthe organization's\b/gi, 'your')
       if (customerName) {
@@ -866,10 +868,14 @@ export function buildOpener(
         cleaned = cleaned.replace(possessivePattern, 'your')
       }
       cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|high|low)\s*\.?\s*$/, '').trim()
-      // Ensure sentence has a grammatical subject — verb-leading fragments read broken
-      const VERB_LEADING = /^(?:directly\s+)?(?:aligns|addresses|creates|drives|enables|supports|delivers|provides|positions|represents|demonstrates|offers|reduces|increases|improves|ensures|complements|connects|targets|reflects|highlights|leverages|reinforces|strengthens|validates|confirms|correlates|resonates|maps|speaks|opens|builds|extends|integrates|unifies|consolidates)\b/i
+      const VERB_LEADING = /^(?:directly\s+)?(?:aligns|addresses|creates|drives|enables|supports|delivers|provides|positions|represents|demonstrates|offers|reduces|increases|improves|ensures|complements|connects|targets|reflects|highlights|leverages|reinforces|strengthens|validates|confirms|correlates|resonates|maps|speaks|opens|builds|extends|integrates|unifies|consolidates)\b\s*(?:\w+ly\s+)?(?:with\s+)?/i
       if (VERB_LEADING.test(cleaned)) {
-        cleaned = 'this ' + cleaned.charAt(0).toLowerCase() + cleaned.slice(1)
+        const stripped = cleaned.replace(VERB_LEADING, '').trim()
+        if (stripped.length >= 20) {
+          cleaned = stripped
+        } else {
+          return null
+        }
       }
       if (cleaned.length < 20) return null
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
@@ -877,8 +883,8 @@ export function buildOpener(
       const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
       if (first.length < 20) return null
       let result = first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
-      // Post-truncation cleanup: strip trailing conjunctions/prepositions left by truncation
-      result = result.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|or|the|a|an|that|this|is|are|was|were)\s*\.?\s*$/, '').trim()
+      result = result.replace(/\s+\b(?:that|which|where|who)\s+\S+\s*$/, '').trim()
+      result = result.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|or|the|a|an|that|which|where|who|this|is|are|was|were)\s*\.?\s*$/, '').trim()
       return result
     }
     const smartLc = (s: string): string => {
@@ -902,7 +908,7 @@ export function buildOpener(
         const key = field.slice(0, 50)
         if (!usedOpeners || !usedOpeners.has(key)) {
           if (usedOpeners) usedOpeners.add(key)
-          return validateBlock('opener', toBlock(`${firstName}, ${field}.`))
+          return validateBlock('opener', toBlock(`${firstName}, ${field.trim()}.`))
         }
       }
     }

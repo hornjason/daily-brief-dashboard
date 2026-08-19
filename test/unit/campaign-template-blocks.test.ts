@@ -782,23 +782,24 @@ describe('renderObjectiveBlock — persona fallback', () => {
 
 // ── renderObjectiveBlock — preMatch (ADR-045) ─────────────────────────────
 
-describe('buildOpener — verb-leading subject fix (#197)', () => {
-  it('prepends "this" when brief field starts with a verb like "aligns"', () => {
+describe('buildOpener — verb-leading subject fix (#197, #1165)', () => {
+  it('strips verb-leading text and keeps the meaningful content', () => {
     const brief = makeBrief({
       objectiveMatch: "aligns directly with A10's strong focus on profitability",
     })
     const result = buildOpener(0, testSignals, 0, 'Dhrupad Trivedi', 'manager', brief, 'A10').text
     expect(result).not.toMatch(/^Dhrupad, aligns\b/i)
-    expect(result).toContain('this')
+    expect(result).not.toContain('this aligns')
+    expect(result).toContain('your strong focus on profitability')
   })
 
-  it('catches uppercase verb-leading text like "Aligns"', () => {
+  it('strips uppercase verb-leading text like "Aligns"', () => {
     const brief = makeBrief({
       objectiveMatch: 'Aligns perfectly with your infrastructure modernization goals',
     })
     const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
-    expect(result).toContain('this aligns')
     expect(result).not.toMatch(/^Test, Aligns\b/)
+    expect(result).toContain('your infrastructure modernization goals')
   })
 
   it('catches "Directly addresses" as verb-leading', () => {
@@ -1044,5 +1045,93 @@ ${emailHtml}</body></html>`
     const blockers = result.failures.filter(f => f.severity === 'blocker')
     expect(blockers).toEqual([])
     expect(result.pass).toBe(true)
+  })
+})
+
+// ── #1165 opener quality fixes ────────────────────────────────────────────
+
+describe('buildOpener — his/her pronoun replacement (#1165)', () => {
+  it('replaces "his" with "your" in brief field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'aligns with his security objective to reduce risk',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Sean Pike', 'manager', brief).text
+    expect(result).not.toContain('his')
+    expect(result).toContain('your')
+  })
+
+  it('replaces "her" with "your" in brief field', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'supports her operational goals for automation across the enterprise',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Michelle Chen', 'manager', brief).text
+    expect(result).not.toContain('her')
+    expect(result).toContain('your')
+  })
+
+  it('does not replace "his" inside words like "history"', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'the history of infrastructure modernization drives urgency',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    expect(result).toContain('history')
+  })
+
+  it('does not replace "her" inside words like "there"', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'there is strong alignment with automation goals here',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    expect(result).toContain('there')
+  })
+})
+
+describe('buildOpener — verb-leading natural construction (#1165)', () => {
+  it('verb-leading text reads naturally without awkward "this" prefix', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'aligns with your security objectives across the enterprise',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Sean Pike', 'manager', brief).text
+    expect(result).not.toMatch(/^Sean, this aligns/i)
+    expect(result).toContain('Sean')
+  })
+})
+
+describe('buildOpener — truncation does not leave mid-clause fragments (#1165)', () => {
+  it('does not end with dangling "that"', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'your engineering teams with a unified automation platform that boosts operational efficiency across all data centers and regions permanently',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Michelle Lee', 'manager', brief).text
+    expect(result).not.toMatch(/\bthat\.\s*$/)
+    expect(result).not.toMatch(/\bthat\s*$/)
+  })
+
+  it('does not end with dangling "which"', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'infrastructure consolidation strategy which reduces complexity across environments and improves the overall team productivity significantly',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    expect(result).not.toMatch(/\bwhich\.\s*$/)
+    expect(result).not.toMatch(/\bwhich\s*$/)
+  })
+})
+
+describe('buildOpener — no trailing space before punctuation (#1165)', () => {
+  it('trims field before adding period', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'the state of California has set a deadline ',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Michelle Tran', 'manager', brief).text
+    expect(result).not.toMatch(/\s+\./)
+    expect(result).not.toMatch(/\s\.$/)
+  })
+
+  it('trims field with multiple trailing spaces', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'modernize the automation stack   ',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief).text
+    expect(result).not.toMatch(/\s+\./)
   })
 })
