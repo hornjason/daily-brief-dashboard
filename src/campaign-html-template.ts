@@ -924,7 +924,14 @@ export function buildOpener(
     observation = observation.charAt(0).toUpperCase() + observation.slice(1)
   }
 
+  const EXEC_GREETINGS = [
+    `${firstName}, I noticed ${observation} and thought of your team immediately.`,
+    `Hi ${firstName} — saw ${observation} and wanted to share a quick thought.`,
+    `${firstName}, a few of us were discussing ${observation} and your name came up.`,
+  ]
+
   const EXEC_OPENERS = [
+    ...EXEC_GREETINGS,
     `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`,
     `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`,
     `${firstName}, ${observation} is creating a window that closes faster than most planning cycles account for.`,
@@ -932,7 +939,14 @@ export function buildOpener(
     `Hi ${firstName}, ${observation} is already changing how your peers allocate infrastructure investment.`,
   ]
 
+  const MGR_GREETINGS = [
+    `Hi ${firstName} — ${observation} caught my eye and I think it's relevant to what your team is working on.`,
+    `${firstName}, wanted to flag ${observation} — it has some practical implications worth a look.`,
+    `Hi ${firstName}, came across ${observation} and thought it was worth a quick note.`,
+  ]
+
   const MGR_OPENERS = [
+    ...MGR_GREETINGS,
     `Hi ${firstName}, ${observation} is driving new priorities for leaders in your position.`,
     `Hi ${firstName}, ${observation} has direct implications for how your team operates day to day.`,
     `${firstName}, ${observation} is worth a closer look — the technical implications run deeper than the headline.`,
@@ -1866,25 +1880,7 @@ export async function generateCampaignFromStructured(
       email.recipientName,
     )
 
-    // Pass 3: Polish the assembled email body via Gemini
-    let finalBody = assembled.body
-    if (data.enablePolish !== false) {
-      const wordLimit = email.tier === 'executive'
-        ? voiceTokens.wordBudget.exec
-        : voiceTokens.wordBudget.manager
-      const theme = data.campaignThreat && data.campaignSolution
-        ? `${data.campaignThreat} → ${data.campaignSolution}`
-        : data.materialTitle || ''
-      finalBody = await polishEmailBody(
-        assembled.body,
-        email.recipientName,
-        recipientExec?.title || email.tier,
-        email.tier,
-        data.customerName,
-        theme,
-        wordLimit,
-      )
-    }
+    const finalBody = assembled.body
 
     // Run quality checks on polished email
     const qualityInput: EmailCheckInput = {
@@ -1958,7 +1954,7 @@ ${renderContactsSection(contacts)}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
-  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Three-Pass (ADR-043): Gemini selection + deterministic assembly + Gemini polish</td></tr>
+  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Two-Pass (ADR-043): Gemini selection + deterministic assembly</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(aeName)} (${voiceTokens.formality}, ${voiceTokens.assertionLevel})</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
     data.accountTeam.length > 0
@@ -1968,7 +1964,7 @@ ${renderContactsSection(contacts)}
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">${execEmailsHtml.length} Executive (${voiceTokens.wordBudget.exec} words) + ${managerEmailsHtml.length} Manager (${voiceTokens.wordBudget.manager} words)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${personaList}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">${data.signals.length} signals loaded</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa;">Assembly</td><td>8-block deterministic template + Gemini polish (facts-only rewrite, 0.1 temp)</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa;">Assembly</td><td>8-block deterministic template (no LLM polish)</td></tr>
 </table>
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: ${BRAND_RED}; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
