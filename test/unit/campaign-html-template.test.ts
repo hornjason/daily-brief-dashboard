@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, assembleEmail, type UsedObjective } from '../../src/campaign-html-template.ts'
+import { generateCampaignFromStructured, renderMetricsTable, renderObjectiveBlock, assembleEmail, isInternalUrl, type UsedObjective } from '../../src/campaign-html-template.ts'
 import type { PersonaBrief } from '../../src/lib/persona-selector.ts'
 import type { CustomerObjectiveProfile } from '../../src/modules/intelligence-module.ts'
 
@@ -443,5 +443,52 @@ describe('email body formatting — bullets and links (#1149)', () => {
     )
 
     expect(html).toContain('hklaw.com')
+  })
+})
+
+describe('internal URLs in Reference Materials (#1150)', () => {
+  const baseSelection = {
+    campaignSummary: 'Test campaign',
+    customerContext: 'Test context',
+    positioning: 'Test positioning',
+    emails: [] as any[],
+  }
+
+  const baseData = {
+    resolvedExecs: [],
+    signals: [],
+    voiceProfile: null,
+    accountTeam: [],
+    subscriptions: [],
+    structuredPlays: [],
+    customerName: 'Test Corp',
+    materialTitle: 'SSP Deck',
+    materialUrl: 'https://docs.google.com/presentation/d/abc123',
+    generatedDate: '2026-08-19',
+    enablePolish: false,
+  }
+
+  it('renders Google Docs URL in reference materials section', async () => {
+    const html = await generateCampaignFromStructured(baseSelection, {
+      ...baseData,
+      referenceMaterials: [
+        { resource: 'SSP Deck - Cloud Strategy', url: 'https://docs.google.com/presentation/d/abc123', keyTakeaway: 'Strategic selling deck for cloud migration' },
+        { resource: 'Portal Analysis', url: 'https://access.redhat.com/articles/12345', keyTakeaway: 'Customer support case trends' },
+      ],
+    })
+
+    expect(html).toContain('docs.google.com/presentation/d/abc123')
+    expect(html).toContain('access.redhat.com/articles/12345')
+    expect(html).toContain('SSP Deck - Cloud Strategy')
+    expect(html).toContain('Portal Analysis')
+  })
+
+  it('isInternalUrl still identifies internal domains', () => {
+    expect(isInternalUrl('https://docs.google.com/document/d/xyz')).toBe(true)
+    expect(isInternalUrl('https://drive.google.com/file/d/xyz')).toBe(true)
+    expect(isInternalUrl('https://slides.google.com/presentation/d/xyz')).toBe(true)
+    expect(isInternalUrl('https://access.redhat.com/articles/12345')).toBe(true)
+    expect(isInternalUrl('https://salesforce.com/opp/123')).toBe(true)
+    expect(isInternalUrl('https://www.gartner.com/report/123')).toBe(false)
   })
 })

@@ -1715,13 +1715,13 @@ export async function generateCampaign(
     }
     // Filter internal URLs and homepage/generic URLs from materialUrlMap
     for (const [name, url] of materialUrlMap.entries()) {
-      if (isInternalUrl(url) || isHomepageUrl(url)) materialUrlMap.delete(name)
+      if (isHomepageUrl(url)) materialUrlMap.delete(name)
     }
 
     // Fallback: populate from referenceMaterialData (confirmed URLs from extraction)
     if (materialUrlMap.size === 0 && referenceMaterialData.length > 0) {
       for (const ref of referenceMaterialData) {
-        if (ref.url && !isInternalUrl(ref.url) && !isHomepageUrl(ref.url)) {
+        if (ref.url && !isHomepageUrl(ref.url)) {
           materialUrlMap.set(ref.title, ref.url)
         }
       }
@@ -1731,7 +1731,7 @@ export async function generateCampaign(
     const deterministicRefMaterials: Array<{ resource: string; url?: string; keyTakeaway: string }> = []
     if (referenceMaterialData.length > 0) {
       for (const ref of referenceMaterialData) {
-        if (ref.url && ref.title && !isInternalUrl(ref.url) && !isHomepageUrl(ref.url)) {
+        if (ref.url && ref.title && !isHomepageUrl(ref.url)) {
           deterministicRefMaterials.push({ resource: ref.title, url: ref.url, keyTakeaway: ref.excerpt ? (ref.excerpt.length > 200 ? ref.excerpt.slice(0, 200) + '...' : ref.excerpt) : 'Source document referenced in campaign material.' })
         }
       }
