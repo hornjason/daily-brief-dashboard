@@ -833,6 +833,7 @@ export function buildOpener(
         .replace(/\s+/g, ' ')
         .trim()
       cleaned = cleaned.replace(/\b(?:show how|highlight|position|demonstrate|emphasize)\b.*$/i, '').trim()
+      cleaned = cleaned.replace(/\bthis persona\b.*$/i, '').trim()
       cleaned = cleaned.replace(/^(lead|empower|drive|enable|accelerate|build|deploy|implement|consolidate|modernize|migrate|transform)\b\s*/i, '').trim()
       cleaned = cleaned.replace(/\btheir\b/gi, 'your')
       cleaned = cleaned.replace(/\bthe company's\b/gi, 'your')
@@ -841,17 +842,21 @@ export function buildOpener(
         const possessivePattern = new RegExp(`\\b${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'s\\b`, 'gi')
         cleaned = cleaned.replace(possessivePattern, 'your')
       }
-      cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at)\s*\.?\s*$/, '').trim()
+      cleaned = cleaned.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|high|low)\s*\.?\s*$/, '').trim()
       // Ensure sentence has a grammatical subject — verb-leading fragments read broken
-      if (/^[a-z]+(s|es|ed|ing)\b/.test(cleaned)) {
-        cleaned = 'this ' + cleaned
+      const VERB_LEADING = /^(?:directly\s+)?(?:aligns|addresses|creates|drives|enables|supports|delivers|provides|positions|represents|demonstrates|offers|reduces|increases|improves|ensures|complements|connects|targets|reflects|highlights|leverages|reinforces|strengthens|validates|confirms|correlates|resonates|maps|speaks|opens|builds|extends|integrates|unifies|consolidates)\b/i
+      if (VERB_LEADING.test(cleaned)) {
+        cleaned = 'this ' + cleaned.charAt(0).toLowerCase() + cleaned.slice(1)
       }
       if (cleaned.length < 20) return null
       const sentenceMatch = cleaned.match(/^([^.!?]+[.!?])/)
       if (sentenceMatch && sentenceMatch[1].length <= 80) return sentenceMatch[1].replace(/[.!?]$/, '')
       const first = cleaned.split(/\s*[—–]\s*/)[0].trim()
       if (first.length < 20) return null
-      return first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
+      let result = first.length > 80 ? first.slice(0, 77).replace(/\s+\S*$/, '') : first
+      // Post-truncation cleanup: strip trailing conjunctions/prepositions left by truncation
+      result = result.replace(/\s*\b(?:and|with|for|on|to|from|by|in|at|or|the|a|an|that|this|is|are|was|were)\s*\.?\s*$/, '').trim()
+      return result
     }
     const smartLc = (s: string): string => {
       const firstWord = s.split(/\s/)[0]

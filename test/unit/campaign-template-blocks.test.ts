@@ -763,12 +763,51 @@ describe('buildOpener — verb-leading subject fix (#197)', () => {
     expect(result).toContain('this')
   })
 
+  it('catches uppercase verb-leading text like "Aligns"', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'Aligns perfectly with your infrastructure modernization goals',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).toContain('this aligns')
+    expect(result).not.toMatch(/^Test, Aligns\b/)
+  })
+
+  it('catches "Directly addresses" as verb-leading', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'Directly addresses your challenge with infrastructure sprawl',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).not.toMatch(/^Test, [Dd]irectly\b/)
+  })
+
   it('does not prepend "this" when field already has a subject', () => {
     const brief = makeBrief({
       objectiveMatch: 'your automation strategy creates room for consolidation',
     })
     const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
     expect(result).not.toMatch(/this your/)
+  })
+})
+
+describe('buildOpener — coaching language strip (#197)', () => {
+  it('strips "this persona" and trailing text from opener', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'the SaaS tax is the catalyst this persona needs to get executive buy-in and',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Aris Chen', 'manager', brief)
+    expect(result).not.toContain('this persona')
+    expect(result).toContain('Aris')
+  })
+})
+
+describe('buildOpener — trailing conjunction cleanup (#197)', () => {
+  it('strips trailing "and" from truncated openers', () => {
+    const brief = makeBrief({
+      objectiveMatch: 'your platform consolidation drives efficiency and',
+    })
+    const result = buildOpener(0, testSignals, 0, 'Test User', 'manager', brief)
+    expect(result).not.toMatch(/\band\.\s*$/)
+    expect(result).not.toMatch(/\band\s*$/)
   })
 })
 
