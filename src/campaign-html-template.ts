@@ -1628,12 +1628,20 @@ Write the email body using markdown links for products and sources.`
     const text = (result.text || '').trim()
 
     const words = text.split(/\s+/).length
-    if (words < 50 || words > 250) return null
+    if (words < 50 || words > 250) {
+      console.warn(`[compose] ${brief.recipientName}: rejected — ${words} words (need 50-250)`)
+      return null
+    }
     const firstName = brief.recipientName.split(' ')[0]
-    if (!text.includes(firstName)) return null
+    if (!text.includes(firstName)) {
+      console.warn(`[compose] ${brief.recipientName}: rejected — missing first name "${firstName}"`)
+      return null
+    }
 
+    console.log(`[compose] ${brief.recipientName}: accepted (${words} words)`)
     return text
-  } catch {
+  } catch (err: any) {
+    console.warn(`[compose] ${brief.recipientName}: error — ${err.message?.slice(0, 100)}`)
     return null
   }
 }
