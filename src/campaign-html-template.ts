@@ -639,7 +639,42 @@ const ROLE_LABELS: Record<string, string> = {
   'practitioner': 'Practitioner',
 }
 
-export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[]): string {
+export function renderMetricsTable(usedObjectives: UsedObjective[], pass0Briefs?: import('./lib/persona-selector.ts').PersonaBrief[], objectiveProfile?: CustomerObjectiveProfile): string {
+  if (objectiveProfile) {
+    const categories: { key: keyof Pick<CustomerObjectiveProfile, 'financial' | 'security' | 'operational' | 'innovation' | 'growth'>; label: string }[] = [
+      { key: 'financial', label: 'Financial' },
+      { key: 'security', label: 'Security' },
+      { key: 'operational', label: 'Operational' },
+      { key: 'innovation', label: 'Innovation' },
+      { key: 'growth', label: 'Growth' },
+    ]
+
+    const allEntries = categories.flatMap(cat =>
+      (objectiveProfile[cat.key] || []).map(e => ({ ...e, category: cat.label }))
+    )
+
+    if (allEntries.length === 0) return ''
+
+    const usedSet = new Set(usedObjectives.map(u => u.objective))
+
+    let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics — Available Objectives</h3>'
+    html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
+    html += '<tr style="background: #f8f9fa; font-weight: bold;"><td>Category</td><td>Objective</td><td>Metric</td><td style="width: 60px; text-align: center;">Priority</td><td style="width: 70px; text-align: center;">In Email</td></tr>'
+
+    let prevCategory = ''
+    for (const e of allEntries) {
+      const categoryCell = e.category !== prevCategory ? escapeHtml(e.category) : ''
+      prevCategory = e.category
+      const priorityBadge = e.priority
+        ? `<span style="background: ${e.priority === 'HIGH' ? '#c5221f' : e.priority === 'MED' ? '#f9ab00' : '#5f6368'}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px;">${escapeHtml(e.priority)}</span>`
+        : ''
+      const inEmail = usedSet.has(e.objective) ? '✓' : ''
+      html += `<tr><td style="font-weight: ${categoryCell ? 'bold' : 'normal'};">${categoryCell}</td><td>${escapeHtml(e.objective)}</td><td style="color: #5f6368;">${escapeHtml(e.metric || '')}</td><td style="text-align: center;">${priorityBadge}</td><td style="text-align: center;">${inEmail}</td></tr>`
+    }
+    html += '</table>'
+    return html
+  }
+
   if (pass0Briefs && pass0Briefs.length > 0 && usedObjectives.length === 0) {
     let html = '<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">Business Metrics Used in Outreach</h3>'
     html += '<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; font-size: 13px;">'
@@ -1583,6 +1618,7 @@ export interface CompositionBrief {
   ctaText: string
   campaignTheme: string
   campaignContext?: string
+  relevantObjectives?: Array<{ objective: string; metric: string | null; category: string; priority: string | null }>
 }
 
 export async function composeEmailBody(brief: CompositionBrief): Promise<string | null> {
@@ -1604,6 +1640,7 @@ RULES:
 - When citing financial impact, use the SPECIFIC numbers from Source Material Content — never say just "SaaS tax" without the rate
 - Use markdown links: [Product Name](URL) for products, [Title](URL) for sources
 - Do NOT invent facts — use ONLY the data provided below
+- Cite 1-2 specific metrics from the Relevant Business Metrics that are most compelling for this recipient's role
 - Do NOT use phrases like "I noticed", "I wanted to reach out", "I hope this finds you well"
 - Do NOT use marketing buzzwords or exclamation marks
 
@@ -1616,6 +1653,8 @@ Red Hat Capabilities (with URLs): ${brief.products}
 Peer Proof: ${brief.peerProof}
 Source Material (with URLs): ${brief.references}
 Campaign Theme: ${brief.campaignTheme}
+Relevant Business Metrics for ${brief.recipientTitle}:
+${brief.relevantObjectives?.map(o => `- [${o.category}] ${o.objective}${o.metric ? ' (' + o.metric + ')' : ''}`).join('\n') || 'None'}
 Source Material Content: ${brief.campaignContext || 'None provided'}
 Meeting Ask: ${brief.ctaText}
 Write the email body using markdown links for products and sources.`
@@ -2046,21 +2085,23 @@ export async function generateCampaignFromStructured(
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections, usedBridges)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
-    const preMatch = data.preMatchedMetrics?.find(pm => pm.recipientName === email.recipientName)
+    const preMatches = data.preMatchedMetrics?.filter(pm => pm.recipientName === email.recipientName) || []
+    const preMatch = preMatches[0] || undefined
     const objectiveContext = cleanObjectivePrefix(sanitizeCreepyLines(renderObjectiveBlock(
       data.objectiveProfile,
       campaignTheme,
       recipientTitle,
       preMatch,
     )))
-    if (preMatch) {
+    for (const pm of preMatches) {
       usedObjectives.push({
-        objective: preMatch.entry.objective,
-        metric: preMatch.entry.metric,
-        category: preMatch.category.charAt(0).toUpperCase() + preMatch.category.slice(1),
+        objective: pm.entry.objective,
+        metric: pm.entry.metric,
+        category: pm.category.charAt(0).toUpperCase() + pm.category.slice(1),
         usedIn: `${email.recipientName} (${email.tier})`,
       })
-    } else if (objectiveContext && data.objectiveProfile) {
+    }
+    if (preMatches.length === 0 && objectiveContext && data.objectiveProfile) {
       const catEntries = [
         ...data.objectiveProfile.financial.map(e => ({ ...e, category: 'Financial' })),
         ...data.objectiveProfile.security.map(e => ({ ...e, category: 'Security' })),
@@ -2107,6 +2148,12 @@ export async function generateCampaignFromStructured(
       ctaText: cta.text,
       campaignTheme: data.campaignThreat || data.campaignSolution || '',
       campaignContext: data.sourceExcerpt || (data.materialTitle ? `Campaign source: "${data.materialTitle}"` : undefined),
+      relevantObjectives: preMatches.map(pm => ({
+        objective: pm.entry.objective,
+        metric: pm.entry.metric,
+        category: pm.category.charAt(0).toUpperCase() + pm.category.slice(1),
+        priority: pm.entry.priority,
+      })),
     }
 
     const composedBody = await composeEmailBody(compositionBrief)
@@ -2223,7 +2270,7 @@ ${data.pass0Briefs && data.pass0Briefs.length > 0
   ? renderFitFromPass0(data.customerName, data.pass0Briefs)
   : (data.fitRationale || selection.customerContext) ? renderFitRationale(data.customerName, (data.fitRationale || selection.customerContext) + (objectiveCorrelation ? '\n' + objectiveCorrelation : '')) : ''}
 
-${renderMetricsTable(usedObjectives, data.pass0Briefs)}
+${renderMetricsTable(usedObjectives, data.pass0Briefs, data.objectiveProfile)}
 
 ${renderStructuredIntelSections(data.rawSignals, data.pass0Briefs, data.objectiveProfile)}
 
