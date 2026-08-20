@@ -1634,8 +1634,8 @@ Write the email body using markdown links for products and sources.`
     }
     const firstName = brief.recipientName.split(' ')[0]
     if (!text.toLowerCase().includes(firstName.toLowerCase())) {
-      console.warn(`[compose] ${brief.recipientName}: rejected — missing first name "${firstName}" in: ${text.slice(0, 80)}`)
-      return null
+      console.log(`[compose] ${brief.recipientName}: prepending greeting (name not in body)`)
+      return `${firstName},\n\n${text}`
     }
 
     console.log(`[compose] ${brief.recipientName}: accepted (${words} words)`)
