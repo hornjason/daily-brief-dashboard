@@ -167,7 +167,6 @@ registerProbe({
       } catch { /* try next */ }
     }
     throw new Error('All model fallbacks failed (gemini-3.5-flash, gemini-2.5-pro)')
-    }
   },
 })
 
