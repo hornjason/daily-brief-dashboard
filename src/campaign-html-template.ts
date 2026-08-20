@@ -885,7 +885,8 @@ export function buildOpener(
       if (usedOpeners?.has(key)) continue
 
       const template = templates[openerVariant % templates.length]
-      const candidate = template(init.name)
+      const cleanName = init.name.replace(new RegExp(`^${customerFirstWord}\\s+`, 'i'), '')
+      const candidate = template(cleanName)
       usedOpeners?.add(key)
       return validateBlock('opener', toBlock(candidate))
     }
