@@ -1620,7 +1620,6 @@ Write the email body as plain text.`
     const result = await callGemini(systemPrompt, userPrompt, {
       callType: 'campaign-compose',
       temperature: 0.7,
-      model: 'lite',
     })
     const text = (result.text || '').trim()
 
