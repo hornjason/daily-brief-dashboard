@@ -3,469 +3,264 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Account Plan Assembly — Brief Encounters</title>
+<title>Account Plan Pipeline — Brief Encounters</title>
 <style>
   :root {
-    --surface: #1a1a19;
-    --surface-card: #242423;
-    --surface-hover: #2e2e2d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #8a8980;
-    --blue: #3987e5;
-    --orange: #d95926;
-    --aqua: #199e70;
-    --yellow: #c98500;
-    --magenta: #d55181;
-    --green: #008300;
-    --violet: #9085e9;
-    --border: #3a3a38;
-    --flow-line: #52514e;
+    --surface: #1a1a19; --surface-card: #242423; --surface-hover: #2e2e2d;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a8980;
+    --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+    --magenta: #d55181; --green: #008300; --violet: #9085e9;
+    --border: #3a3a38; --flow-line: #52514e;
+    --hidden: #d95926; --visible: #199e70;
   }
   [data-theme="light"] {
-    --surface: #fcfcfb;
-    --surface-card: #f5f5f3;
-    --surface-hover: #eeeee9;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted: #8a8980;
-    --blue: #2a78d6;
-    --orange: #eb6834;
-    --aqua: #1baf7a;
-    --yellow: #eda100;
-    --magenta: #e87ba4;
-    --green: #008300;
-    --violet: #4a3aa7;
-    --border: #d9d9d4;
-    --flow-line: #b0afa8;
+    --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+    --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+    --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+    --border: #d9d9d4; --flow-line: #b0afa8;
+    --hidden: #eb6834; --visible: #1baf7a;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--surface);
-    color: var(--text-primary);
-    min-height: 100vh;
-    padding: 48px 32px;
-  }
-  .container { max-width: 1200px; margin: 0 auto; }
-  h1 {
-    font-size: 28px;
-    font-weight: 600;
-    margin-bottom: 4px;
-    letter-spacing: -0.5px;
-  }
-  .subtitle {
-    font-size: 15px;
-    color: var(--text-secondary);
-    margin-bottom: 48px;
-  }
-  .pipeline {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    position: relative;
-  }
-  .stage {
-    display: flex;
-    align-items: flex-start;
-    gap: 24px;
-    position: relative;
-    padding: 0 0 0 0;
-  }
-  .stage-connector {
-    display: flex;
-    justify-content: center;
-    padding: 0 0 0 60px;
-    height: 32px;
-  }
-  .stage-connector svg { display: block; }
-  .stage-badge {
-    flex-shrink: 0;
-    width: 120px;
-    text-align: right;
-    padding-top: 16px;
-  }
-  .stage-badge .num {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--text-muted);
-  }
-  .stage-badge .label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-  .stage-content {
-    flex: 1;
-    background: var(--surface-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 24px;
-    position: relative;
-  }
-  .stage-content h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .stage-content p {
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-  }
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-  }
-  .sources-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .source-chip {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    text-align: center;
-  }
-  .source-chip .icon { font-size: 20px; margin-bottom: 4px; }
-  .source-chip .name {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-secondary);
-  }
-  .source-chip .count {
-    font-size: 10px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-  .metrics-row {
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-  }
-  .metric {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
-    flex: 1;
-    text-align: center;
-  }
-  .metric .value {
-    font-size: 24px;
-    font-weight: 700;
-  }
-  .metric .label {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-  .output-cards {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .output-card {
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-  }
-  .output-card .name {
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-  .output-card .desc {
-    font-size: 11px;
-    color: var(--text-muted);
-    line-height: 1.4;
-  }
-  .theme-toggle {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    background: var(--surface-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 12px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 12px;
-    font-family: inherit;
-  }
-  .scorecard {
-    margin-top: 48px;
-    padding: 0 0 0 144px;
-  }
-  .scorecard h2 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 16px;
-  }
-  .scorecard-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-  }
-  .scorecard-item {
-    background: var(--surface-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-  }
-  .scorecard-item .category {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-  }
-  .scorecard-item .score {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-  .scorecard-item .detail {
-    font-size: 11px;
-    color: var(--text-muted);
-  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
+  .container { max-width: 1300px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
+  .theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .layer { margin-bottom: 0; }
+  .layer-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 12px; }
+  .layer-bar { display: inline-block; width: 4px; height: 14px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+  .connector { display: flex; justify-content: center; height: 32px; }
+  .connector svg { display: block; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+  /* Input cards */
+  .inputs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .input-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative; }
+  .input-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .input-card .file { font-size: 11px; color: var(--text-muted); font-family: 'SF Mono', 'Menlo', monospace; margin-bottom: 4px; }
+  .input-card .desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+  .status-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; }
+  .status-hidden { background: rgba(217, 89, 38, 0.15); color: var(--hidden); }
+  .status-visible { background: rgba(25, 158, 112, 0.15); color: var(--visible); }
+
+  /* Processing cards */
+  .proc-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .proc-card h3 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .proc-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .proc-row { display: flex; gap: 12px; }
+
+  /* Quality checks */
+  .checks-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+  .check-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 10px; display: flex; align-items: center; gap: 6px; }
+  .check-num { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; background: rgba(25, 158, 112, 0.2); color: var(--aqua); flex-shrink: 0; }
+  .check-name { color: var(--text-secondary); }
+
+  /* Provenance */
+  .prov-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+  .prov-table th { text-align: left; padding: 6px 10px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  .prov-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+  .prov-loaded { color: var(--aqua); }
+  .prov-missing { color: var(--hidden); }
+
+  /* Output */
+  .output-card { background: var(--surface-card); border: 2px solid var(--blue); border-radius: 14px; padding: 24px 28px; }
+  .output-card h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .output-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+  .score-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .score-item .cat { font-size: 11px; color: var(--text-muted); }
+  .score-item .val { font-size: 20px; font-weight: 700; color: var(--aqua); }
+
+  /* Theme mapping */
+  .theme-map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .theme-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .theme-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .theme-card .tag { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; }
+  .theme-card ul { font-size: 11px; color: var(--text-secondary); padding-left: 16px; line-height: 1.6; }
 </style>
 </head>
 <body>
 <button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
 <div class="container">
-  <h1>How an Account Plan Gets Assembled</h1>
-  <p class="subtitle">Brief Encounters — from 7 intelligence sources to a complete account plan in Google Drive</p>
+  <h1>Account Plan Pipeline — What's Hidden</h1>
+  <p class="subtitle">9 inputs assemble the account plan. Today, the user sees none of them. Theme A: "Show Your Work" changes that.</p>
 
-  <div class="pipeline">
-
-    <!-- Stage 1: Input Sources -->
-    <div class="stage">
-      <div class="stage-badge">
-        <div class="num">Stage 1</div>
-        <div class="label">Sources</div>
+  <!-- LAYER 1: The 9 Inputs -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--orange)"></span>9 Hidden Inputs — None Visible to the User Today</div>
+    <div class="inputs-grid">
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--violet)"></span> Sample Plan Template <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">config/account-plan/sample.md</div>
+        <div class="desc">Structural template — Gemini matches sections, depth, and style from this exemplar</div>
       </div>
-      <div class="stage-content">
-        <h3><span class="dot" style="background: var(--blue)"></span> 7 Intelligence Sources</h3>
-        <p>Every account plan assembles from 7 distinct sources — structural templates, planning guidance, customer intelligence, and signal enrichment. All validated and cached.</p>
-        <div class="sources-grid">
-          <div class="source-chip">
-            <div class="icon">🏢</div>
-            <div class="name">Company Intel</div>
-            <div class="count">Gemini research</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">📊</div>
-            <div class="name">Industry Analysis</div>
-            <div class="count">Market research</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">📡</div>
-            <div class="name">Customer Signals</div>
-            <div class="count">7 signal types</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">🎯</div>
-            <div class="name">Solution Plays</div>
-            <div class="count">SalesHub verified</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">📝</div>
-            <div class="name">Structural Template</div>
-            <div class="count">sample.md</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">📘</div>
-            <div class="name">Planning Playbook</div>
-            <div class="count">CY27 guidance</div>
-          </div>
-          <div class="source-chip">
-            <div class="icon">📋</div>
-            <div class="name">Scoring Rubric</div>
-            <div class="count">questions.pdf</div>
-          </div>
-        </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--violet)"></span> Questions PDF <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">config/account-plan/questions.pdf</div>
+        <div class="desc">Scorecard questions reference — sent as a PDF image to Gemini multimodal (vision input)</div>
       </div>
-    </div>
-
-    <div class="stage-connector">
-      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
-    </div>
-
-    <!-- Stage 2: Context Orchestrator -->
-    <div class="stage">
-      <div class="stage-badge">
-        <div class="num">Stage 2</div>
-        <div class="label">Enrich</div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--violet)"></span> Planning Playbook <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">config/account-plan/playbook.md (338 lines)</div>
+        <div class="desc">Guidance on how to structure and write account plans — truncated to 8,000 chars</div>
       </div>
-      <div class="stage-content">
-        <h3><span class="dot" style="background: var(--aqua)"></span> Context Orchestrator Enrichment</h3>
-        <p>buildConsumerContext loads customer signals via ensureFresh, then templateAll deterministically assembles signal context + verified solution plays section for grounding. No hallucination — every play citation must exist in the VERIFIED SOLUTION PLAYS section.</p>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--magenta)"></span> CY27 Planning Deck <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">config/account-plan/cy27-planning-deck.txt (2,703 lines)</div>
+        <div class="desc">Red Hat CY27 planning slides as text — sets strategic context, new CY27 requirements</div>
+      </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--orange)"></span> Customer Signals <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">loadCustomerSignals(slug, name, { ensureFresh: true })</div>
+        <div class="desc">All 7 signal sources: cases, emails, meetings, pipeline, subs, cloud spend, docs</div>
+      </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--aqua)"></span> Consumer Context <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">buildConsumerContext({ consumerType: 'account-plan' })</div>
+        <div class="desc">3-layer context assembly: signals → templateAll → intelligence + Drive docs + solution plays</div>
+      </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--green)"></span> Solution Plays <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">templateResult.structured.solutionPlays</div>
+        <div class="desc">Verified expansion motions matched to customer's tech stack and subscription data</div>
+      </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--blue)"></span> Team Members <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">getAccountTeam(customer)</div>
+        <div class="desc">AE + ASA names from config — inserted into plan Team Members section</div>
+      </div>
+      <div class="input-card">
+        <h4><span class="dot" style="background: var(--yellow)"></span> Quality Validator <span class="status-badge status-hidden">Hidden</span></h4>
+        <div class="file">quality-validators/account-plan-validator.ts</div>
+        <div class="desc">11 structural checks, 75% pass threshold — auto-retries on failure with feedback</div>
       </div>
     </div>
+  </div>
 
-    <div class="stage-connector">
-      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
-    </div>
+  <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
 
-    <!-- Stage 3: Gemini Generation -->
-    <div class="stage">
-      <div class="stage-badge">
-        <div class="num">Stage 3</div>
-        <div class="label">Generate</div>
+  <!-- LAYER 2: Gemini Processing -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--violet)"></span>Gemini Multimodal Processing</div>
+    <div class="proc-row">
+      <div class="proc-card" style="flex: 2;">
+        <h3><span class="dot" style="background: var(--violet)"></span> callGeminiForAccountPlan()</h3>
+        <p>Text prompt (system + user with all context) + PDF image (questions.pdf as base64 vision) → Gemini at temperature 0.3 → structured JSON response via ACCOUNT_PLAN_RESPONSE_SCHEMA → converted to markdown via convertAccountPlanJsonToMarkdown()</p>
       </div>
-      <div class="stage-content">
-        <h3><span class="dot" style="background: var(--violet)"></span> Gemini Multimodal Generation</h3>
-        <p>callGeminiForAccountPlan sends 7 sources as text context + questions PDF as base64 vision input. Gemini reads the questions image while processing intelligence. Structured responseSchema (ADR-040) ensures all 12 required sections. Temperature fixed at 0.3 for consistency.</p>
-        <div class="metrics-row">
-          <div class="metric">
-            <div class="value" style="color: var(--violet)">12</div>
-            <div class="label">Required Sections</div>
-          </div>
-          <div class="metric">
-            <div class="value" style="color: var(--violet)">0.3</div>
-            <div class="label">Temperature</div>
-          </div>
-          <div class="metric">
-            <div class="value" style="color: var(--violet)">PDF</div>
-            <div class="label">Vision Input</div>
-          </div>
-        </div>
+      <div class="proc-card" style="flex: 1;">
+        <h3><span class="dot" style="background: var(--aqua)"></span> Provenance Tracking</h3>
+        <p>Every input is tracked: <code>{ source, loaded, tokenEstimate }</code>. This data exists in the code but is <strong style="color: var(--hidden)">never surfaced in the UI</strong>.</p>
       </div>
     </div>
+  </div>
 
-    <div class="stage-connector">
-      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
-    </div>
+  <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
 
-    <!-- Stage 4: Quality Gate -->
-    <div class="stage">
-      <div class="stage-badge">
-        <div class="num">Stage 4</div>
-        <div class="label">Quality</div>
-      </div>
-      <div class="stage-content">
-        <h3><span class="dot" style="background: var(--yellow)"></span> Quality Gate (11 Checks)</h3>
-        <p>validateAndRetry runs accountPlanValidator — 11 checks for required sections, no placeholder text, content depth, grounding rules compliance. Below threshold = regenerate with formatFailureFeedback. Mandatory pass before Drive upload (ADR-024 compliance).</p>
-        <div class="metrics-row">
-          <div class="metric">
-            <div class="value" style="color: var(--yellow)">11</div>
-            <div class="label">Quality Checks</div>
-          </div>
-          <div class="metric">
-            <div class="value" style="color: var(--yellow)">85%</div>
-            <div class="label">Pass Threshold</div>
-          </div>
-          <div class="metric">
-            <div class="value" style="color: var(--yellow)">Auto</div>
-            <div class="label">Retry on Fail</div>
-          </div>
-        </div>
+  <!-- LAYER 3: Quality Gate with named checks -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--yellow)"></span>Quality Gate — 11 Named Checks (75% threshold)</div>
+    <div class="proc-card" style="border-color: var(--yellow);">
+      <h3><span class="dot" style="background: var(--yellow)"></span> Account Plan Validator <span class="status-badge status-hidden">Hidden</span></h3>
+      <p>Each check is pass/fail with expected vs actual. Below 75% → auto-retry with formatted failure feedback. All check results are computed but never shown.</p>
+      <div class="checks-grid">
+        <div class="check-item"><span class="check-num">1</span><span class="check-name">Sections Present (>= 10)</span></div>
+        <div class="check-item"><span class="check-num">2</span><span class="check-name">Whitespace Map Table</span></div>
+        <div class="check-item"><span class="check-num">3</span><span class="check-name">Initiatives (>= 3)</span></div>
+        <div class="check-item"><span class="check-num">4</span><span class="check-name">Actions Table + Ownership</span></div>
+        <div class="check-item"><span class="check-num">5</span><span class="check-name">Team Members (AE + ASA)</span></div>
+        <div class="check-item"><span class="check-num">6</span><span class="check-name">Customer Goals Present</span></div>
+        <div class="check-item"><span class="check-num">7</span><span class="check-name">Red Hat Portfolio (>= 2)</span></div>
+        <div class="check-item"><span class="check-num">8</span><span class="check-name">Timeline References</span></div>
+        <div class="check-item"><span class="check-num">9</span><span class="check-name">Economic Buyer (CY27)</span></div>
+        <div class="check-item"><span class="check-num">10</span><span class="check-name">Partner Growth (CY27)</span></div>
+        <div class="check-item"><span class="check-num">11</span><span class="check-name">Security & Sovereignty</span></div>
       </div>
     </div>
+  </div>
 
-    <div class="stage-connector">
-      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
-    </div>
+  <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
 
-    <!-- Stage 5: Output -->
-    <div class="stage">
-      <div class="stage-badge">
-        <div class="num">Output</div>
-        <div class="label">Drive</div>
-      </div>
-      <div class="stage-content" style="border-color: var(--blue); border-width: 2px;">
-        <h3><span class="dot" style="background: var(--blue)"></span> Account Plan → Google Drive</h3>
-        <p>convertAccountPlanJsonToMarkdown assembles structured JSON response into markdown. upsertAccountPlanDoc uploads to "Account Plans" subfolder (separate from Account Intelligence to avoid feedback loops — ADR-0016). Metadata sidecar persists Drive URL, quality scorecard, generation timestamp.</p>
-        <div class="output-cards">
-          <div class="output-card">
-            <div class="name" style="color: var(--blue)">Google Drive</div>
-            <div class="desc">Customer folder / Account Plans subfolder</div>
-          </div>
-          <div class="output-card">
-            <div class="name" style="color: var(--orange)">Cache</div>
-            <div class="desc">intelligence/{slug}-account-plan.md</div>
-          </div>
-          <div class="output-card">
-            <div class="name" style="color: var(--violet)">Meta</div>
-            <div class="desc">Quality scorecard + Drive URL sidecar</div>
-          </div>
-        </div>
+  <!-- LAYER 4: Output -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--blue)"></span>Output — Account Plan</div>
+    <div class="output-card">
+      <h3><span class="dot" style="background: var(--blue)"></span> Generated Account Plan → Google Drive</h3>
+      <p>12 required sections, quality-scored, uploaded to Account Plans subfolder. CrowdStrike example scorecard:</p>
+      <div class="score-grid">
+        <div class="score-item"><div class="cat">Overall Score</div><div class="val">95.2%</div></div>
+        <div class="score-item"><div class="cat">Customer View</div><div class="val">100%</div></div>
+        <div class="score-item"><div class="cat">Account Intelligence</div><div class="val">100%</div></div>
+        <div class="score-item"><div class="cat">Ecosystem Strategy</div><div class="val">100%</div></div>
+        <div class="score-item"><div class="cat">Key Stakeholders</div><div class="val">100%</div></div>
+        <div class="score-item"><div class="cat">Technical Landscape</div><div class="val">100%</div></div>
+        <div class="score-item"><div class="cat">Customer Success</div><div class="val">67%</div></div>
+        <div class="score-item"><div class="cat">Whitespace Map</div><div class="val">Present</div></div>
+        <div class="score-item"><div class="cat">Initiatives</div><div class="val">4 mapped</div></div>
       </div>
     </div>
+  </div>
 
-    <!-- Scorecard Example -->
-    <div class="scorecard">
-      <h2>Account Plan Scorecard — Example: CrowdStrike</h2>
-      <div class="scorecard-grid">
-        <div class="scorecard-item">
-          <div class="category">Overall Score</div>
-          <div class="score" style="color: var(--green)">94%</div>
-          <div class="detail">Quality gate passed, all sections complete</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Customer View</div>
-          <div class="score" style="color: var(--aqua)">92%</div>
-          <div class="detail">ACV ambition, growth %, all questions answered</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Account Intelligence</div>
-          <div class="score" style="color: var(--aqua)">96%</div>
-          <div class="detail">Business objectives, market analysis, innovation persona</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Customer Ecosystem</div>
-          <div class="score" style="color: var(--blue)">89%</div>
-          <div class="detail">Partner strategy, cloud providers, committed spend</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Technical Landscape</div>
-          <div class="score" style="color: var(--aqua)">93%</div>
-          <div class="detail">6 TDP assessments, maturity ratings, security/sovereignty</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Whitespace Map</div>
-          <div class="score" style="color: var(--violet)">91%</div>
-          <div class="detail">Business units × products, grounded in evidence</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Key Stakeholders</div>
-          <div class="score" style="color: var(--aqua)">88%</div>
-          <div class="detail">Economic Buyer identified, P&L authority, engagement status</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Initiatives</div>
-          <div class="score" style="color: var(--blue)">95%</div>
-          <div class="detail">5 initiatives, tagged opportunities, concrete next steps</div>
-        </div>
-        <div class="scorecard-item">
-          <div class="category">Actions & Next Steps</div>
-          <div class="score" style="color: var(--aqua)">90%</div>
-          <div class="detail">12 action items, owners, target dates, quarterly milestones</div>
-        </div>
+  <!-- Provenance Example -->
+  <div style="margin-top: 36px;">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--aqua)"></span>What Provenance Tracking Already Captures (but doesn't show)</div>
+    <div class="proc-card">
+      <p>The <code>buildConsumerContext()</code> function already builds this data for every generation. Exposing it = Theme A.</p>
+      <table class="prov-table">
+        <tr><th>Source</th><th>Loaded?</th><th>Est. Tokens</th><th>Notes</th></tr>
+        <tr><td>signal-loader</td><td class="prov-loaded">Yes</td><td>2,400</td><td>19 cases + 17 emails + 6 subs + pipeline</td></tr>
+        <tr><td>templateAll</td><td class="prov-loaded">Yes</td><td>3,800</td><td>Deterministic sections from 15 budgeted sources</td></tr>
+        <tr><td>intelligence</td><td class="prov-loaded">Yes</td><td>5,000</td><td>Company Intel + Industry Analysis (Gemini-generated)</td></tr>
+        <tr><td>drive-docs</td><td class="prov-loaded">Yes</td><td>1,200</td><td>Meeting notes, prior plans from Drive folder</td></tr>
+        <tr><td>solution-plays</td><td class="prov-loaded">Yes</td><td>800</td><td>3 matched plays: OCP, AAP, RHEL AI</td></tr>
+        <tr><td>email-intelligence</td><td class="prov-missing">No</td><td>0</td><td>Not configured for account-plan consumer</td></tr>
+        <tr><td>engagement-timeline</td><td class="prov-missing">No</td><td>0</td><td>Not configured for account-plan consumer</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Theme Mapping -->
+  <div style="margin-top: 36px;">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--magenta)"></span>Challenge Theme Mapping — What to Build</div>
+    <div class="theme-map">
+      <div class="theme-card">
+        <h4 style="color: var(--blue);">A: "Show Your Work"</h4>
+        <div class="tag">Innovation, Technical Excellence, UX</div>
+        <ul>
+          <li>Expose the provenance table in the UI</li>
+          <li>Show the 9 inputs and which loaded</li>
+          <li>Display the 11 quality checks with pass/fail</li>
+          <li>Data maturity indicator: "6/7 sources loaded"</li>
+          <li>"This plan used: 14 case signals, 3 plays"</li>
+        </ul>
+      </div>
+      <div class="theme-card">
+        <h4 style="color: var(--orange);">B: "Make It Smarter"</h4>
+        <div class="tag">Innovation, Technical Excellence</div>
+        <ul>
+          <li>"Why this score" — show which checks failed</li>
+          <li>Delta tracking — "3 new signals since last plan"</li>
+          <li>Suggest missing inputs: "Add email sync to improve"</li>
+          <li>CY27 requirement coverage indicator</li>
+        </ul>
+      </div>
+      <div class="theme-card">
+        <h4 style="color: var(--aqua);">C: "Make It Shine"</h4>
+        <div class="tag">User Experience, Feasibility</div>
+        <ul>
+          <li>Scorecard visual component (not just text)</li>
+          <li>Progress animation during generation</li>
+          <li>Side-by-side: Day 1 plan vs Day 90 plan</li>
+          <li>One-click regenerate with visual diff</li>
+        </ul>
       </div>
     </div>
-
   </div>
 </div>
 <script>
 function toggleTheme() {
   const html = document.documentElement;
-  const current = html.getAttribute('data-theme');
-  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
 }
 </script>
 </body>
