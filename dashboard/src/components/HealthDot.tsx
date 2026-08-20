@@ -121,6 +121,7 @@ export default function HealthDot({ score, size = 'sm', showScore = false, break
               <span className="text-xs font-semibold text-text-primary">Health Score</span>
               <span className={`text-sm font-bold tabular-nums ${textColor}`}>{score}/100</span>
             </div>
+            <div className="text-[9px] text-text-secondary/70 mt-0.5">Composite across 6 dimensions</div>
             <div className="text-[10px] text-text-secondary mb-1.5">{label}</div>
             <div className="space-y-1.5">
               {(Object.keys(breakdown) as (keyof HealthBreakdown)[]).map((key) => {

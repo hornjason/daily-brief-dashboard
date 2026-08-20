@@ -1352,7 +1352,7 @@ export function CustomerDetailPage() {
       .then(r => r.json())
       .then((modules: Array<{ name: string; accountTab?: { label: string; order?: number } }>) => {
         const moduleTabs = modules
-          .filter(m => m.accountTab)
+          .filter(m => m.accountTab && (m.name in TAB_COMPONENTS))
           .map(m => ({
             id: m.name,
             label: m.accountTab!.label,
