@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account Plan Assembly — Brief Encounters</title>
+<style>
+  :root {
+    --surface: #1a1a19;
+    --surface-card: #242423;
+    --surface-hover: #2e2e2d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8a8980;
+    --blue: #3987e5;
+    --orange: #d95926;
+    --aqua: #199e70;
+    --yellow: #c98500;
+    --magenta: #d55181;
+    --green: #008300;
+    --violet: #9085e9;
+    --border: #3a3a38;
+    --flow-line: #52514e;
+  }
+  [data-theme="light"] {
+    --surface: #fcfcfb;
+    --surface-card: #f5f5f3;
+    --surface-hover: #eeeee9;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #8a8980;
+    --blue: #2a78d6;
+    --orange: #eb6834;
+    --aqua: #1baf7a;
+    --yellow: #eda100;
+    --magenta: #e87ba4;
+    --green: #008300;
+    --violet: #4a3aa7;
+    --border: #d9d9d4;
+    --flow-line: #b0afa8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 48px 32px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 48px;
+  }
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .stage {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    position: relative;
+    padding: 0 0 0 0;
+  }
+  .stage-connector {
+    display: flex;
+    justify-content: center;
+    padding: 0 0 0 60px;
+    height: 32px;
+  }
+  .stage-connector svg { display: block; }
+  .stage-badge {
+    flex-shrink: 0;
+    width: 120px;
+    text-align: right;
+    padding-top: 16px;
+  }
+  .stage-badge .num {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+  .stage-badge .label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .stage-content {
+    flex: 1;
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+  }
+  .stage-content h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stage-content p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .source-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .source-chip .icon { font-size: 20px; margin-bottom: 4px; }
+  .source-chip .name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .source-chip .count {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .metrics-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    flex: 1;
+    text-align: center;
+  }
+  .metric .value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .metric .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .output-cards {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .output-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .output-card .name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .output-card .desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .theme-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  .scorecard {
+    margin-top: 48px;
+    padding: 0 0 0 144px;
+  }
+  .scorecard h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .scorecard-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .scorecard-item {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .scorecard-item .category {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .scorecard-item .score {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .scorecard-item .detail {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<div class="container">
+  <h1>How an Account Plan Gets Assembled</h1>
+  <p class="subtitle">Brief Encounters — from 7 intelligence sources to a complete account plan in Google Drive</p>
+
+  <div class="pipeline">
+
+    <!-- Stage 1: Input Sources -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 1</div>
+        <div class="label">Sources</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--blue)"></span> 7 Intelligence Sources</h3>
+        <p>Every account plan assembles from 7 distinct sources — structural templates, planning guidance, customer intelligence, and signal enrichment. All validated and cached.</p>
+        <div class="sources-grid">
+          <div class="source-chip">
+            <div class="icon">🏢</div>
+            <div class="name">Company Intel</div>
+            <div class="count">Gemini research</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📊</div>
+            <div class="name">Industry Analysis</div>
+            <div class="count">Market research</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📡</div>
+            <div class="name">Customer Signals</div>
+            <div class="count">7 signal types</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">🎯</div>
+            <div class="name">Solution Plays</div>
+            <div class="count">SalesHub verified</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📝</div>
+            <div class="name">Structural Template</div>
+            <div class="count">sample.md</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📘</div>
+            <div class="name">Planning Playbook</div>
+            <div class="count">CY27 guidance</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📋</div>
+            <div class="name">Scoring Rubric</div>
+            <div class="count">questions.pdf</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 2: Context Orchestrator -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 2</div>
+        <div class="label">Enrich</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--aqua)"></span> Context Orchestrator Enrichment</h3>
+        <p>buildConsumerContext loads customer signals via ensureFresh, then templateAll deterministically assembles signal context + verified solution plays section for grounding. No hallucination — every play citation must exist in the VERIFIED SOLUTION PLAYS section.</p>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 3: Gemini Generation -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 3</div>
+        <div class="label">Generate</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--violet)"></span> Gemini Multimodal Generation</h3>
+        <p>callGeminiForAccountPlan sends 7 sources as text context + questions PDF as base64 vision input. Gemini reads the questions image while processing intelligence. Structured responseSchema (ADR-040) ensures all 12 required sections. Temperature fixed at 0.3 for consistency.</p>
+        <div class="metrics-row">
+          <div class="metric">
+            <div class="value" style="color: var(--violet)">12</div>
+            <div class="label">Required Sections</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--violet)">0.3</div>
+            <div class="label">Temperature</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--violet)">PDF</div>
+            <div class="label">Vision Input</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 4: Quality Gate -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 4</div>
+        <div class="label">Quality</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--yellow)"></span> Quality Gate (11 Checks)</h3>
+        <p>validateAndRetry runs accountPlanValidator — 11 checks for required sections, no placeholder text, content depth, grounding rules compliance. Below threshold = regenerate with formatFailureFeedback. Mandatory pass before Drive upload (ADR-024 compliance).</p>
+        <div class="metrics-row">
+          <div class="metric">
+            <div class="value" style="color: var(--yellow)">11</div>
+            <div class="label">Quality Checks</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--yellow)">85%</div>
+            <div class="label">Pass Threshold</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--yellow)">Auto</div>
+            <div class="label">Retry on Fail</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 5: Output -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Output</div>
+        <div class="label">Drive</div>
+      </div>
+      <div class="stage-content" style="border-color: var(--blue); border-width: 2px;">
+        <h3><span class="dot" style="background: var(--blue)"></span> Account Plan → Google Drive</h3>
+        <p>convertAccountPlanJsonToMarkdown assembles structured JSON response into markdown. upsertAccountPlanDoc uploads to "Account Plans" subfolder (separate from Account Intelligence to avoid feedback loops — ADR-0016). Metadata sidecar persists Drive URL, quality scorecard, generation timestamp.</p>
+        <div class="output-cards">
+          <div class="output-card">
+            <div class="name" style="color: var(--blue)">Google Drive</div>
+            <div class="desc">Customer folder / Account Plans subfolder</div>
+          </div>
+          <div class="output-card">
+            <div class="name" style="color: var(--orange)">Cache</div>
+            <div class="desc">intelligence/{slug}-account-plan.md</div>
+          </div>
+          <div class="output-card">
+            <div class="name" style="color: var(--violet)">Meta</div>
+            <div class="desc">Quality scorecard + Drive URL sidecar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scorecard Example -->
+    <div class="scorecard">
+      <h2>Account Plan Scorecard — Example: CrowdStrike</h2>
+      <div class="scorecard-grid">
+        <div class="scorecard-item">
+          <div class="category">Overall Score</div>
+          <div class="score" style="color: var(--green)">94%</div>
+          <div class="detail">Quality gate passed, all sections complete</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Customer View</div>
+          <div class="score" style="color: var(--aqua)">92%</div>
+          <div class="detail">ACV ambition, growth %, all questions answered</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Account Intelligence</div>
+          <div class="score" style="color: var(--aqua)">96%</div>
+          <div class="detail">Business objectives, market analysis, innovation persona</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Customer Ecosystem</div>
+          <div class="score" style="color: var(--blue)">89%</div>
+          <div class="detail">Partner strategy, cloud providers, committed spend</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Technical Landscape</div>
+          <div class="score" style="color: var(--aqua)">93%</div>
+          <div class="detail">6 TDP assessments, maturity ratings, security/sovereignty</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Whitespace Map</div>
+          <div class="score" style="color: var(--violet)">91%</div>
+          <div class="detail">Business units × products, grounded in evidence</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Key Stakeholders</div>
+          <div class="score" style="color: var(--aqua)">88%</div>
+          <div class="detail">Economic Buyer identified, P&L authority, engagement status</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Initiatives</div>
+          <div class="score" style="color: var(--blue)">95%</div>
+          <div class="detail">5 initiatives, tagged opportunities, concrete next steps</div>
+        </div>
+        <div class="scorecard-item">
+          <div class="category">Actions & Next Steps</div>
+          <div class="score" style="color: var(--aqua)">90%</div>
+          <div class="detail">12 action items, owners, target dates, quarterly milestones</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
