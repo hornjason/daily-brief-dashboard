@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brief Encounters — The Intelligence Engine</title>
+<style>
+  :root {
+    --surface: #1a1a19;
+    --surface-card: #242423;
+    --surface-hover: #2e2e2d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8a8980;
+    --blue: #3987e5;
+    --orange: #d95926;
+    --aqua: #199e70;
+    --yellow: #c98500;
+    --magenta: #d55181;
+    --green: #008300;
+    --violet: #9085e9;
+    --border: #3a3a38;
+    --flow-line: #52514e;
+  }
+  [data-theme="light"] {
+    --surface: #fcfcfb;
+    --surface-card: #f5f5f3;
+    --surface-hover: #eeeee9;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #8a8980;
+    --blue: #2a78d6;
+    --orange: #eb6834;
+    --aqua: #1baf7a;
+    --yellow: #eda100;
+    --magenta: #e87ba4;
+    --green: #008300;
+    --violet: #4a3aa7;
+    --border: #d9d9d4;
+    --flow-line: #b0afa8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 40px 32px 64px;
+  }
+  .container { max-width: 1300px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
+  .theme-toggle {
+    position: fixed; top: 16px; right: 16px;
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; color: var(--text-secondary);
+    cursor: pointer; font-size: 12px; font-family: inherit;
+  }
+
+  /* Shared layer styles */
+  .layer {
+    position: relative;
+    margin-bottom: 0;
+  }
+  .layer-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .layer-bar {
+    display: inline-block; width: 4px; height: 14px; border-radius: 2px;
+    margin-right: 8px; vertical-align: middle;
+  }
+  .connector-row {
+    display: flex; justify-content: center; height: 36px; position: relative;
+  }
+  .connector-row svg { display: block; }
+  .connector-row .fan-label {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    font-size: 11px; color: var(--text-muted); font-style: italic;
+  }
+
+  /* Source chips grid */
+  .source-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;
+  }
+  .source-chip {
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 10px; text-align: center;
+    transition: border-color 0.15s;
+  }
+  .source-chip:hover { border-color: var(--blue); }
+  .source-chip .icon { font-size: 22px; margin-bottom: 6px; }
+  .source-chip .name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .source-chip .detail { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+  .source-chip .refresh { font-size: 9px; color: var(--text-muted); margin-top: 4px; opacity: 0.7; }
+
+  /* Processing cards */
+  .processing-row {
+    display: flex; gap: 12px;
+  }
+  .proc-card {
+    flex: 1; background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .proc-card h3 {
+    font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .proc-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block; flex-shrink: 0;
+  }
+
+  /* Engine card (wide, prominent) */
+  .engine-card {
+    background: var(--surface-card); border: 2px solid var(--aqua);
+    border-radius: 14px; padding: 24px 28px;
+  }
+  .engine-card h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .engine-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .engine-stats {
+    display: flex; gap: 12px; margin-top: 14px;
+  }
+  .engine-stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; text-align: center; flex: 1;
+  }
+  .engine-stat .val { font-size: 22px; font-weight: 700; }
+  .engine-stat .lbl { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Quality gate */
+  .gate-card {
+    background: var(--surface-card); border: 1px solid var(--yellow);
+    border-radius: 12px; padding: 18px 24px;
+  }
+  .gate-card h3 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .gate-card p { font-size: 12px; color: var(--text-secondary); }
+  .gate-checks {
+    display: flex; gap: 4px; margin-top: 10px;
+  }
+  .gate-check {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .gate-pass { background: rgba(25, 158, 112, 0.2); color: var(--aqua); }
+
+  /* Consumer grid */
+  .consumer-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+  }
+  .consumer-card {
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 12px; text-align: center;
+    transition: border-color 0.15s;
+  }
+  .consumer-card:hover { border-color: var(--violet); }
+  .consumer-card .c-icon { font-size: 20px; margin-bottom: 6px; }
+  .consumer-card .c-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .consumer-card .c-desc { font-size: 10px; color: var(--text-muted); margin-top: 3px; line-height: 1.3; }
+  .consumer-card .c-signals {
+    margin-top: 6px; display: flex; gap: 3px; justify-content: center; flex-wrap: wrap;
+  }
+  .signal-dot {
+    width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+  }
+
+  /* Fan lines SVG */
+  .fan-svg { width: 100%; height: 40px; }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<div class="container">
+  <h1>The Intelligence Engine</h1>
+  <p class="subtitle">How raw data becomes actionable intelligence — from bootstrap to brief</p>
+
+  <!-- LAYER 1: Bootstrap -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--blue)"></span>Layer 1 — Bootstrap</div>
+    <div class="processing-row">
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--blue)"></span> Territory Setup</h3>
+        <p>AE selected, customers imported from Red Hat territory sheet, Drive folders created for each account</p>
+      </div>
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--blue)"></span> Salesforce Connect</h3>
+        <p>Pipeline report linked, subscription data discovered via Supportable 360, CCSP cloud spend imported</p>
+      </div>
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--violet)"></span> Intelligence Generation</h3>
+        <p>Gemini + Google Search grounding produces Company Intel doc + Industry Analysis per customer on Day 0</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector-row">
+    <svg width="2" height="36"><line x1="1" y1="0" x2="1" y2="36" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    <span class="fan-label">Signals accumulate over time</span>
+  </div>
+
+  <!-- LAYER 2: Signal Sources -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--orange)"></span>Layer 2 — Signal Sources (7 modules)</div>
+    <div class="source-grid">
+      <div class="source-chip">
+        <div class="icon">🎫</div>
+        <div class="name">Cases</div>
+        <div class="detail">Red Hat Portal</div>
+        <div class="refresh">Every 4h</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">📧</div>
+        <div class="name">Emails</div>
+        <div class="detail">Gmail API</div>
+        <div class="refresh">On load</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">📅</div>
+        <div class="name">Meetings</div>
+        <div class="detail">Calendar API</div>
+        <div class="refresh">On load</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">📁</div>
+        <div class="name">Drive Docs</div>
+        <div class="detail">Intel + Plans</div>
+        <div class="refresh">On demand</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">💰</div>
+        <div class="name">Pipeline</div>
+        <div class="detail">Salesforce</div>
+        <div class="refresh">Daily 6am</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">📋</div>
+        <div class="name">Subscriptions</div>
+        <div class="detail">Supportable 360</div>
+        <div class="refresh">Every 4h</div>
+      </div>
+      <div class="source-chip">
+        <div class="icon">☁️</div>
+        <div class="name">Cloud Spend</div>
+        <div class="detail">Tableau CCSP</div>
+        <div class="refresh">Every 24h</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector-row">
+    <svg width="2" height="36"><line x1="1" y1="0" x2="1" y2="36" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    <span class="fan-label">Each signal carries metadata: severity, products, confidence</span>
+  </div>
+
+  <!-- LAYER 3: Enrichment -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--magenta)"></span>Layer 3 — Enrichment Modules</div>
+    <div class="processing-row">
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--magenta)"></span> Tech Stack Detection</h3>
+        <p>Infers customer tech stack from cases, emails, and subscription data</p>
+      </div>
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--magenta)"></span> News Radar</h3>
+        <p>Monitors customer news, leadership changes, and market moves</p>
+      </div>
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--magenta)"></span> Competitive Intel</h3>
+        <p>Tracks competitor mentions in emails, meetings, and public filings</p>
+      </div>
+      <div class="proc-card">
+        <h3><span class="dot" style="background: var(--magenta)"></span> Product Lifecycle</h3>
+        <p>Maps customer subs to Red Hat product GA/EOL/tech preview dates</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector-row">
+    <svg width="2" height="36"><line x1="1" y1="0" x2="1" y2="36" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+  </div>
+
+  <!-- LAYER 4: Cross-Reference Engine -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--aqua)"></span>Layer 4 — Cross-Reference Engine</div>
+    <div class="engine-card">
+      <h3><span class="dot" style="background: var(--aqua)"></span> Weighted Confidence Scoring</h3>
+      <p>Detects signal specificity (customer / industry / general), applies score boosters (+revenue, +severity, +renewal urgency, +product match, +confidence), enforces time decay and budget caps per section. A security advisory matched to a customer running the affected version with a renewal in 47 days = highest priority.</p>
+      <div class="engine-stats">
+        <div class="engine-stat">
+          <div class="val" style="color: var(--aqua)">153</div>
+          <div class="lbl">Graph Edges</div>
+        </div>
+        <div class="engine-stat">
+          <div class="val" style="color: var(--aqua)">117</div>
+          <div class="lbl">Graph Nodes</div>
+        </div>
+        <div class="engine-stat">
+          <div class="val" style="color: var(--aqua)">7</div>
+          <div class="lbl">Source Types</div>
+        </div>
+        <div class="engine-stat">
+          <div class="val" style="color: var(--aqua)">3</div>
+          <div class="lbl">Specificity Tiers</div>
+        </div>
+        <div class="engine-stat">
+          <div class="val" style="color: var(--aqua)">5</div>
+          <div class="lbl">Score Boosters</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector-row">
+    <svg width="2" height="36"><line x1="1" y1="0" x2="1" y2="36" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+  </div>
+
+  <!-- LAYER 5: Quality Gate -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--yellow)"></span>Layer 5 — Quality Gate</div>
+    <div class="gate-card">
+      <h3><span class="dot" style="background: var(--yellow)"></span> 11-Check Validator</h3>
+      <p>Every generated output runs through quality validation. Gemini multimodal reads the scoring rubric as a PDF image. Below threshold = regenerate. Checks: completeness, accuracy, relevance, freshness, cross-source consistency, template conformance, and more.</p>
+      <div class="gate-checks">
+        <div class="gate-check gate-pass">1</div>
+        <div class="gate-check gate-pass">2</div>
+        <div class="gate-check gate-pass">3</div>
+        <div class="gate-check gate-pass">4</div>
+        <div class="gate-check gate-pass">5</div>
+        <div class="gate-check gate-pass">6</div>
+        <div class="gate-check gate-pass">7</div>
+        <div class="gate-check gate-pass">8</div>
+        <div class="gate-check gate-pass">9</div>
+        <div class="gate-check gate-pass">10</div>
+        <div class="gate-check gate-pass">11</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector-row">
+    <svg class="fan-svg" viewBox="0 0 1200 40" preserveAspectRatio="none">
+      <line x1="600" y1="0" x2="100" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="300" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="500" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="600" y2="40" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="700" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="900" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+      <line x1="600" y1="0" x2="1100" y2="40" stroke="var(--flow-line)" stroke-width="1.5" stroke-dasharray="4,4"/>
+    </svg>
+    <span class="fan-label">Scored signals route to consumers by metadata</span>
+  </div>
+
+  <!-- LAYER 6: Consumers -->
+  <div class="layer">
+    <div class="layer-label"><span class="layer-bar" style="background: var(--violet)"></span>Layer 6 — Consumers (each receives different signal slices)</div>
+    <div class="consumer-grid">
+      <div class="consumer-card">
+        <div class="c-icon">📰</div>
+        <div class="c-name">Morning Brief</div>
+        <div class="c-desc">Daily summary: what matters today across your portfolio</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)" title="Cases"></span>
+          <span class="signal-dot" style="background: var(--blue)" title="Emails"></span>
+          <span class="signal-dot" style="background: var(--aqua)" title="Pipeline"></span>
+          <span class="signal-dot" style="background: var(--magenta)" title="News"></span>
+          <span class="signal-dot" style="background: var(--yellow)" title="Products"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">📊</div>
+        <div class="c-name">Account Plan</div>
+        <div class="c-desc">Full strategic plan from 7 sources, quality-scored, uploaded to Drive</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)"></span>
+          <span class="signal-dot" style="background: var(--blue)"></span>
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--violet)"></span>
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+          <span class="signal-dot" style="background: var(--magenta)"></span>
+          <span class="signal-dot" style="background: var(--green)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">🤝</div>
+        <div class="c-name">Meeting Prep</div>
+        <div class="c-desc">Pre-call intelligence brief with talking points + recent activity</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)"></span>
+          <span class="signal-dot" style="background: var(--blue)"></span>
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">✉️</div>
+        <div class="c-name">Campaigns</div>
+        <div class="c-desc">Personalized outreach with AE voice matching + value props</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--violet)"></span>
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">🔍</div>
+        <div class="c-name">Customer Detail</div>
+        <div class="c-desc">Deep-dive account page with health score + all signals</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)"></span>
+          <span class="signal-dot" style="background: var(--blue)"></span>
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--violet)"></span>
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+          <span class="signal-dot" style="background: var(--magenta)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">📈</div>
+        <div class="c-name">Value Positioning</div>
+        <div class="c-desc">Evidence-backed sales plays mapped to customer objectives</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--violet)"></span>
+          <span class="signal-dot" style="background: var(--magenta)"></span>
+        </div>
+      </div>
+    </div>
+    <div class="consumer-grid" style="margin-top: 8px;">
+      <div class="consumer-card">
+        <div class="c-icon">🧠</div>
+        <div class="c-name">Account Intelligence</div>
+        <div class="c-desc">AI-generated company research + industry context</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--violet)"></span>
+          <span class="signal-dot" style="background: var(--magenta)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">🎯</div>
+        <div class="c-name">Expansion Opps</div>
+        <div class="c-desc">AI-discovered cross-sell and upsell opportunities</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)"></span>
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">📦</div>
+        <div class="c-name">Product Intel</div>
+        <div class="c-desc">GA/EOL dates, tech previews, lifecycle status per product</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--yellow)"></span>
+          <span class="signal-dot" style="background: var(--magenta)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">📋</div>
+        <div class="c-name">Playbook</div>
+        <div class="c-desc">Engagement runbook with correlated signal chains</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--orange)"></span>
+          <span class="signal-dot" style="background: var(--blue)"></span>
+          <span class="signal-dot" style="background: var(--aqua)"></span>
+          <span class="signal-dot" style="background: var(--violet)"></span>
+        </div>
+      </div>
+      <div class="consumer-card">
+        <div class="c-icon">🗣️</div>
+        <div class="c-name">AE Voice</div>
+        <div class="c-desc">Style guide matching each AE's communication patterns</div>
+        <div class="c-signals">
+          <span class="signal-dot" style="background: var(--blue)"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div style="margin-top: 32px; padding: 16px 20px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px;">
+    <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;">Signal Types (colored dots show which signals each consumer receives)</div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--orange)"></span> Cases</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--blue)"></span> Emails</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--aqua)"></span> Pipeline / Subs</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--violet)"></span> Intelligence</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--yellow)"></span> Products</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--magenta)"></span> Competitive / News</span>
+      <span style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;"><span class="signal-dot" style="background: var(--green)"></span> Ecosystem</span>
+    </div>
+  </div>
+</div>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
