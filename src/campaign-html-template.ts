@@ -19,6 +19,7 @@ import { classifyPersona } from './lib/persona-classifier.ts'
 import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, type EmailCheckInput } from './lib/email-quality-checks.ts'
 import { type BlockOutput, type MetricRef, validateBlock, extractLinks, toBlock } from './lib/block-output.ts'
 import { isInternalUrl, isHomepageUrl, isolateLinks, restoreLinks, LinkRegistry } from './lib/link-registry.ts'
+import { callGemini } from './gemini-call.ts'
 
 const BRAND_RED = '#c41e3a'
 const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
@@ -1563,6 +1564,77 @@ function trimToWordLimit(text: string, maxWords: number): string {
   return truncated + '…'
 }
 
+// ── LLM Composition ────────────────────────────────────────────────────────
+
+export interface CompositionBrief {
+  recipientName: string
+  recipientTitle: string
+  company: string
+  aeName: string
+  tier: 'executive' | 'manager'
+  hook: string
+  bridgeContext: string
+  relationship: string
+  products: string
+  peerProof: string
+  references: string
+  challengerClose: string
+  ctaText: string
+  campaignTheme: string
+}
+
+export async function composeEmailBody(brief: CompositionBrief): Promise<string | null> {
+  const systemPrompt = 'You write concise, peer-level B2B prospecting emails for enterprise technology sales.'
+  const userPrompt = `You are writing a prospecting email on behalf of ${brief.aeName}, an Account Executive at Red Hat, to ${brief.recipientName}, ${brief.recipientTitle} at ${brief.company}.
+
+Write the email body ONLY. No subject line, no signature, no "Dear" or "Sincerely".
+
+RULES:
+- 120-150 words maximum
+- Peer-level business tone — strategic advisor, not vendor pitch
+- Lead with their specific business event: ${brief.hook}
+- Connect it to a business risk or opportunity they face
+- Weave in 2-3 Red Hat capabilities naturally — NO bullet lists, NO product catalog format
+- Include the peer proof naturally in one sentence
+- Reference the source material by name where relevant
+- If they're an existing Red Hat customer, acknowledge the relationship naturally
+- End with a specific meeting ask
+- Do NOT invent facts — use ONLY the data provided below
+- Do NOT use phrases like "I noticed", "I wanted to reach out", "I hope this finds you well"
+- Do NOT use marketing buzzwords or exclamation marks
+
+DATA FOR THIS EMAIL:
+Recipient: ${brief.recipientName}, ${brief.recipientTitle} at ${brief.company}
+Business Event: ${brief.hook}
+Business Context: ${brief.bridgeContext}
+Existing Relationship: ${brief.relationship}
+Red Hat Capabilities: ${brief.products}
+Peer Proof: ${brief.peerProof}
+Source Material: ${brief.references}
+Campaign Theme: ${brief.campaignTheme}
+Meeting Ask: ${brief.ctaText}
+
+Write the email body as plain text.`
+
+  try {
+    const result = await callGemini(systemPrompt, userPrompt, {
+      callType: 'campaign-compose',
+      temperature: 0.7,
+      model: 'lite',
+    })
+    const text = (result.text || '').trim()
+
+    const words = text.split(/\s+/).length
+    if (words < 50 || words > 250) return null
+    const firstName = brief.recipientName.split(' ')[0]
+    if (!text.includes(firstName)) return null
+
+    return text
+  } catch {
+    return null
+  }
+}
+
 /**
  * Assemble email from composable blocks, applying word budget and tier formatting.
  */
@@ -2006,13 +2078,38 @@ export async function generateCampaignFromStructured(
     const cta = buildCTA(aeName, email.recipientName, data.customerName, i)
     const signOff = buildSignOff(aeName, data.aeEmail, data.aePhone)
 
-    // Assemble with tier-appropriate formatting
-    const assembled = assembleEmail(
-      { opener, signalBridge, relationshipLine, featureBullets, referenceLine, peerPattern, challengerFrame, cta, signOff },
-      email.tier,
-      voiceTokens,
-      email.recipientName,
-    )
+    // LLM composition from structured brief, fallback to template assembly
+    const recipientExecForCompose = data.resolvedExecs.find(e => e.name === email.recipientName)
+    const compositionBrief: CompositionBrief = {
+      recipientName: email.recipientName,
+      recipientTitle: recipientExecForCompose?.title || email.tier,
+      company: data.customerName,
+      aeName,
+      tier: email.tier,
+      hook: opener.text,
+      bridgeContext: signalBridge.text,
+      relationship: relationshipLine.text,
+      products: featureBullets.text,
+      peerProof: peerPattern.text,
+      references: referenceLine.text,
+      challengerClose: challengerFrame.text,
+      ctaText: cta.text,
+      campaignTheme: data.campaignThreat || data.campaignSolution || '',
+    }
+
+    const composedBody = await composeEmailBody(compositionBrief)
+
+    let assembled: { body: string; signOff: string }
+    if (composedBody) {
+      assembled = { body: composedBody, signOff: signOff.text }
+    } else {
+      assembled = assembleEmail(
+        { opener, signalBridge, relationshipLine, featureBullets, referenceLine, peerPattern, challengerFrame, cta, signOff },
+        email.tier,
+        voiceTokens,
+        email.recipientName,
+      )
+    }
 
     const finalBody = assembled.body
 
