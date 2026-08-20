@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Challenge Workflow — Brief Encounters</title>
+<style>
+  :root {
+    --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+    --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+    --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+    --magenta: #d55181; --green: #008300; --violet: #9085e9;
+    --border: #3a3a38; --flow-line: #52514e;
+    --hidden: #d95926; --visible: #199e70;
+  }
+  [data-theme="light"] {
+    --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+    --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+    --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+    --border: #d9d9d4; --flow-line: #b0afa8;
+    --hidden: #eb6834; --visible: #1baf7a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
+  .theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .connector { display: flex; justify-content: center; height: 32px; }
+  .connector svg { display: block; }
+
+  /* Workflow steps */
+  .workflow { display: flex; flex-direction: column; gap: 0; }
+  .step { display: flex; gap: 20px; align-items: flex-start; }
+  .step-num { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; border: 2px solid var(--border); }
+  .step-content { flex: 1; background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .step-content h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .step-content p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .step-content .example { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); font-family: 'SF Mono', 'Menlo', monospace; line-height: 1.6; }
+  .step-content .example .highlight { color: var(--aqua); font-weight: 600; }
+  .step-content .example .change { color: var(--orange); font-weight: 600; }
+
+  /* Consumer cards */
+  .consumers-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+  .consumer-mini { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; text-align: center; }
+  .consumer-mini .icon { font-size: 18px; }
+  .consumer-mini .name { font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .consumer-mini .change-desc { font-size: 9px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Before/After comparison */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .compare-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .compare-panel h4 { font-size: 12px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .compare-panel .line { font-size: 11px; color: var(--text-secondary); line-height: 1.6; padding: 2px 0; }
+  .compare-panel .line.added { color: var(--aqua); background: rgba(25, 158, 112, 0.08); border-radius: 3px; padding: 2px 4px; }
+  .compare-panel .line.removed { color: var(--hidden); text-decoration: line-through; opacity: 0.6; }
+
+  /* Changeable inputs */
+  .changeable-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+  .changeable { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .changeable .what { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .changeable .how { font-size: 11px; color: var(--text-secondary); }
+  .changeable .effect { font-size: 10px; color: var(--aqua); margin-top: 4px; font-style: italic; }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<div class="container">
+  <h1>The Challenge Workflow</h1>
+  <p class="subtitle">Change an input → regenerate → see the output change. This is how the team demonstrates innovation.</p>
+
+  <div class="workflow">
+    <!-- Step 1: Baseline -->
+    <div class="step">
+      <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
+      <div class="step-content">
+        <h3><span class="dot" style="background: var(--blue)"></span> Capture Baseline</h3>
+        <p>Open any customer account → read the current brief and account plan. This is the "before" state. Note the signal counts, graph edges, and quality score.</p>
+        <div class="example">
+          Dashboard → [Select Customer] → Account Plan<br>
+          <span class="highlight">Score: 95.2%</span> | <span class="highlight">Sections: 12</span> | <span class="highlight">Initiatives: 4</span><br>
+          Customer Success: <span class="change">67%</span> ← example lowest category
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
+
+    <!-- Step 2: Change an Input -->
+    <div class="step">
+      <div class="step-num" style="color: var(--orange); border-color: var(--orange);">2</div>
+      <div class="step-content">
+        <h3><span class="dot" style="background: var(--orange)"></span> Change an Input</h3>
+        <p>Pick any of the hidden inputs and modify it. Each change produces a different effect on the output.</p>
+        <div class="changeable-grid">
+          <div class="changeable">
+            <div class="what">Inject a new support case</div>
+            <div class="how">Add a Sev1 case to cases.json → triggers cross-reference with existing signals</div>
+            <div class="effect">Effect: New case appears in brief, graph edges increase, recommended actions update</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Update the CY27 planning deck</div>
+            <div class="how">Edit cy27-planning-deck.txt → changes strategic context and CY27 requirements</div>
+            <div class="effect">Effect: Partner growth strategy, sovereignty section, and timeline all shift</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Add email threads</div>
+            <div class="how">Add customer emails to the email cache → email intelligence loads for next generation</div>
+            <div class="effect">Effect: Engagement timeline populates, contact names surface, meeting prep improves</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Modify the quality threshold</div>
+            <div class="how">Change PASS_THRESHOLD from 75 to 90 → forces higher-quality regeneration</div>
+            <div class="effect">Effect: Plans retry more, output depth increases, weaker sections get rewritten</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Add a solution play</div>
+            <div class="how">New solution play matched to customer's tech stack → appears in initiatives</div>
+            <div class="effect">Effect: New initiative with estimated TCV, specific Red Hat product positioning</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Change the playbook guidance</div>
+            <div class="how">Edit playbook.md → different planning methodology or emphasis</div>
+            <div class="effect">Effect: Plan structure shifts, section depth changes, different strategic framing</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
+
+    <!-- Step 3: Regenerate -->
+    <div class="step">
+      <div class="step-num" style="color: var(--violet); border-color: var(--violet);">3</div>
+      <div class="step-content">
+        <h3><span class="dot" style="background: var(--violet)"></span> Regenerate</h3>
+        <p>Click regenerate. The pipeline re-runs with the modified input. Watch the provenance table update — it shows exactly which sources loaded and how many tokens each contributed.</p>
+        <div class="example">
+          <span class="highlight">Provenance after injection:</span><br>
+          signal-loader: <span class="highlight">loaded</span> (2,800 tokens — <span class="change">+400 from new case</span>)<br>
+          templateAll: <span class="highlight">loaded</span> (4,100 tokens — <span class="change">+300 from new signals</span>)<br>
+          intelligence: <span class="highlight">loaded</span> (5,000 tokens)<br>
+          solution-plays: <span class="highlight">loaded</span> (1,200 tokens — <span class="change">+400 from new play</span>)<br>
+          email-intelligence: <span class="change">now loaded</span> (800 tokens — <span class="change">NEW</span>)
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
+
+    <!-- Step 4: Compare -->
+    <div class="step">
+      <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">4</div>
+      <div class="step-content">
+        <h3><span class="dot" style="background: var(--aqua)"></span> Compare Before / After</h3>
+        <p>Side-by-side diff shows exactly what changed. The provenance panel explains WHY — which new signals caused each change.</p>
+        <div class="compare">
+          <div class="compare-panel">
+            <h4><span class="dot" style="background: var(--text-muted)"></span> Before (baseline)</h4>
+            <div class="line">Score: 95.2% | Customer Success: 67%</div>
+            <div class="line">Initiatives: 4 (RHEL AI, Ansible, OCP, OCP Virt)</div>
+            <div class="line">Graph: ~413 edges, ~388 nodes</div>
+            <div class="line">Provenance: sources loaded but hidden</div>
+            <div class="line removed">No email intelligence</div>
+            <div class="line removed">No Sev1 case context</div>
+          </div>
+          <div class="compare-panel">
+            <h4><span class="dot" style="background: var(--aqua)"></span> After (injection)</h4>
+            <div class="line">Score: 97.1% | Customer Success: <span style="color:var(--aqua)">83%</span></div>
+            <div class="line added">+ New initiative: "OpenShift Networking Recovery"</div>
+            <div class="line">Graph: <span style="color:var(--aqua)">edges increase</span>, <span style="color:var(--aqua)">nodes increase</span></div>
+            <div class="line">Provenance: <span style="color:var(--aqua)">new sources now loaded</span></div>
+            <div class="line added">+ Email threads now loading — engagement context surfaces</div>
+            <div class="line added">+ Sev1 case cross-referenced with subscription renewal timeline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
+
+    <!-- Step 5: Ripple effect -->
+    <div class="step">
+      <div class="step-num" style="color: var(--magenta); border-color: var(--magenta);">5</div>
+      <div class="step-content">
+        <h3><span class="dot" style="background: var(--magenta)"></span> Ripple Effect — Other Consumers Update Too</h3>
+        <p>The same signal change ripples through every consumer that uses those signals. One injection → multiple outputs change.</p>
+        <div class="consumers-row">
+          <div class="consumer-mini">
+            <div class="icon">📰</div>
+            <div class="name">Customer Brief</div>
+            <div class="change-desc">New Sev1 case appears as top priority</div>
+          </div>
+          <div class="consumer-mini">
+            <div class="icon">📊</div>
+            <div class="name">Account Plan</div>
+            <div class="change-desc">New initiative + improved score</div>
+          </div>
+          <div class="consumer-mini">
+            <div class="icon">🤝</div>
+            <div class="name">Meeting Prep</div>
+            <div class="change-desc">Sev1 case as #1 talking point</div>
+          </div>
+          <div class="consumer-mini">
+            <div class="icon">✉️</div>
+            <div class="name">Campaigns</div>
+            <div class="change-desc">Outreach re-prioritized for urgency</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- The Demo Script -->
+  <div style="margin-top: 48px; background: var(--surface-card); border: 2px solid var(--violet); border-radius: 14px; padding: 24px 28px;">
+    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">The 60-Second Demo Script</h3>
+    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
+      <strong style="color: var(--blue)">1.</strong> "Here's the account plan for this customer. Score: 95.2%. But you can't see what went into it."<br>
+      <strong style="color: var(--orange)">2.</strong> "Let me show you." <em>[Toggle provenance panel — 9 inputs appear, showing what loaded]</em><br>
+      <strong style="color: var(--orange)">3.</strong> "Watch what happens when I inject a Sev1 case." <em>[Add case to pipeline]</em><br>
+      <strong style="color: var(--violet)">4.</strong> "Regenerate." <em>[Pipeline re-runs, provenance updates live — token counts shift, new sources appear]</em><br>
+      <strong style="color: var(--aqua)">5.</strong> "Score jumped to 97.1%. Customer Success went from 67% to 83%. A new initiative appeared. And look — the brief, meeting prep, and campaigns all updated too."<br>
+      <strong style="color: var(--magenta)">6.</strong> "That's the pipeline. Transparent, traceable, and it gets smarter with every signal."
+    </p>
+  </div>
+</div>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
