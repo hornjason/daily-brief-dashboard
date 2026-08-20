@@ -867,15 +867,15 @@ export function buildOpener(
     })
 
     const INIT_EXEC_TEMPLATES = [
-      (name: string) => `${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} caught my attention.`,
-      (name: string) => `Hi ${firstName} — with ${customerFirstWord}'s ${name.toLowerCase()}, there's a strategic conversation worth having.`,
-      (name: string) => `${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} signals a shift worth examining.`,
+      (name: string) => `${firstName}, ${customerFirstWord}'s ${name} caught my attention.`,
+      (name: string) => `Hi ${firstName} — with ${customerFirstWord}'s ${name}, there's a strategic conversation worth having.`,
+      (name: string) => `${firstName}, ${customerFirstWord}'s ${name} signals a shift worth examining.`,
     ]
 
     const INIT_MGR_TEMPLATES = [
-      (name: string) => `Hi ${firstName} — ${customerFirstWord}'s ${name.toLowerCase()} has practical implications for your team.`,
-      (name: string) => `${firstName}, with ${customerFirstWord}'s ${name.toLowerCase()}, there are some technical decisions worth revisiting.`,
-      (name: string) => `Hi ${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} creates some interesting infrastructure questions.`,
+      (name: string) => `Hi ${firstName} — ${customerFirstWord}'s ${name} has practical implications for your team.`,
+      (name: string) => `${firstName}, with ${customerFirstWord}'s ${name}, there are some technical decisions worth revisiting.`,
+      (name: string) => `Hi ${firstName}, ${customerFirstWord}'s ${name} creates some interesting infrastructure questions.`,
     ]
 
     const templates = tier === 'executive' ? INIT_EXEC_TEMPLATES : INIT_MGR_TEMPLATES
