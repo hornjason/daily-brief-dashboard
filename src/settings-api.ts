@@ -654,6 +654,28 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     return c.json({
       briefProvider: getBriefProvider(),
       briefConfigured: isBriefConfigured(),
+      providers: {
+        pai: {
+          vars: ['GOOGLE_CLOUD_PROJECT', 'GEMINI_SERVICE_ACCOUNT_KEY'],
+          snippet: 'GOOGLE_CLOUD_PROJECT=my-project\nGEMINI_SERVICE_ACCOUNT_KEY=...',
+          description: 'Google Gemini via Vertex AI (default). Requires a GCP project with Vertex AI enabled.',
+        },
+        openai: {
+          vars: ['OPENAI_API_KEY'],
+          snippet: 'OPENAI_API_KEY=sk-...',
+          description: 'OpenAI GPT models. Requires an API key from platform.openai.com.',
+        },
+        anthropic: {
+          vars: ['ANTHROPIC_API_KEY'],
+          snippet: 'ANTHROPIC_API_KEY=sk-ant-...',
+          description: 'Anthropic Claude models. Requires an API key from console.anthropic.com.',
+        },
+        ollama: {
+          vars: ['OLLAMA_URL'],
+          snippet: 'OLLAMA_URL=http://localhost:11434',
+          description: 'Local Ollama instance. Requires Ollama running with a compatible model pulled.',
+        },
+      },
     })
   })
 

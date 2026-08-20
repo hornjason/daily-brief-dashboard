@@ -224,7 +224,7 @@ function BriefSetupCard({ config, onTestDone }: { config: DashboardConfig; onTes
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; preview?: string } | null>(null)
 
-  const provider = config.providers[selected]
+  const provider = config.providers?.[selected]
 
   async function runTest() {
     setTesting(true)
@@ -254,7 +254,7 @@ function BriefSetupCard({ config, onTestDone }: { config: DashboardConfig; onTes
 
         {/* Provider tabs */}
         <div className="flex gap-1 flex-wrap">
-          {Object.entries(config.providers).map(([key, p]) => (
+          {Object.entries(config.providers ?? {}).map(([key, p]) => (
             <button
               key={key}
               onClick={() => setSelected(key)}
@@ -589,7 +589,7 @@ function BriefSection({ name }: { name: string }) {
 
   // Show setup card if provider not configured and brief hasn't loaded
   // NOTE: Moved after all hooks to comply with React Rules of Hooks (BKL-G16)
-  if (config && !config.briefConfigured && !data && !configDismissed) {
+  if (config && !config.briefConfigured && config.providers && !data && !configDismissed) {
     return <BriefSetupCard config={config} onTestDone={() => { setConfigDismissed(true); refresh() }} />
   }
 
