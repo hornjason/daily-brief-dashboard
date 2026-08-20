@@ -1294,11 +1294,15 @@ function cleanPeerOutcome(raw: string): string {
     .trim()
   if (cleaned.length === 0) return ''
   const words = cleaned.split(/\s+/)
-  if (words.length <= 25) return cleaned
-  const truncated = words.slice(0, 25).join(' ')
-  const lastBoundary = truncated.search(/[.;,—]\s*\S+$/)
-  if (lastBoundary > 0) return truncated.slice(0, lastBoundary + 1).trim()
-  return truncated.replace(/\s+\S*$/, '').trim()
+  let result: string
+  if (words.length <= 25) {
+    result = cleaned
+  } else {
+    const truncated = words.slice(0, 25).join(' ')
+    const lastBoundary = truncated.search(/[.;,—]\s*\S+$/)
+    result = lastBoundary > 0 ? truncated.slice(0, lastBoundary + 1).trim() : truncated.replace(/\s+\S*$/, '').trim()
+  }
+  return result.replace(/\.{2,}$/g, '.').replace(/\.\s*$/g, '').trim()
 }
 
 function formatPeerProofLine(customer: string, outcome: string): string {
@@ -1384,6 +1388,7 @@ export function buildChallengerFrame(
     insight = insight.split(' — ')[0]
   }
   insight = insight
+    .replace(/\s*\([a-z-]+,\s*[a-z-]+\)\s*/gi, ' ')
     .replace(/\s*(?:detected|identified|flagged|observed|reported)\s*/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
