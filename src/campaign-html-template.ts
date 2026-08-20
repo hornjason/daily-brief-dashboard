@@ -1581,6 +1581,7 @@ export interface CompositionBrief {
   challengerClose: string
   ctaText: string
   campaignTheme: string
+  campaignContext?: string
 }
 
 export async function composeEmailBody(brief: CompositionBrief): Promise<string | null> {
@@ -1596,9 +1597,11 @@ RULES:
 - Connect it to a business risk or opportunity they face
 - Weave in 2-3 Red Hat capabilities naturally — NO bullet lists, NO product catalog format
 - Include the peer proof naturally in one sentence
-- Reference the source material by name where relevant
+- Reference the source material by name where relevant (use markdown links: [Title](URL))
 - If they're an existing Red Hat customer, acknowledge the relationship naturally
+- When mentioning Red Hat products, use markdown links: [Product Name](URL)
 - End with a specific meeting ask
+- If a tax rate or financial figure is available in the data, cite it specifically
 - Do NOT invent facts — use ONLY the data provided below
 - Do NOT use phrases like "I noticed", "I wanted to reach out", "I hope this finds you well"
 - Do NOT use marketing buzzwords or exclamation marks
@@ -1608,13 +1611,13 @@ Recipient: ${brief.recipientName}, ${brief.recipientTitle} at ${brief.company}
 Business Event: ${brief.hook}
 Business Context: ${brief.bridgeContext}
 Existing Relationship: ${brief.relationship}
-Red Hat Capabilities: ${brief.products}
+Red Hat Capabilities (with URLs): ${brief.products}
 Peer Proof: ${brief.peerProof}
-Source Material: ${brief.references}
+Source Material (with URLs): ${brief.references}
 Campaign Theme: ${brief.campaignTheme}
 Meeting Ask: ${brief.ctaText}
-
-Write the email body as plain text.`
+${brief.campaignContext || ''}
+Write the email body using markdown links for products and sources.`
 
   try {
     const result = await callGemini(systemPrompt, userPrompt, {
@@ -2094,6 +2097,9 @@ export async function generateCampaignFromStructured(
       challengerClose: challengerFrame.text,
       ctaText: cta.text,
       campaignTheme: data.campaignThreat || data.campaignSolution || '',
+      campaignContext: (data.campaignThreat || '').toLowerCase().includes('saas tax') || (data.campaignThreat || '').toLowerCase().includes('sb 122')
+        ? 'Key fact: California SB 122 imposes sales tax (base rate 7.25%, up to 10.25% with local additions) on SaaS subscriptions effective January 1, 2027. Self-managed on-premises deployments are exempt. This is a new, unplanned cost for every SaaS tool in the stack.'
+        : undefined,
     }
 
     const composedBody = await composeEmailBody(compositionBrief)
