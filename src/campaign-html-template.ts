@@ -2097,9 +2097,7 @@ export async function generateCampaignFromStructured(
       challengerClose: challengerFrame.text,
       ctaText: cta.text,
       campaignTheme: data.campaignThreat || data.campaignSolution || '',
-      campaignContext: (data.campaignThreat || '').toLowerCase().includes('saas tax') || (data.campaignThreat || '').toLowerCase().includes('sb 122')
-        ? 'Key fact: California SB 122 imposes sales tax (base rate 7.25%, up to 10.25% with local additions) on SaaS subscriptions effective January 1, 2027. Self-managed on-premises deployments are exempt. This is a new, unplanned cost for every SaaS tool in the stack.'
-        : undefined,
+      campaignContext: data.materialTitle ? `Campaign source: "${data.materialTitle}"` : undefined,
     }
 
     const composedBody = await composeEmailBody(compositionBrief)
