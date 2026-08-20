@@ -35,6 +35,7 @@ IMAGE      := localhost/daily-brief-dashboard:latest
 REMOTE     := ghcr.io/hornjason/daily-brief-dashboard:latest
 IMAGE_L4   := localhost/daily-brief-l4-daemon:latest
 REMOTE_L4  := ghcr.io/hornjason/daily-brief-l4-daemon:latest
+CHALLENGE_IMAGE := ghcr.io/hornjason/daily-brief-dashboard:challenge
 PLATFORMS  := linux/amd64,linux/arm64
 DATA       := $(HOME)/hero-test/data
 
@@ -907,6 +908,18 @@ sync-up-vnc: sync-down
 	  --name pai-sync-l3 \
 	  $(IMAGE_L4)
 	@echo "Sync daemon running with VNC at http://localhost:6082"
+
+# ── Challenge image (AI Challenge — CrowdStrike-only demo) ────────────────────
+challenge-build:
+	@echo "Validating challenge data (credential check)..."
+	bash $(CURDIR)/scripts/build-challenge-data.sh
+	@echo "Building challenge image..."
+	podman build -f $(CURDIR)/Dockerfile.challenge -t $(CHALLENGE_IMAGE) $(CURDIR)
+	@echo "Challenge image built: $(CHALLENGE_IMAGE)"
+
+challenge-push:
+	podman push $(CHALLENGE_IMAGE)
+	@echo "Challenge image pushed: $(CHALLENGE_IMAGE)"
 
 # ── All environments ──────────────────────────────────────────────────────────
 all-down: down dev-down demo-down

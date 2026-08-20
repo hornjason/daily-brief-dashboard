@@ -128,9 +128,12 @@ loadServerState()
 import { checkForUpgrade } from './src/build-hash.ts'
 {
   const upgradeResult = checkForUpgrade()
-  if (upgradeResult.upgradeDetected) {
+  // CHALLENGE_MODE: skip upgrade-triggered refresh — baked data is authoritative (#20)
+  if (upgradeResult.upgradeDetected && process.env.CHALLENGE_MODE !== 'true') {
     console.log(`[startup] Upgrade detected (old: ${upgradeResult.oldSha ?? 'none'} → new: ${upgradeResult.newSha}). Background refresh started.`)
     void refreshAllModules('upgrade')
+  } else if (upgradeResult.upgradeDetected) {
+    console.log(`[startup] Upgrade detected but CHALLENGE_MODE=true — skipping automatic refresh.`)
   } else {
     console.log(`[startup] No upgrade detected (build: ${upgradeResult.buildInfo?.gitSha ?? 'unknown'}).`)
   }

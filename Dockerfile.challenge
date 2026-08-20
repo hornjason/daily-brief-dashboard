@@ -4,18 +4,10 @@ FROM ghcr.io/hornjason/daily-brief-dashboard:latest
 
 ENV CHALLENGE_MODE=true
 
-# Config files (explicit per-file COPY — no directory COPYs)
-COPY data-challenge/config/customers.json /data/config/customers.json
-COPY data-challenge/config/aes.json /data/config/aes.json
-COPY data-challenge/config/settings.json /data/config/settings.json
-COPY data-challenge/config/pod-config.json /data/config/pod-config.json
+# Config files (hand-curated, credential-free — validated by build-challenge-data.sh)
+COPY data-challenge/config/ /data/config/
 
-# Baseline data (explicit per-file COPY)
-COPY data-demo/baselines/crowdstrike/crowdstrike-cases.json /data/cache/cases.json
-COPY data-demo/baselines/crowdstrike/crowdstrike-emails.json /data/cache/crowdstrike-emails.json
-COPY data-demo/baselines/crowdstrike/crowdstrike-sheets.json /data/cache/crowdstrike-sheets.json
-COPY data-demo/baselines/crowdstrike/intelligence-graph.json /data/cache/intelligence-graph.json
-COPY data-demo/baselines/crowdstrike/intelligence-graph.previous.json /data/cache/intelligence-graph.previous.json
-COPY data-demo/baselines/crowdstrike/motion.json /data/cache/motion.json
+# Full CrowdStrike cache: signals, intelligence docs, news, campaigns, global reference data
+COPY data-challenge/cache/ /data/cache/
 
 EXPOSE 7777
