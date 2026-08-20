@@ -153,18 +153,20 @@ registerProbe({
     }
   },
   heal: async () => {
-    // Try falling back to gemini-2.5-pro
-    process.env.GEMINI_MODEL = 'gemini-2.5-pro'
-    try {
-      const { callGemini } = await import('./gemini-call.ts')
-      await callGemini(
-        'You are a health check probe.',
-        'Say hello',
-        { callType: 'health-probe', timeoutMs: 15_000 }
-      )
-      return 'Set GEMINI_MODEL=gemini-2.5-pro (org policy fallback)'
-    } catch (retryErr: any) {
-      throw new Error(`Fallback to gemini-2.5-pro also failed: ${retryErr.message?.slice(0, 200)}`)
+    // Try falling back to gemini-3.5-flash then gemini-2.5-pro
+    for (const fallback of ['gemini-3.5-flash', 'gemini-2.5-pro']) {
+      process.env.GEMINI_MODEL = fallback
+      try {
+        const { callGemini } = await import('./gemini-call.ts')
+        await callGemini(
+          'You are a health check probe.',
+          'Say hello',
+          { callType: 'health-probe', timeoutMs: 15_000 }
+        )
+        return `Set GEMINI_MODEL=${fallback} (org policy fallback)`
+      } catch { /* try next */ }
+    }
+    throw new Error('All model fallbacks failed (gemini-3.5-flash, gemini-2.5-pro)')
     }
   },
 })

@@ -379,18 +379,18 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
   router.post('/api/settings/ai', async (c) => {
     const body = await c.req.json<Partial<AiConfig>>().catch(() => ({} as Partial<AiConfig>))
     const current = getAiConfig()
-    const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'])
+    const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'])
     const updated: AiConfig = { ...current }
 
     if ('geminiModel' in body) {
       if (typeof body.geminiModel !== 'string' || !ALLOWED_MODELS.has(body.geminiModel)) {
-        return c.json({ error: 'geminiModel must be one of: gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite' }, 400)
+        return c.json({ error: `geminiModel must be one of: ${[...ALLOWED_MODELS].join(', ')}` }, 400)
       }
       updated.geminiModel = body.geminiModel
     }
     if ('geminiModelLite' in body) {
       if (typeof body.geminiModelLite !== 'string' || !ALLOWED_MODELS.has(body.geminiModelLite)) {
-        return c.json({ error: 'geminiModelLite must be one of: gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite' }, 400)
+        return c.json({ error: `geminiModelLite must be one of: ${[...ALLOWED_MODELS].join(', ')}` }, 400)
       }
       updated.geminiModelLite = body.geminiModelLite
     }

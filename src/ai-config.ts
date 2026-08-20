@@ -23,8 +23,8 @@ export interface AiConfig {
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
-  geminiModel: 'gemini-2.5-pro',
-  geminiModelLite: 'gemini-2.5-flash',
+  geminiModel: 'gemini-3.5-flash',
+  geminiModelLite: 'gemini-3.1-flash-lite',
   briefSynthesisTemperature: 0.3,
   customerIntelTemperature: 0.3,
   featureExtractionMaxFeatures: 30,

@@ -27,7 +27,7 @@ import { getAiConfig, getGeminiModel, getGeminiModelLite } from './ai-config.ts'
 
 const CACHE_DIR = resolve(import.meta.dir, '../data/cache/gemini-delta')
 const PROJECT_ID = process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'jhorn-pai'
-const LOCATION = process.env.VERTEX_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'us-east1'
+const LOCATION = process.env.VERTEX_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'global'
 
 // Scoring version — bump when signal scoring logic changes to invalidate delta caches
 const SCORING_VERSION = 'adr027-v1'
@@ -124,7 +124,8 @@ export async function callGemini(
 
   try {
     // ── Step 5: Call Gemini ────────────────────────────────────────────────────
-    const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${modelName}:generateContent`
+    const host = LOCATION === 'global' ? 'aiplatform.googleapis.com' : `${LOCATION}-aiplatform.googleapis.com`
+    const url = `https://${host}/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${modelName}:generateContent`
 
     const response = await fetchGeminiWithRetry(
       url,
