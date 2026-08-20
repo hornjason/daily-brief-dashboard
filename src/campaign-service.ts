@@ -949,6 +949,7 @@ export async function generateCampaign(
       pass0Briefs: pass0Briefs.length > 0 ? pass0Briefs : undefined,
       productFitSections: Object.keys(productFitSections).length > 0 ? productFitSections : undefined,
       signalQuality: signalQuality.disposition !== 'PROCEED' || config?.forceGenerate ? signalQuality : undefined,
+      sourceExcerpt: materialContent.slice(0, 3000),
     })
 
     // Store selection JSON as markdown equivalent for cache compatibility

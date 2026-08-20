@@ -56,6 +56,40 @@ export async function extractFromEmail(subject: string): Promise<EmailExtractRes
     bodyText = msgRes.data.snippet ?? ''
   }
 
+  // Detect PDF/PPTX attachments
+  const attachmentTexts: string[] = []
+  function findAttachmentIds(payload: any): Array<{filename: string; attachmentId: string; mimeType: string}> {
+    const results: Array<{filename: string; attachmentId: string; mimeType: string}> = []
+    if (payload?.filename && payload.filename.length > 0 && payload.body?.attachmentId) {
+      results.push({ filename: payload.filename, attachmentId: payload.body.attachmentId, mimeType: payload.mimeType || '' })
+    }
+    if (payload?.parts) {
+      for (const part of payload.parts) results.push(...findAttachmentIds(part))
+    }
+    return results
+  }
+
+  const attachments = findAttachmentIds(msgRes.data.payload)
+  const pdfAttachments = attachments.filter(a => a.mimeType === 'application/pdf' || a.filename.endsWith('.pdf'))
+
+  for (const att of pdfAttachments.slice(0, 2)) {
+    try {
+      const attRes = await gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId: msgId,
+        id: att.attachmentId,
+      })
+      if (attRes.data.data) {
+        const pdfBuffer = Buffer.from(attRes.data.data, 'base64url')
+        attachmentTexts.push(`[Attached PDF: ${att.filename}, ${Math.round(pdfBuffer.length / 1024)}KB]`)
+      }
+    } catch { /* skip failed attachments */ }
+  }
+
+  if (attachmentTexts.length > 0) {
+    bodyText += '\n\n## Attachments\n' + attachmentTexts.join('\n')
+  }
+
   const sourceLinks = await fetchLinkedContent(urls)
 
   return {

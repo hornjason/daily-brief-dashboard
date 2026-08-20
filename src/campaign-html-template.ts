@@ -836,6 +836,7 @@ export interface StructuredCampaignData {
   productFitSections?: Record<string, string>
   signalQuality?: { disposition: string; signalCompleteness: number; missing: string[] }
   enablePolish?: boolean
+  sourceExcerpt?: string
 }
 
 // ── 8 Composable Email Blocks ───────────────────────────────────────────────
@@ -1615,8 +1616,8 @@ Red Hat Capabilities (with URLs): ${brief.products}
 Peer Proof: ${brief.peerProof}
 Source Material (with URLs): ${brief.references}
 Campaign Theme: ${brief.campaignTheme}
+Source Material Content: ${brief.campaignContext || 'None provided'}
 Meeting Ask: ${brief.ctaText}
-${brief.campaignContext || ''}
 Write the email body using markdown links for products and sources.`
 
   try {
@@ -2097,7 +2098,7 @@ export async function generateCampaignFromStructured(
       challengerClose: challengerFrame.text,
       ctaText: cta.text,
       campaignTheme: data.campaignThreat || data.campaignSolution || '',
-      campaignContext: data.materialTitle ? `Campaign source: "${data.materialTitle}"` : undefined,
+      campaignContext: data.sourceExcerpt || (data.materialTitle ? `Campaign source: "${data.materialTitle}"` : undefined),
     }
 
     const composedBody = await composeEmailBody(compositionBrief)
