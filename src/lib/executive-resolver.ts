@@ -20,6 +20,7 @@ export interface ResolvedExecutive {
   name: string        // Found executive name
   title: string       // Actual title at the company
   email?: string
+  emailSource?: 'gmail' | 'calendar' | 'inferred'
   linkedinUrl?: string
   resolvedAt: string
   leadershipContext?: string  // Excerpt from intelligence Leadership section
@@ -213,6 +214,24 @@ export function extractContactsFromIntelligence(companyName: string): ResolvedEx
   }
 }
 
+// ── LinkedIn URL Validation ─────────────────────────────────────────────────
+
+async function validateLinkedInUrl(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(5000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+    })
+    console.log(`[executive-resolver] LinkedIn validation: ${url} → ${res.status}`)
+    return res.status === 200
+  } catch (e: any) {
+    console.log(`[executive-resolver] LinkedIn validation: ${url} → error (${e?.message ?? 'timeout'})`)
+    return false
+  }
+}
+
 // ── Resolution ──────────────────────────────────────────────────────────────
 
 /**
@@ -267,7 +286,9 @@ export async function resolveExecutivesByRole(
         for (const entry of parsed) {
           const contact = results.find(r => r.name.toLowerCase() === entry.name.toLowerCase())
           if (contact && entry.linkedinUrl) {
-            contact.linkedinUrl = entry.linkedinUrl
+            const valid = await validateLinkedInUrl(entry.linkedinUrl)
+            if (valid) contact.linkedinUrl = entry.linkedinUrl
+            else console.log(`[executive-resolver] Dropped invalid LinkedIn URL for ${entry.name}`)
           }
         }
 
@@ -342,11 +363,17 @@ export async function resolveExecutivesByRole(
           if (!entry.name || !entry.role) continue
           if (seenNames.has(entry.name.toLowerCase())) continue
           seenNames.add(entry.name.toLowerCase())
+          let validatedLinkedinUrl: string | undefined
+          if (entry.linkedinUrl) {
+            const valid = await validateLinkedInUrl(entry.linkedinUrl)
+            validatedLinkedinUrl = valid ? entry.linkedinUrl : undefined
+            if (!valid) console.log(`[executive-resolver] Dropped invalid LinkedIn URL for ${entry.name}`)
+          }
           const exec: ResolvedExecutive = {
             role: entry.role,
             name: entry.name,
             title: entry.title ?? entry.role,
-            linkedinUrl: entry.linkedinUrl || undefined,
+            linkedinUrl: validatedLinkedinUrl,
             resolvedAt: new Date().toISOString(),
           }
           newExecs[entry.role] = exec
@@ -364,16 +391,21 @@ export async function resolveExecutivesByRole(
 
   // ── Tier 3: Email enrichment ───────────────────────────────────────────
   if (companyDomain) {
+    const { detectEmailPattern, generateEmailFromPattern } = await import('./email-pattern-detector.ts')
+    const pattern = await detectEmailPattern(companyDomain, companyName)
+
     for (const exec of results) {
       if (exec.email) continue
       const nameParts = exec.name.trim().split(/\s+/)
       if (nameParts.length >= 2) {
-        const firstInitial = nameParts[0][0].toLowerCase()
+        const firstName = nameParts[0].toLowerCase()
         const lastName = nameParts[nameParts.length - 1].toLowerCase()
-        exec.email = `${firstInitial}${lastName}@${companyDomain}`
+        const { email, emailSource } = generateEmailFromPattern(firstName, lastName, companyDomain, pattern)
+        exec.email = email
+        exec.emailSource = emailSource
       }
     }
-    console.log(`[executive-resolver] Tier 3: Enriched ${results.filter(r => r.email).length} contacts with inferred emails`)
+    console.log(`[executive-resolver] Tier 3: Enriched ${results.filter(r => r.email).length} contacts with ${pattern ? pattern.format + ' pattern' : 'inferred'} emails`)
   }
 
   return results.map(r => ({ ...r, title: cleanExecutiveTitle(r.title) }))

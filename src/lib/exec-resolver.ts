@@ -125,7 +125,10 @@ function lookupDomain(customerName: string): string | undefined {
   }
 }
 
-function backfillEmails(execs: ResolvedExecutive[], domain: string): number {
+async function backfillEmails(execs: ResolvedExecutive[], domain: string, customerName: string): Promise<number> {
+  const { detectEmailPattern, generateEmailFromPattern } = await import('./email-pattern-detector.ts')
+  const pattern = await detectEmailPattern(domain, customerName)
+
   let backfilled = 0
   for (const exec of execs) {
     if (exec.email) continue
@@ -138,9 +141,11 @@ function backfillEmails(execs: ResolvedExecutive[], domain: string): number {
       /^[A-Za-z]/.test(nameParts[0]) &&
       /^[A-Za-z]/.test(nameParts[nameParts.length - 1])
     ) {
-      const firstInitial = nameParts[0][0].toLowerCase()
+      const firstName = nameParts[0].toLowerCase()
       const lastName = nameParts[nameParts.length - 1].toLowerCase()
-      exec.email = `${firstInitial}${lastName}@${domain}`
+      const { email, emailSource } = generateEmailFromPattern(firstName, lastName, domain, pattern)
+      exec.email = email
+      exec.emailSource = emailSource
       backfilled++
     }
   }
@@ -335,7 +340,7 @@ export async function resolveAllContacts(input: ExecResolverInput): Promise<Reso
   }
   console.log(`[exec-resolver] Email domain: ${emailDomain ?? 'NONE'}, contacts: ${resolvedExecs.length}, missing email: ${resolvedExecs.filter(e => !e.email).length}`)
   if (emailDomain) {
-    const backfilled = backfillEmails(resolvedExecs, emailDomain)
+    const backfilled = await backfillEmails(resolvedExecs, emailDomain, customerName)
     console.log(`[exec-resolver] Email backfill: ${backfilled} new, ${resolvedExecs.filter(e => e.email).length}/${resolvedExecs.length} have email for ${customerName}`)
   }
 
