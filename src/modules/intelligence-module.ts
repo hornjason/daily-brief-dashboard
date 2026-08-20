@@ -163,7 +163,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
       const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
       const cleanBody = cleanMarkdown(body)
       const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
-      const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 80) : truncateAtSentence(rawTitle, 80)
+      const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 200) : truncateAtSentence(rawTitle, 200)
       entries.push({
         objective,
         metric: extractMetric(cleanBody),
@@ -179,7 +179,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
     const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
     const cleanBody = cleanMarkdown(body)
     const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
-    const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 80) : truncateAtSentence(rawTitle, 80)
+    const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 200) : truncateAtSentence(rawTitle, 200)
     entries.push({
       objective,
       metric: extractMetric(cleanBody),

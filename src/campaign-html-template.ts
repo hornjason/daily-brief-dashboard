@@ -870,25 +870,27 @@ export function buildOpener(
       observation = observation.charAt(0).toUpperCase() + observation.slice(1)
     }
 
+    const customerFirstWord = (customerName || 'your organization').split(/[\s,]+/)[0]
+
     const EXEC_GREETINGS = [
-      `${firstName}, I noticed ${observation} and thought of your team immediately.`,
-      `Hi ${firstName} — saw ${observation} and wanted to share a quick thought.`,
-      `${firstName}, a few of us were discussing ${observation} and your name came up.`,
+      `${firstName}, your team's work on ${observation} caught my attention.`,
+      `Hi ${firstName} — ${observation} stood out as particularly relevant to your strategy.`,
+      `${firstName}, a few of us were discussing ${observation} and how it connects to ${customerFirstWord}'s priorities.`,
     ]
 
     const EXEC_OPENERS = [
       ...EXEC_GREETINGS,
-      `Hi ${firstName}, ${observation} tells me this is shaping how your teams operate going forward.`,
-      `Hi ${firstName}, with ${observation}, there is an opportunity worth examining.`,
+      `${firstName}, with ${observation} reshaping priorities, there's a window worth examining.`,
       `${firstName}, ${observation} is creating a window that closes faster than most planning cycles account for.`,
       `${firstName}, ${observation} is the kind of shift that separates the organizations that act early from those that react late.`,
       `Hi ${firstName}, ${observation} is already changing how your peers allocate infrastructure investment.`,
+      `Hi ${firstName}, ${observation} is driving decisions across your peer group right now.`,
     ]
 
     const MGR_GREETINGS = [
-      `Hi ${firstName} — ${observation} caught my eye and I think it's relevant to what your team is working on.`,
-      `${firstName}, wanted to flag ${observation} — it has some practical implications worth a look.`,
-      `Hi ${firstName}, came across ${observation} and thought it was worth a quick note.`,
+      `Hi ${firstName} — ${observation} stood out as relevant to what your team is working on.`,
+      `${firstName}, wanted to flag ${observation} — it has practical implications for your team.`,
+      `Hi ${firstName}, ${observation} connects directly to priorities I'm hearing from teams like yours.`,
     ]
 
     const MGR_OPENERS = [
