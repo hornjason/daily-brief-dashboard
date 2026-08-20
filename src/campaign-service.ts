@@ -46,6 +46,7 @@ import {
   CampaignQualityGateError,
   deriveFootprint,
   deriveThreatSolution,
+  validateGeneratedCampaign,
   type SignalQualityAssessment,
 } from './lib/campaign-quality.ts'
 import { uploadCampaignToDrive } from './lib/campaign-drive.ts'
@@ -1002,7 +1003,19 @@ export async function generateCampaign(
       console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
     }
 
-  // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
+  // 7. Post-generation quality gate (#1178)
+  const campaignWarnings = validateGeneratedCampaign(
+    htmlContent,
+    selection.emails.map(e => ({ subject: e.subject, recipientName: e.recipientName })),
+  )
+  if (campaignWarnings.length > 0) {
+    console.log(`[campaigns] Quality warnings for ${customer.name}: ${campaignWarnings.length} issues`)
+    for (const w of campaignWarnings) {
+      console.log(`[campaigns]   [${w.category}] email ${w.email}: ${w.message}`)
+    }
+  }
+
+  // 8. Save to cache (with HTML content for preview + signal metadata + quality scorecard + file IDs)
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
@@ -1019,6 +1032,7 @@ export async function generateCampaign(
     signalsMissing: missing,
     signalCompleteness: signalQuality.signalCompleteness,
     qualityScorecard,
+    qualityWarnings: campaignWarnings.length > 0 ? campaignWarnings : undefined,
     campaignDirective: config?.campaignDirective,
   })
 
@@ -1273,6 +1287,8 @@ export {
   deriveThreatSolution,
   isSpeculativeInstalledBase,
   scoreStructuredOutput,
+  validateGeneratedCampaign,
+  type CampaignWarning,
   type SignalQualityAssessment,
 } from './lib/campaign-quality.ts'
 export { uploadCampaignToDrive, ensureCampaignsSubfolder } from './lib/campaign-drive.ts'

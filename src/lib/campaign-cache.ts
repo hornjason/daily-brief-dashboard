@@ -30,6 +30,7 @@ export interface CampaignCacheEntry {
   signalsMissing?: string[]
   signalCompleteness?: number
   qualityScorecard?: QualityScorecard
+  qualityWarnings?: Array<{ email: number; category: string; message: string }>
   campaignDirective?: string
 }
 
