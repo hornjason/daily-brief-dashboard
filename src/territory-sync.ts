@@ -777,6 +777,12 @@ export async function runTerritorySyncOrchestration(): Promise<{
     return { added: allToAdd.length, flagged: allToRemove.length, unchanged: allUnchanged.length }
   }
 
+  // CHALLENGE_MODE: skip customer addition — demo safety (#20)
+  if (process.env.CHALLENGE_MODE === 'true' && allToAdd.length > 0) {
+    console.log(`[challenge] Territory-sync: skipping ${allToAdd.length} customer addition(s) — CHALLENGE_MODE active`)
+    return { added: 0, flagged: allToRemove.length, unchanged: allUnchanged.length }
+  }
+
   // Auto-add new customers
   if (allToAdd.length > 0) {
     console.log(`[territory-sync] adding ${allToAdd.length} new customers`)

@@ -2078,3 +2078,18 @@ All extraction is pure regex — no Gemini, no NLP. Fields are conditionally spr
 - `techStackTriggers: string[] | null` — customer technologies that make this content relevant
 
 Schema is universal — zero product-specific code. Works for AAP, OCP-V, RHEL, and future products. Gemini extracts fields from document content via structured output. `matchDocumentToCustomer()` in `saleshub-products-module.ts` uses `techStackTriggers` alongside `integrationsReferenced` for customer matching. Quality validator enforces `buyingStage` enum membership and coherence (e.g., battlecards cannot be "awareness").
+
+---
+
+## §24 CHALLENGE_MODE Guards (#20)
+
+When `CHALLENGE_MODE=true`, the dashboard runs in a restricted mode for live demos. All guards are no-ops when the env var is unset — zero behavior change on production.
+
+| # | File | Guard | What it prevents |
+|---|---|---|---|
+| 1 | `src/refresh-engine.ts` | `CHALLENGE_SAFE_MODULES` allowlist in `refreshAllModules()` | Unsafe modules (Gemini lifecycle, product-release-radar, etc.) from running on refresh. Only 8 safe modules pass: cases, subscriptions, emails, news-radar, pipeline, recommended-actions, campaigns, rh-events. Same filter applied to per-customer refresh path. |
+| 2 | `src/refresh-engine.ts` | Early return in `refreshAll()` | Google Sheets calls (`batchRefreshSubscriptions`, `refreshCCSP`) — baked data covers these. |
+| 3 | `src/territory-sync.ts` | Early return before `writeJsonAtomic` | Territory-sync adding new customers discovered from sheets. |
+| 4 | `src/server-state.ts` | Write guard in `saveCustomers()` | Any code path adding new customers (defense-in-depth covering 13+ write paths). Allows updates to existing customers but blocks count increases. |
+
+**Background-scheduler.ts** also has CHALLENGE_MODE guards (added separately) that skip startup cascade, refreshAll, and scraper scheduling.

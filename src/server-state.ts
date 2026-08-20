@@ -72,6 +72,12 @@ export function patchAe(name: string, fields: Partial<AE>): void {
 }
 
 export function saveCustomers(updated: Customer[]): void {
+  // CHALLENGE_MODE: block adding new customers — defense-in-depth (#20)
+  if (process.env.CHALLENGE_MODE === 'true' && updated.length > customers.length) {
+    console.warn(`[challenge] saveCustomers: blocked — new count (${updated.length}) > current (${customers.length}), CHALLENGE_MODE active`)
+    return
+  }
+
   // BKL-G27: merge-not-replace — carry forward AI-enriched fields not present in `updated`
   const existing = readExistingCustomers(CUSTOMERS_PATH)
   const merged = mergeCustomers(updated as Record<string, any>[], existing) as Customer[]

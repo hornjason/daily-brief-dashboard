@@ -25,6 +25,21 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { CACHE_DIR } from './lib/paths.ts'
 import { sanitizeErr } from './utils.ts'
 
+// ── CHALLENGE_MODE: module allowlist (#20) ──────────────────────────────────
+// When CHALLENGE_MODE=true, only these modules run during refresh.
+// Prevents customer discovery, Gemini hallucination, and Google Sheets calls
+// for data already baked into the demo snapshot.
+const CHALLENGE_SAFE_MODULES = new Set([
+  'cases',
+  'subscriptions',
+  'emails',
+  'news-radar',
+  'pipeline',
+  'recommended-actions',
+  'campaigns',
+  'rh-events',
+])
+
 // ── ADR-037 F2: refreshAllModules types & constants ─────────────────────────
 
 // Gemini modules are identified by usesGemini: true in their registry entry (ADR-037)
@@ -107,8 +122,19 @@ export async function refreshAllModules(trigger: string): Promise<RefreshManifes
   try {
   const startedAt = new Date().toISOString()
 
-  const allModules = FeatureModuleRegistry.getRegisteredModules()
+  let allModules = FeatureModuleRegistry.getRegisteredModules()
   const customerNames = customers.map(c => c.name)
+
+  // CHALLENGE_MODE: filter to safe modules only (#20)
+  if (process.env.CHALLENGE_MODE === 'true') {
+    const before = allModules.length
+    allModules = allModules.filter(m => {
+      if (CHALLENGE_SAFE_MODULES.has(m.name)) return true
+      console.log(`[challenge] Skipping module ${m.name} — not in CHALLENGE_SAFE_MODULES`)
+      return false
+    })
+    console.log(`[challenge] refreshAllModules: ${allModules.length}/${before} modules allowed`)
+  }
 
   // Split into fast (non-Gemini) and Gemini queues — registry-driven via usesGemini field
   const fastModules = allModules.filter(m => !m.usesGemini)
@@ -356,6 +382,12 @@ async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors:
 // ── Full data refresh ───────────────────────────────────────────────────────
 
 export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; errors: string[] }> {
+  // CHALLENGE_MODE: skip Google Sheets calls — baked data covers these (#20)
+  if (process.env.CHALLENGE_MODE === 'true') {
+    console.log('[challenge] refreshAll: skipping batchRefreshSubscriptions/refreshCCSP — CHALLENGE_MODE active')
+    return { sheets: 0, ccsp: false, errors: [] }
+  }
+
   const errors: string[] = []
 
   // 1. Subscription sheet data for every customer (batch path — BKL-AE-03)
@@ -769,9 +801,18 @@ export function createRefreshRouter(): Hono {
     })
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-    const modules = FeatureModuleRegistry.getRegisteredModules()
+    let modules = FeatureModuleRegistry.getRegisteredModules()
     let refreshed = 0
     let failed = 0
+
+    // CHALLENGE_MODE: filter to safe modules only (#20)
+    if (process.env.CHALLENGE_MODE === 'true') {
+      modules = modules.filter(m => {
+        if (CHALLENGE_SAFE_MODULES.has(m.name)) return true
+        console.log(`[challenge] Per-customer refresh: skipping module ${m.name} — not in CHALLENGE_SAFE_MODULES`)
+        return false
+      })
+    }
 
     for (const mod of modules) {
       if (!mod.syncNow) continue
