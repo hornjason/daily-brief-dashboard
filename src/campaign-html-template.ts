@@ -1633,8 +1633,8 @@ Write the email body using markdown links for products and sources.`
       return null
     }
     const firstName = brief.recipientName.split(' ')[0]
-    if (!text.includes(firstName)) {
-      console.warn(`[compose] ${brief.recipientName}: rejected — missing first name "${firstName}"`)
+    if (!text.toLowerCase().includes(firstName.toLowerCase())) {
+      console.warn(`[compose] ${brief.recipientName}: rejected — missing first name "${firstName}" in: ${text.slice(0, 80)}`)
       return null
     }
 
