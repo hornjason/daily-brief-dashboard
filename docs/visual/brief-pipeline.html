@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brief Encounters — How the Brief Gets Built</title>
+<style>
+  :root {
+    --surface: #1a1a19;
+    --surface-card: #242423;
+    --surface-hover: #2e2e2d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8a8980;
+    --blue: #3987e5;
+    --orange: #d95926;
+    --aqua: #199e70;
+    --yellow: #c98500;
+    --magenta: #d55181;
+    --green: #008300;
+    --violet: #9085e9;
+    --border: #3a3a38;
+    --flow-line: #52514e;
+  }
+  [data-theme="light"] {
+    --surface: #fcfcfb;
+    --surface-card: #f5f5f3;
+    --surface-hover: #eeeee9;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #8a8980;
+    --blue: #2a78d6;
+    --orange: #eb6834;
+    --aqua: #1baf7a;
+    --yellow: #eda100;
+    --magenta: #e87ba4;
+    --green: #008300;
+    --violet: #4a3aa7;
+    --border: #d9d9d4;
+    --flow-line: #b0afa8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--surface);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 48px 32px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 48px;
+  }
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .stage {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    position: relative;
+    padding: 0 0 0 0;
+  }
+  .stage-connector {
+    display: flex;
+    justify-content: center;
+    padding: 0 0 0 60px;
+    height: 32px;
+  }
+  .stage-connector svg { display: block; }
+  .stage-badge {
+    flex-shrink: 0;
+    width: 120px;
+    text-align: right;
+    padding-top: 16px;
+  }
+  .stage-badge .num {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+  .stage-badge .label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .stage-content {
+    flex: 1;
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+  }
+  .stage-content h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stage-content p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .source-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .source-chip .icon { font-size: 20px; margin-bottom: 4px; }
+  .source-chip .name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+  .source-chip .count {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .metrics-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    flex: 1;
+    text-align: center;
+  }
+  .metric .value {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .metric .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .output-cards {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .output-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .output-card .name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .output-card .desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .theme-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  .maturity-bar {
+    display: flex;
+    gap: 2px;
+    margin-top: 8px;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .maturity-bar .seg {
+    flex: 1;
+    border-radius: 3px;
+  }
+  .maturity-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .day-compare {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .day-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .day-card h4 {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .day-card .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .day-card .bar-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 70px;
+    text-align: right;
+  }
+  .day-card .bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .day-card .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .day-card .bar-val {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 28px;
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<div class="container">
+  <h1>How the Brief Gets Built</h1>
+  <p class="subtitle">Brief Encounters — the intelligence pipeline from raw signals to actionable briefings</p>
+
+  <div class="pipeline">
+
+    <!-- Stage 1: Bootstrap -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 1</div>
+        <div class="label">Bootstrap</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--blue)"></span> Account Setup</h3>
+        <p>When an AE is added, the system creates Drive folders, pulls the customer list from the territory sheet, and connects Salesforce. This is the foundation — everything else builds on it.</p>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 2: Intelligence Generation -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 2</div>
+        <div class="label">Intelligence</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--violet)"></span> AI Research (Gemini + Google Search)</h3>
+        <p>For every new customer, Gemini generates a Company Intelligence doc and an Industry Analysis doc using Google Search grounding. These aren't templates — they're real research, created immediately at Day 0.</p>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 3: Signal Sources -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 3</div>
+        <div class="label">Signals</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--orange)"></span> 7 Signal Sources</h3>
+        <p>Signals accumulate over time. Each source has its own scraper, refresh timer, and cache. More time = richer brief.</p>
+        <div class="sources-grid">
+          <div class="source-chip">
+            <div class="icon">🎫</div>
+            <div class="name">Support Cases</div>
+            <div class="count">19 signals</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📧</div>
+            <div class="name">Email Threads</div>
+            <div class="count">17 signals</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📅</div>
+            <div class="name">Meetings</div>
+            <div class="count">Calendar sync</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📁</div>
+            <div class="name">Drive Docs</div>
+            <div class="count">Intel + plans</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">💰</div>
+            <div class="name">Pipeline</div>
+            <div class="count">Salesforce</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">📋</div>
+            <div class="name">Subscriptions</div>
+            <div class="count">6 active</div>
+          </div>
+          <div class="source-chip">
+            <div class="icon">☁️</div>
+            <div class="name">Cloud Spend</div>
+            <div class="count">CCSP data</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 4: Cross-Reference Engine -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 4</div>
+        <div class="label">Cross-Ref</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--aqua)"></span> Cross-Reference Engine</h3>
+        <p>Weighted confidence scoring connects signals across sources. A security advisory matches to a customer running the affected version, cross-referenced with their renewal in 47 days.</p>
+        <div class="metrics-row">
+          <div class="metric">
+            <div class="value" style="color: var(--aqua)">153</div>
+            <div class="label">Graph Edges</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--aqua)">117</div>
+            <div class="label">Graph Nodes</div>
+          </div>
+          <div class="metric">
+            <div class="value" style="color: var(--aqua)">7</div>
+            <div class="label">Source Types</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 5: Quality Gate -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Stage 5</div>
+        <div class="label">Quality</div>
+      </div>
+      <div class="stage-content">
+        <h3><span class="dot" style="background: var(--yellow)"></span> Quality Gate (11 Checks)</h3>
+        <p>Every generated output runs through an 11-check quality validator. Below threshold = regenerate. Gemini multimodal reads the scoring rubric as a PDF image for structural validation.</p>
+      </div>
+    </div>
+
+    <div class="stage-connector">
+      <svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg>
+    </div>
+
+    <!-- Stage 6: The Brief -->
+    <div class="stage">
+      <div class="stage-badge">
+        <div class="num">Output</div>
+        <div class="label">The Brief</div>
+      </div>
+      <div class="stage-content" style="border-color: var(--blue); border-width: 2px;">
+        <h3><span class="dot" style="background: var(--blue)"></span> Customer Intelligence Brief</h3>
+        <p>One view replaces 8 systems. Under 2 minutes instead of 30-45. Catches signals a human would miss.</p>
+        <div class="output-cards">
+          <div class="output-card">
+            <div class="name" style="color: var(--blue)">Morning Summary</div>
+            <div class="desc">What matters today across your portfolio</div>
+          </div>
+          <div class="output-card">
+            <div class="name" style="color: var(--orange)">Recommended Actions</div>
+            <div class="desc">Prioritized plays with "why now" reasoning</div>
+          </div>
+          <div class="output-card">
+            <div class="name" style="color: var(--violet)">Account Plans</div>
+            <div class="desc">Generated from 7 sources, quality-checked, uploaded to Drive</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Maturity story -->
+    <div style="margin-top: 48px; padding: 0 0 0 144px;">
+      <h2 style="font-size: 20px; font-weight: 600; margin-bottom: 16px;">Day 1 it researches your customer. Day 90 it knows your customer.</h2>
+      <div class="day-compare">
+        <div class="day-card">
+          <h4 style="color: var(--yellow)">Day 1 — Bootstrap</h4>
+          <div class="bar-row">
+            <span class="bar-label">Intelligence</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Subscriptions</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Pipeline</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Cases</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 0%; background: var(--border)"></div></div>
+            <span class="bar-val">--</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Emails</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 0%; background: var(--border)"></div></div>
+            <span class="bar-val">--</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Meetings</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 0%; background: var(--border)"></div></div>
+            <span class="bar-val">--</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Drive Docs</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 0%; background: var(--border)"></div></div>
+            <span class="bar-val">--</span>
+          </div>
+          <div class="maturity-bar">
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--border)"></div>
+            <div class="seg" style="background: var(--border)"></div>
+            <div class="seg" style="background: var(--border)"></div>
+            <div class="seg" style="background: var(--border)"></div>
+          </div>
+          <div class="maturity-label"><span>Data Maturity</span><span>43%</span></div>
+        </div>
+        <div class="day-card">
+          <h4 style="color: var(--aqua)">Day 90 — Full Signal Set</h4>
+          <div class="bar-row">
+            <span class="bar-label">Intelligence</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Subscriptions</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Pipeline</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Cases</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">19</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Emails</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">17</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Meetings</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">Drive Docs</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%; background: var(--aqua)"></div></div>
+            <span class="bar-val">yes</span>
+          </div>
+          <div class="maturity-bar">
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+            <div class="seg" style="background: var(--aqua)"></div>
+          </div>
+          <div class="maturity-label"><span>Data Maturity</span><span>100%</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
