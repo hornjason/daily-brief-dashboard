@@ -852,11 +852,46 @@ export function buildOpener(
   matchedBrief?: import('./lib/persona-selector.ts').PersonaBrief,
   customerName?: string,
   usedOpeners?: Set<string>,
+  initiatives?: Array<{ name: string; priority: string; detail: string }>,
 ): BlockOutput {
   const firstName = recipientName.split(' ')[0]
   const signal = signals[signalIndex]
 
-  // ── PRIMARY: signal-headline path ──────────────────────────────────────────
+  // ── TOP PRIORITY: strategic initiative headlines (grounded customer events) ──
+  if (initiatives && initiatives.length > 0) {
+    const customerFirstWord = (customerName || 'your organization').split(/[\s,]+/)[0]
+
+    const sorted = [...initiatives].sort((a, b) => {
+      const order: Record<string, number> = { HIGH: 0, MED: 1, LOW: 2 }
+      return (order[a.priority] ?? 2) - (order[b.priority] ?? 2)
+    })
+
+    const INIT_EXEC_TEMPLATES = [
+      (name: string) => `${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} caught my attention.`,
+      (name: string) => `Hi ${firstName} — with ${customerFirstWord}'s ${name.toLowerCase()}, there's a strategic conversation worth having.`,
+      (name: string) => `${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} signals a shift worth examining.`,
+    ]
+
+    const INIT_MGR_TEMPLATES = [
+      (name: string) => `Hi ${firstName} — ${customerFirstWord}'s ${name.toLowerCase()} has practical implications for your team.`,
+      (name: string) => `${firstName}, with ${customerFirstWord}'s ${name.toLowerCase()}, there are some technical decisions worth revisiting.`,
+      (name: string) => `Hi ${firstName}, ${customerFirstWord}'s ${name.toLowerCase()} creates some interesting infrastructure questions.`,
+    ]
+
+    const templates = tier === 'executive' ? INIT_EXEC_TEMPLATES : INIT_MGR_TEMPLATES
+
+    for (const init of sorted) {
+      const key = init.name.slice(0, 50)
+      if (usedOpeners?.has(key)) continue
+
+      const template = templates[openerVariant % templates.length]
+      const candidate = template(init.name)
+      usedOpeners?.add(key)
+      return validateBlock('opener', toBlock(candidate))
+    }
+  }
+
+  // ── SECONDARY: signal-headline path ────────────────────────────────────────
   if (signal) {
     let observation = signal.headline
     if (observation.includes(' — ')) {
@@ -1882,6 +1917,8 @@ export async function generateCampaignFromStructured(
   const usedPeerCompanies = new Set<string>()
 
   // Build per-email HTML
+  const initiatives = extractStructuredIntel(data.rawSignals, data.objectiveProfile).initiatives
+
   const execEmailsHtml: string[] = []
   const managerEmailsHtml: string[] = []
   let execIdx = 0
@@ -1916,7 +1953,7 @@ export async function generateCampaignFromStructured(
     const matchedBrief = exactMatch || tierBriefs[tierIndex % tierBriefs.length]
 
     // Build all 8 blocks
-    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName, usedOpeners)
+    const opener = buildOpener(email.signalIndex, data.signals, openerVariant, email.recipientName, email.tier, matchedBrief, data.customerName, usedOpeners, initiatives)
     const rawSignalBridge = buildSignalBridge(signal, email.featureKeys, data.productFitSections, usedBridges)
     const recipientExec = data.resolvedExecs.find(e => e.name === email.recipientName)
     const recipientTitle = recipientExec?.title || email.tier
