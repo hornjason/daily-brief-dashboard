@@ -62,11 +62,11 @@ function extractMetric(text: string): string | null {
 }
 
 export const CATEGORY_KEYWORDS: Record<ObjectiveCategory, RegExp> = {
-  security: /\b(security|threat|firewall|vulnerabilit|cyber|protection|zero[\s-]trust|compliance|CISO)\b/i,
-  financial: /\b(cost|margin|EBITDA|cash|fiscal|dividend|EPS|capital|balance\s*sheet|profitab|net\s*income|debt|CFO|controller|treasurer)\b/i,
-  operational: /\b(automat|efficien|operation|infrastructure|management|consolidat|streamline|overhead|manual|CIO|COO)\b/i,
-  growth: /\b(revenue|growth|expansion|market|acqui|partnership|scale|go[\s-]to[\s-]market|guidance|outlook|CEO|president)\b/i,
-  innovation: /\b(AI|ML|machine\s*learning|digital\s*transform|R&D|innovat|platform|next[\s-]gen|moderniz|CTO)\b/i,
+  security: /\b(security|threat|firewall|vulnerabilit\w*|cyber|protection|zero[\s-]trust|compliance|CISO|chief\s+information\s+security)\b/i,
+  financial: /\b(cost|margin|EBITDA|cash|fiscal|dividend|EPS|capital|balance\s*sheet|profitab\w*|net\s*income|debt|CFO|chief\s+financial\w*|controller|treasurer|financ\w*|procurement|budget)\b/i,
+  operational: /\b(automat\w*|efficien\w*|operation\w*|infrastructure|management|consolidat\w*|streamline|overhead|manual|CIO|COO|chief\s+information\s+officer|chief\s+operating\w*|head\s+of\s+IT|IT\s+director|sysadmin|devops|SRE)\b/i,
+  growth: /\b(revenue|growth|expansion|market|acqui\w*|partnership|scale|go[\s-]to[\s-]market|guidance|outlook|CEO|president|chief\s+executive\w*|sales|business\s+development)\b/i,
+  innovation: /\b(AI|ML|machine\s*learning|digital\s*transform\w*|R&D|innovat\w*|platform|next[\s-]gen|moderniz\w*|CTO|chief\s+technolog\w*|VP\s+(?:of\s+)?\w*engineer\w*|architect\w*|engineer\w*)\b/i,
 }
 
 function classifyObjective(text: string): ObjectiveCategory {

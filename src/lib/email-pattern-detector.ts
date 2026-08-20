@@ -22,7 +22,7 @@ function classifyLocalPart(local: string): EmailPattern['format'] {
   const lower = local.toLowerCase()
   if (!isPersonalEmail(lower)) return 'unknown'
   if (/^[a-z]{2,}\.[a-z]{2,}$/.test(lower)) return 'first.last'
-  if (/^[a-z]\.[a-z]{2,}$/.test(lower)) return 'flast'
+  if (/^[a-z]+$/.test(lower) && lower.length >= 4 && lower.length <= 15) return 'flast'
   return 'unknown'
 }
 

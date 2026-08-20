@@ -789,6 +789,20 @@ export async function generateCampaign(
     const excerptMap = new Map(referenceMaterialData.filter(r => r.excerpt).map(r => [r.title, r.excerpt]))
     const deterministicRefMaterials = linkRegistry.getReferenceMaterials(excerptMap)
 
+    // Google Docs/Slides in source material are campaign references, not internal links
+    for (const ref of referenceMaterialData) {
+      const isGoogleDoc = /docs\.google\.com\/(document|presentation|spreadsheets)\/d\//.test(ref.url)
+      const alreadyIncluded = deterministicRefMaterials.some(r => r.url === ref.url)
+      if (isGoogleDoc && !alreadyIncluded && ref.title) {
+        const excerpt = ref.excerpt || ''
+        deterministicRefMaterials.push({
+          resource: ref.title,
+          url: ref.url,
+          keyTakeaway: excerpt.length > 200 ? excerpt.slice(0, 200) + '...' : (excerpt || 'Campaign source document.'),
+        })
+      }
+    }
+
     // Build deterministic source attributions from registry
     const deterministicSourceAttrs: Array<{ name: string; description: string }> = []
     if (materialTitle) deterministicSourceAttrs.push({ name: materialTitle, description: 'Primary campaign source material.' })
