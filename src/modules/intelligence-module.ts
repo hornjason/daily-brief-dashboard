@@ -162,7 +162,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
       const urgency = body.match(/\*\*Buying Urgency:\s*(HIGH|MEDIUM|LOW)\b/i)
       const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
       const cleanBody = cleanMarkdown(body)
-      const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
+      const shortDesc = cleanBody.split(/[!]|\.(?!\d)/).filter(s => s.trim())[0]?.trim() || ''
       const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 200) : truncateAtSentence(rawTitle, 200)
       entries.push({
         objective,
@@ -178,7 +178,7 @@ function parseStrategicInitiatives(sectionText: string): ObjectiveEntry[] {
     const urgency = body.match(/\*\*Buying Urgency:\s*(HIGH|MEDIUM|LOW)\b/i)
     const priority = urgency ? (urgency[1].toUpperCase() === 'MEDIUM' ? 'MED' : urgency[1].toUpperCase() as 'HIGH' | 'LOW') : null
     const cleanBody = cleanMarkdown(body)
-    const shortDesc = cleanBody.split(/[.!]/).filter(s => s.trim())[0]?.trim() || ''
+    const shortDesc = cleanBody.split(/[!]|\.(?!\d)/).filter(s => s.trim())[0]?.trim() || ''
     const objective = shortDesc ? truncateAtSentence(`${rawTitle} — ${shortDesc}`, 200) : truncateAtSentence(rawTitle, 200)
     entries.push({
       objective,

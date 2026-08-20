@@ -1174,7 +1174,9 @@ export function buildFeatureBullets(
     if (matchedBrief?.valueProposition) {
       const vpLower = matchedBrief.valueProposition.toLowerCase()
       if (vpLower.includes(entry.featureName.toLowerCase()) || vpLower.includes(key.replace(/-/g, ' '))) {
-        applicationSentence = matchedBrief.valueProposition
+        const firstSentence = matchedBrief.valueProposition.split(/(?<!\d)[.!?]\s/)[0]?.trim() || matchedBrief.valueProposition
+        const words = firstSentence.split(/\s+/)
+        applicationSentence = words.length > 25 ? words.slice(0, 25).join(' ') : firstSentence
       }
     }
 
