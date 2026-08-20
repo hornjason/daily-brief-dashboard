@@ -115,25 +115,28 @@ export function preMatchObjectives(
   for (const contact of contacts) {
     const classification = classifyPersona(contact)
 
-    let matched: PreMatchedMetric | null = null
+    const contactMatches: PreMatchedMetric[] = []
     for (const { category, confidence } of classification.categories) {
+      if (contactMatches.length >= 3) break
+
       const entries = profile[category]?.filter(e =>
         e.priority !== 'LOW' && !INTERNAL_SIGNAL_PATTERN.test(e.objective)
       ) ?? []
 
-      if (entries.length > 0) {
-        matched = {
+      const takeCount = contactMatches.length === 0 ? 2 : 1
+      for (const entry of entries.slice(0, takeCount)) {
+        if (contactMatches.length >= 3) break
+        contactMatches.push({
           recipientName: contact.name,
           recipientTitle: contact.title,
           category,
           confidence,
-          entry: entries[0],
-        }
-        break
+          entry,
+        })
       }
     }
 
-    if (matched) results.push(matched)
+    results.push(...contactMatches)
   }
 
   return results
