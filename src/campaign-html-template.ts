@@ -1592,17 +1592,17 @@ export async function composeEmailBody(brief: CompositionBrief): Promise<string 
 Write the email body ONLY. No subject line, no signature, no "Dear" or "Sincerely".
 
 RULES:
-- 120-150 words maximum
+- 120-160 words maximum
 - Peer-level business tone — strategic advisor, not vendor pitch
-- Lead with their specific business event: ${brief.hook}
-- Connect it to a business risk or opportunity they face
-- Weave in 2-3 Red Hat capabilities naturally — NO bullet lists, NO product catalog format
-- Include the peer proof naturally in one sentence
-- Reference the source material by name where relevant (use markdown links: [Title](URL))
-- If they're an existing Red Hat customer, acknowledge the relationship naturally
-- When mentioning Red Hat products, use markdown links: [Product Name](URL)
-- End with a specific meeting ask
-- If a tax rate or financial figure is available in the data, cite it specifically
+- STRUCTURE (follow this order):
+  1. First sentence: Lead with their specific business event
+  2. Second sentence: Acknowledge they are already a Red Hat customer (use the Existing Relationship data) — this MUST be in the first paragraph so they know you are their vendor, not a cold caller
+  3. Connect the event to the specific financial risk — cite the EXACT tax rate or percentage from the Source Material Content (e.g., "7.25% to 10.75%", "8-10%")
+  4. Weave in 2-3 Red Hat capabilities naturally — NO bullet lists
+  5. Include the peer proof in one sentence
+  6. End with the specific meeting ask
+- When citing financial impact, use the SPECIFIC numbers from Source Material Content — never say just "SaaS tax" without the rate
+- Use markdown links: [Product Name](URL) for products, [Title](URL) for sources
 - Do NOT invent facts — use ONLY the data provided below
 - Do NOT use phrases like "I noticed", "I wanted to reach out", "I hope this finds you well"
 - Do NOT use marketing buzzwords or exclamation marks
