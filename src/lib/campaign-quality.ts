@@ -107,6 +107,102 @@ export function deriveFootprint(
   return undefined
 }
 
+// ── Post-generation campaign validation (#1178) ────────────────────────────
+
+export interface CampaignWarning {
+  email: number
+  category: 'metadata' | 'truncation' | 'bare-number' | 'subject-body' | 'duplication'
+  message: string
+}
+
+const METADATA_ARTIFACT = /\([a-z-]+,\s*[a-z-]+\)/gi
+const TRUNCATION_ARTIFACT = /\w\.\.\s|\.\.\s*$/gm
+const BARE_MONEY = /\$\d[\d,.]*\s*(?:million|billion|M|B)\b/gi
+const MONEY_CONTEXT = /(?:revenue|budget|spend|growth|pipeline|renewal|deal|opportunity|investment|cost|savings|value)/i
+const COMMON_WORDS = new Set(['and', 'the', 'of', 'for', 'with', 'that', 'this', 'from', 'your', 'their', 'has', 'have', 'are', 'will', 'can', 'not', 'but', 'our', 'its', 'should', 'about', 'into', 'been', 'than'])
+const BOILERPLATE_PATTERNS = [
+  /your teams? (?:already )?(?:work|use|rely|run)/i,
+  /should .+ by (?:end of|next|this)/i,
+]
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function splitEmails(html: string): string[] {
+  return html.split(/📧/).slice(1).map(block => stripHtml(block))
+}
+
+function isBoilerplate(sentence: string): boolean {
+  return BOILERPLATE_PATTERNS.some(p => p.test(sentence))
+}
+
+function extractSentences(text: string): string[] {
+  return text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 20)
+}
+
+export function validateGeneratedCampaign(
+  htmlContent: string,
+  emails: Array<{ subject: string; recipientName: string }>,
+): CampaignWarning[] {
+  const warnings: CampaignWarning[] = []
+  const blocks = splitEmails(htmlContent)
+
+  for (let i = 0; i < blocks.length; i++) {
+    const text = blocks[i]
+    const emailMeta = emails[i]
+
+    // CHECK 1: Metadata artifacts
+    for (const match of text.matchAll(METADATA_ARTIFACT)) {
+      warnings.push({ email: i, category: 'metadata', message: `Metadata artifact: "${match[0]}"` })
+    }
+
+    // CHECK 2: Truncation artifacts
+    for (const match of text.matchAll(TRUNCATION_ARTIFACT)) {
+      warnings.push({ email: i, category: 'truncation', message: `Truncation artifact: "${match[0].trim()}"` })
+    }
+
+    // CHECK 3: Unattributed bare numbers
+    for (const match of text.matchAll(BARE_MONEY)) {
+      const start = Math.max(0, match.index! - 60)
+      const end = Math.min(text.length, match.index! + match[0].length + 60)
+      const surrounding = text.slice(start, end)
+      if (!MONEY_CONTEXT.test(surrounding)) {
+        warnings.push({ email: i, category: 'bare-number', message: `Unattributed figure: "${match[0]}"` })
+      }
+    }
+
+    // CHECK 4: Subject-body alignment
+    if (emailMeta) {
+      const subjectWords = emailMeta.subject
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(w => w.length > 3 && !COMMON_WORDS.has(w))
+      const bodyLower = text.toLowerCase()
+      const found = subjectWords.some(w => bodyLower.includes(w))
+      if (!found && subjectWords.length > 0) {
+        warnings.push({ email: i, category: 'subject-body', message: `No subject keywords found in body (checked: ${subjectWords.join(', ')})` })
+      }
+    }
+  }
+
+  // CHECK 5: Cross-email duplication
+  for (let a = 0; a < blocks.length; a++) {
+    const sentencesA = extractSentences(blocks[a]).filter(s => !isBoilerplate(s))
+    for (let b = a + 1; b < blocks.length; b++) {
+      const sentencesB = extractSentences(blocks[b]).filter(s => !isBoilerplate(s))
+      if (sentencesA.length === 0) continue
+      const shared = sentencesA.filter(sa => sentencesB.some(sb => sa === sb)).length
+      const ratio = shared / Math.min(sentencesA.length, sentencesB.length)
+      if (ratio > 0.3) {
+        warnings.push({ email: a, category: 'duplication', message: `${Math.round(ratio * 100)}% sentence overlap with email ${b}` })
+      }
+    }
+  }
+
+  return warnings
+}
+
 // ── Structured HTML quality scoring (parallel validation) ───────────────────
 export function scoreStructuredOutput(html: string): { sections: number; emails: number; words: number } {
   const sections = (html.match(/<h[23][^>]*>/g) || []).length
