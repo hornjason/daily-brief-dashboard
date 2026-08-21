@@ -54,25 +54,44 @@ p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
 ul, ol { font-size: 14px; color: var(--text-secondary); padding-left: 20px; margin-bottom: 12px; }
 li { margin-bottom: 6px; }
 strong { color: var(--text-primary); }
+a { color: var(--aqua); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
 
 /* Banner */
 .banner {
   background: rgba(25, 158, 112, 0.08); border: 1px solid rgba(25, 158, 112, 0.25);
-  border-radius: 10px; padding: 16px 20px; margin-bottom: 32px;
+  border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;
   display: flex; align-items: center; gap: 12px;
 }
 .banner-icon { font-size: 22px; flex-shrink: 0; }
 .banner-text { font-size: 14px; color: var(--text-secondary); }
-.banner-text a { color: var(--aqua); font-weight: 600; text-decoration: none; }
-.banner-text a:hover { text-decoration: underline; }
+.banner-text a { color: var(--aqua); font-weight: 600; }
 
 /* Framing box */
 .framing {
   background: var(--surface-card); border: 2px solid var(--violet);
-  border-radius: 12px; padding: 20px 24px; margin-bottom: 32px;
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;
 }
 .framing p { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
 .framing strong { color: var(--violet); }
+
+/* Judging criteria callout */
+.judging {
+  background: var(--surface-card); border: 1px solid var(--yellow);
+  border-radius: 12px; padding: 18px 22px; margin-bottom: 32px;
+}
+.judging h3 { margin-top: 0; color: var(--yellow); font-size: 14px; margin-bottom: 10px; }
+.judging-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+.judging-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; text-align: center;
+}
+.judging-item .weight { font-size: 20px; font-weight: 700; color: var(--yellow); }
+.judging-item .name { font-size: 11px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+.judging-item .desc { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 
 /* Cards */
 .card {
@@ -116,6 +135,20 @@ strong { color: var(--text-primary); }
 .link-card .name { font-size: 13px; font-weight: 600; color: var(--aqua); margin-bottom: 2px; }
 .link-card .desc { font-size: 11px; color: var(--text-muted); }
 
+/* Theme cards */
+.themes-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  margin-bottom: 12px;
+}
+.theme-card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 18px;
+}
+.theme-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.theme-card p { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.theme-card .issues { font-size: 11px; color: var(--text-muted); }
+.theme-card .issues a { color: var(--aqua); font-weight: 600; font-size: 11px; }
+
 /* Checklist */
 .checklist { list-style: none; padding-left: 0; }
 .checklist li {
@@ -125,6 +158,13 @@ strong { color: var(--text-primary); }
   display: flex; align-items: center; gap: 8px;
 }
 .check-icon { color: var(--aqua); font-weight: 700; font-size: 14px; }
+
+/* Drive highlight */
+.drive-highlight {
+  background: rgba(25, 158, 112, 0.06); border: 2px solid var(--aqua);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 12px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
 </style>
 </head>
 <body>
@@ -132,61 +172,84 @@ strong { color: var(--text-primary); }
 <button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
 
 <h1>Contributor Guide</h1>
-<p class="subtitle">Everything you need to explore the platform and submit ideas — no coding required</p>
+<p class="subtitle">Your single walkthrough for the AI Challenge &mdash; explore, contribute, and submit ideas</p>
 
 <!-- Banner -->
 <div class="banner">
   <div class="banner-icon">&#x1F310;</div>
   <div class="banner-text">
-    <strong>Team Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io/dashboard</a> — no setup, no containers, just open the link.
+    <strong>Live Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io/dashboard</a> &mdash; no setup, no login, no containers. Jason's session is already authenticated on the shared instance. Just open the link and browse.
   </div>
 </div>
 
 <!-- Framing -->
 <div class="framing">
   <p><strong>"You don't need to write code. You need to see what I can't."</strong></p>
-  <p>The platform is built &mdash; 35 modules, 9,000+ graph nodes, 17 quality validators. What we're competing on is how well we expose, explain, and improve it. That takes judgment, perspective, and fresh eyes. Not just engineers.</p>
+  <p>The platform is built &mdash; 22 processing modules, 9,000+ graph nodes, 17 quality validators. What we're competing on is how well we expose, explain, and improve it. That takes judgment, perspective, and fresh eyes. Not just engineers.</p>
+</div>
+
+<!-- Judging Criteria -->
+<div class="judging">
+  <h3>What Judges Score On</h3>
+  <div class="judging-grid">
+    <div class="judging-item">
+      <div class="weight">25%</div>
+      <div class="name">Innovation</div>
+      <div class="desc">Novel approaches to real problems</div>
+    </div>
+    <div class="judging-item">
+      <div class="weight">25%</div>
+      <div class="name">Feasibility</div>
+      <div class="desc">Can it ship in 3 weeks?</div>
+    </div>
+    <div class="judging-item">
+      <div class="weight">25%</div>
+      <div class="name">User Experience</div>
+      <div class="desc">Does it help real users?</div>
+    </div>
+    <div class="judging-item">
+      <div class="weight">25%</div>
+      <div class="name">Technical Excellence</div>
+      <div class="desc">Clean, tested, maintainable</div>
+    </div>
+  </div>
 </div>
 
 <!-- Architecture Visuals -->
-<h2><span class="bar" style="background: var(--aqua)"></span> Architecture Visuals</h2>
-<p>Browse these interactive visuals to understand how the platform works before diving into the dashboard.</p>
+<h2><span class="bar" style="background: var(--aqua)"></span> Understand the Engine</h2>
+<p>Browse these interactive visuals to understand what's happening behind the dashboard before you start exploring.</p>
 <div class="links-grid">
   <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/full-engine.html" target="_blank">
     <div class="name">The Intelligence Engine</div>
-    <div class="desc">Full 6-layer architecture &mdash; 22 modules, 9K+ graph nodes</div>
+    <div class="desc">Full 6-layer architecture &mdash; 22 modules, 9K+ graph nodes, 9.4K edges</div>
   </a>
   <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/brief-pipeline.html" target="_blank">
     <div class="name">How the Brief Gets Built</div>
-    <div class="desc">Pipeline stages + Day 0/7/30 maturity ramp</div>
+    <div class="desc">Pipeline stages + Day 0/7/30 maturity ramp (67% &rarr; 89% &rarr; 100%)</div>
   </a>
   <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/account-plan-pipeline.html" target="_blank">
     <div class="name">Account Plan Pipeline</div>
-    <div class="desc">9 inputs, 11 quality checks, provenance tracking</div>
+    <div class="desc">9 inputs, 11 quality checks, provenance tracking &mdash; all invisible today</div>
   </a>
   <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/consumer-matrix.html" target="_blank">
-    <div class="name">Consumer Matrix</div>
-    <div class="desc">Which inputs each of 7 consumers receives</div>
+    <div class="name">Consumer Matrix &mdash; The Gap Map</div>
+    <div class="desc">11 consumers, 9 signal sources &mdash; see what each consumer receives and what's hidden</div>
   </a>
   <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/challenge-workflow.html" target="_blank">
     <div class="name">Challenge Workflow</div>
-    <div class="desc">Change input &rarr; regenerate &rarr; compare</div>
+    <div class="desc">The 5-step demo: change input &rarr; regenerate &rarr; compare &rarr; ripple effect</div>
   </a>
 </div>
 
-<!-- What You Will See -->
-<h2><span class="bar" style="background: var(--blue)"></span> What You Will See</h2>
-<p>The platform collects signals from 9 data sources (support cases, emails, meetings, Drive docs, pipeline, subscriptions, cloud spend, RSS, events) and weaves them into intelligence outputs for each customer account. The demo account has rich signal coverage across cases, emails, subscriptions, and cross-reference connections &mdash; making it the ideal baseline to explore.</p>
-
-<!-- Step-by-Step -->
-<h2><span class="bar" style="background: var(--orange)"></span> Step-by-Step: Explore, Refresh, and Compare</h2>
+<!-- Step-by-Step Walkthrough -->
+<h2><span class="bar" style="background: var(--orange)"></span> The Walkthrough &mdash; 7 Steps</h2>
 
 <div class="step">
   <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
   <div class="step-body">
     <h4>Open the Dashboard</h4>
-    <p>Navigate to <a href="https://demo.jasonhorn.io/dashboard" style="color: var(--aqua)">demo.jasonhorn.io/dashboard</a> in your browser. You'll see the portfolio overview page showing all demo accounts as cards in a grid.</p>
-    <p style="font-size: 12px; color: var(--text-muted);">Running locally? Use <code style="background: var(--surface-hover); padding: 1px 6px; border-radius: 4px;">localhost:7779</code> instead.</p>
+    <p>Navigate to <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a>. You'll see the portfolio overview &mdash; all demo accounts as cards in a grid with health scores, pipeline, and subscription data.</p>
+    <p style="font-size: 12px; color: var(--text-muted);">Running locally? Use <code>localhost:7779</code> instead.</p>
   </div>
 </div>
 
@@ -194,12 +257,12 @@ strong { color: var(--text-primary); }
   <div class="step-num" style="color: var(--violet); border-color: var(--violet);">2</div>
   <div class="step-body">
     <h4>View the Baseline Brief</h4>
-    <p>Click on the demo account card in the dashboard grid. This opens the customer detail page. Scroll through to read the current Customer Brief. This is the "before" state &mdash; what the platform generates from the existing baseline signals.</p>
-    <p>Take note of:</p>
+    <p>Click a customer account card. Scroll through the Customer Brief. This is the "before" state &mdash; note:</p>
     <ul>
       <li>Which support cases are highlighted</li>
       <li>What themes appear in the brief narrative</li>
-      <li>How many cross-reference connections are shown in the intelligence graph</li>
+      <li>The recommended actions and their "why now" reasoning</li>
+      <li>How many cross-reference connections appear in the intelligence graph</li>
     </ul>
   </div>
 </div>
@@ -208,81 +271,276 @@ strong { color: var(--text-primary); }
   <div class="step-num" style="color: var(--orange); border-color: var(--orange);">3</div>
   <div class="step-body">
     <h4>Refresh Data Sources</h4>
-    <p>Use the dashboard's <strong>Data Freshness</strong> panel to refresh any data source. Click <strong>Refresh</strong> on Cases, Pipeline, Subscriptions, or any other source. The platform re-pulls live data &mdash; new cases, updated pipeline opportunities, and changed subscriptions flow in automatically.</p>
+    <p>Use the <strong>Data Freshness</strong> panel to refresh any source. Click <strong>Refresh</strong> on Cases, Pipeline, Subscriptions, or any other source. The platform re-pulls live data &mdash; new cases, updated opportunities, changed subscriptions flow in automatically.</p>
     <p>No file editing required. Everything happens through the UI.</p>
   </div>
 </div>
 
-<div class="step">
-  <div class="step-num" style="color: var(--violet); border-color: var(--violet);">4</div>
+<!-- Step 4: Drive workflow - highlighted -->
+<div class="drive-highlight">
+  <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">4</div>
   <div class="step-body">
-    <h4>Regenerate an Output</h4>
-    <p>After refreshing data sources, click <strong>Regenerate</strong> on any consumer output:</p>
-    <ul>
-      <li><strong>Customer Brief</strong> &mdash; click the refresh icon on the Brief section</li>
-      <li><strong>Account Plan</strong> &mdash; click Generate on the Account Plan tab</li>
-      <li><strong>Meeting Prep</strong> &mdash; click an upcoming meeting, then Generate Prep</li>
-      <li><strong>Product Intel</strong> &mdash; click Generate on any product card</li>
-    </ul>
-    <p>The pipeline re-runs with the updated data. Watch the output change based on the new signals.</p>
+    <h4 style="color: var(--aqua);">Add a Document to Google Drive</h4>
+    <p>This is the most powerful input method. Drop any document into the customer's shared Drive folder &mdash; a competitive alert, meeting notes, a partner update, an expansion opportunity.</p>
+    <p><strong>What happens:</strong> On the next regeneration, Gemini reads the document and synthesizes its content into every consumer output automatically. A competitive alert about Kubernetes migration becomes a new initiative in the account plan, a talking point in meeting prep, and updated context in the brief.</p>
+    <p style="font-size: 12px; color: var(--aqua); font-weight: 600;">Verified: adding a VMware migration alert produced a new "VMware to OpenShift Consolidation" initiative. Removing it and regenerating removed the initiative. The system reads fresh every time.</p>
+    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;"><strong>Anyone on the team can do this.</strong> No code, no config &mdash; just drag a file into Google Drive.</p>
   </div>
 </div>
 
 <div class="step">
-  <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">5</div>
+  <div class="step-num" style="color: var(--violet); border-color: var(--violet);">5</div>
   <div class="step-body">
-    <h4>Compare Before and After</h4>
-    <p>Navigate back to the customer account page and compare the updated outputs with what you saw in Step 2:</p>
+    <h4>Regenerate an Output</h4>
+    <p>After adding a Drive document, Jason will regenerate the output during the live demo. On the shared instance, regeneration is coordinated &mdash; Jason runs it, everyone sees the result.</p>
+    <p>The consumers that update:</p>
     <ul>
-      <li><strong>New data highlighted</strong> &mdash; refreshed cases, pipeline changes, or new email context should appear in the brief</li>
-      <li><strong>Cross-references</strong> &mdash; the intelligence graph shows new connections between refreshed signals and existing data</li>
-      <li><strong>Brief narrative</strong> &mdash; the text should now reflect the updated data and its business impact</li>
-      <li><strong>Ripple effect</strong> &mdash; check other consumers (Account Plan, Meeting Prep, Campaigns) to see how the same data change affected multiple outputs</li>
+      <li><strong>Customer Brief</strong> &mdash; refresh icon on the Brief section</li>
+      <li><strong>Account Plan</strong> &mdash; Generate on the Account Plan tab (quality-scored, uploaded to Drive)</li>
+      <li><strong>Value Positioning</strong> &mdash; Generate button builds competitive positioning</li>
+      <li><strong>Intelligence Docs</strong> &mdash; Company Intel + Industry Analysis (also appear in Drive)</li>
     </ul>
+    <p>The pipeline re-runs with the updated data. The new Drive document is synthesized into every output automatically.</p>
   </div>
 </div>
 
 <div class="step">
   <div class="step-num" style="color: var(--magenta); border-color: var(--magenta);">6</div>
   <div class="step-body">
-    <h4>Explore Further</h4>
-    <p>Now that you've seen a signal flow through the pipeline, try exploring other parts of the dashboard:</p>
+    <h4>Compare Before and After</h4>
+    <p>Compare the updated outputs with what you saw in Step 2:</p>
     <ul>
-      <li><strong>Intelligence Graph</strong> &mdash; click the graph visualization to see how signals connect to each other</li>
-      <li><strong>Other Accounts</strong> &mdash; click on other account cards to see how different signal patterns produce different briefs</li>
-      <li><strong>Product View</strong> &mdash; toggle to the product view to see signals grouped by Red Hat product line</li>
+      <li><strong>New data highlighted</strong> &mdash; refreshed cases, Drive docs, or pipeline changes appear in the brief</li>
+      <li><strong>Cross-references</strong> &mdash; the intelligence graph shows new connections between signals</li>
+      <li><strong>Ripple effect</strong> &mdash; the <em>same</em> input change affects Brief, Account Plan, Meeting Prep, Campaigns, and more simultaneously</li>
     </ul>
+    <p>See the <a href="https://hornjason.github.io/daily-brief-dashboard/visual/challenge-workflow.html" target="_blank">Challenge Workflow</a> visual for the full before/after comparison framework.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--yellow); border-color: var(--yellow);">7</div>
+  <div class="step-body">
+    <h4>Explore Further</h4>
+    <ul>
+      <li><strong>Intelligence Graph</strong> &mdash; click the graph visualization to see how signals connect across sources</li>
+      <li><strong>Other Accounts</strong> &mdash; different signal patterns produce different briefs</li>
+      <li><strong>Product View</strong> &mdash; signals grouped by Red Hat product line</li>
+      <li><strong>Account Plan</strong> &mdash; 9 hidden inputs, 11 quality checks, auto-uploaded to Drive</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Challenge Themes -->
+<h2><span class="bar" style="background: var(--violet)"></span> The Three Themes</h2>
+<p>Every idea you submit fits one of these themes. Each theme has GitHub issues ready for features &mdash; your ideas seed new ones.</p>
+
+<div class="themes-grid">
+  <div class="theme-card" style="border-color: var(--blue);">
+    <h4 style="color: var(--blue);">A: "Show Your Work"</h4>
+    <p>Make the hidden visible. The account plan has 9 inputs and 11 quality checks &mdash; the user sees none of it. Surface provenance, data maturity, quality scores.</p>
+    <div class="issues">
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/27" target="_blank">#27</a>
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/28" target="_blank">#28</a> &mdash; Provenance, data maturity
+    </div>
+  </div>
+  <div class="theme-card" style="border-color: var(--orange);">
+    <h4 style="color: var(--orange);">B: "Make It Smarter"</h4>
+    <p>Add the "why." Recommendations say WHAT &mdash; this theme adds the signal chain that explains WHY. Delta tracking, trend indicators, visual connections.</p>
+    <div class="issues">
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/29" target="_blank">#29</a>
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/30" target="_blank">#30</a> &mdash; Signal chains, delta tracking
+    </div>
+  </div>
+  <div class="theme-card" style="border-color: var(--magenta);">
+    <h4 style="color: var(--magenta);">C: "Make It Shine"</h4>
+    <p>First impressions win. Confusing labels, dead tabs, inconsistent layouts &mdash; your fresh eyes catch what the builder can't see.</p>
+    <div class="issues">
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/31" target="_blank">#31</a>
+      <a href="https://github.com/hornjason/daily-brief-dashboard/issues/32" target="_blank">#32</a> &mdash; UX polish, clarity
+    </div>
+  </div>
+</div>
+
+<!-- Team Roles -->
+<h2><span class="bar" style="background: var(--blue)"></span> Your Role on the Team</h2>
+<p>9 people, 6 roles, 6 time zones. Each of you sees this platform through a different lens &mdash; that's the point.</p>
+
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 24px;">
+  <div class="card" style="border-left: 3px solid var(--blue);">
+    <h4>Gonzalo &mdash; AE Lens</h4>
+    <p>"Does this help me prep for a real call?" Browse as if you're 5 minutes before a customer meeting. Drop your meeting notes into Drive.</p>
+  </div>
+  <div class="card" style="border-left: 3px solid var(--orange);">
+    <h4>Eric &mdash; Storyteller</h4>
+    <p>"What's the 60-second pitch?" Own the video script and storyboard. Write a competitive brief, drop it in Drive, watch it reshape the account plan.</p>
+  </div>
+  <div class="card" style="border-left: 3px solid var(--magenta);">
+    <h4>Nikki &mdash; Positioning + Video</h4>
+    <p>"What's the one-liner that sticks?" Co-lead video with Eric. Add a market analysis doc to Drive and watch the intelligence shift.</p>
+  </div>
+  <div class="card" style="border-left: 3px solid var(--aqua);">
+    <h4>Aneela, Siddardh, Riya &mdash; Technical</h4>
+    <p>"What's technically possible?" The quality gate could expose its reasoning. The provenance table could be interactive. Show token counts per source.</p>
+  </div>
+  <div class="card" style="border-left: 3px solid var(--yellow);">
+    <h4>John &mdash; Customer Success</h4>
+    <p>"What would my customers need?" What's missing from the output? What gaps would frustrate a real user?</p>
+  </div>
+  <div class="card" style="border-left: 3px solid var(--violet);">
+    <h4>Peter &mdash; Fresh Eyes</h4>
+    <p>"Why does this button say that?" You've never seen this before &mdash; that is your superpower. Every confusion you have is a Theme C fix.</p>
+  </div>
+</div>
+
+<!-- Workstreams -->
+<h2><span class="bar" style="background: var(--orange)"></span> Workstreams</h2>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px;">
+  <div class="card" style="border-top: 3px solid var(--blue);">
+    <h4 style="color: var(--blue);">Product Council</h4>
+    <p><strong>Who:</strong> Nikki, Eric, Peter, Gonzalo, John, Aneela</p>
+    <p>Explore dashboard, submit ideas, verify shipped features. You're the product council &mdash; what gets built, and what gets cut.</p>
+    <p style="font-size: 11px; color: var(--text-muted);">Weeks 1&ndash;3</p>
+  </div>
+  <div class="card" style="border-top: 3px solid var(--aqua);">
+    <h4 style="color: var(--aqua);">Technical Validation</h4>
+    <p><strong>Who:</strong> Siddardh, Riya, Aneela</p>
+    <p>Inject signals via Drive, validate pipeline behavior, verify Theme A features work correctly.</p>
+    <p style="font-size: 11px; color: var(--text-muted);">Weeks 1&ndash;3</p>
+  </div>
+  <div class="card" style="border-top: 3px solid var(--orange);">
+    <h4 style="color: var(--orange);">Video Production</h4>
+    <p><strong>Who:</strong> Eric (lead), Nikki (co-lead), Jason</p>
+    <p>Script the 60-second pitch, screen recording, voiceover, editing. Volunteers welcome.</p>
+    <p style="font-size: 11px; color: var(--text-muted);">Weeks 2&ndash;4</p>
+  </div>
+</div>
+
+<!-- Timeline -->
+<h2><span class="bar" style="background: var(--aqua)"></span> Timeline</h2>
+<div style="margin-bottom: 24px;">
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--blue);">This Week<br><span style="font-weight: 400; color: var(--text-muted);">Aug 18&ndash;22</span></div>
+    <div><p>Kickoff call. Explore the dashboard. Vote on themes. Get comfortable with the platform.</p></div>
+  </div>
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--orange);">Week 2<br><span style="font-weight: 400; color: var(--text-muted);">Aug 25&ndash;27</span></div>
+    <div><p>Submit 2&ndash;3 ideas each by <strong>Wed Aug 27</strong>. Try the Drive workflow. First batch of features starts shipping.</p></div>
+  </div>
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--aqua);">Week 2 Sync<br><span style="font-weight: 400; color: var(--text-muted);">Thu Aug 28</span></div>
+    <div><p>Review submissions. Watch the first batch ship live. Verify features look right.</p></div>
+  </div>
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--violet);">Week 3<br><span style="font-weight: 400; color: var(--text-muted);">Sep 1&ndash;4</span></div>
+    <div><p>Second batch ships. Video script finalized. First recording attempt.</p></div>
+  </div>
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start;">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--magenta);">Week 4<br><span style="font-weight: 400; color: var(--text-muted);">Sep 8&ndash;11</span></div>
+    <div><p>Final polish + video edit + submit. Target: <strong>Sep 11</strong> (4-day buffer before deadline).</p></div>
+  </div>
+  <div class="card" style="display: flex; gap: 16px; align-items: flex-start; border-color: var(--magenta);">
+    <div style="min-width: 90px; font-size: 12px; font-weight: 700; color: var(--magenta);">Deadline<br><span style="font-weight: 400; color: var(--text-muted);">Sep 15</span></div>
+    <div><p><strong style="color: var(--magenta);">VIDEO DEADLINE &mdash; 12:00 PM EST.</strong> Then associate voting begins Sep 16.</p></div>
   </div>
 </div>
 
 <!-- What to Look For -->
 <h2><span class="bar" style="background: var(--yellow)"></span> What to Look For</h2>
-<p>When evaluating the platform, consider:</p>
+<p>When exploring the platform, evaluate through the judging criteria lens:</p>
 <ul class="checklist">
-  <li><span class="check-icon">&#x25B8;</span> <strong>Signal Coverage</strong> &mdash; Does the brief capture all relevant signals for the account?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Signal Coverage</strong> &mdash; Does the brief capture all relevant signals? What's missing?</li>
   <li><span class="check-icon">&#x25B8;</span> <strong>Cross-References</strong> &mdash; Are connections between signals meaningful and actionable?</li>
-  <li><span class="check-icon">&#x25B8;</span> <strong>Brief Quality</strong> &mdash; Is the narrative useful for preparing for a customer meeting?</li>
-  <li><span class="check-icon">&#x25B8;</span> <strong>Missing Signals</strong> &mdash; What information sources would make the brief more complete?</li>
-  <li><span class="check-icon">&#x25B8;</span> <strong>Confusing Labels</strong> &mdash; Is anything unclear, jargon-heavy, or hard to understand?</li>
-  <li><span class="check-icon">&#x25B8;</span> <strong>Hidden Context</strong> &mdash; What would you want to know about HOW the output was generated?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Brief Quality</strong> &mdash; Would this help you prepare for a real customer meeting?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Hidden Context</strong> &mdash; What would you want to know about HOW the output was generated? (Theme A)</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Missing "Why"</strong> &mdash; Where do you see a recommendation without the reasoning chain? (Theme B)</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Confusing Labels</strong> &mdash; Anything unclear, jargon-heavy, or hard to understand? (Theme C)</li>
 </ul>
 
 <!-- Providing Feedback -->
-<h2><span class="bar" style="background: var(--magenta)"></span> Providing Feedback</h2>
-<p>After exploring the platform, share your observations with the team. The most valuable feedback is:</p>
+<h2><span class="bar" style="background: var(--magenta)"></span> Submit Your Ideas</h2>
+<p>After exploring, submit 2&ndash;3 ideas via the GitHub issue form by <strong>Wed Aug 27</strong>.</p>
 
 <div class="card">
-  <h4>What to submit (2&ndash;3 ideas via GitHub form by Wed Aug 27)</h4>
+  <h4>What makes a great submission</h4>
   <p>
-    1. What was surprising or unexpected in the brief<br>
+    1. What was surprising or unexpected in the output<br>
     2. What information was missing that you'd need for a real customer conversation<br>
-    3. Which cross-references were most useful and which felt like noise<br>
-    4. Ideas for new features, labels, layouts, or signal sources<br>
-    5. Anything that confused you &mdash; every confusion is a potential improvement
+    3. Which cross-references were useful and which felt like noise<br>
+    4. Ideas for new features, layouts, or signal sources<br>
+    5. Anything that confused you &mdash; every confusion is a Theme C improvement<br>
+    6. Try the Drive workflow &mdash; drop a document, regenerate, and describe what changed
   </p>
 </div>
 
-<p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">Open an issue on the project GitHub repository, post in the Slack channel, or bring your feedback to the next team sync.</p>
+<div class="card" style="border-color: var(--aqua);">
+  <h4 style="color: var(--aqua);">The Drive Contribution</h4>
+  <p>
+    The easiest way to contribute is through Google Drive. Drop a document (competitive alert, meeting notes, market analysis, partner update) into the customer's shared folder, then regenerate the brief or account plan. Describe what changed &mdash; that observation IS your submission. You don't need to write code to prove the platform works.
+  </p>
+</div>
+
+<div class="card">
+  <h4>Not a GitHub person?</h4>
+  <p>Post ideas in Slack using this format &mdash; Jason will convert them into GitHub issues:</p>
+  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 8px; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+    IDEA: [Short title]<br>
+    THEME: A / B / C<br>
+    WHAT: [2&ndash;3 sentences &mdash; what should it do?]<br>
+    WHY: [1 sentence &mdash; why it matters for customer conversations]<br>
+    IMPACT: Must-have / Strong addition / Nice-to-have
+  </div>
+</div>
+
+<!-- What Happens Next -->
+<h2><span class="bar" style="background: var(--aqua)"></span> What Happens After You Submit</h2>
+<div style="display: flex; gap: 8px; align-items: stretch; margin-bottom: 24px;">
+  <div class="card" style="flex: 1; text-align: center;">
+    <p style="font-size: 20px; margin-bottom: 4px;">1</p>
+    <h4>You Submit</h4>
+    <p>Idea posted via GitHub form or Slack</p>
+  </div>
+  <div style="display: flex; align-items: center; color: var(--text-muted); font-size: 18px;">&rarr;</div>
+  <div class="card" style="flex: 1; text-align: center;">
+    <p style="font-size: 20px; margin-bottom: 4px;">2</p>
+    <h4>Jason Triages</h4>
+    <p>Mapped to theme, sized, prioritized</p>
+  </div>
+  <div style="display: flex; align-items: center; color: var(--text-muted); font-size: 18px;">&rarr;</div>
+  <div class="card" style="flex: 1; text-align: center;">
+    <p style="font-size: 20px; margin-bottom: 4px;">3</p>
+    <h4>AI Agent Builds</h4>
+    <p>Code written, tested, deployed</p>
+  </div>
+  <div style="display: flex; align-items: center; color: var(--text-muted); font-size: 18px;">&rarr;</div>
+  <div class="card" style="flex: 1; text-align: center;">
+    <p style="font-size: 20px; margin-bottom: 4px;">4</p>
+    <h4>You Verify</h4>
+    <p>Check: does it look right?</p>
+  </div>
+  <div style="display: flex; align-items: center; color: var(--text-muted); font-size: 18px;">&rarr;</div>
+  <div class="card" style="flex: 1; text-align: center;">
+    <p style="font-size: 20px; margin-bottom: 4px;">5</p>
+    <h4>Live on Dashboard</h4>
+    <p>Your idea, shipped</p>
+  </div>
+</div>
+<p style="font-size: 13px; color: var(--text-muted);">
+  An evangelist who says "this label makes no sense" produces a feature just like an engineer who says "expose the provenance table." Both become real, shipped changes. <strong>Your name stays on the feature.</strong>
+</p>
+
+<!-- Quick Reference -->
+<h2><span class="bar" style="background: var(--blue)"></span> Quick Reference</h2>
+<div class="links-grid">
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/ai-challenge.html" target="_blank">
+    <div class="name">AI Challenge Overview</div>
+    <div class="desc">Rules, timeline, themes, submission format</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/token-setup.html" target="_blank">
+    <div class="name">Token Setup (Optional)</div>
+    <div class="desc">Only needed if running locally &mdash; demo.jasonhorn.io needs no setup</div>
+  </a>
+</div>
 
 <script>
 function toggleTheme() {

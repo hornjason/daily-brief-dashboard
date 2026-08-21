@@ -24,7 +24,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
   .container { max-width: 1200px; margin: 0 auto; }
-  h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+  h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 4px; }
   .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
   .theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -69,7 +69,7 @@
 <button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
 <div class="container">
   <h1>The Challenge Workflow</h1>
-  <p class="subtitle">Change an input → regenerate → see the output change. This is how the team demonstrates innovation.</p>
+  <p class="subtitle">Add a document to Google Drive → regenerate → see every output change. This is how the team demonstrates innovation.</p>
 
   <div class="workflow">
     <!-- Step 1: Baseline -->
@@ -77,60 +77,47 @@
       <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
       <div class="step-content">
         <h3><span class="dot" style="background: var(--blue)"></span> Capture Baseline</h3>
-        <p>Open any customer account → read the current brief and account plan. This is the "before" state. Note the signal counts, graph edges, and quality score.</p>
+        <p>Open a customer account in the dashboard. Read the current brief and account plan. This is your "before" state &mdash; note the priority action, signal count, graph edges, and quality score.</p>
         <div class="example">
-          Dashboard → [Select Customer] → Account Plan<br>
-          <span class="highlight">Score: 95.2%</span> | <span class="highlight">Sections: 12</span> | <span class="highlight">Initiatives: 4</span><br>
-          Customer Success: <span class="change">67%</span> ← example lowest category
+          Dashboard &rarr; Customer Account &rarr; Account Plan<br>
+          <span class="highlight">Quality Score: 90%</span> | <span class="highlight">Sections: 12</span> | <span class="highlight">Initiatives: 3</span><br>
+          Priority Action: <span class="change">"Review Strategic POV document"</span>
         </div>
       </div>
     </div>
 
     <div class="connector"><svg width="2" height="32"><line x1="1" y1="0" x2="1" y2="32" stroke="var(--flow-line)" stroke-width="2" stroke-dasharray="4,4"/></svg></div>
 
-    <!-- Step 2: Change an Input -->
+    <!-- Step 2: Add to Drive (PRIMARY) -->
     <div class="step">
-      <div class="step-num" style="color: var(--orange); border-color: var(--orange);">2</div>
-      <div class="step-content">
-        <h3><span class="dot" style="background: var(--orange)"></span> Change an Input</h3>
-        <p>All changes happen through the dashboard UI or Google Drive &mdash; no code or config editing required.</p>
+      <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">2</div>
+      <div class="step-content" style="border-color: var(--aqua); border-width: 2px;">
+        <h3><span class="dot" style="background: var(--aqua)"></span> Add a Document to Google Drive</h3>
+        <p><strong style="color: var(--aqua);">This is the primary way to change inputs.</strong> Drop any document into the customer's shared Drive folder &mdash; the pipeline reads it on the next regeneration and synthesizes it into every consumer output automatically.</p>
         <div class="changeable-grid">
-          <div class="changeable" style="border: 2px solid var(--aqua); grid-column: span 2;">
-            <div class="what" style="color: var(--aqua); font-size: 14px;">Add a Document to Google Drive</div>
-            <div class="how">Drop a file (competitive alert, meeting notes, partner update, expansion opportunity) into the customer's shared Drive folder</div>
-            <div class="effect">Effect: Gemini reads the new doc on next regeneration &mdash; content is synthesized into the brief, account plan, and all consumers automatically. Verified: adding a VMware migration alert produced a new &ldquo;VMware to OpenShift Consolidation&rdquo; initiative in the account plan.</div>
+          <div class="changeable" style="border-color: var(--aqua);">
+            <div class="what">Competitive Alert</div>
+            <div class="how">Drop a competitive intelligence brief into Drive &mdash; a vendor switch, a migration trend, a market shift</div>
+            <div class="effect">Effect: New initiative appears in account plan, competitive context updates across all consumers</div>
           </div>
-          <div class="changeable">
-            <div class="what">Refresh Data Sources</div>
-            <div class="how">Dashboard &rarr; Data Freshness &rarr; click "Refresh" on any source (Cases, Pipeline, Subscriptions)</div>
-            <div class="effect">Effect: Scraper re-pulls live data &mdash; new cases, updated pipeline, changed subscriptions flow in</div>
+          <div class="changeable" style="border-color: var(--aqua);">
+            <div class="what">Meeting Notes</div>
+            <div class="how">Drop notes from a customer conversation &mdash; decisions made, concerns raised, next steps discussed</div>
+            <div class="effect">Effect: Meeting context flows into brief, talking points update, engagement timeline enriches</div>
           </div>
-          <div class="changeable">
-            <div class="what">Regenerate Account Intelligence</div>
-            <div class="how">Customer page &rarr; Intelligence panel &rarr; click "Generate" &mdash; Gemini re-researches the company</div>
-            <div class="effect">Effect: Fresh company intel with latest news, leadership changes, strategic context</div>
+          <div class="changeable" style="border-color: var(--aqua);">
+            <div class="what">Partner Update</div>
+            <div class="how">Drop a partner relationship update &mdash; joint solutions, co-sell opportunities, integration news</div>
+            <div class="effect">Effect: Partner context appears in account plan, new opportunities surface in expansion motions</div>
           </div>
-          <div class="changeable">
-            <div class="what">Generate Account Plan</div>
-            <div class="how">Customer page &rarr; Account Plan tab &rarr; click "Generate" &mdash; builds from 9 inputs + 11 quality checks</div>
-            <div class="effect">Effect: New plan with updated signals, re-scored quality gate, uploaded to Google Drive</div>
-          </div>
-          <div class="changeable">
-            <div class="what">Generate Meeting Prep</div>
-            <div class="how">Customer page &rarr; Calendar strip &rarr; click upcoming meeting &rarr; "Generate Prep"</div>
-            <div class="effect">Effect: Pre-call brief with attendee context, recent activity, talking points from 10 signal sources</div>
-          </div>
-          <div class="changeable">
-            <div class="what">Generate Product Intel</div>
-            <div class="how">Customer page &rarr; Products tab &rarr; click "Generate" on any product</div>
-            <div class="effect">Effect: Per-product expansion angles, feature maturity, lifecycle status refresh</div>
-          </div>
-          <div class="changeable">
-            <div class="what">Regenerate Customer Brief</div>
-            <div class="how">Customer page &rarr; Brief section &rarr; click the refresh icon to regenerate</div>
-            <div class="effect">Effect: Brief rebuilds from all 9 inputs &mdash; recommended actions, signal priorities, cross-references update</div>
+          <div class="changeable" style="border-color: var(--aqua);">
+            <div class="what">Market Analysis</div>
+            <div class="how">Drop an industry analysis, analyst report summary, or market trend document</div>
+            <div class="effect">Effect: Industry context enriches, competitive positioning shifts, strategic framing adapts</div>
           </div>
         </div>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--aqua); font-weight: 600;">Anyone on the team can do this. No code, no config &mdash; just drag a file into Google Drive.</p>
+        <p style="font-size: 11px; color: var(--text-muted);">Verified: adding a migration alert produced a new consolidation initiative. Removing it and regenerating removed the initiative. The system reads fresh every time.</p>
       </div>
     </div>
 
@@ -141,14 +128,14 @@
       <div class="step-num" style="color: var(--violet); border-color: var(--violet);">3</div>
       <div class="step-content">
         <h3><span class="dot" style="background: var(--violet)"></span> Regenerate</h3>
-        <p>Click regenerate. The pipeline re-runs with the modified input. Watch the provenance table update — it shows exactly which sources loaded and how many tokens each contributed.</p>
+        <p>Click regenerate on any consumer output. The pipeline re-runs with the new Drive document included. Gemini reads the document, extracts intelligence, and weaves it into the output.</p>
         <div class="example">
-          <span class="highlight">Provenance after injection:</span><br>
-          signal-loader: <span class="highlight">loaded</span> (2,800 tokens — <span class="change">+400 from new case</span>)<br>
-          templateAll: <span class="highlight">loaded</span> (4,100 tokens — <span class="change">+300 from new signals</span>)<br>
+          <span class="highlight">After adding a competitive alert to Drive:</span><br>
+          signal-loader: <span class="highlight">loaded</span> (2,800 tokens)<br>
           intelligence: <span class="highlight">loaded</span> (5,000 tokens)<br>
-          solution-plays: <span class="highlight">loaded</span> (1,200 tokens — <span class="change">+400 from new play</span>)<br>
-          email-intelligence: <span class="change">now loaded</span> (800 tokens — <span class="change">NEW</span>)
+          drive-docs: <span class="change">loaded</span> (1,200 tokens &mdash; <span class="change">NEW from your document</span>)<br>
+          solution-plays: <span class="highlight">loaded</span> (1,200 tokens)<br>
+          <span class="change">Quality gate: 94/75 PASS</span>
         </div>
       </div>
     </div>
@@ -157,32 +144,34 @@
 
     <!-- Step 4: Compare -->
     <div class="step">
-      <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">4</div>
+      <div class="step-num" style="color: var(--orange); border-color: var(--orange);">4</div>
       <div class="step-content">
-        <h3><span class="dot" style="background: var(--aqua)"></span> Compare Before / After</h3>
-        <p>Check each consumer to see how the refreshed data changed the output. The provenance panel (Theme A) would explain WHY.</p>
+        <h3><span class="dot" style="background: var(--orange)"></span> Compare Before / After</h3>
+        <p>Check what changed in the output. The new document's intelligence is woven throughout &mdash; not just appended, but synthesized into the existing narrative.</p>
         <div class="compare">
           <div class="compare-panel">
             <h4><span class="dot" style="background: var(--text-muted)"></span> Before (baseline)</h4>
-            <div class="line">Account Plan score: 95.2%</div>
-            <div class="line">Initiatives: 4</div>
-            <div class="line">Brief: 6 recommended actions</div>
-            <div class="line">Meeting Prep: based on last week's data</div>
-            <div class="line removed">No recent case context in any consumer</div>
+            <div class="line">Priority Action: "Review Strategic POV document"</div>
+            <div class="line">Initiatives: 3</div>
+            <div class="line">Graph: 87 nodes, 100 edges</div>
+            <div class="line removed">No competitive migration context</div>
+            <div class="line removed">No partner update intelligence</div>
           </div>
           <div class="compare-panel">
-            <h4><span class="dot" style="background: var(--aqua)"></span> After (refresh + regenerate)</h4>
-            <div class="line">Account Plan score: <span style="color:var(--aqua)">changed</span> &mdash; new signals scored</div>
-            <div class="line added">+ New initiative surfaced from fresh data</div>
-            <div class="line added">+ Brief: recommended actions re-prioritized</div>
-            <div class="line added">+ Meeting Prep: new cases appear as talking points</div>
-            <div class="line added">+ Campaigns: outreach updated with latest context</div>
+            <h4><span class="dot" style="background: var(--aqua)"></span> After (Drive document added)</h4>
+            <div class="line">Priority Action: <span style="color:var(--aqua)">"Clarify strategy and at-risk opportunity"</span></div>
+            <div class="line added">+ New initiative from competitive alert</div>
+            <div class="line">Graph: <span style="color:var(--aqua)">expanded</span> with new intelligence edges</div>
+            <div class="line added">+ Drive document synthesized into account plan</div>
+            <div class="line added">+ Competitive context woven into meeting prep</div>
           </div>
         </div>
-        <div style="margin-top: 12px; padding: 10px 14px; background: rgba(25,158,112,0.08); border: 1px solid rgba(25,158,112,0.2); border-radius: 8px;">
-          <div style="font-size: 12px; font-weight: 600; color: var(--aqua); margin-bottom: 4px;">How to verify the intelligence is working</div>
-          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
-            Check each consumer after regeneration: <strong>Brief</strong> &rarr; did recommended actions change? <strong>Account Plan</strong> &rarr; did the score or initiatives change? <strong>Meeting Prep</strong> &rarr; do talking points reflect new data? <strong>Campaigns</strong> &rarr; is the outreach updated? Same signal change, different outputs &mdash; that proves the cross-reference engine works.
+        <div style="margin-top: 12px;">
+          <p style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Verify these consumers updated:</p>
+          <div class="consumers-row" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="consumer-mini"><div class="name">Customer Brief</div><div class="change-desc">New themes in narrative</div></div>
+            <div class="consumer-mini"><div class="name">Account Plan</div><div class="change-desc">New initiative from your doc</div></div>
+            <div class="consumer-mini"><div class="name">Value Positioning</div><div class="change-desc">Competitive context shifts</div></div>
           </div>
         </div>
       </div>
@@ -194,30 +183,31 @@
     <div class="step">
       <div class="step-num" style="color: var(--magenta); border-color: var(--magenta);">5</div>
       <div class="step-content">
-        <h3><span class="dot" style="background: var(--magenta)"></span> Ripple Effect — Other Consumers Update Too</h3>
-        <p>The same signal change ripples through every consumer that uses those signals. One injection → multiple outputs change.</p>
+        <h3><span class="dot" style="background: var(--magenta)"></span> Ripple Effect &mdash; One Document, Multiple Outputs</h3>
+        <p>The same Drive document ripples through every consumer that uses document intelligence. One file dropped &rarr; multiple outputs change.</p>
         <div class="consumers-row">
           <div class="consumer-mini">
-            <div class="icon">📰</div>
+            <div class="icon">&#x1F4CB;</div>
             <div class="name">Customer Brief</div>
-            <div class="change-desc">New Sev1 case appears as top priority</div>
+            <div class="change-desc">New context in narrative + actions</div>
           </div>
           <div class="consumer-mini">
-            <div class="icon">📊</div>
+            <div class="icon">&#x1F4CA;</div>
             <div class="name">Account Plan</div>
-            <div class="change-desc">New initiative + improved score</div>
+            <div class="change-desc">New initiative + updated strategy</div>
           </div>
           <div class="consumer-mini">
-            <div class="icon">🤝</div>
+            <div class="icon">&#x1F91D;</div>
             <div class="name">Meeting Prep</div>
-            <div class="change-desc">Sev1 case as #1 talking point</div>
+            <div class="change-desc">New talking points from your doc</div>
           </div>
           <div class="consumer-mini">
-            <div class="icon">✉️</div>
+            <div class="icon">&#x2709;&#xFE0F;</div>
             <div class="name">Campaigns</div>
-            <div class="change-desc">Outreach re-prioritized for urgency</div>
+            <div class="change-desc">Outreach updated with new context</div>
           </div>
         </div>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">Generated outputs are also written to Google Drive &mdash; account plans, intelligence docs, campaigns, and value positioning all appear as real documents you can share with your AE.</p>
       </div>
     </div>
   </div>
@@ -226,19 +216,25 @@
   <div style="margin-top: 48px; background: var(--surface-card); border: 2px solid var(--violet); border-radius: 14px; padding: 24px 28px;">
     <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">The 60-Second Demo Script</h3>
     <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
-      <strong style="color: var(--blue)">1.</strong> "Here's the account plan for this customer. Score: 95.2%. But you can't see what went into it."<br>
-      <strong style="color: var(--orange)">2.</strong> "Let me show you." <em>[Toggle provenance panel &mdash; 9 inputs appear, showing what loaded and what's missing]</em><br>
-      <strong style="color: var(--orange)">3.</strong> "Watch what happens when I refresh the data sources." <em>[Click Refresh on Cases in Data Freshness]</em><br>
-      <strong style="color: var(--violet)">4.</strong> "Now regenerate the account plan." <em>[Click Generate &mdash; pipeline re-runs, provenance updates live]</em><br>
-      <strong style="color: var(--aqua)">5.</strong> "The score changed. New signals pulled in. New initiatives appeared. And look &mdash; the brief, meeting prep, and campaigns all reflect the same new data."<br>
-      <strong style="color: var(--magenta)">6.</strong> "That's the pipeline. Transparent, traceable, and it gets smarter with every signal &mdash; all from the UI."
+      <strong style="color: var(--blue)">1.</strong> "Here's a customer account plan. Quality score: 90%. But you can't see what went into it."<br>
+      <strong style="color: var(--aqua)">2.</strong> "Watch what happens when I drop a competitive alert into the customer's Drive folder." <em>[Drag document into Google Drive]</em><br>
+      <strong style="color: var(--violet)">3.</strong> "Regenerate." <em>[Pipeline re-runs, reads the new document, synthesizes it into the output]</em><br>
+      <strong style="color: var(--orange)">4.</strong> "A new initiative appeared. The priority action changed. The competitive context updated across the brief, account plan, and meeting prep &mdash; all from one document."<br>
+      <strong style="color: var(--magenta)">5.</strong> "That's the pipeline. One document in Drive, every output updates. Transparent, traceable, and it gets smarter with every signal."
     </p>
   </div>
 </div>
 <script>
 function toggleTheme() {
   const html = document.documentElement;
-  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
 }
 </script>
 </body>
