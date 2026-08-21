@@ -17,7 +17,7 @@ export async function extractFromEmail(subject: string): Promise<EmailExtractRes
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const gmail = google.gmail({ version: 'v1', auth })
 
-  const query = `subject:${subject}`
+  const query = `subject:${subject} -subject:"Document Shared with You" -from:drive-shares-dm-noreply@google.com`
   const listRes = await gmail.users.messages.list({
     userId: 'me',
     q: query,
