@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Status — Brief Encounters</title>
+<style>
+:root {
+  --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+  --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+  --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+  --magenta: #d55181; --green: #008300; --violet: #9085e9;
+  --border: #3a3a38;
+}
+[data-theme="light"] {
+  --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+  --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+  --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+  --border: #d9d9d4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--text-primary); line-height: 1.6; padding: 40px 32px 64px; max-width: 1000px; margin: 0 auto; }
+.theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 4px; }
+.subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
+.updated { font-size: 12px; color: var(--text-muted); margin-bottom: 32px; }
+h2 { font-size: 20px; font-weight: 700; margin-top: 36px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+h2 .bar { display: inline-block; width: 4px; height: 18px; border-radius: 2px; }
+p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+a { color: var(--aqua); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 10px; }
+.card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 0; }
+.tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-right: 4px; }
+.meeting { border-left: 3px solid var(--violet); }
+.decision { border-left: 3px solid var(--aqua); }
+.action { border-left: 3px solid var(--orange); }
+.idea { border-left: 3px solid var(--blue); }
+.status-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.timeline-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
+.timeline-date { min-width: 80px; font-size: 12px; font-weight: 600; color: var(--text-muted); padding-top: 16px; }
+.timeline-card { flex: 1; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+
+<h1>Project Status</h1>
+<p class="subtitle">Brief Encounters &mdash; what happened, what's next, who's doing what</p>
+<p class="updated">Last updated: Aug 21, 2026 &mdash; after kickoff call</p>
+
+<!-- Current Sprint -->
+<h2><span class="bar" style="background: var(--aqua)"></span> Current Sprint</h2>
+<div class="card" style="border: 2px solid var(--aqua);">
+  <h4 style="color: var(--aqua);">Week 1: Explore &amp; Submit Ideas</h4>
+  <p>Team explores the dashboard at <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io</a>, tries the Drive workflow, and submits 2&ndash;3 ideas each by <strong>Wed Aug 27</strong>.</p>
+  <p style="margin-top: 6px;"><strong>Next sync:</strong> Wednesday Aug 27 &mdash; review ideas, discuss themes, plan improvements</p>
+</div>
+
+<!-- Meeting Log -->
+<h2><span class="bar" style="background: var(--violet)"></span> Meeting Log</h2>
+
+<div class="timeline-row">
+  <div class="timeline-date">Aug 21</div>
+  <div class="card meeting timeline-card">
+    <h4>Kickoff Call <span class="status-badge" style="background: rgba(144,133,233,0.15); color: var(--violet);">Completed</span></h4>
+    <p><strong>Attendees:</strong> Jason, Eric, Gonzalo, John, Pete, Nikki, Siddardh, Riya, Aneela</p>
+    <p style="margin-top: 8px;"><strong>What happened:</strong></p>
+    <ul style="font-size: 13px; color: var(--text-secondary); padding-left: 18px; margin-top: 4px;">
+      <li>Live demo of the dashboard &mdash; portfolio view, customer brief, account plan generation</li>
+      <li>Walked through architecture visuals (full engine, brief pipeline)</li>
+      <li>Team intros &mdash; each person shared their background and lens</li>
+      <li>Demonstrated Drive workflow: drop a document, regenerate, see output change</li>
+      <li>Discussed GitHub issue template for submitting ideas</li>
+      <li>Explored scaling to other regions (EMEA, APAC) &mdash; possible via separate containers</li>
+    </ul>
+    <p style="margin-top: 8px;"><a href="https://docs.google.com/document/d/1etL6TSGQedCqzBH7IeU9G3Aq_USWBrBQHP1EmjbnLbQ/" target="_blank">Full meeting notes &amp; recording &rarr;</a></p>
+  </div>
+</div>
+
+<!-- Key Decisions -->
+<h2><span class="bar" style="background: var(--aqua)"></span> Decisions</h2>
+
+<div class="card decision">
+  <h4>GitHub for collaboration</h4>
+  <p>GitHub repository and issue templates are the centralized channel for submitting feature requests and ideas. Slack alternative available for non-GitHub users.</p>
+</div>
+<div class="card decision">
+  <h4>Red Hat Insights as new signal source</h4>
+  <p>John proposed integrating RHEL, OpenShift, and Ansible telemetry from Red Hat Insights for granular cluster and operator-level customer data. <span class="tag" style="background: rgba(57,135,229,0.15); color: var(--blue);">Theme B</span></p>
+</div>
+<div class="card decision">
+  <h4>Next sync: Wednesday Aug 27</h4>
+  <p>Team reconvenes to review submitted ideas, discuss theme priorities, and plan first batch of improvements.</p>
+</div>
+
+<!-- Ideas from Kickoff -->
+<h2><span class="bar" style="background: var(--blue)"></span> Ideas Surfaced</h2>
+
+<div class="card idea">
+  <h4>Red Hat Insights telemetry integration <span class="tag" style="background: rgba(57,135,229,0.15); color: var(--blue);">Theme B</span></h4>
+  <p><strong>John Johansson</strong> &mdash; Extend signal sources to include cluster data from OpenShift, Ansible, and RHEL Insights. Provides granular visibility into customer environments (operators, cluster versions, consumption patterns).</p>
+</div>
+<div class="card idea">
+  <h4>Dashboard as provider for Shadowbot <span class="tag" style="background: rgba(217,89,38,0.15); color: var(--orange);">Theme B</span></h4>
+  <p><strong>Eric Ames</strong> &mdash; The dashboard could feed context into Shadowbot and other tools, making them more effective by supplying customer-specific intelligence.</p>
+</div>
+<div class="card idea">
+  <h4>Notebook LM integration <span class="tag" style="background: rgba(57,135,229,0.15); color: var(--blue);">Theme A</span></h4>
+  <p><strong>Eric Ames</strong> &mdash; Auto-sync documents between a user's Google account and the dashboard via Notebook LM.</p>
+</div>
+<div class="card idea">
+  <h4>Individual account addition <span class="tag" style="background: rgba(213,81,129,0.15); color: var(--magenta);">Theme C</span></h4>
+  <p><strong>Gonzalo Cabrera</strong> &mdash; Allow adding individual accounts without being tied to Salesforce territory reports.</p>
+</div>
+<div class="card idea">
+  <h4>Plan IQ benchmarking alignment <span class="tag" style="background: rgba(217,89,38,0.15); color: var(--orange);">Theme B</span></h4>
+  <p><strong>John Johansson</strong> &mdash; Align auto-generated account plans with Plan IQ benchmarks and Technology Development Plans.</p>
+</div>
+
+<!-- Action Items -->
+<h2><span class="bar" style="background: var(--orange)"></span> Action Items</h2>
+
+<div class="card action">
+  <h4>[Jason] Share all project links to Slack <span class="status-badge" style="background: rgba(25,158,112,0.15); color: var(--aqua);">In Progress</span></h4>
+  <p>Post dashboard URL, GitHub hub page, issue form, and architecture visuals to Slack channel bookmarks.</p>
+</div>
+<div class="card action">
+  <h4>[Team] Submit 2&ndash;3 ideas via GitHub by Aug 27 <span class="status-badge" style="background: rgba(201,133,0,0.15); color: var(--yellow);">Pending</span></h4>
+  <p>Use the <a href="https://github.com/hornjason/daily-brief-dashboard/issues/new?template=ai-challenge-feature-request.yml">GitHub issue form</a> or post in Slack.</p>
+</div>
+<div class="card action">
+  <h4>[Team] Explore dashboard and try Drive workflow <span class="status-badge" style="background: rgba(201,133,0,0.15); color: var(--yellow);">Pending</span></h4>
+  <p>Browse <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io</a>, drop a document into the shared Drive folder, regenerate, observe changes.</p>
+</div>
+<div class="card action">
+  <h4>[Team] Verify data workflows <span class="status-badge" style="background: rgba(201,133,0,0.15); color: var(--yellow);">Pending</span></h4>
+  <p>Validate that Drive document changes correctly update downstream consumers (brief, account plan).</p>
+</div>
+
+<!-- Video Timeline -->
+<h2><span class="bar" style="background: var(--magenta)"></span> Video Timeline</h2>
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px;">
+  <div class="card" style="text-align: center; border-top: 3px solid var(--aqua);">
+    <p style="font-size: 11px; color: var(--text-muted);">Week 2&ndash;3</p>
+    <h4>Script</h4>
+    <p>60-second pitch</p>
+    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Eric + Nikki lead</p>
+  </div>
+  <div class="card" style="text-align: center;">
+    <p style="font-size: 11px; color: var(--text-muted);">Week 3</p>
+    <h4>Record</h4>
+    <p>Screen capture + voiceover</p>
+  </div>
+  <div class="card" style="text-align: center;">
+    <p style="font-size: 11px; color: var(--text-muted);">Week 4</p>
+    <h4>Edit</h4>
+    <p>Final polish</p>
+  </div>
+  <div class="card" style="text-align: center; border-top: 3px solid var(--magenta);">
+    <p style="font-size: 11px; color: var(--text-muted);">Sep 11 target</p>
+    <h4>Submit</h4>
+    <p>4-day buffer</p>
+    <p style="font-size: 11px; color: var(--magenta); margin-top: 4px;">Deadline: Sep 15</p>
+  </div>
+</div>
+
+<!-- Team Quick Reference -->
+<h2><span class="bar" style="background: var(--blue)"></span> Team</h2>
+<p>Updated from kickoff call introductions.</p>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+  <div class="card">
+    <h4>Jason Horn <span style="font-size: 10px; color: var(--text-muted); font-weight: 400;">(Lead)</span></h4>
+    <p style="font-size: 11px;">Account SA, ET. Built the platform. Triages ideas, runs pipeline, coordinates the team.</p>
+  </div>
+  <div class="card">
+    <h4>Eric Ames</h4>
+    <p style="font-size: 11px;">Ansible Technical Specialist, PT. 4.5yr at RH. Former Unix sysadmin at Schwab. Lens: deal structuring, automation gaps, Notebook LM. Video lead.</p>
+  </div>
+  <div class="card">
+    <h4>Gonzalo Cabrera</h4>
+    <p style="font-size: 11px;">Account Executive, Dallas, CT. 5yr at RH. Background in software/telecom. Lens: collaboration across accounts, individual account onboarding.</p>
+  </div>
+  <div class="card">
+    <h4>John Johansson</h4>
+    <p style="font-size: 11px;">Specialist Adoption Architect (OpenShift), Sweden, CET. 20yr Linux. Lens: Red Hat Insights telemetry, Plan IQ alignment, EMEA expansion.</p>
+  </div>
+  <div class="card">
+    <h4>Pete Codevilla</h4>
+    <p style="font-size: 11px;">Portfolio Product Marketing, MT. 8yr at RH. Sales play management + competitive platforms. Lens: new data sources for enablement.</p>
+  </div>
+  <div class="card">
+    <h4>Nikki Yeaton</h4>
+    <p style="font-size: 11px;">Global Ecosystem Marketing, ET. 7mo at RH. Partner demand center, AI/Ansible campaigns. Former BDR. Lens: automation, competitive positioning. Video co-lead.</p>
+  </div>
+  <div class="card">
+    <h4>Siddardh R A</h4>
+    <p style="font-size: 11px;">Sr. Software Engineer (Perf &amp; Scale), India, IST. 4.5yr at RH. OpenShift pipelines, GitOps. Lens: performance, scale testing, configuration.</p>
+  </div>
+  <div class="card">
+    <h4>Riya Sharma</h4>
+    <p style="font-size: 11px;">Sr. Software Engineer (Perf &amp; Scale), India, IST. Lens: technical validation, pipeline behavior.</p>
+  </div>
+  <div class="card">
+    <h4>Aneela Kaplan</h4>
+    <p style="font-size: 11px;">Manager, Fleet Console Next, India, IST. Lens: what's technically possible, provenance design.</p>
+  </div>
+</div>
+
+<!-- Links -->
+<h2><span class="bar" style="background: var(--yellow)"></span> Quick Links</h2>
+<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+  <a href="https://demo.jasonhorn.io/dashboard" target="_blank" class="card" style="text-decoration: none;">
+    <h4 style="color: var(--aqua);">Dashboard</h4>
+    <p>demo.jasonhorn.io</p>
+  </a>
+  <a href="https://github.com/hornjason/daily-brief-dashboard/issues/new?template=ai-challenge-feature-request.yml" target="_blank" class="card" style="text-decoration: none;">
+    <h4 style="color: var(--aqua);">Submit an Idea</h4>
+    <p>GitHub issue form</p>
+  </a>
+  <a href="https://hornjason.github.io/daily-brief-dashboard/visual/contributor-guide.html" target="_blank" class="card" style="text-decoration: none;">
+    <h4 style="color: var(--aqua);">Contributor Guide</h4>
+    <p>Walkthrough hub</p>
+  </a>
+  <a href="https://docs.google.com/document/d/1etL6TSGQedCqzBH7IeU9G3Aq_USWBrBQHP1EmjbnLbQ/" target="_blank" class="card" style="text-decoration: none;">
+    <h4 style="color: var(--aqua);">Kickoff Recording &amp; Notes</h4>
+    <p>Google Doc with transcript</p>
+  </a>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
+}
+</script>
+</body>
+</html>
