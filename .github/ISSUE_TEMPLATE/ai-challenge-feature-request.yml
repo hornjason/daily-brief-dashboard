@@ -1,81 +1,42 @@
 name: "AI Challenge - Feature Request"
-description: "Submit a feature idea, improvement, or polish request for Brief Encounters"
+description: "Submit a feature idea for Brief Encounters"
 title: "[Challenge] "
 labels: ["ai-challenge", "team-submission", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        ## Brief Encounters — Feature & Improvement Request
-        Thanks for submitting an idea! Fill out as much as you can. Don't worry about technical feasibility — just describe what you want to see.
-
-  - type: input
-    id: submitter-name
-    attributes:
-      label: Your Name
-      placeholder: "e.g., Aneela Kaplan"
-    validations:
-      required: true
-
-  - type: input
-    id: submitter-role
-    attributes:
-      label: Your Role at Red Hat
-      placeholder: "e.g., Solution Architect, Account Executive, TAM"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: request-type
-    attributes:
-      label: Type of Request
-      options:
-        - New feature — something that doesn't exist yet
-        - Polish — something that exists but needs improvement
-        - Fix — something that's broken or confusing
-        - Data gap — a signal or data source that's missing
-        - UX improvement — layout, navigation, clarity
-    validations:
-      required: true
+        ## Submit an Idea
+        Describe what you want to see. Don't worry about technical feasibility — just tell us the idea.
 
   - type: textarea
     id: description
     attributes:
-      label: What should it do?
-      description: "2-3 sentences describing the idea"
-      placeholder: "Describe the feature, improvement, or fix you'd like to see..."
+      label: What's your idea?
+      placeholder: "e.g., Show which data sources went into the brief so I know what's missing..."
     validations:
       required: true
 
-  - type: textarea
-    id: customer-impact
+  - type: dropdown
+    id: theme
     attributes:
-      label: Why it matters for customers
-      description: "How does this help an ASA have a better customer conversation?"
-      placeholder: "e.g., This would help me spot renewal risks 30 days earlier..."
-    validations:
-      required: true
-
-  - type: checkboxes
-    id: judging-criteria
-    attributes:
-      label: Which judging criteria does this improve?
-      description: "Check all that apply"
+      label: Which theme?
       options:
-        - label: "Innovation — makes the solution more creative or original"
-        - label: "Feasibility — makes it more realistic to implement or scale"
-        - label: "User Experience — makes it more intuitive, useful, or easy to understand"
-        - label: "Technical Excellence — demonstrates better use of AI and technology"
+        - "A: Show Your Work — expose how outputs are built"
+        - "B: Make It Smarter — better reasoning and recommendations"
+        - "C: Make It Shine — polish, clarity, first impressions"
+        - "Not sure — let the team decide"
+    validations:
+      required: true
 
   - type: dropdown
     id: demo-impact
     attributes:
-      label: How impactful would this be for the demo video?
+      label: How impactful for the demo video?
       options:
         - Must-have — the demo isn't complete without this
         - Strong addition — would clearly impress judges
-        - Nice-to-have — good but not critical for the submission
-        - Future vision — great idea but probably post-challenge
+        - Nice-to-have — good but not critical
     validations:
       required: true
 
@@ -83,18 +44,5 @@ body:
     id: real-scenario
     attributes:
       label: Real scenario (optional but valuable)
-      description: "Describe a real situation where you needed this. Real stories make the video compelling."
-      placeholder: "e.g., Last month I was prepping for a call with Acme Corp and I had to manually check..."
-
-  - type: textarea
-    id: role-lens
-    attributes:
-      label: Your evaluation lens
-      description: "What perspective are you bringing? How does your role inform this idea?"
-      placeholder: "e.g., As a TAM, I'm looking at this from a customer health and retention angle..."
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-        *After you submit, the team will review and vote on priorities. Top items go into the build pipeline.*
+      description: "When did you need this? Real stories make the video compelling."
+      placeholder: "e.g., Last month I was prepping for a call and had to manually check 4 systems to find..."
