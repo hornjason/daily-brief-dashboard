@@ -350,14 +350,55 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
   </div>
 </div>
 
-<!-- Challenge Themes -->
-<h2><span class="bar" style="background: var(--violet)"></span> The Three Themes</h2>
-<p>Every idea you submit fits one of these themes. Each theme has GitHub issues ready for features &mdash; your ideas seed new ones.</p>
+<!-- Challenge Themes aligned to Judging Criteria -->
+<h2><span class="bar" style="background: var(--violet)"></span> Themes &times; Judging Criteria</h2>
+<p>Every idea fits one of three themes. Each theme is designed to score across the four judging criteria (25% each).</p>
+
+<!-- Alignment matrix -->
+<div style="overflow-x: auto; margin-bottom: 20px;">
+  <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+    <thead>
+      <tr style="border-bottom: 2px solid var(--border);">
+        <th style="text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 600;">Judging Criterion (25% each)</th>
+        <th style="text-align: center; padding: 8px 12px; color: var(--blue); font-weight: 600;">A: Show Your Work</th>
+        <th style="text-align: center; padding: 8px 12px; color: var(--orange); font-weight: 600;">B: Make It Smarter</th>
+        <th style="text-align: center; padding: 8px 12px; color: var(--magenta); font-weight: 600;">C: Make It Shine</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid var(--border);">
+        <td style="padding: 8px 12px; font-weight: 600; color: var(--text-primary);">Innovation</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--text-muted);">&#x25CB;</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--border);">
+        <td style="padding: 8px 12px; font-weight: 600; color: var(--text-primary);">Feasibility</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--text-secondary);">&#x25CF; Built on existing data</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--text-secondary);">&#x25CF; Small/medium features</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+      </tr>
+      <tr style="border-bottom: 1px solid var(--border);">
+        <td style="padding: 8px 12px; font-weight: 600; color: var(--text-primary);">User Experience</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--text-secondary);">&#x25CF; "Why now" reasoning</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 12px; font-weight: 600; color: var(--text-primary);">Technical Excellence</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--aqua); font-weight: 700;">&#x25CF; Primary</td>
+        <td style="padding: 8px 12px; text-align: center; color: var(--text-secondary);">&#x25CF; Clean implementation</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
 <div class="themes-grid">
   <div class="theme-card" style="border-color: var(--blue);">
     <h4 style="color: var(--blue);">A: "Show Your Work"</h4>
     <p>Make the hidden visible. The account plan has 9 inputs and 11 quality checks &mdash; the user sees none of it. Surface provenance, data maturity, quality scores.</p>
+    <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;"><strong>Judges see:</strong> Innovation (nobody else exposes this), Technical Excellence (real provenance, not mocked), UX (users understand what went in), Feasibility (data already exists &mdash; just surface it)</p>
     <div class="issues">
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/27" target="_blank">#27</a>
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/28" target="_blank">#28</a> &mdash; Provenance, data maturity
@@ -366,6 +407,7 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
   <div class="theme-card" style="border-color: var(--orange);">
     <h4 style="color: var(--orange);">B: "Make It Smarter"</h4>
     <p>Add the "why." Recommendations say WHAT &mdash; this theme adds the signal chain that explains WHY. Delta tracking, trend indicators, visual connections.</p>
+    <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;"><strong>Judges see:</strong> Innovation (AI explains its reasoning), Technical Excellence (signal chains across 9 sources), UX ("why now" makes actions understandable), Feasibility (small/medium features on existing engine)</p>
     <div class="issues">
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/29" target="_blank">#29</a>
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/30" target="_blank">#30</a> &mdash; Signal chains, delta tracking
@@ -374,12 +416,14 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
   <div class="theme-card" style="border-color: var(--magenta);">
     <h4 style="color: var(--magenta);">C: "Make It Shine"</h4>
     <p>First impressions win. Confusing labels, dead tabs, inconsistent layouts &mdash; your fresh eyes catch what the builder can't see.</p>
+    <p style="font-size: 11px; color: var(--text-muted); margin-top: 6px;"><strong>Judges see:</strong> UX (polished, professional interface), Feasibility (quick wins that ship fast), Technical Excellence (clean implementation), Innovation (loading states, progress animations)</p>
     <div class="issues">
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/31" target="_blank">#31</a>
       <a href="https://github.com/hornjason/daily-brief-dashboard/issues/32" target="_blank">#32</a> &mdash; UX polish, clarity
     </div>
   </div>
 </div>
+<p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">Every theme touches all four criteria. The matrix shows where each theme scores strongest &mdash; together they cover the full rubric.</p>
 
 <!-- Team Roles -->
 <h2><span class="bar" style="background: var(--blue)"></span> Your Role on the Team</h2>
