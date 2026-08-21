@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Challenge Overview — Brief Encounters</title>
+<style>
+:root {
+  --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+  --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+  --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+  --magenta: #d55181; --green: #008300; --violet: #9085e9;
+  --border: #3a3a38; --flow-line: #52514e;
+}
+[data-theme="light"] {
+  --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+  --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+  --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+  --border: #d9d9d4; --flow-line: #b0afa8;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--surface); color: var(--text-primary);
+  line-height: 1.6; padding: 40px 32px 64px; max-width: 1000px; margin: 0 auto;
+}
+.theme-toggle {
+  position: fixed; top: 16px; right: 16px; z-index: 100;
+  background: var(--surface-card); border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit;
+  transition: background 0.15s;
+}
+.theme-toggle:hover { background: var(--surface-hover); }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 6px; }
+h2 { font-size: 20px; font-weight: 700; margin-top: 40px; margin-bottom: 16px; }
+.subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 8px; }
+.callout {
+  font-size: 14px; color: var(--text-secondary); font-style: italic;
+  border-left: 3px solid var(--aqua); padding: 12px 16px; margin: 16px 0;
+  background: rgba(25,158,112,0.06); border-radius: 0 8px 8px 0;
+}
+p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+a { color: var(--aqua); text-decoration: none; }
+a:hover { text-decoration: underline; }
+hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+.section-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--text-muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.section-label .bar {
+  display: inline-block; width: 4px; height: 14px; border-radius: 2px;
+}
+.card {
+  background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin-bottom: 12px; transition: background 0.15s;
+}
+.card:hover { background: var(--surface-hover); }
+.card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--text-primary); }
+.card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 0; }
+table {
+  width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;
+}
+th {
+  text-align: left; padding: 10px 14px; background: var(--surface-card);
+  color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; border-bottom: 2px solid var(--border);
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-secondary);
+}
+tr:hover td { background: var(--surface-hover); }
+code {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 6px; font-size: 12px; font-family: 'SF Mono', 'Menlo', monospace;
+}
+pre {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; font-size: 13px; font-family: 'SF Mono', 'Menlo', monospace;
+  overflow-x: auto; margin: 12px 0; color: var(--text-secondary); line-height: 1.6;
+}
+.pipeline-flow {
+  display: flex; flex-direction: column; gap: 0; margin: 20px 0;
+}
+.pipeline-step {
+  display: flex; align-items: center; gap: 16px;
+}
+.pipeline-step .step-icon {
+  width: 40px; height: 40px; border-radius: 10px; display: flex;
+  align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+  border: 2px solid var(--border);
+}
+.pipeline-step .step-body { flex: 1; }
+.pipeline-step .step-title { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.pipeline-step .step-desc { font-size: 12px; color: var(--text-muted); }
+.pipeline-connector {
+  display: flex; justify-content: flex-start; padding-left: 19px; height: 20px;
+}
+.pipeline-connector .dash {
+  width: 2px; height: 20px;
+  background: repeating-linear-gradient(to bottom, var(--flow-line) 0px, var(--flow-line) 4px, transparent 4px, transparent 8px);
+}
+.highlight-box {
+  background: rgba(57,135,229,0.06); border: 1px solid rgba(57,135,229,0.2);
+  border-radius: 10px; padding: 16px 20px; margin: 16px 0;
+}
+.highlight-box strong { color: var(--blue); }
+.links-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0;
+}
+@media (max-width: 700px) { .links-grid { grid-template-columns: 1fr; } }
+.link-card {
+  background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; transition: background 0.15s, border-color 0.15s;
+  display: block; text-decoration: none;
+}
+.link-card:hover { background: var(--surface-hover); border-color: var(--aqua); text-decoration: none; }
+.link-card .link-title { font-size: 13px; font-weight: 600; color: var(--aqua); margin-bottom: 3px; }
+.link-card .link-desc { font-size: 11px; color: var(--text-muted); }
+ol, ul { padding-left: 20px; margin-bottom: 12px; }
+li { font-size: 14px; color: var(--text-secondary); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+
+<h1>Brief Encounters</h1>
+<p class="subtitle">Innovation Days 2026 Global AI Challenge</p>
+<p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Challenge 1: Customer Insight Activation from Telemetry &amp; Data Signals</p>
+
+<div class="callout">
+  Walk into every customer conversation prepared &mdash; with AI-powered briefs built from 9 data sources, cross-referenced in real time.
+</div>
+
+<hr>
+
+<!-- What Is This -->
+<div class="section-label"><span class="bar" style="background: var(--blue)"></span>What Is This?</div>
+
+<p>An AI-powered intelligence platform that produces customer intelligence briefs for Red Hat Account Solution Architects. It aggregates signals from Salesforce, support cases, Gmail, Calendar, Drive, cloud marketplace, Red Hat RSS, events, and product lifecycle &mdash; then cross-references them with weighted confidence scoring to surface what matters and what to do about it.</p>
+
+<p>This is real and running, not a prototype. The demo environment includes a full account with real cases, emails, subscriptions, and hundreds of graph edges.</p>
+
+<hr>
+
+<!-- How the Brief Gets Built -->
+<div class="section-label"><span class="bar" style="background: var(--orange)"></span>How the Brief Gets Built</div>
+
+<div class="pipeline-flow">
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--blue); color: var(--blue);">1</div>
+    <div class="step-body">
+      <div class="step-title">Bootstrap</div>
+      <div class="step-desc">Creates Drive folder structure, imports Salesforce bookings, discovers customers from shared data source</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--violet); color: var(--violet);">2</div>
+    <div class="step-body">
+      <div class="step-title">Intelligence Generation</div>
+      <div class="step-desc">Gemini + Google Search grounding produces company intelligence docs and industry analysis on Day 0</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--orange); color: var(--orange);">3</div>
+    <div class="step-body">
+      <div class="step-title">9 Data Sources</div>
+      <div class="step-desc">Cases, Emails, Meetings, Drive Docs, Pipeline, Subscriptions, Cloud Spend, Red Hat RSS, Events &mdash; each with its own scraper, refresh timer, and cache</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--magenta); color: var(--magenta);">4</div>
+    <div class="step-body">
+      <div class="step-title">22 Processing Modules</div>
+      <div class="step-desc">7 AI-powered (Gemini) + 15 data transformation modules that enrich, cross-reference, and route signals</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--aqua); color: var(--aqua);">5</div>
+    <div class="step-body">
+      <div class="step-title">Cross-Reference Engine</div>
+      <div class="step-desc">Weighted confidence scoring with specificity tiers, 8 score boosters, budget caps, and 30-day time decay</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--yellow); color: var(--yellow);">6</div>
+    <div class="step-body">
+      <div class="step-title">Quality Gate</div>
+      <div class="step-desc">17 programmatic validators &middot; 75% threshold &mdash; deterministic structural checks, not AI. Below threshold = auto-regenerate</div>
+    </div>
+  </div>
+  <div class="pipeline-connector"><div class="dash"></div></div>
+  <div class="pipeline-step">
+    <div class="step-icon" style="border-color: var(--blue); color: var(--blue);">&#x2713;</div>
+    <div class="step-body">
+      <div class="step-title">11 Consumers</div>
+      <div class="step-desc">Customer Brief, Account Plan, Meeting Prep, Campaigns, Playbook, Value Positioning, Expansion Opps, and 4 more &mdash; same data, different slices</div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- Architecture Visuals -->
+<div class="section-label"><span class="bar" style="background: var(--violet)"></span>Architecture Visuals</div>
+<p>Interactive visual walkthroughs of the full architecture &mdash; explore these to understand how the engine works:</p>
+
+<div class="links-grid">
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/full-engine.html">
+    <div class="link-title">The Intelligence Engine</div>
+    <div class="link-desc">Full 6-layer architecture &mdash; 22 modules, 9K+ graph nodes, source traceability</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/brief-pipeline.html">
+    <div class="link-title">How the Brief Gets Built</div>
+    <div class="link-desc">Pipeline stages + Day 0/7/30 maturity ramp</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/account-plan-pipeline.html">
+    <div class="link-title">Account Plan Pipeline</div>
+    <div class="link-desc">9 inputs, 11 quality checks, provenance tracking</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/consumer-matrix.html">
+    <div class="link-title">Consumer Matrix</div>
+    <div class="link-desc">Which inputs each of 7 consumers receives</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/challenge-workflow.html">
+    <div class="link-title">Challenge Workflow</div>
+    <div class="link-desc">Change input &rarr; regenerate &rarr; see the ripple effect</div>
+  </a>
+</div>
+
+<hr>
+
+<!-- Three Themes -->
+<div class="section-label"><span class="bar" style="background: var(--magenta)"></span>The Three Themes</div>
+
+<table>
+  <thead>
+    <tr><th>Theme</th><th>Focus</th><th>Judging Criteria</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong style="color: var(--blue)">A: "Show Your Work"</strong></td>
+      <td>Expose the pipeline &mdash; provenance, quality scores, data maturity, signal flow</td>
+      <td>Innovation, Technical Excellence, UX</td>
+    </tr>
+    <tr>
+      <td><strong style="color: var(--orange)">B: "Make It Smarter"</strong></td>
+      <td>Better recommendations &mdash; "why now" reasoning, signal chains, trend indicators</td>
+      <td>Innovation, Technical Excellence</td>
+    </tr>
+    <tr>
+      <td><strong style="color: var(--aqua)">C: "Make It Shine"</strong></td>
+      <td>Polish &mdash; sidebar, loading states, Customer Brief visual hierarchy, first-time UX</td>
+      <td>User Experience, Feasibility</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- Quick Start -->
+<div class="section-label"><span class="bar" style="background: var(--aqua)"></span>Quick Start</div>
+
+<div class="highlight-box">
+  <strong>Easiest:</strong> Open <a href="https://demo.jasonhorn.io/dashboard">https://demo.jasonhorn.io/dashboard</a> &mdash; no setup needed. Demo data is already loaded.
+</div>
+
+<p style="font-size: 13px; color: var(--text-muted); margin-top: 16px;">Optional &mdash; run your own local instance:</p>
+<pre>podman pull ghcr.io/hornjason/daily-brief-dashboard:challenge
+podman run -d -p 7779:7777 --name brief-encounters \
+  ghcr.io/hornjason/daily-brief-dashboard:challenge
+# Open http://localhost:7779</pre>
+<p style="font-size: 12px; color: var(--text-muted);">Demo data is baked in &mdash; no auth needed for initial exploration.</p>
+
+<hr>
+
+<!-- Explore the Demo -->
+<div class="section-label"><span class="bar" style="background: var(--orange)"></span>Explore the Demo</div>
+
+<div class="card">
+  <h3>1. View the Baseline</h3>
+  <p>Open the <a href="https://demo.jasonhorn.io/dashboard">dashboard</a> &rarr; click the demo account card &rarr; read the brief. Note signal counts, graph edges, and quality score.</p>
+</div>
+<div class="card">
+  <h3>2. Change an Input</h3>
+  <p>Use the dashboard's <strong style="color: var(--text-primary)">Data Freshness</strong> panel to refresh any data source (Cases, Pipeline, Subscriptions). Or click <strong style="color: var(--text-primary)">Generate</strong> on Intelligence, Account Plan, or Meeting Prep to trigger a fresh generation.</p>
+</div>
+<div class="card">
+  <h3>3. Regenerate</h3>
+  <p>Click the refresh icon on the Customer Brief or hit Generate on the Account Plan. The pipeline re-runs with updated inputs.</p>
+</div>
+<div class="card">
+  <h3>4. Compare Before / After</h3>
+  <p>Return to the customer page &rarr; observe changes in the brief, updated graph edges, new recommended actions reflecting the refreshed data.</p>
+</div>
+<div class="card">
+  <h3>5. Check the Ripple Effect</h3>
+  <p>The same data change updates multiple consumers. Check: did the Brief's recommended actions change? Did the Account Plan score shift? Did Meeting Prep talking points update?</p>
+</div>
+
+<hr>
+
+<!-- Submit Ideas -->
+<div class="section-label"><span class="bar" style="background: var(--violet)"></span>Submit Ideas</div>
+
+<p>Use the GitHub feature request form to submit your ideas:</p>
+<p><a href="https://github.com/hornjason/daily-brief-dashboard/issues/new?template=ai-challenge-feature-request.yml">Feature Request Form &rarr;</a></p>
+
+<hr>
+
+<!-- Team -->
+<div class="section-label"><span class="bar" style="background: var(--blue)"></span>Team</div>
+
+<table>
+  <thead><tr><th>Name</th><th>Role</th><th>TZ</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Jason Horn</strong> (lead)</td><td>Account Solution Architect</td><td>ET</td></tr>
+    <tr><td>Aneela Kaplan</td><td>Manager - Fleet Console Next</td><td>IST</td></tr>
+    <tr><td>Eric Ames</td><td>Ansible Evangelist</td><td>PT</td></tr>
+    <tr><td>Gonzalo Cabrera</td><td>Account SA</td><td>CT</td></tr>
+    <tr><td>John Johansson</td><td>Senior Specialist Adoption Architect</td><td>CET</td></tr>
+    <tr><td>Nikki Yeaton</td><td>Ecosystem Marketing</td><td>ET</td></tr>
+    <tr><td>Peter Codevilla</td><td></td><td>MT</td></tr>
+    <tr><td>Siddardh R A</td><td>Senior Software Engineer</td><td>IST</td></tr>
+    <tr><td>Riya Sharma</td><td>Senior Software Engineer</td><td>IST</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- Key Dates -->
+<div class="section-label"><span class="bar" style="background: var(--yellow)"></span>Key Dates</div>
+
+<table>
+  <thead><tr><th>Date</th><th>Milestone</th></tr></thead>
+  <tbody>
+    <tr><td>Aug 21 (Thu)</td><td>Kickoff call &mdash; 10 AM ET</td></tr>
+    <tr><td>Aug 27 (Wed)</td><td>Feature ideas due</td></tr>
+    <tr><td>Aug 28 (Thu)</td><td>Week 2 sync</td></tr>
+    <tr><td>Sep 4 (Fri)</td><td>Video script finalized</td></tr>
+    <tr><td>Sep 11 (Fri)</td><td>Final video submitted</td></tr>
+    <tr><td><strong>Sep 15 (Tue)</strong></td><td><strong>VIDEO DEADLINE &mdash; 12:00 PM EST</strong></td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- Judging Criteria -->
+<div class="section-label"><span class="bar" style="background: var(--magenta)"></span>Judging Criteria</div>
+
+<table>
+  <thead><tr><th>Criteria</th><th>The Question Judges Ask</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Innovation</strong></td><td>How creative and original is this approach?</td></tr>
+    <tr><td><strong>Feasibility</strong></td><td>Could this realistically be implemented or scaled?</td></tr>
+    <tr><td><strong>User Experience</strong></td><td>Is it intuitive, useful, easy to understand?</td></tr>
+    <tr><td><strong>Technical Excellence</strong></td><td>Does it demonstrate thoughtful use of AI?</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- Built With -->
+<div class="section-label"><span class="bar" style="background: var(--aqua)"></span>Built With</div>
+
+<ul>
+  <li><strong>Claude Code</strong> &mdash; Platform development + AI agent pipeline</li>
+  <li><strong>Gemini Enterprise</strong> &mdash; Intelligence generation + Google Search grounding</li>
+</ul>
+
+<hr>
+
+<!-- Resources -->
+<div class="section-label"><span class="bar" style="background: var(--blue)"></span>Resources</div>
+
+<ul>
+  <li><strong>Live Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a></li>
+  <li><strong>Contributor Guide:</strong> <a href="https://hornjason.github.io/daily-brief-dashboard/CONTRIBUTOR-GUIDE.html">Full walkthrough</a></li>
+  <li><strong>Public Repo:</strong> <a href="https://github.com/hornjason/daily-brief-dashboard">github.com/hornjason/daily-brief-dashboard</a></li>
+  <li><strong>Demo account signal data:</strong> Baked into the challenge container</li>
+  <li><strong>Lead Contact:</strong> jhorn@redhat.com</li>
+</ul>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
+}
+</script>
+
+</body>
+</html>

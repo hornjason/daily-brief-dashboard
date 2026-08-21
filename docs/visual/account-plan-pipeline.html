@@ -6,8 +6,8 @@
 <title>Account Plan Pipeline — Brief Encounters</title>
 <style>
   :root {
-    --surface: #1a1a19; --surface-card: #242423; --surface-hover: #2e2e2d;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a8980;
+    --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+    --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
     --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
     --magenta: #d55181; --green: #008300; --violet: #9085e9;
     --border: #3a3a38; --flow-line: #52514e;
@@ -22,9 +22,9 @@
     --hidden: #eb6834; --visible: #1baf7a;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
   .container { max-width: 1300px; margin: 0 auto; }
-  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+  h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
   .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
   .theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
   .layer { margin-bottom: 0; }
@@ -81,7 +81,7 @@
 </style>
 </head>
 <body>
-<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
 <div class="container">
   <h1>Account Plan Pipeline — What's Hidden</h1>
   <p class="subtitle">9 inputs assemble the account plan. Today, the user sees none of them. Theme A: "Show Your Work" changes that.</p>
@@ -186,7 +186,7 @@
     <div class="layer-label"><span class="layer-bar" style="background: var(--blue)"></span>Output — Account Plan</div>
     <div class="output-card">
       <h3><span class="dot" style="background: var(--blue)"></span> Generated Account Plan → Google Drive</h3>
-      <p>12 required sections, quality-scored, uploaded to Account Plans subfolder. CrowdStrike example scorecard:</p>
+      <p>12 required sections, quality-scored, uploaded to Account Plans subfolder. Example scorecard from one account:</p>
       <div class="score-grid">
         <div class="score-item"><div class="cat">Overall Score</div><div class="val">95.2%</div></div>
         <div class="score-item"><div class="cat">Customer View</div><div class="val">100%</div></div>

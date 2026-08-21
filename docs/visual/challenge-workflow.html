@@ -6,8 +6,8 @@
 <title>Challenge Workflow — Brief Encounters</title>
 <style>
   :root {
-    --surface: #1a1a19; --surface-card: #242423; --surface-hover: #2e2e2d;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8a8980;
+    --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+    --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
     --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
     --magenta: #d55181; --green: #008300; --violet: #9085e9;
     --border: #3a3a38; --flow-line: #52514e;
@@ -22,9 +22,9 @@
     --hidden: #eb6834; --visible: #1baf7a;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--text-primary); padding: 40px 32px 64px; }
   .container { max-width: 1200px; margin: 0 auto; }
-  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 4px; }
+  h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
   .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
   .theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
@@ -66,7 +66,7 @@
 </style>
 </head>
 <body>
-<button class="theme-toggle" onclick="toggleTheme()">Toggle light/dark</button>
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
 <div class="container">
   <h1>The Challenge Workflow</h1>
   <p class="subtitle">Change an input → regenerate → see the output change. This is how the team demonstrates innovation.</p>
@@ -77,11 +77,11 @@
       <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
       <div class="step-content">
         <h3><span class="dot" style="background: var(--blue)"></span> Capture Baseline</h3>
-        <p>Open CrowdStrike account → read the current brief and account plan. This is the "before" state. Note: 19 cases, 17 emails, 6 subscriptions, 153 graph edges, quality score 95.2%.</p>
+        <p>Open any customer account → read the current brief and account plan. This is the "before" state. Note the signal counts, graph edges, and quality score.</p>
         <div class="example">
-          Dashboard → CrowdStrike → Account Plan<br>
+          Dashboard → [Select Customer] → Account Plan<br>
           <span class="highlight">Score: 95.2%</span> | <span class="highlight">Sections: 12</span> | <span class="highlight">Initiatives: 4</span><br>
-          Customer Success: <span class="change">67%</span> ← lowest category
+          Customer Success: <span class="change">67%</span> ← example lowest category
         </div>
       </div>
     </div>
@@ -93,37 +93,42 @@
       <div class="step-num" style="color: var(--orange); border-color: var(--orange);">2</div>
       <div class="step-content">
         <h3><span class="dot" style="background: var(--orange)"></span> Change an Input</h3>
-        <p>Pick any of the hidden inputs and modify it. Each change produces a different effect on the output.</p>
+        <p>All changes happen through the dashboard UI or Google Drive &mdash; no code or config editing required.</p>
         <div class="changeable-grid">
-          <div class="changeable">
-            <div class="what">Inject a new support case</div>
-            <div class="how">Add a Sev1 case to cases.json → triggers cross-reference with existing signals</div>
-            <div class="effect">Effect: New case appears in brief, graph edges increase, recommended actions update</div>
+          <div class="changeable" style="border: 2px solid var(--aqua); grid-column: span 2;">
+            <div class="what" style="color: var(--aqua); font-size: 14px;">Add a Document to Google Drive</div>
+            <div class="how">Drop a file (competitive alert, meeting notes, partner update, expansion opportunity) into the customer's shared Drive folder</div>
+            <div class="effect">Effect: Gemini reads the new doc on next regeneration &mdash; content is synthesized into the brief, account plan, and all consumers automatically. Verified: adding a VMware migration alert produced a new &ldquo;VMware to OpenShift Consolidation&rdquo; initiative in the account plan.</div>
           </div>
           <div class="changeable">
-            <div class="what">Update the CY27 planning deck</div>
-            <div class="how">Edit cy27-planning-deck.txt → changes strategic context and CY27 requirements</div>
-            <div class="effect">Effect: Partner growth strategy, sovereignty section, and timeline all shift</div>
+            <div class="what">Refresh Data Sources</div>
+            <div class="how">Dashboard &rarr; Data Freshness &rarr; click "Refresh" on any source (Cases, Pipeline, Subscriptions)</div>
+            <div class="effect">Effect: Scraper re-pulls live data &mdash; new cases, updated pipeline, changed subscriptions flow in</div>
           </div>
           <div class="changeable">
-            <div class="what">Add email threads</div>
-            <div class="how">Add customer emails to the email cache → email intelligence loads for next generation</div>
-            <div class="effect">Effect: Engagement timeline populates, contact names surface, meeting prep improves</div>
+            <div class="what">Regenerate Account Intelligence</div>
+            <div class="how">Customer page &rarr; Intelligence panel &rarr; click "Generate" &mdash; Gemini re-researches the company</div>
+            <div class="effect">Effect: Fresh company intel with latest news, leadership changes, strategic context</div>
           </div>
           <div class="changeable">
-            <div class="what">Modify the quality threshold</div>
-            <div class="how">Change PASS_THRESHOLD from 75 to 90 → forces higher-quality regeneration</div>
-            <div class="effect">Effect: Plans retry more, output depth increases, weaker sections get rewritten</div>
+            <div class="what">Generate Account Plan</div>
+            <div class="how">Customer page &rarr; Account Plan tab &rarr; click "Generate" &mdash; builds from 9 inputs + 11 quality checks</div>
+            <div class="effect">Effect: New plan with updated signals, re-scored quality gate, uploaded to Google Drive</div>
           </div>
           <div class="changeable">
-            <div class="what">Add a solution play</div>
-            <div class="how">New solution play matched to customer's tech stack → appears in initiatives</div>
-            <div class="effect">Effect: New initiative with estimated TCV, specific Red Hat product positioning</div>
+            <div class="what">Generate Meeting Prep</div>
+            <div class="how">Customer page &rarr; Calendar strip &rarr; click upcoming meeting &rarr; "Generate Prep"</div>
+            <div class="effect">Effect: Pre-call brief with attendee context, recent activity, talking points from 10 signal sources</div>
           </div>
           <div class="changeable">
-            <div class="what">Change the playbook guidance</div>
-            <div class="how">Edit playbook.md → different planning methodology or emphasis</div>
-            <div class="effect">Effect: Plan structure shifts, section depth changes, different strategic framing</div>
+            <div class="what">Generate Product Intel</div>
+            <div class="how">Customer page &rarr; Products tab &rarr; click "Generate" on any product</div>
+            <div class="effect">Effect: Per-product expansion angles, feature maturity, lifecycle status refresh</div>
+          </div>
+          <div class="changeable">
+            <div class="what">Regenerate Customer Brief</div>
+            <div class="how">Customer page &rarr; Brief section &rarr; click the refresh icon to regenerate</div>
+            <div class="effect">Effect: Brief rebuilds from all 9 inputs &mdash; recommended actions, signal priorities, cross-references update</div>
           </div>
         </div>
       </div>
@@ -155,25 +160,29 @@
       <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">4</div>
       <div class="step-content">
         <h3><span class="dot" style="background: var(--aqua)"></span> Compare Before / After</h3>
-        <p>Side-by-side diff shows exactly what changed. The provenance panel explains WHY — which new signals caused each change.</p>
+        <p>Check each consumer to see how the refreshed data changed the output. The provenance panel (Theme A) would explain WHY.</p>
         <div class="compare">
           <div class="compare-panel">
             <h4><span class="dot" style="background: var(--text-muted)"></span> Before (baseline)</h4>
-            <div class="line">Score: 95.2% | Customer Success: 67%</div>
-            <div class="line">Initiatives: 4 (RHEL AI, Ansible, OCP, OCP Virt)</div>
-            <div class="line">Graph: 153 edges, 117 nodes</div>
-            <div class="line">Provenance: 5/7 sources loaded</div>
-            <div class="line removed">No email intelligence</div>
-            <div class="line removed">No Sev1 case context</div>
+            <div class="line">Account Plan score: 95.2%</div>
+            <div class="line">Initiatives: 4</div>
+            <div class="line">Brief: 6 recommended actions</div>
+            <div class="line">Meeting Prep: based on last week's data</div>
+            <div class="line removed">No recent case context in any consumer</div>
           </div>
           <div class="compare-panel">
-            <h4><span class="dot" style="background: var(--aqua)"></span> After (injection)</h4>
-            <div class="line">Score: 97.1% | Customer Success: <span style="color:var(--aqua)">83%</span></div>
-            <div class="line added">+ New initiative: "OpenShift Networking Recovery"</div>
-            <div class="line">Graph: <span style="color:var(--aqua)">167</span> edges, <span style="color:var(--aqua)">124</span> nodes</div>
-            <div class="line">Provenance: <span style="color:var(--aqua)">6/7</span> sources loaded</div>
-            <div class="line added">+ Email threads: 17 discussions with Sri Harsha Panchali</div>
-            <div class="line added">+ Sev1 case cross-referenced with OCP subscription renewal</div>
+            <h4><span class="dot" style="background: var(--aqua)"></span> After (refresh + regenerate)</h4>
+            <div class="line">Account Plan score: <span style="color:var(--aqua)">changed</span> &mdash; new signals scored</div>
+            <div class="line added">+ New initiative surfaced from fresh data</div>
+            <div class="line added">+ Brief: recommended actions re-prioritized</div>
+            <div class="line added">+ Meeting Prep: new cases appear as talking points</div>
+            <div class="line added">+ Campaigns: outreach updated with latest context</div>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding: 10px 14px; background: rgba(25,158,112,0.08); border: 1px solid rgba(25,158,112,0.2); border-radius: 8px;">
+          <div style="font-size: 12px; font-weight: 600; color: var(--aqua); margin-bottom: 4px;">How to verify the intelligence is working</div>
+          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+            Check each consumer after regeneration: <strong>Brief</strong> &rarr; did recommended actions change? <strong>Account Plan</strong> &rarr; did the score or initiatives change? <strong>Meeting Prep</strong> &rarr; do talking points reflect new data? <strong>Campaigns</strong> &rarr; is the outreach updated? Same signal change, different outputs &mdash; that proves the cross-reference engine works.
           </div>
         </div>
       </div>
@@ -190,7 +199,7 @@
         <div class="consumers-row">
           <div class="consumer-mini">
             <div class="icon">📰</div>
-            <div class="name">Morning Brief</div>
+            <div class="name">Customer Brief</div>
             <div class="change-desc">New Sev1 case appears as top priority</div>
           </div>
           <div class="consumer-mini">
@@ -217,12 +226,12 @@
   <div style="margin-top: 48px; background: var(--surface-card); border: 2px solid var(--violet); border-radius: 14px; padding: 24px 28px;">
     <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">The 60-Second Demo Script</h3>
     <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
-      <strong style="color: var(--blue)">1.</strong> "Here's the CrowdStrike account plan. Score: 95.2%. But you can't see what went into it."<br>
-      <strong style="color: var(--orange)">2.</strong> "Let me show you." <em>[Toggle provenance panel — 9 inputs appear, 5/7 sources loaded]</em><br>
-      <strong style="color: var(--orange)">3.</strong> "Watch what happens when I inject a Sev1 case." <em>[Add case to pipeline]</em><br>
-      <strong style="color: var(--violet)">4.</strong> "Regenerate." <em>[Pipeline re-runs, provenance updates — 6/7 sources, +400 tokens from new case]</em><br>
-      <strong style="color: var(--aqua)">5.</strong> "Score jumped to 97.1%. Customer Success went from 67% to 83%. A new initiative appeared. And look — the brief, meeting prep, and campaigns all updated too."<br>
-      <strong style="color: var(--magenta)">6.</strong> "That's the pipeline. Transparent, traceable, and it gets smarter with every signal."
+      <strong style="color: var(--blue)">1.</strong> "Here's the account plan for this customer. Score: 95.2%. But you can't see what went into it."<br>
+      <strong style="color: var(--orange)">2.</strong> "Let me show you." <em>[Toggle provenance panel &mdash; 9 inputs appear, showing what loaded and what's missing]</em><br>
+      <strong style="color: var(--orange)">3.</strong> "Watch what happens when I refresh the data sources." <em>[Click Refresh on Cases in Data Freshness]</em><br>
+      <strong style="color: var(--violet)">4.</strong> "Now regenerate the account plan." <em>[Click Generate &mdash; pipeline re-runs, provenance updates live]</em><br>
+      <strong style="color: var(--aqua)">5.</strong> "The score changed. New signals pulled in. New initiatives appeared. And look &mdash; the brief, meeting prep, and campaigns all reflect the same new data."<br>
+      <strong style="color: var(--magenta)">6.</strong> "That's the pipeline. Transparent, traceable, and it gets smarter with every signal &mdash; all from the UI."
     </p>
   </div>
 </div>

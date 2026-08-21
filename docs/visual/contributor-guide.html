@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contributor Guide — Brief Encounters</title>
+<style>
+:root {
+  --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+  --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+  --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+  --magenta: #d55181; --green: #008300; --violet: #9085e9;
+  --border: #3a3a38; --flow-line: #52514e;
+}
+[data-theme="light"] {
+  --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+  --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+  --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+  --border: #d9d9d4; --flow-line: #b0afa8;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--surface);
+  color: var(--text-primary);
+  line-height: 1.6;
+  padding: 40px 32px 64px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.theme-toggle {
+  position: fixed; top: 16px; right: 16px;
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 12px; color: var(--text-secondary);
+  cursor: pointer; font-size: 12px; font-family: inherit;
+}
+.theme-toggle:hover { background: var(--surface-hover); }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 6px; }
+.subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 36px; }
+h2 {
+  font-size: 20px; font-weight: 700; margin-top: 40px; margin-bottom: 14px;
+  color: var(--text-primary); display: flex; align-items: center; gap: 8px;
+}
+h2 .bar {
+  display: inline-block; width: 4px; height: 18px; border-radius: 2px;
+  vertical-align: middle;
+}
+h3 {
+  font-size: 16px; font-weight: 600; margin-top: 24px; margin-bottom: 8px;
+  color: var(--text-primary);
+}
+p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+ul, ol { font-size: 14px; color: var(--text-secondary); padding-left: 20px; margin-bottom: 12px; }
+li { margin-bottom: 6px; }
+strong { color: var(--text-primary); }
+
+/* Banner */
+.banner {
+  background: rgba(25, 158, 112, 0.08); border: 1px solid rgba(25, 158, 112, 0.25);
+  border-radius: 10px; padding: 16px 20px; margin-bottom: 32px;
+  display: flex; align-items: center; gap: 12px;
+}
+.banner-icon { font-size: 22px; flex-shrink: 0; }
+.banner-text { font-size: 14px; color: var(--text-secondary); }
+.banner-text a { color: var(--aqua); font-weight: 600; text-decoration: none; }
+.banner-text a:hover { text-decoration: underline; }
+
+/* Framing box */
+.framing {
+  background: var(--surface-card); border: 2px solid var(--violet);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 32px;
+}
+.framing p { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
+.framing strong { color: var(--violet); }
+
+/* Cards */
+.card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px; margin-bottom: 12px;
+  transition: background 0.15s;
+}
+.card:hover { background: var(--surface-hover); }
+.card h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+.card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 0; }
+
+/* Step cards */
+.step {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 12px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.step-num {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; flex-shrink: 0;
+  border: 2px solid var(--border);
+}
+.step-body { flex: 1; }
+.step-body h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.step-body p { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.step-body ul { font-size: 13px; margin-top: 6px; }
+
+/* Links grid */
+.links-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  margin-bottom: 12px;
+}
+.link-card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  display: block;
+}
+.link-card:hover { background: var(--surface-hover); border-color: var(--aqua); }
+.link-card .name { font-size: 13px; font-weight: 600; color: var(--aqua); margin-bottom: 2px; }
+.link-card .desc { font-size: 11px; color: var(--text-muted); }
+
+/* Checklist */
+.checklist { list-style: none; padding-left: 0; }
+.checklist li {
+  font-size: 13px; color: var(--text-secondary); padding: 8px 12px;
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 6px;
+  display: flex; align-items: center; gap: 8px;
+}
+.check-icon { color: var(--aqua); font-weight: 700; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+
+<h1>Contributor Guide</h1>
+<p class="subtitle">Everything you need to explore the platform and submit ideas — no coding required</p>
+
+<!-- Banner -->
+<div class="banner">
+  <div class="banner-icon">&#x1F310;</div>
+  <div class="banner-text">
+    <strong>Team Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io/dashboard</a> — no setup, no containers, just open the link.
+  </div>
+</div>
+
+<!-- Framing -->
+<div class="framing">
+  <p><strong>"You don't need to write code. You need to see what I can't."</strong></p>
+  <p>The platform is built &mdash; 35 modules, 9,000+ graph nodes, 17 quality validators. What we're competing on is how well we expose, explain, and improve it. That takes judgment, perspective, and fresh eyes. Not just engineers.</p>
+</div>
+
+<!-- Architecture Visuals -->
+<h2><span class="bar" style="background: var(--aqua)"></span> Architecture Visuals</h2>
+<p>Browse these interactive visuals to understand how the platform works before diving into the dashboard.</p>
+<div class="links-grid">
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/full-engine.html" target="_blank">
+    <div class="name">The Intelligence Engine</div>
+    <div class="desc">Full 6-layer architecture &mdash; 22 modules, 9K+ graph nodes</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/brief-pipeline.html" target="_blank">
+    <div class="name">How the Brief Gets Built</div>
+    <div class="desc">Pipeline stages + Day 0/7/30 maturity ramp</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/account-plan-pipeline.html" target="_blank">
+    <div class="name">Account Plan Pipeline</div>
+    <div class="desc">9 inputs, 11 quality checks, provenance tracking</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/consumer-matrix.html" target="_blank">
+    <div class="name">Consumer Matrix</div>
+    <div class="desc">Which inputs each of 7 consumers receives</div>
+  </a>
+  <a class="link-card" href="https://hornjason.github.io/daily-brief-dashboard/visual/challenge-workflow.html" target="_blank">
+    <div class="name">Challenge Workflow</div>
+    <div class="desc">Change input &rarr; regenerate &rarr; compare</div>
+  </a>
+</div>
+
+<!-- What You Will See -->
+<h2><span class="bar" style="background: var(--blue)"></span> What You Will See</h2>
+<p>The platform collects signals from 9 data sources (support cases, emails, meetings, Drive docs, pipeline, subscriptions, cloud spend, RSS, events) and weaves them into intelligence outputs for each customer account. The demo account has rich signal coverage across cases, emails, subscriptions, and cross-reference connections &mdash; making it the ideal baseline to explore.</p>
+
+<!-- Step-by-Step -->
+<h2><span class="bar" style="background: var(--orange)"></span> Step-by-Step: Explore, Refresh, and Compare</h2>
+
+<div class="step">
+  <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
+  <div class="step-body">
+    <h4>Open the Dashboard</h4>
+    <p>Navigate to <a href="https://demo.jasonhorn.io/dashboard" style="color: var(--aqua)">demo.jasonhorn.io/dashboard</a> in your browser. You'll see the portfolio overview page showing all demo accounts as cards in a grid.</p>
+    <p style="font-size: 12px; color: var(--text-muted);">Running locally? Use <code style="background: var(--surface-hover); padding: 1px 6px; border-radius: 4px;">localhost:7779</code> instead.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--violet); border-color: var(--violet);">2</div>
+  <div class="step-body">
+    <h4>View the Baseline Brief</h4>
+    <p>Click on the demo account card in the dashboard grid. This opens the customer detail page. Scroll through to read the current Customer Brief. This is the "before" state &mdash; what the platform generates from the existing baseline signals.</p>
+    <p>Take note of:</p>
+    <ul>
+      <li>Which support cases are highlighted</li>
+      <li>What themes appear in the brief narrative</li>
+      <li>How many cross-reference connections are shown in the intelligence graph</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--orange); border-color: var(--orange);">3</div>
+  <div class="step-body">
+    <h4>Refresh Data Sources</h4>
+    <p>Use the dashboard's <strong>Data Freshness</strong> panel to refresh any data source. Click <strong>Refresh</strong> on Cases, Pipeline, Subscriptions, or any other source. The platform re-pulls live data &mdash; new cases, updated pipeline opportunities, and changed subscriptions flow in automatically.</p>
+    <p>No file editing required. Everything happens through the UI.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--violet); border-color: var(--violet);">4</div>
+  <div class="step-body">
+    <h4>Regenerate an Output</h4>
+    <p>After refreshing data sources, click <strong>Regenerate</strong> on any consumer output:</p>
+    <ul>
+      <li><strong>Customer Brief</strong> &mdash; click the refresh icon on the Brief section</li>
+      <li><strong>Account Plan</strong> &mdash; click Generate on the Account Plan tab</li>
+      <li><strong>Meeting Prep</strong> &mdash; click an upcoming meeting, then Generate Prep</li>
+      <li><strong>Product Intel</strong> &mdash; click Generate on any product card</li>
+    </ul>
+    <p>The pipeline re-runs with the updated data. Watch the output change based on the new signals.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--aqua); border-color: var(--aqua);">5</div>
+  <div class="step-body">
+    <h4>Compare Before and After</h4>
+    <p>Navigate back to the customer account page and compare the updated outputs with what you saw in Step 2:</p>
+    <ul>
+      <li><strong>New data highlighted</strong> &mdash; refreshed cases, pipeline changes, or new email context should appear in the brief</li>
+      <li><strong>Cross-references</strong> &mdash; the intelligence graph shows new connections between refreshed signals and existing data</li>
+      <li><strong>Brief narrative</strong> &mdash; the text should now reflect the updated data and its business impact</li>
+      <li><strong>Ripple effect</strong> &mdash; check other consumers (Account Plan, Meeting Prep, Campaigns) to see how the same data change affected multiple outputs</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num" style="color: var(--magenta); border-color: var(--magenta);">6</div>
+  <div class="step-body">
+    <h4>Explore Further</h4>
+    <p>Now that you've seen a signal flow through the pipeline, try exploring other parts of the dashboard:</p>
+    <ul>
+      <li><strong>Intelligence Graph</strong> &mdash; click the graph visualization to see how signals connect to each other</li>
+      <li><strong>Other Accounts</strong> &mdash; click on other account cards to see how different signal patterns produce different briefs</li>
+      <li><strong>Product View</strong> &mdash; toggle to the product view to see signals grouped by Red Hat product line</li>
+    </ul>
+  </div>
+</div>
+
+<!-- What to Look For -->
+<h2><span class="bar" style="background: var(--yellow)"></span> What to Look For</h2>
+<p>When evaluating the platform, consider:</p>
+<ul class="checklist">
+  <li><span class="check-icon">&#x25B8;</span> <strong>Signal Coverage</strong> &mdash; Does the brief capture all relevant signals for the account?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Cross-References</strong> &mdash; Are connections between signals meaningful and actionable?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Brief Quality</strong> &mdash; Is the narrative useful for preparing for a customer meeting?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Missing Signals</strong> &mdash; What information sources would make the brief more complete?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Confusing Labels</strong> &mdash; Is anything unclear, jargon-heavy, or hard to understand?</li>
+  <li><span class="check-icon">&#x25B8;</span> <strong>Hidden Context</strong> &mdash; What would you want to know about HOW the output was generated?</li>
+</ul>
+
+<!-- Providing Feedback -->
+<h2><span class="bar" style="background: var(--magenta)"></span> Providing Feedback</h2>
+<p>After exploring the platform, share your observations with the team. The most valuable feedback is:</p>
+
+<div class="card">
+  <h4>What to submit (2&ndash;3 ideas via GitHub form by Wed Aug 27)</h4>
+  <p>
+    1. What was surprising or unexpected in the brief<br>
+    2. What information was missing that you'd need for a real customer conversation<br>
+    3. Which cross-references were most useful and which felt like noise<br>
+    4. Ideas for new features, labels, layouts, or signal sources<br>
+    5. Anything that confused you &mdash; every confusion is a potential improvement
+  </p>
+</div>
+
+<p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">Open an issue on the project GitHub repository, post in the Slack channel, or bring your feedback to the next team sync.</p>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
+}
+</script>
+
+</body>
+</html>
