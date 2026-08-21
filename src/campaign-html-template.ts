@@ -20,6 +20,7 @@ import { runEmailQualityCheck, renderQualityChecklist, type EmailQualityResult, 
 import { type BlockOutput, type MetricRef, validateBlock, extractLinks, toBlock } from './lib/block-output.ts'
 import { isInternalUrl, isHomepageUrl, isolateLinks, restoreLinks, LinkRegistry } from './lib/link-registry.ts'
 import { callGemini } from './gemini-call.ts'
+import { scoreSaplingAI, humanizeEmail } from './lib/sapling-gate.ts'
 
 const BRAND_RED = '#c41e3a'
 const SPECULATION_PATTERN = /\b(likely|suggests|indicates|probably|appears|implies|may include|current use|operational reliance|technical requirements|infrastructure strategy)\b|existing\s.*(?:portfolio|tools|automation)|e\.g\.,/i
@@ -1703,7 +1704,22 @@ Write the email body using markdown links for products and sources.`
       return null
     }
 
-    const sanitized = sanitizeComposedEmail(text, brief.recipientName)
+    let sanitized = sanitizeComposedEmail(text, brief.recipientName)
+
+    // Sapling AI detection gate: rewrite if score > 0.5
+    const saplingResult = await scoreSaplingAI(sanitized, brief.recipientName)
+    if (saplingResult.score > 0.5) {
+      const rewritten = await humanizeEmail(sanitized, saplingResult, brief.recipientName, brief.recipientTitle, brief.company)
+      if (rewritten) {
+        const rewriteResult = await scoreSaplingAI(rewritten, brief.recipientName)
+        if (rewriteResult.score <= 0.5) {
+          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rewrite → ${rewriteResult.score.toFixed(3)}`)
+          sanitized = sanitizeComposedEmail(rewritten, brief.recipientName)
+        } else {
+          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rewrite → ${rewriteResult.score.toFixed(3)} (still high, using original)`)
+        }
+      }
+    }
 
     const firstName = brief.recipientName.split(' ')[0]
     if (!sanitized.toLowerCase().includes(firstName.toLowerCase())) {
