@@ -187,15 +187,15 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
   <summary style="padding: 14px 18px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Want to run it locally instead?</summary>
   <div style="padding: 4px 18px 16px; font-size: 12px; color: var(--text-secondary); line-height: 1.7;">
     <p style="margin-bottom: 8px;">You need <a href="https://podman-desktop.io/" target="_blank">Podman Desktop</a> or Docker Desktop installed, plus a GitHub account.</p>
+    <p style="margin-bottom: 8px; font-weight: 600; color: var(--text-primary);">One-liner setup:</p>
     <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.8;">
-      <span style="color: var(--text-muted);"># 1. Log in to GitHub Container Registry</span><br>
+      <span style="color: var(--text-muted);"># Log in to GitHub Container Registry first</span><br>
       podman login ghcr.io -u YOUR_GITHUB_USERNAME<br>
       <span style="color: var(--text-muted);"># (use a Personal Access Token with read:packages scope as password)</span><br><br>
-      <span style="color: var(--text-muted);"># 2. Pull and run the challenge image</span><br>
-      podman pull ghcr.io/hornjason/daily-brief-dashboard:challenge<br>
-      podman run -d -p 7779:7777 --name brief-encounters \<br>
-      &nbsp;&nbsp;ghcr.io/hornjason/daily-brief-dashboard:challenge<br><br>
-      <span style="color: var(--text-muted);"># 3. Open in browser</span><br>
+      <span style="color: var(--text-muted);"># Run the setup script &mdash; installs prerequisites, pulls image, starts container</span><br>
+      IMAGE_TAG=challenge PORT=7779 CONTAINER_NAME=brief-encounters \<br>
+      &nbsp;&nbsp;curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash<br><br>
+      <span style="color: var(--text-muted);"># Open in browser</span><br>
       open http://localhost:7779/dashboard
     </div>
     <p style="margin-top: 8px; color: var(--text-muted);"><strong>Note:</strong> The local instance includes all baked-in customer data. Drive integration (adding documents) requires Google OAuth credentials &mdash; ask Jason if you need those.</p>
