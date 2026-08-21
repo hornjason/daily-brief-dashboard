@@ -178,9 +178,29 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
 <div class="banner">
   <div class="banner-icon">&#x1F310;</div>
   <div class="banner-text">
-    <strong>Live Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io/dashboard</a> &mdash; no setup, no login, no containers. Jason's session is already authenticated on the shared instance. Just open the link and browse.
+    <strong>Live Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io/dashboard</a> &mdash; no setup needed, just open the link and browse.
   </div>
 </div>
+
+<!-- Run locally -->
+<details style="background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 0; margin-bottom: 12px;">
+  <summary style="padding: 14px 18px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Want to run it locally instead?</summary>
+  <div style="padding: 4px 18px 16px; font-size: 12px; color: var(--text-secondary); line-height: 1.7;">
+    <p style="margin-bottom: 8px;">You need <a href="https://podman-desktop.io/" target="_blank">Podman Desktop</a> or Docker Desktop installed, plus a GitHub account.</p>
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.8;">
+      <span style="color: var(--text-muted);"># 1. Log in to GitHub Container Registry</span><br>
+      podman login ghcr.io -u YOUR_GITHUB_USERNAME<br>
+      <span style="color: var(--text-muted);"># (use a Personal Access Token with read:packages scope as password)</span><br><br>
+      <span style="color: var(--text-muted);"># 2. Pull and run the challenge image</span><br>
+      podman pull ghcr.io/hornjason/daily-brief-dashboard:challenge<br>
+      podman run -d -p 7779:7777 --name brief-encounters \<br>
+      &nbsp;&nbsp;ghcr.io/hornjason/daily-brief-dashboard:challenge<br><br>
+      <span style="color: var(--text-muted);"># 3. Open in browser</span><br>
+      open http://localhost:7779/dashboard
+    </div>
+    <p style="margin-top: 8px; color: var(--text-muted);"><strong>Note:</strong> The local instance includes all baked-in customer data. Drive integration (adding documents) requires Google OAuth credentials &mdash; ask Jason if you need those.</p>
+  </div>
+</details>
 
 <!-- Status link -->
 <div style="background: var(--surface-card); border: 1px solid var(--violet); border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
@@ -254,27 +274,7 @@ code { background: var(--surface-hover); padding: 1px 6px; border-radius: 4px; f
   <div class="step-num" style="color: var(--blue); border-color: var(--blue);">1</div>
   <div class="step-body">
     <h4>Open the Dashboard</h4>
-    <p>Navigate to <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a>. You'll see the portfolio overview &mdash; all demo accounts as cards in a grid with health scores, pipeline, and subscription data.</p>
-    <p style="font-size: 12px; color: var(--text-muted);">No login needed &mdash; the shared instance is already authenticated.</p>
-
-    <details style="margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0;">
-      <summary style="padding: 12px 14px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Want to run it locally instead?</summary>
-      <div style="padding: 4px 14px 14px; font-size: 12px; color: var(--text-secondary); line-height: 1.7;">
-        <p style="margin-bottom: 8px;">You need <a href="https://podman-desktop.io/" target="_blank">Podman Desktop</a> or Docker Desktop installed, plus a GitHub account.</p>
-        <div style="background: var(--surface-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.8;">
-          <span style="color: var(--text-muted);"># 1. Log in to GitHub Container Registry</span><br>
-          podman login ghcr.io -u YOUR_GITHUB_USERNAME<br>
-          <span style="color: var(--text-muted);"># (use a Personal Access Token with read:packages scope as password)</span><br><br>
-          <span style="color: var(--text-muted);"># 2. Pull and run the challenge image</span><br>
-          podman pull ghcr.io/hornjason/daily-brief-dashboard:challenge<br>
-          podman run -d -p 7779:7777 --name brief-encounters \<br>
-          &nbsp;&nbsp;ghcr.io/hornjason/daily-brief-dashboard:challenge<br><br>
-          <span style="color: var(--text-muted);"># 3. Open in browser</span><br>
-          open http://localhost:7779/dashboard
-        </div>
-        <p style="margin-top: 8px; color: var(--text-muted);"><strong>Note:</strong> The local instance includes all baked-in customer data. Drive integration (adding documents) requires Google OAuth credentials &mdash; ask Jason if you need those. For browsing and exploring, the shared demo at demo.jasonhorn.io is recommended.</p>
-      </div>
-    </details>
+    <p>Navigate to <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a> or your local instance at <code>localhost:7779</code>. You'll see the portfolio overview &mdash; all demo accounts as cards in a grid with health scores, pipeline, and subscription data.</p>
   </div>
 </div>
 
