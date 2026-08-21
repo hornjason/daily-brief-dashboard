@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offline Token Setup — Brief Encounters</title>
+<style>
+:root {
+  --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+  --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+  --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+  --magenta: #d55181; --green: #008300; --violet: #9085e9;
+  --border: #3a3a38;
+}
+[data-theme="light"] {
+  --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+  --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+  --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7;
+  --border: #d9d9d4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--surface); color: var(--text-primary);
+  line-height: 1.6; padding: 40px 32px 64px; max-width: 1000px; margin: 0 auto;
+}
+.theme-toggle {
+  position: fixed; top: 16px; right: 16px; z-index: 100;
+  background: var(--surface-card); border: 1px solid var(--border);
+  color: var(--text-secondary); padding: 8px 14px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit;
+}
+.theme-toggle:hover { background: var(--surface-hover); }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 6px; }
+.subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 32px; }
+h2 {
+  font-size: 18px; font-weight: 700; margin-top: 36px; margin-bottom: 14px;
+  color: var(--text-primary); display: flex; align-items: center; gap: 8px;
+}
+h2 .bar { display: inline-block; width: 4px; height: 16px; border-radius: 2px; }
+.card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 16px;
+}
+.card:hover { background: var(--surface-hover); }
+.card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.card p, .card li { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+.card ol, .card ul { padding-left: 20px; margin-top: 6px; }
+.card li { margin-bottom: 4px; }
+code {
+  font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 6px;
+}
+pre {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; margin-top: 8px;
+  overflow-x: auto; font-size: 12px; line-height: 1.6;
+  font-family: 'SF Mono', Menlo, monospace; color: var(--aqua);
+}
+.banner {
+  background: rgba(25, 158, 112, 0.08); border: 2px solid var(--aqua);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 32px;
+}
+.banner h3 { font-size: 15px; font-weight: 700; color: var(--aqua); margin-bottom: 6px; }
+.banner p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+.banner a { color: var(--aqua); font-weight: 600; text-decoration: none; }
+.banner a:hover { text-decoration: underline; }
+table {
+  width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;
+}
+th {
+  text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+}
+td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.check { color: var(--aqua); font-weight: 700; }
+.note {
+  font-size: 12px; color: var(--text-muted); margin-top: 8px;
+  padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; font-style: italic;
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+
+<h1>Offline Token Setup</h1>
+<p class="subtitle">Google OAuth setup for the Brief Encounters dashboard</p>
+
+<!-- Banner: no setup needed -->
+<div class="banner">
+  <h3>For the AI Challenge, no local setup is needed</h3>
+  <p>The team dashboard is live at <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a> — just open the link. No containers, no tokens, no OAuth configuration.</p>
+  <p style="margin-top: 8px;">This guide is only needed if you want to run your own local instance.</p>
+</div>
+
+<!-- Option 1 -->
+<h2><span class="bar" style="background: var(--aqua)"></span> Option 1: Use the Team Dashboard (Recommended)</h2>
+<div class="card">
+  <h3>No setup required</h3>
+  <p>The shared team dashboard is already running with full Google OAuth configured. Open <a href="https://demo.jasonhorn.io/dashboard">https://demo.jasonhorn.io/dashboard</a> in your browser and start exploring. All data sources are connected — emails, calendar, Drive, Salesforce, everything.</p>
+</div>
+
+<!-- Option 2 -->
+<h2><span class="bar" style="background: var(--blue)"></span> Option 2: Setup Wizard (Local Install)</h2>
+<div class="card">
+  <h3>Web UI handles everything</h3>
+  <p>If you want to run your own local instance:</p>
+  <ol>
+    <li>Start the dashboard: <code>make up</code> (or ask Jason to start it for you)</li>
+    <li>Open your browser to: <code>http://localhost:7777/dashboard/setup</code></li>
+    <li>Click <strong>"Authorize Google Account"</strong></li>
+    <li>Sign in with your @redhat.com Google account</li>
+    <li>Click <strong>"Allow"</strong> when Google asks for permissions (Gmail, Calendar, Drive)</li>
+    <li>The wizard saves your token automatically — you're done</li>
+  </ol>
+  <div class="note">
+    <span class="check">Verify it works:</span> Refresh the dashboard — you should see email highlights, calendar events, and Drive files. If the page shows "No data", wait 30 seconds and refresh (first sync takes time).
+  </div>
+</div>
+
+<!-- Option 3 -->
+<h2><span class="bar" style="background: var(--violet)"></span> Option 3: Manual Token Setup</h2>
+<div class="card">
+  <h3>For remote machines or headless setups</h3>
+  <p>If the wizard doesn't work or you're setting up a remote machine:</p>
+  <ol>
+    <li><strong>Get the token file</strong> — use the setup wizard on any machine with a browser:
+      <pre>podman run -d -p 7777:7777 --name daily-brief ghcr.io/hornjason/daily-brief-dashboard:latest</pre>
+      Open <code>http://localhost:7777/dashboard/setup</code>, click "Authorize Google Account", and complete sign-in. The token saves to <code>data/config/.google-token.json</code>.
+    </li>
+    <li><strong>Copy the token to the remote machine:</strong>
+      <pre>podman cp daily-brief:/data/config/.google-token.json ./
+scp .google-token.json &lt;remote-machine&gt;:~/daily-brief/data/config/</pre>
+    </li>
+    <li><strong>Restart the remote container:</strong>
+      <pre>make restart</pre>
+    </li>
+  </ol>
+</div>
+
+<!-- Troubleshooting -->
+<h2><span class="bar" style="background: var(--yellow)"></span> Troubleshooting</h2>
+<div class="card">
+  <table>
+    <tr><th>Problem</th><th>Solution</th></tr>
+    <tr><td>"Token not found" error</td><td>Run the setup wizard again or check that <code>data/config/.google-token.json</code> exists</td></tr>
+    <tr><td>"Invalid credentials"</td><td>Token expired — delete <code>.google-token.json</code> and re-authorize via wizard</td></tr>
+    <tr><td>Dashboard shows no data after 2 min</td><td>Check container logs: <code>make logs</code> — look for "Auth error" or "Rate limit"</td></tr>
+    <tr><td>Can't access localhost:7777</td><td>Container may not be running — run <code>make up</code></td></tr>
+    <tr><td>Browser can't reach Google during setup</td><td>Corporate VPN may block OAuth flow — try disconnecting VPN</td></tr>
+  </table>
+</div>
+
+<!-- If too complex -->
+<h2><span class="bar" style="background: var(--orange)"></span> If This Is Too Complex</h2>
+<div class="card">
+  <p>Two easier alternatives:</p>
+  <ol>
+    <li><strong>Ask Jason to pre-generate your token</strong> — he runs the setup, gives you a ready-to-use config file, you just run <code>make up</code></li>
+    <li><strong>Use the team dashboard</strong> at <a href="https://demo.jasonhorn.io/dashboard">demo.jasonhorn.io/dashboard</a> — no local setup needed</li>
+  </ol>
+  <p style="margin-top: 8px;">Both options skip all OAuth steps — you just use the dashboard with a bookmark.</p>
+</div>
+
+<!-- Technical Notes -->
+<h2><span class="bar" style="background: var(--text-muted)"></span> Technical Notes</h2>
+<div class="card">
+  <ul>
+    <li><strong>Token location in container:</strong> <code>/data/config/.google-token.json</code> (maps to host <code>./data/config/</code>)</li>
+    <li><strong>Scopes requested:</strong> Gmail read, Calendar read, Drive read/write (uploads account plans to Drive)</li>
+    <li><strong>Token expiration:</strong> Refresh tokens are long-lived but may expire if unused for 6+ months</li>
+    <li><strong>Security:</strong> Keep <code>.google-token.json</code> private — it grants full read access to your Google account</li>
+    <li><strong>Rotation:</strong> To rotate, delete the token file and re-authorize via the wizard</li>
+  </ul>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
+}
+</script>
+
+</body>
+</html>
