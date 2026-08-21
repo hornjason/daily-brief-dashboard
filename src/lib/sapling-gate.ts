@@ -24,6 +24,11 @@ export async function scoreSaplingAI(text: string, recipientName?: string): Prom
     return { score: 0, flaggedSentences: [] }
   }
 
+  if (text.length < 300) {
+    console.log(`[sapling] ${recipientName || 'unknown'}: text too short (${text.length} chars) — skipping`)
+    return { score: 0, flaggedSentences: [] }
+  }
+
   try {
     const response = await fetch('https://api.sapling.ai/api/v1/aidetect', {
       method: 'POST',
@@ -55,13 +60,45 @@ export async function scoreSaplingAI(text: string, recipientName?: string): Prom
   }
 }
 
+export async function rephraseSapling(text: string, recipientName?: string): Promise<string | null> {
+  const key = getSaplingApiKey()
+  if (!key) {
+    console.warn('[sapling-rephrase] SAPLING_API_KEY not set — skipping')
+    return null
+  }
+
+  try {
+    const response = await fetch('https://api.sapling.ai/api/v1/rephrase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, text, mapping: 'paraphrase' }),
+    })
+
+    if (!response.ok) {
+      console.warn(`[sapling-rephrase] ${recipientName || 'unknown'}: API error ${response.status} — failed`)
+      return null
+    }
+
+    const data = await response.json() as { results?: Array<{ replacement: string }> }
+    const rephrased = data.results?.map(r => r.replacement).join(' ')?.trim() || null
+    console.log(`[sapling-rephrase] ${recipientName || 'unknown'}: ${rephrased ? 'OK' : 'failed'}`)
+    return rephrased
+  } catch (err: any) {
+    console.warn(`[sapling-rephrase] ${recipientName || 'unknown'}: error — ${err.message?.slice(0, 80)}`)
+    return null
+  }
+}
+
 export async function humanizeEmail(
   text: string,
   saplingResult: SaplingResult,
   recipientName: string,
   recipientTitle: string,
   company: string,
-): Promise<string | null> {
+): Promise<{ text: string | null; source: 'sapling' | 'gemini' }> {
+  const rephrased = await rephraseSapling(text, recipientName)
+  if (rephrased) return { text: rephrased, source: 'sapling' }
+
   const systemPrompt = 'You rewrite AI-generated B2B emails to sound like a real person wrote them. Keep all facts, names, links, and data points. Change the sentence structure and word choice to sound natural.'
 
   const flaggedList = saplingResult.flaggedSentences
@@ -95,12 +132,12 @@ Rules:
     const words = rewritten.split(/\s+/).length
     if (words < 50 || words > 250) {
       console.warn(`[humanize] ${recipientName}: rejected rewrite — ${words} words`)
-      return null
+      return { text: null, source: 'gemini' }
     }
 
-    return rewritten
+    return { text: rewritten, source: 'gemini' }
   } catch (err: any) {
     console.warn(`[humanize] ${recipientName}: error — ${err.message?.slice(0, 80)}`)
-    return null
+    return { text: null, source: 'gemini' }
   }
 }

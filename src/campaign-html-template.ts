@@ -1709,14 +1709,14 @@ Write the email body using markdown links for products and sources.`
     // Sapling AI detection gate: rewrite if score > 0.5
     const saplingResult = await scoreSaplingAI(sanitized, brief.recipientName)
     if (saplingResult.score > 0.5) {
-      const rewritten = await humanizeEmail(sanitized, saplingResult, brief.recipientName, brief.recipientTitle, brief.company)
+      const { text: rewritten, source: rephraseSource } = await humanizeEmail(sanitized, saplingResult, brief.recipientName, brief.recipientTitle, brief.company)
       if (rewritten) {
         const rewriteResult = await scoreSaplingAI(rewritten, brief.recipientName)
         if (rewriteResult.score <= 0.5) {
-          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rewrite → ${rewriteResult.score.toFixed(3)}`)
+          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rephrase(${rephraseSource}) → ${rewriteResult.score.toFixed(3)}`)
           sanitized = sanitizeComposedEmail(rewritten, brief.recipientName)
         } else {
-          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rewrite → ${rewriteResult.score.toFixed(3)} (still high, using original)`)
+          console.log(`[compose] ${brief.recipientName}: sapling ${saplingResult.score.toFixed(3)} → rephrase(${rephraseSource}) → ${rewriteResult.score.toFixed(3)} (still high, using original)`)
         }
       }
     }
