@@ -100,7 +100,7 @@ preview() {
   say "This will:"
   say "  1. Check prerequisites (Podman, RAM, disk, port 7777)"
   say "  2. Create ./data/config, ./data/cache, ./data/rh-profile"
-  say "  3. Copy defaults.env to .env (or append new keys if .env exists)"
+  say "  3. Copy .env.example to .env (or append new keys if .env exists)"
   say "  4. Pull the container image from GHCR"
   say "  5. Start the container via compose"
   say "  6. Open the setup wizard in your browser"
@@ -343,31 +343,31 @@ scaffold_dirs() {
 
 scaffold_env() {
   hdr "Environment file"
-  if [[ ! -f defaults.env ]]; then
+  if [[ ! -f .env.example ]]; then
     # When invoked via curl pipe the file won't be present locally.
     # Fetch it from raw GitHub so the script is self-contained.
-    say "Fetching defaults.env from GitHub..."
+    say "Fetching .env.example from GitHub..."
     if command -v curl >/dev/null 2>&1 && \
-       curl -fsSL "$ENV_EXAMPLE_URL" -o defaults.env 2>/dev/null; then
-      ok "Downloaded defaults.env"
+       curl -fsSL "$ENV_EXAMPLE_URL" -o .env.example 2>/dev/null; then
+      ok "Downloaded .env.example"
     else
-      warn "defaults.env not found and could not be downloaded — skipping env scaffold."
+      warn ".env.example not found and could not be downloaded — skipping env scaffold."
       return 0
     fi
   fi
 
   if [[ ! -f .env ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
-      say "(dry-run) would copy defaults.env → .env"
+      say "(dry-run) would copy .env.example → .env"
     else
-      cp defaults.env .env
+      cp .env.example .env
       chmod 600 .env
       ok "Created .env from template"
     fi
     return 0
   fi
 
-  # .env exists — append any missing keys from defaults.env (preserve existing values)
+  # .env exists — append any missing keys from .env.example (preserve existing values)
   local line key appended=0
   while IFS= read -r line; do
     # Skip blanks and comments
@@ -388,10 +388,10 @@ scaffold_env() {
       say "appended missing key: $key"
       appended=1
     fi
-  done < defaults.env
+  done < .env.example
 
   if [[ "$appended" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
-    ok ".env already has all keys from defaults.env"
+    ok ".env already has all keys from .env.example"
   fi
 }
 
@@ -464,7 +464,7 @@ start_container() {
     -e CACHE_DIR=/data/cache \
     -e RH_PROFILE_DIR=/data/rh-profile \
     -e UNIFIED_INTELLIGENCE=true \
-    ${env_file_arg[@]+"${env_file_arg[@]}"} \
+    "${env_file_arg[@]}" \
     --shm-size 2g \
     --memory 8g \
     "$IMAGE_REF"
