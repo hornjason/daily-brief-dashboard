@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    image: ghcr.io/hornjason/daily-brief-dashboard:latest
+    container_name: pai-dashboard
+    restart: unless-stopped
+    ports:
+      - "7777:7777"
+      - "6080:6080"
+    volumes:
+      - ./data:/data
+    environment:
+      PORT: "7777"
+      CONFIG_DIR: /data/config
+      CACHE_DIR: /data/cache
+      RH_PROFILE_DIR: /data/rh-profile
+      UNIFIED_INTELLIGENCE: "true"
+    shm_size: '2g'
+    mem_limit: 16g
+    cpus: 4
