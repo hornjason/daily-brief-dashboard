@@ -7,7 +7,7 @@ services:
       - "7777:7777"
       - "6080:6080"
     volumes:
-      - ./data:/data
+      - ./data:/data:Z
     environment:
       PORT: "7777"
       CONFIG_DIR: /data/config
