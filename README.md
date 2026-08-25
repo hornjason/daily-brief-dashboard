@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-08-25
+---
+
 <p align="center">
   <img src="docs/images/dashboard-hero.png" alt="Daily Brief Dashboard" width="800" />
 </p>
@@ -15,6 +22,7 @@
   <a href="#intelligence-engine">Intelligence Engine</a> &bull;
   <a href="#screenshots">Screenshots</a> &bull;
   <a href="#setup-wizard">Setup</a> &bull;
+  <a href="#large-installs">Large Installs</a> &bull;
   <a href="#architecture">Architecture</a>
 </p>
 
@@ -44,7 +52,7 @@ curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/do
 
 That's it. The installer handles prerequisites, pulls the container, and opens the setup wizard. Setup takes ~5 minutes.
 
-**Requirements:** [Podman](https://podman.io/) (or Docker), 4GB RAM, 5GB disk. Linux and macOS on Intel and Apple Silicon.
+**Requirements:** [Podman](https://podman.io/) (or Docker), 4GB RAM (16GB for [large installs](#large-installs)), 5GB disk. Linux and macOS on Intel and Apple Silicon.
 
 > Want to inspect the script first? `curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh` then review it.
 
@@ -377,8 +385,22 @@ podman rm pai-dashboard       # remove (data preserved in ./data/)
 
 ```bash
 cd ~/daily-brief
-podman compose pull
-podman compose up -d
+podman compose pull            # pull latest image
+podman compose up -d           # restart with new image
+```
+
+To always pull the latest on startup (skips caching stale images):
+
+```bash
+podman compose up -d --pull always
+```
+
+**Manual pull (without compose):**
+
+```bash
+podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
+podman stop pai-dashboard && podman rm pai-dashboard
+# Then re-run your compose or podman run command
 ```
 
 Data and configuration are preserved — only the application code updates.
@@ -390,15 +412,94 @@ Data and configuration are preserved — only the application code updates.
 | Problem | Solution |
 |---------|----------|
 | Podman machine not running (macOS) | `podman machine start` |
-| RAM too low | `podman machine stop && podman machine set --memory 4096 && podman machine start` |
-| Container exits immediately | `podman logs pai-dashboard` |
-| Dashboard not loading | `podman ps` to verify container is running |
+| RAM too low (macOS) | `podman machine stop && podman machine set --memory 8192 && podman machine start` |
+| RAM too low (large install, macOS) | `podman machine stop && podman machine set --memory 16384 && podman machine start` |
+| Container exits immediately | `podman logs pai-dashboard` — check for missing deps or config |
+| Dashboard not loading | `podman ps` to verify container is running, then check logs |
+| Pages slow during intel generation | Use `docker-compose-optimized.yaml` — see [Large Installs](#large-installs) |
+| "Thin content (1 lines)" on intel docs | Gemini calls timing out — reduce concurrency or increase container memory |
 | Google auth errors | Re-run setup wizard at `/dashboard/setup` |
 | AI briefs empty | Check `podman logs pai-dashboard` — uses your Google OAuth token |
-| SELinux errors | Use `:Z` volume suffix (Podman on RHEL/Fedora) |
+| SELinux permission denied (Fedora/RHEL) | Use `:Z` volume suffix — already set in compose files |
 | Port 7777 in use | Set `PORT=7778` in `.env` and update `docker-compose.yml` |
+| Stale image after upgrade | `podman pull ghcr.io/hornjason/daily-brief-dashboard:latest` or use `--pull always` |
+| Check container resources (macOS) | `podman machine inspect --format '{{.Resources.CPUs}}c / {{.Resources.Memory}}MB'` |
+| Check container resources (Fedora) | `podman info --format '{{.Host.MemTotal}}'` (uses host resources directly) |
 
 Still stuck? Email **jhorn@redhat.com**.
+
+---
+
+## Large Installs
+
+For deployments with **100+ accounts or 2+ pods**, use the optimized compose file for better performance during intelligence generation and page loads.
+
+### Quick Start (Large Install)
+
+```bash
+mkdir ~/daily-brief && cd ~/daily-brief
+curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose-optimized.yaml -o docker-compose.yaml
+curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example -o .env
+mkdir -p ./data/config ./data/cache ./data/rh-profile
+podman compose up -d --pull always
+```
+
+### Resource Sizing
+
+| Accounts | RAM | CPUs | Compose File |
+|----------|-----|------|--------------|
+| 1–50 | 4GB | 2 | `docker-compose.yml` |
+| 50–100 | 8GB | 2 | `docker-compose.yml` |
+| 100–250 | 16GB | 4 | `docker-compose-optimized.yaml` |
+| 250+ | 16GB+ | 4+ | `docker-compose-optimized.yaml` |
+
+### macOS (Podman Machine)
+
+Podman on macOS runs in a VM — you must allocate resources to the VM:
+
+```bash
+podman machine stop
+podman machine set --memory 16384 --cpus 4
+podman machine start
+```
+
+Verify: `podman machine inspect --format '{{.Resources.CPUs}}c / {{.Resources.Memory}}MB'`
+
+### What the Optimized Compose Adds
+
+- **16GB memory limit** — prevents OOM during batch intelligence generation
+- **4 CPUs** — parallel Gemini calls and scraper scheduling
+- **2GB shared memory** — headless Chrome for web scraping
+- **`MAX_RSS_MB=12288`** — raises the browser recycle threshold (default is tuned for 4GB containers)
+- **Event loop healthcheck** — detects starvation, not just HTTP availability
+
+---
+
+## Fedora / RHEL Install
+
+Fedora and RHEL run Podman natively — no VM or `podman machine` needed. Containers use host resources directly.
+
+```bash
+# Install podman-compose if not present
+sudo dnf install -y podman podman-compose
+
+# Standard install
+mkdir ~/daily-brief && cd ~/daily-brief
+curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
+```
+
+**For large installs on Fedora:**
+
+```bash
+mkdir ~/daily-brief && cd ~/daily-brief
+curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose-optimized.yaml -o docker-compose.yaml
+mkdir -p ./data/config ./data/cache ./data/rh-profile
+podman-compose up -d --pull always
+```
+
+The `:Z` volume flag (for SELinux) is already set in both compose files.
+
+Check available resources: `free -h` for memory, `nproc` for CPUs.
 
 ---
 
@@ -458,6 +559,8 @@ Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 | `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model for brief generation |
 | `PORT` | `7777` | Server port |
+| `MAX_RSS_MB` | `12288` | Browser recycle threshold (MB) — raise for large containers |
+| `UNIFIED_INTELLIGENCE` | `true` | Enable unified intelligence engine |
 
 </details>
 
@@ -469,7 +572,7 @@ The dashboard is built with React + TypeScript on the frontend and Bun + TypeScr
 
 **Supported platforms:** Linux and macOS on Intel (x86_64) and Apple Silicon (arm64). Multi-arch container image.
 
-**System requirements:** 4GB RAM minimum (8GB recommended), 5GB disk, 2+ cores.
+**System requirements:** 4GB RAM minimum (8GB recommended, 16GB for 100+ accounts), 5GB disk, 2+ cores (4 for large installs).
 
 ---
 
