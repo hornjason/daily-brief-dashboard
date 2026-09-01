@@ -383,27 +383,77 @@ podman rm pai-dashboard       # remove (data preserved in ./data/)
 
 ## Upgrading
 
+### One-command upgrade (recommended)
+
+```bash
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash
+```
+
+This pulls the latest release, swaps the container, preserves all data in `~/daily-brief/data/`, and verifies the dashboard is healthy. Takes ~30 seconds.
+
+Preview what it'll do first:
+
+```bash
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --dry-run
+```
+
+Upgrade to a specific version:
+
+```bash
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --version=v1.7.3
+```
+
+### Manual upgrade
+
+If you prefer to run the commands yourself:
+
 ```bash
 cd ~/daily-brief
-podman compose pull            # pull latest image
-podman compose up -d           # restart with new image
-```
 
-To always pull the latest on startup (skips caching stale images):
+# 1. Check your current version
+podman exec pai-dashboard cat /app/package.json | grep version
 
-```bash
-podman compose up -d --pull always
-```
-
-**Manual pull (without compose):**
-
-```bash
+# 2. Pull the latest image
 podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
-podman stop pai-dashboard && podman rm pai-dashboard
-# Then re-run your compose or podman run command
+
+# 3. Stop and remove the old container (data is safe — it's on the host)
+podman stop pai-dashboard
+podman rm pai-dashboard
+
+# 4. Start the new container
+podman run -d \
+  --name pai-dashboard \
+  --restart unless-stopped \
+  -p 7777:7777 \
+  -p 127.0.0.1:6080:6080 \
+  -v ./data:/data \
+  -e PORT=7777 \
+  -e CONFIG_DIR=/data/config \
+  -e CACHE_DIR=/data/cache \
+  -e RH_PROFILE_DIR=/data/rh-profile \
+  -e UNIFIED_INTELLIGENCE=true \
+  --env-file .env \
+  --shm-size 2g \
+  --memory 8g \
+  ghcr.io/hornjason/daily-brief-dashboard:latest
+
+# 5. Verify it's running
+curl -sf http://localhost:7777/api/admin/health && echo "✔ healthy"
 ```
 
-Data and configuration are preserved — only the application code updates.
+> **Linux note:** Add `:z` to the volume mount: `-v ./data:/data:z`
+
+### Using compose
+
+If you installed with compose and prefer that workflow:
+
+```bash
+cd ~/daily-brief
+podman compose pull
+podman compose up -d
+```
+
+Data and configuration are preserved across upgrades — only the application code changes.
 
 ---
 
