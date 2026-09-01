@@ -398,6 +398,12 @@ Preview what it'll do first:
 curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --dry-run
 ```
 
+Upgrade to the latest image (bleeding edge — most recent push, may be ahead of the last release):
+
+```bash
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --latest
+```
+
 Upgrade to a specific version:
 
 ```bash

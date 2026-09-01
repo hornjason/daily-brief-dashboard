@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # upgrade.sh — Upgrade DailyBriefDashboard to the latest (or specified) release.
-# Usage: bash upgrade.sh [--version=vX.Y.Z] [--dry-run] [--help]
+# Usage: bash upgrade.sh [--version=vX.Y.Z] [--latest] [--dry-run] [--help]
 
 CONTAINER="${CONTAINER_NAME:-pai-dashboard}"
 IMAGE="ghcr.io/hornjason/daily-brief-dashboard"
@@ -20,21 +20,27 @@ hdr()  { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 # ── Argument parsing ──────────────────────────────────────────────────────────
 VERSION=""
 DRY_RUN=0
+USE_LATEST=0
 
 for arg in "$@"; do
   case "$arg" in
     --version=*) VERSION="${arg#--version=}" ;;
+    --latest)    USE_LATEST=1 ;;
     --dry-run)   DRY_RUN=1 ;;
     --help|-h)
       echo "Usage: bash upgrade.sh [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --version=vX.Y.Z   Upgrade to a specific version (default: latest release)"
+      echo "  --version=vX.Y.Z   Upgrade to a specific version"
+      echo "  --latest            Pull the latest image (most recent push, may be ahead of release)"
       echo "  --dry-run           Print planned actions without executing"
       echo "  --help              Show this help"
       echo ""
+      echo "Default (no flags): upgrades to the latest GitHub release."
+      echo ""
       echo "Examples:"
-      echo "  bash upgrade.sh                    # upgrade to latest"
+      echo "  bash upgrade.sh                    # upgrade to latest release"
+      echo "  bash upgrade.sh --latest           # upgrade to latest image (bleeding edge)"
       echo "  bash upgrade.sh --version=v1.7.3   # upgrade to specific version"
       echo "  bash upgrade.sh --dry-run           # preview without changes"
       exit 0
@@ -79,7 +85,12 @@ OLD_VERSION=$(podman exec "$CONTAINER" cat /app/package.json 2>/dev/null \
 say "Current version: $OLD_VERSION"
 
 # ── Resolve target version ───────────────────────────────────────────────────
-if [[ -z "$VERSION" ]]; then
+if [[ -n "$VERSION" ]]; then
+  : # explicit version provided via --version=
+elif [[ "$USE_LATEST" -eq 1 ]]; then
+  VERSION="latest"
+  ok "using :latest image (bleeding edge)"
+else
   hdr "Checking for latest release"
   VERSION=$(curl -sf "$REPO_API" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
