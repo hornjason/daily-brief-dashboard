@@ -18,6 +18,7 @@ updated: 2026-08-25
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> &bull;
+  <a href="#upgrading">Upgrading</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="#intelligence-engine">Intelligence Engine</a> &bull;
   <a href="#screenshots">Screenshots</a> &bull;
