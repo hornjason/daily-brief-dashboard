@@ -395,6 +395,34 @@ scaffold_env() {
   fi
 }
 
+# ---------- Large install check ----------
+
+check_large_install() {
+  # Skip in non-interactive mode (piped input, --yes, or --doctor)
+  if [[ ! -t 0 || "$ASSUME_YES" -eq 1 || "$DOCTOR" -eq 1 || "$DRY_RUN" -eq 1 ]]; then
+    return 0
+  fi
+  # Skip if already configured
+  if grep -qE "^MEM_LIMIT=" .env 2>/dev/null; then
+    return 0
+  fi
+
+  hdr "Install size"
+  say "Standard install supports up to ~150 accounts (8GB memory)."
+  say "Large installs (150+ accounts) need 16GB memory and higher resource limits."
+  printf '\n  Will you be managing more than 150 accounts? [y/N] '
+  read -r answer
+  case "$answer" in
+    [yY]|[yY][eE][sS])
+      printf '\nMEM_LIMIT=16g\nMAX_RSS_MB=12288\nCPU_LIMIT=4\n' >> .env
+      ok "Large install configured (16GB memory, 12GB RSS threshold, 4 CPUs)"
+      ;;
+    *)
+      ok "Standard install (8GB memory)"
+      ;;
+  esac
+}
+
 # ---------- Container start ----------
 
 pull_image() {
@@ -453,6 +481,12 @@ start_container() {
     env_file_arg=(--env-file .env)
   fi
 
+  # Read memory limit from .env (large installs set MEM_LIMIT=16g)
+  local mem_limit="8g"
+  if grep -qE "^MEM_LIMIT=" .env 2>/dev/null; then
+    mem_limit="$(grep -E '^MEM_LIMIT=' .env | cut -d= -f2)"
+  fi
+
   podman run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
@@ -466,7 +500,7 @@ start_container() {
     -e UNIFIED_INTELLIGENCE=true \
     ${env_file_arg[@]+"${env_file_arg[@]}"} \
     --shm-size 2g \
-    --memory 8g \
+    --memory "$mem_limit" \
     "$IMAGE_REF"
   ok "container started on port ${PORT}"
 }
@@ -617,6 +651,7 @@ main() {
 
   scaffold_dirs
   scaffold_env
+  check_large_install
   scaffold_compose
 
   pull_image

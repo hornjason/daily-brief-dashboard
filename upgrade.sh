@@ -136,6 +136,13 @@ if [[ -f "${INSTALL_DIR}/.env" ]]; then
   env_file_arg=(--env-file "${INSTALL_DIR}/.env")
 fi
 
+# Read memory limit from .env (large installs set MEM_LIMIT=16g)
+MEM_LIMIT="8g"
+if grep -qE "^MEM_LIMIT=" "${INSTALL_DIR}/.env" 2>/dev/null; then
+  MEM_LIMIT="$(grep -E '^MEM_LIMIT=' "${INSTALL_DIR}/.env" | cut -d= -f2)"
+  say "Large install detected: memory=$MEM_LIMIT"
+fi
+
 podman run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
@@ -149,7 +156,7 @@ podman run -d \
   -e UNIFIED_INTELLIGENCE=true \
   ${env_file_arg[@]+"${env_file_arg[@]}"} \
   --shm-size 2g \
-  --memory 8g \
+  --memory "$MEM_LIMIT" \
   "$IMAGE_REF"
 ok "container started"
 

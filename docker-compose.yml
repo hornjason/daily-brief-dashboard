@@ -14,7 +14,15 @@ services:
       CACHE_DIR: /data/cache
       RH_PROFILE_DIR: /data/rh-profile
       UNIFIED_INTELLIGENCE: "true"
+      MAX_RSS_MB: "${MAX_RSS_MB:-}"
     env_file:
       - .env
     shm_size: '2g'
-    mem_limit: 8g
+    mem_limit: ${MEM_LIMIT:-8g}
+    cpus: ${CPU_LIMIT:-}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "setTimeout(() => process.exit(0), 200); setTimeout(() => process.exit(1), 5000)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
