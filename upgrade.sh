@@ -57,7 +57,9 @@ if [[ "$OS_TYPE" == "linux" ]]; then
 fi
 
 # ── Find install directory ────────────────────────────────────────────────────
-if [[ -f "$HOME/daily-brief/.env" ]]; then
+if [[ -n "${INSTALL_DIR:-}" && -f "${INSTALL_DIR}/.env" ]]; then
+  : # explicit override via env var
+elif [[ -f "$HOME/daily-brief/.env" ]]; then
   INSTALL_DIR="$HOME/daily-brief"
 elif [[ -f ".env" ]]; then
   INSTALL_DIR="$(pwd)"
@@ -147,7 +149,7 @@ podman run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
   -p "${PORT}:7777" \
-  -p 127.0.0.1:6080:6080 \
+  -p "127.0.0.1:${VNC_PORT:-6080}:6080" \
   -v "${INSTALL_DIR}/data:/data${VOL_FLAG}" \
   -e PORT=7777 \
   -e CONFIG_DIR=/data/config \
