@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Demo Plan — Brief Encounters</title>
+<style>
+:root {
+  --surface: #141413; --surface-card: #1e1e1d; --surface-hover: #2a2a29;
+  --text-primary: #ffffff; --text-secondary: #d4d3ca; --text-muted: #9a998f;
+  --blue: #3987e5; --orange: #d95926; --aqua: #199e70; --yellow: #c98500;
+  --magenta: #d55181; --green: #008300; --violet: #9085e9; --red: #e5443b;
+  --border: #3a3a38;
+}
+[data-theme="light"] {
+  --surface: #fcfcfb; --surface-card: #f5f5f3; --surface-hover: #eeeee9;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8980;
+  --blue: #2a78d6; --orange: #eb6834; --aqua: #1baf7a; --yellow: #eda100;
+  --magenta: #e87ba4; --green: #008300; --violet: #4a3aa7; --red: #d63e36;
+  --border: #d9d9d4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--surface); color: var(--text-primary); line-height: 1.6; padding: 40px 32px 64px; max-width: 1000px; margin: 0 auto; }
+.theme-toggle { position: fixed; top: 16px; right: 16px; background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-secondary); cursor: pointer; font-size: 12px; font-family: inherit; z-index: 10; }
+h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 4px; }
+.subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 8px; }
+.updated { font-size: 12px; color: var(--text-muted); margin-bottom: 32px; }
+h2 { font-size: 20px; font-weight: 700; margin-top: 40px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+h2 .bar { display: inline-block; width: 4px; height: 18px; border-radius: 2px; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+a { color: var(--aqua); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 10px; }
+.card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 0; }
+.tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-right: 4px; letter-spacing: 0.3px; }
+.tag-innovation { background: rgba(57,135,229,0.15); color: var(--blue); }
+.tag-feasibility { background: rgba(25,158,112,0.15); color: var(--aqua); }
+.tag-ux { background: rgba(144,133,233,0.15); color: var(--violet); }
+.tag-techex { background: rgba(217,89,38,0.15); color: var(--orange); }
+.tag-shipped { background: rgba(0,131,0,0.15); color: var(--green); }
+.hero-stat { text-align: center; padding: 20px; }
+.hero-stat .number { font-size: 36px; font-weight: 800; line-height: 1; }
+.hero-stat .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stats-grid .card { text-align: center; }
+.demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.demo-card { border-left: 3px solid var(--blue); }
+.demo-card .demo-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.demo-card .clip-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(57,135,229,0.15); color: var(--blue); white-space: nowrap; }
+.timeline { position: relative; margin-left: 16px; padding-left: 24px; border-left: 2px solid var(--border); }
+.timeline-item { position: relative; margin-bottom: 16px; }
+.timeline-item::before { content: ''; position: absolute; left: -29px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--aqua); }
+.timeline-item.past::before { background: var(--text-muted); }
+.timeline-item.current::before { background: var(--orange); box-shadow: 0 0 8px rgba(217,89,38,0.5); }
+.role-card { border-left: 3px solid var(--violet); cursor: default; transition: border-color 0.2s; }
+.role-card:hover { border-color: var(--aqua); }
+.role-card .time { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.criteria-card { padding: 20px; }
+.criteria-card h4 { font-size: 15px; margin-bottom: 8px; }
+.criteria-card ul { font-size: 13px; color: var(--text-secondary); padding-left: 16px; margin-top: 6px; }
+.criteria-card li { margin-bottom: 4px; }
+.act-label { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+.act-time { font-size: 11px; color: var(--text-muted); }
+.video-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 24px; }
+.video-act { background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+.video-act .act-num { font-size: 24px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.video-act .act-name { font-size: 12px; font-weight: 600; }
+.img-placeholder { background: var(--surface-hover); border: 1px dashed var(--border); border-radius: 8px; padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; margin: 12px 0; }
+.callout { background: rgba(57,135,229,0.08); border: 1px solid rgba(57,135,229,0.2); border-radius: 10px; padding: 16px 20px; margin: 20px 0; }
+.callout p { color: var(--text-secondary); margin-bottom: 0; }
+img.screenshot { width: 100%; border-radius: 8px; border: 1px solid var(--border); margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" onclick="toggleTheme()">Light Mode</button>
+
+<h1>Video Demo Plan</h1>
+<p class="subtitle">Brief Encounters &mdash; what we're showing judges, how it maps to criteria, and how to help</p>
+<p class="updated">Updated: September 1, 2026 &mdash; all features verified against live code</p>
+
+<!-- Hero Stats -->
+<div class="stats-grid">
+  <div class="card hero-stat">
+    <div class="number" style="color: var(--blue);">11</div>
+    <div class="label">Features Demo-Ready</div>
+  </div>
+  <div class="card hero-stat">
+    <div class="number" style="color: var(--aqua);">4/4</div>
+    <div class="label">Judging Criteria Covered</div>
+  </div>
+  <div class="card hero-stat">
+    <div class="number" style="color: var(--orange);">9</div>
+    <div class="label">Video Clips to Record</div>
+  </div>
+  <div class="card hero-stat">
+    <div class="number" style="color: var(--violet);">2:30</div>
+    <div class="label">Target Video Length</div>
+  </div>
+</div>
+
+<!-- What Judges Score On -->
+<h2><span class="bar" style="background: var(--yellow)"></span> What Judges Score On</h2>
+<p>Four criteria, weighted equally. Every demo clip hits at least two.</p>
+
+<div class="criteria-grid">
+  <div class="card criteria-card" style="border-left: 3px solid var(--blue);">
+    <h4><span class="tag tag-innovation">INNOVATION</span> How creative and original?</h4>
+    <ul>
+      <li>6-layer signal flow topology &mdash; no other tool shows this</li>
+      <li>Cross-referencing 9 data sources with weighted confidence</li>
+      <li>Drive document injection &mdash; anyone can contribute intelligence</li>
+      <li>Self-grading AI with quality scorecard</li>
+    </ul>
+  </div>
+  <div class="card criteria-card" style="border-left: 3px solid var(--aqua);">
+    <h4><span class="tag tag-feasibility">FEASIBILITY</span> Can it scale?</h4>
+    <ul>
+      <li>Already deployed and in daily use &mdash; not a prototype</li>
+      <li>Team submission &rarr; shipped workflow (hours, not sprints)</li>
+      <li>Container deployment, SSO via Cloudflare Access</li>
+      <li>15+ customer accounts running live</li>
+    </ul>
+  </div>
+  <div class="card criteria-card" style="border-left: 3px solid var(--violet);">
+    <h4><span class="tag tag-ux">USER EXPERIENCE</span> Intuitive and useful?</h4>
+    <ul>
+      <li>One brief replaces 8 systems, under 2 minutes</li>
+      <li>Health score &mdash; single number tells you where to focus</li>
+      <li>Data maturity &mdash; "4/7 sources, 57%" is instantly clear</li>
+      <li>Polished loading states, expanded sidebar, no dead ends</li>
+    </ul>
+  </div>
+  <div class="card criteria-card" style="border-left: 3px solid var(--orange);">
+    <h4><span class="tag tag-techex">TECHNICAL EXCELLENCE</span> Thoughtful use of AI?</h4>
+    <ul>
+      <li>17 quality validators &mdash; deterministic, not AI vibes</li>
+      <li>Auto-retry on quality failure (75% threshold)</li>
+      <li>Product lifecycle from endoflife.date API &mdash; knows when NOT to use AI</li>
+      <li>9 sources &rarr; 22 modules &rarr; cross-reference &rarr; 11 consumers</li>
+    </ul>
+  </div>
+</div>
+
+<!-- The Video: 5 Acts -->
+<h2><span class="bar" style="background: var(--orange)"></span> The Video: 5 Acts in 2:30</h2>
+
+<div class="video-strip">
+  <div class="video-act" style="border-bottom: 3px solid var(--magenta);">
+    <div class="act-num" style="color: var(--magenta);">1</div>
+    <div class="act-name">The Problem</div>
+    <div class="act-time">0:00 &ndash; 0:20</div>
+  </div>
+  <div class="video-act" style="border-bottom: 3px solid var(--blue);">
+    <div class="act-num" style="color: var(--blue);">2</div>
+    <div class="act-name">The Brief</div>
+    <div class="act-time">0:20 &ndash; 0:55</div>
+  </div>
+  <div class="video-act" style="border-bottom: 3px solid var(--orange);">
+    <div class="act-num" style="color: var(--orange);">3</div>
+    <div class="act-name">How It's Built</div>
+    <div class="act-time">0:55 &ndash; 1:40</div>
+  </div>
+  <div class="video-act" style="border-bottom: 3px solid var(--aqua);">
+    <div class="act-num" style="color: var(--aqua);">4</div>
+    <div class="act-name">Team Built This</div>
+    <div class="act-time">1:40 &ndash; 2:05</div>
+  </div>
+  <div class="video-act" style="border-bottom: 3px solid var(--violet);">
+    <div class="act-num" style="color: var(--violet);">5</div>
+    <div class="act-name">Close</div>
+    <div class="act-time">2:05 &ndash; 2:30</div>
+  </div>
+</div>
+
+<!-- Demo Features -->
+<h2><span class="bar" style="background: var(--aqua)"></span> What We're Showing &mdash; All Shipped, All Live</h2>
+<p>Every feature below is running at <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io</a> right now. Zero new code needed.</p>
+
+<!-- Act 2 features -->
+<p style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); text-transform: uppercase; margin-top: 24px; margin-bottom: 8px;">Act 2 &mdash; The Brief (0:20 &ndash; 0:55)</p>
+
+<div class="demo-grid">
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Territory Overview</h4>
+      <span class="clip-badge">Clip 1</span>
+    </div>
+    <p>All 15+ accounts in one view. Health score dots (red/yellow/green) show where to focus instantly.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-ux">UX</span>
+      <span class="tag tag-feasibility">FEASIBILITY</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Customer Intelligence Brief</h4>
+      <span class="clip-badge">Clip 2</span>
+    </div>
+    <p>One-page summary: prioritized signals, recommended actions, cross-referenced data from 9 sources. Replaces 30&ndash;45 min of manual research.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-ux">UX</span>
+      <span class="tag tag-techex">TECH EXCELLENCE</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Health Score (6 Dimensions)</h4>
+      <span class="clip-badge">Clip 2</span>
+    </div>
+    <p>Composite score: Cases (25%), Subscriptions (20%), Meetings (15%), Emails (15%), Pipeline (15%), Cloud Spend (10%). Color-coded with full breakdown.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-ux">UX</span>
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Data Maturity Indicator</h4>
+      <span class="clip-badge">Clip 3</span>
+    </div>
+    <p>"4/7 sources connected, 57%" &mdash; shows how much the AI knows about each customer and what's missing. Color-coded (green &ge;89%, yellow &ge;67%, red below).</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-ux">UX</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+</div>
+
+<!-- Act 3 features -->
+<p style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); text-transform: uppercase; margin-top: 24px; margin-bottom: 8px;">Act 3 &mdash; How It's Built (0:55 &ndash; 1:40)</p>
+
+<div class="demo-grid">
+  <div class="card demo-card" style="border-color: var(--orange);">
+    <div class="demo-title">
+      <h4>Signal Flow / Engine Topology</h4>
+      <span class="clip-badge" style="background: rgba(217,89,38,0.15); color: var(--orange);">Clip 4 &mdash; WOW MOMENT</span>
+    </div>
+    <p>Interactive 6-layer visualization: 9 sources &rarr; enrichment modules &rarr; cross-reference engine &rarr; quality gate &rarr; 11 consumers. With health indicators, drift detection, and expandable module details.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-techex">TECH EXCELLENCE</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Account Plan Generation</h4>
+      <span class="clip-badge">Clip 5</span>
+    </div>
+    <p>Press a button &rarr; AI assembles a strategic account plan from 9 inputs. Self-grades with 17 quality validators. Auto-retries below 75%. Uploads to Google Drive.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-techex">TECH EXCELLENCE</span>
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-feasibility">FEASIBILITY</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Quality Scorecard</h4>
+      <span class="clip-badge">Clip 6</span>
+    </div>
+    <p>17 quality checks visible per output: pass/fail per criterion, overall score percentage, retry count. The AI grades itself &mdash; deterministic structural checks, not vibes.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-techex">TECH EXCELLENCE</span>
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card">
+    <div class="demo-title">
+      <h4>Provenance Panel</h4>
+      <span class="clip-badge">Clip 5</span>
+    </div>
+    <p>"14 case signals, 3 pipeline opps, 5 solution plays loaded. Est. 12,400 tokens." Every output tells you exactly what went into it.</p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-techex">TECH EXCELLENCE</span>
+      <span class="tag tag-ux">UX</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+  <div class="card demo-card" style="grid-column: 1 / -1;">
+    <div class="demo-title">
+      <h4>Google Drive Intelligence Contribution</h4>
+      <span class="clip-badge" style="background: rgba(217,89,38,0.15); color: var(--orange);">Clip 7 &mdash; KEY MOMENT</span>
+    </div>
+    <p>Drop a document (competitive alert, meeting notes) into a customer's shared Drive folder &rarr; regenerate the account plan &rarr; see the new content woven in. <strong>Anyone on the team can contribute intelligence &mdash; no code, just documents.</strong></p>
+    <div style="margin-top: 8px;">
+      <span class="tag tag-innovation">INNOVATION</span>
+      <span class="tag tag-feasibility">FEASIBILITY</span>
+      <span class="tag tag-shipped">SHIPPED</span>
+    </div>
+  </div>
+</div>
+
+<!-- Act 4 features -->
+<p style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); text-transform: uppercase; margin-top: 24px; margin-bottom: 8px;">Act 4 &mdash; The Team Built This (1:40 &ndash; 2:05)</p>
+
+<div class="card demo-card" style="border-color: var(--aqua);">
+  <div class="demo-title">
+    <h4>Team Submission &rarr; Shipped Feature</h4>
+    <span class="clip-badge" style="background: rgba(25,158,112,0.15); color: var(--aqua);">Clip 8</span>
+  </div>
+  <p>AI Voice Registry (<a href="https://github.com/hornjason/daily-brief-dashboard/issues/35" target="_blank">#35</a>) &mdash; submitted by a team member via GitHub, built by AI agent, shipped and live. <strong>"The team shapes the product. AI builds it."</strong></p>
+  <div style="margin-top: 8px;">
+    <span class="tag tag-innovation">INNOVATION</span>
+    <span class="tag tag-feasibility">FEASIBILITY</span>
+    <span class="tag tag-shipped">SHIPPED</span>
+  </div>
+</div>
+
+<!-- Architecture Visuals -->
+<h2><span class="bar" style="background: var(--blue)"></span> Architecture Visuals (already published)</h2>
+<p>These interactive HTML pages are live on GitHub Pages. Use them in the video or share with anyone who wants to understand the system.</p>
+
+<div class="demo-grid">
+  <div class="card">
+    <h4><a href="https://hornjason.github.io/daily-brief-dashboard/visual/full-engine.html" target="_blank">The Intelligence Engine &rarr;</a></h4>
+    <p>Full 6-layer architecture: sources, enrichment, cross-reference, quality gate, consumers</p>
+  </div>
+  <div class="card">
+    <h4><a href="https://hornjason.github.io/daily-brief-dashboard/visual/brief-pipeline.html" target="_blank">How the Brief Gets Built &rarr;</a></h4>
+    <p>Pipeline visualization + Day 0 / Day 7 / Day 30 maturity ramp</p>
+  </div>
+  <div class="card">
+    <h4><a href="https://hornjason.github.io/daily-brief-dashboard/visual/account-plan-pipeline.html" target="_blank">Account Plan Pipeline &rarr;</a></h4>
+    <p>9 inputs &rarr; quality gate &rarr; Drive upload</p>
+  </div>
+  <div class="card">
+    <h4><a href="https://hornjason.github.io/daily-brief-dashboard/visual/consumer-matrix.html" target="_blank">Consumer Matrix &rarr;</a></h4>
+    <p>Which inputs feed each of the 11 consumers</p>
+  </div>
+</div>
+
+<!-- Timeline -->
+<h2><span class="bar" style="background: var(--magenta)"></span> Timeline</h2>
+
+<div class="timeline">
+  <div class="timeline-item current">
+    <div class="card">
+      <h4 style="color: var(--orange);">This Week (Sep 1&ndash;5) &mdash; Script + Record</h4>
+      <p>Finalize script, prep demo data, record all 9 clips. Claim a role below to help!</p>
+    </div>
+  </div>
+  <div class="timeline-item">
+    <div class="card">
+      <h4>Sep 8 &mdash; First Cut</h4>
+      <p>Assemble clips into rough 2:30 video</p>
+    </div>
+  </div>
+  <div class="timeline-item">
+    <div class="card">
+      <h4>Sep 10 &mdash; Team Review</h4>
+      <p>Everyone watches, gives feedback on messaging/clarity</p>
+    </div>
+  </div>
+  <div class="timeline-item">
+    <div class="card">
+      <h4>Sep 11 &mdash; Final Submit</h4>
+      <p>Upload to Innovation Days Media Space channel</p>
+    </div>
+  </div>
+  <div class="timeline-item">
+    <div class="card" style="border-left: 3px solid var(--red);">
+      <h4 style="color: var(--red);">Sep 15 &mdash; HARD DEADLINE (12:00 PM EST)</h4>
+      <p>No exceptions. 4-day buffer built in.</p>
+    </div>
+  </div>
+</div>
+
+<!-- How to Help -->
+<h2><span class="bar" style="background: var(--violet)"></span> How You Can Help &mdash; No Coding Needed</h2>
+<p>The product is built. Now we need to produce the video. Pick a role and reply in Slack!</p>
+
+<div class="role-grid">
+  <div class="card role-card">
+    <h4>&#127916; Screen Recorder</h4>
+    <p>Follow a simple click-path doc, record 2&ndash;3 demo clips from the live dashboard</p>
+    <div class="time">~1 hour</div>
+  </div>
+  <div class="card role-card">
+    <h4>&#9986;&#65039; Video Editor</h4>
+    <p>Assemble 9 clips + talking head into a polished 2:30 final cut (iMovie, CapCut, DaVinci &mdash; anything works)</p>
+    <div class="time">~2&ndash;3 hours</div>
+  </div>
+  <div class="card role-card">
+    <h4>&#127908; Voiceover / Narration</h4>
+    <p>Record scripted voiceover for the demo walkthrough sections</p>
+    <div class="time">~30 minutes</div>
+  </div>
+  <div class="card role-card">
+    <h4>&#128221; Script Reviewer</h4>
+    <p>Read the 2:30 script, give feedback on clarity, messaging, and flow</p>
+    <div class="time">~30 minutes</div>
+  </div>
+  <div class="card role-card">
+    <h4>&#127912; Title Card Designer</h4>
+    <p>Create 2&ndash;3 stat overlay graphics for the video (Canva, Google Slides)</p>
+    <div class="time">~1 hour</div>
+  </div>
+  <div class="card role-card">
+    <h4>&#128300; Demo Tester</h4>
+    <p>Open <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io</a> cold, tell us what's confusing or impressive from fresh eyes</p>
+    <div class="time">~30 minutes</div>
+  </div>
+</div>
+
+<div class="callout">
+  <p><strong>Reply in Slack with which role(s) you'd like to take on.</strong> Or just react with &#128064; if you want to review the script first. Every contribution helps &mdash; we're in great shape on the product side, we just need hands on the video.</p>
+</div>
+
+<!-- Links -->
+<h2><span class="bar" style="background: var(--text-muted)"></span> Quick Links</h2>
+<div class="card">
+  <p style="margin-bottom: 6px;"><strong>Live Dashboard:</strong> <a href="https://demo.jasonhorn.io/dashboard" target="_blank">demo.jasonhorn.io</a></p>
+  <p style="margin-bottom: 6px;"><strong>GitHub Issues:</strong> <a href="https://github.com/hornjason/daily-brief-dashboard/issues?q=label:ai-challenge" target="_blank">AI Challenge issues</a></p>
+  <p style="margin-bottom: 6px;"><strong>Contributor Guide:</strong> <a href="https://hornjason.github.io/daily-brief-dashboard/visual/contributor-guide.html" target="_blank">How to contribute</a></p>
+  <p style="margin-bottom: 6px;"><strong>Kickoff Notes:</strong> <a href="https://docs.google.com/document/d/1etL6TSGQedCqzBH7IeU9G3Aq_USWBrBQHP1EmjbnLbQ/" target="_blank">Meeting notes + recording</a></p>
+  <p style="margin-bottom: 0;"><strong>Submit Ideas:</strong> <a href="https://github.com/hornjason/daily-brief-dashboard/issues/new?template=ai-challenge-feature-request.yml" target="_blank">GitHub issue template</a></p>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.querySelector('.theme-toggle');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = 'Light Mode';
+  }
+}
+</script>
+
+</body>
+</html>
