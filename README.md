@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-08-25
+updated: 2026-09-02
 ---
 
 <p align="center">
@@ -19,11 +19,9 @@ updated: 2026-08-25
 <p align="center">
   <a href="#quickstart">Quickstart</a> &bull;
   <a href="#upgrading">Upgrading</a> &bull;
-  <a href="#features">Features</a> &bull;
-  <a href="#intelligence-engine">Intelligence Engine</a> &bull;
-  <a href="#screenshots">Screenshots</a> &bull;
   <a href="#setup-wizard">Setup</a> &bull;
-  <a href="#large-installs">Large Installs</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="#troubleshooting">Troubleshooting</a> &bull;
   <a href="#architecture">Architecture</a>
 </p>
 
@@ -35,7 +33,7 @@ A containerized intelligence dashboard for Red Hat Account Solution Architects a
 
 It aggregates support cases, subscriptions, cloud spend, pipeline, product intelligence, competitive signals, and Google Workspace data — then layers AI-powered intelligence on top to surface **what matters** and **what to do about it**.
 
-**This is not a data dashboard.** It's an intelligence engine that cross-references 30 signal sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
+**This is not a data dashboard.** It's an intelligence engine with 35 modules across 7 data sources that scores every signal for customer relevance and generates strategic sales plays with evidence-backed recommendations.
 
 ```
 Your data stays on your machine. Nothing leaves except API calls
@@ -58,329 +56,6 @@ That's it. The installer handles prerequisites, pulls the container, and opens t
 > Want to inspect the script first? `curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh` then review it.
 
 ---
-
-## Available Pods & Regions
-
-During setup, you select the pods and regions you manage. The shared L3 data source provides nightly-synced subscription, pipeline, and cloud spend data for each pod.
-
-### West Commercial
-
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **Northwest** | WEST_COMM_CORP_NORTHWEST | Active |
-| **Southwest** | WEST_COMM_CORP_SOUTHWEST | Active |
-| **North Central** | WEST_COMM_CORP_NORTH_CENTRAL | Active |
-| **South Central** | WEST_COMM_CORP_SOUTH_CENTRAL | Active |
-
-### East Commercial
-
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
-| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
-| **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
-| **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
-
-### Central Enterprise
-
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **TOLA** | CENTRAL_ENT_TOLA | Active |
-| **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Active |
-
-**7 pods active** across 3 regions. Each pod includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
-
-> Want your region or pod added? Email **jhorn@redhat.com** with your Salesforce report ID and territory codes.
-
----
-
-## Features
-
-### Command Center — Your Daily Brief
-
-The main dashboard gives you a morning summary with today's priorities, KPI cards across your portfolio, Red Hat Pulse (news, product releases, upcoming events), and top actions ranked by urgency.
-
-<img src="docs/images/dashboard-hero.png" alt="Command Center Dashboard" width="800" />
-
-### Customer Intelligence — Account Detail (v2.0)
-
-Click any customer to see their full intelligence page — redesigned around intent, not data type. Every section answers "what's the story?" then "what should I do about it?"
-
-- **Account Brief** — AI-generated narrative: who they are, what's happening, what to talk about
-- **Sales Strategy** — TDP-aligned expansion phases and tactics with evidence chains, estimated TCV, and one-click campaign generation
-- **AI-Discovered Opportunities** — Gemini-surfaced novel sales angles from cross-signal analysis
-- **Health Score** — 81-point composite (cases, contacts, renewal, meetings, resolution) with hover breakdown
-- **Floating Q&A Widget** — Ask grounded questions about any customer's product data, subscriptions, and tech stack — accessible from any tab
-- **3 Sidebar Groups:**
-  - **Opportunities** — Product Signals, Expansion Fit, and Recommended Actions (cross-referenced case/solution matches)
-  - **People** — Key Contacts with engagement frequency and days-silent alerts
-  - **Account Data** — Research Docs, Account Plan, Subscriptions, Cases, Cloud Marketplace, Drive Documents, Signal Sources
-
-<img src="docs/images/customer-intelligence.png" alt="Customer Intelligence View" width="800" />
-
-### Sales Strategy — AI-Powered Sales Plays
-
-The intelligence engine cross-references your customer's tech stack, support cases, subscriptions, cloud spend, and pipeline to generate strategic sales plays. Each motion has phases with evidence-backed tactics, compressed views that expand on click, and estimated TCV.
-
-<img src="docs/images/strategic-motion.png" alt="Strategic Motion with Evidence" width="800" />
-
-### Pipeline & Cloud Spend
-
-Full pipeline visualization with ACV breakdowns by forecast stage, owner, and top opportunities. Cloud spend (CCSP) tracking by partner, with account-level trends.
-
-<img src="docs/images/pipeline-view.png" alt="Pipeline and Cloud Spend" width="800" />
-
-### Product Intelligence
-
-Track new product releases, tech previews, and GA announcements across the Red Hat portfolio. Filter by product family, lifecycle stage, or feature set. Spotlight cards highlight what's new and relevant to your customers.
-
-<img src="docs/images/products-page.png" alt="Product Intelligence" width="800" />
-
-### AI-Generated Campaigns
-
-Generate personalized outreach campaigns per customer, with style guides matching your AE's voice, value propositions mapped to the customer's business objectives, and role-specific email templates.
-
-<img src="docs/images/campaigns.png" alt="AI Campaigns" width="800" />
-
-### Meeting Prep
-
-Pre-meeting intelligence briefs with full customer context, talking points, and recent activity — exported directly to Google Docs with Red Hat brand formatting.
-
-### Red Hat Events
-
-Browse upcoming Red Hat events filtered by format (in-person, virtual, hybrid), product focus (AAP, OCP, RHEL, RHOAI), and region. Share event links directly with customers.
-
-<img src="docs/images/events-page.png" alt="Events Page" width="800" />
-
-### Book of Business
-
-Portfolio triage view with filterable account lists, summary totals, and combined filter states across AEs and products.
-
-<img src="docs/images/book-of-business.png" alt="Book of Business" width="800" />
-
----
-
-## Intelligence Engine
-
-This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 23 sources flows through a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
-
-### How It Works
-
-```mermaid
-flowchart TD
-    subgraph Sources["DATA SOURCES (23 Modules)"]
-        S1[Support Cases]
-        S2[Subscriptions]
-        S3[Cloud Spend]
-        S4[Pipeline]
-        S5[Tech Stack Detection]
-        S6[News Radar]
-        S7[Competitive Intel]
-        S8[Product Lifecycle]
-        S9[Ecosystem Catalog]
-        S10[Solution Plays]
-        S11["+ 13 more..."]
-    end
-
-    subgraph Layer1["LAYER 1: Signal Production"]
-        direction LR
-        L1[Each module produces signals<br/>with structured metadata:<br/>rawRelevance, products, severity,<br/>confidence, customer context]
-    end
-
-    subgraph Layer2["LAYER 2: Scoring Engine"]
-        direction LR
-        L2A[Specificity Detection<br/>Customer · Industry · General]
-        L2B[Score Boosters<br/>+revenue +severity +renewal<br/>+products +confidence]
-        L2C[Time Decay &<br/>Budget Caps]
-    end
-
-    subgraph Layer3["LAYER 3: Template Engine"]
-        direction LR
-        L3A[Signal Routing<br/>metadata → section]
-        L3B[10 Deterministic<br/>Template Sections]
-        L3C[Gemini Synthesis<br/>narrative only]
-    end
-
-    subgraph Consumers["CONSUMERS"]
-        C1[Account Briefs]
-        C2[Strategic Motions]
-        C3[Campaign Generator]
-        C4[Meeting Prep]
-        C5[Playbooks]
-    end
-
-    Sources --> Layer1
-    Layer1 --> Layer2
-    Layer2 --> Layer3
-    Layer3 --> Consumers
-
-    style Sources fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
-    style Layer1 fill:#1a2332,stroke:#ff9800,color:#e0e0e0
-    style Layer2 fill:#1a2332,stroke:#4caf50,color:#e0e0e0
-    style Layer3 fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
-    style Consumers fill:#1a2332,stroke:#f44336,color:#e0e0e0
-```
-
-### The Three Layers
-
-**Layer 1 — Signal Production** &nbsp; Each of 23 modules produces signals with structured metadata. A module reports facts — it never decides importance. Signals carry `rawRelevance`, `redHatProducts`, `severity`, `confidence`, `customerSlug`, and more.
-
-**Layer 2 — Centralized Scoring** &nbsp; A single scoring engine evaluates every signal. It detects specificity (is this customer-specific, industry-level, or general?), applies boosters (revenue, severity, renewal urgency, product match), and enforces budget caps per source so no one data stream dominates.
-
-**Layer 3 — Template Engine** &nbsp; Scored signals are routed to deterministic template sections based on metadata — not editorial judgment. 10 of 18 output sections are fully deterministic (no AI). Gemini only writes narrative synthesis; it never decides what signals matter or where they appear.
-
-### Signal Scoring
-
-Every signal is scored 0–100 using specificity detection and contextual boosters:
-
-| Tier | Score | Meaning | Example |
-|------|-------|---------|---------|
-| **Critical** | 90–100 | Revenue impact, urgent action | Sev1 case on evaluating tech |
-| **High** | 70–89 | Directly actionable | Customer tech + RH product mapping |
-| **Medium** | 50–69 | Useful context | Subscription renewal data |
-| **Low** | 35–49 | Background awareness | Industry trend, low confidence |
-| **Noise** | 0–34 | Filtered from output | Generic blog post |
-
-A generic "OpenShift 4.22 released" signal scores 15 (noise). The **same signal** scores 85 (high) when the customer has OpenShift subscriptions expiring in 30 days with active support cases — because the scoring engine cross-references metadata across all signal sources.
-
-### The Intelligence Graph
-
-The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules:
-
-```mermaid
-flowchart LR
-    subgraph Cross["CROSS-REFERENCE MATRIX"]
-        TS[Tech Stack] -->|"detected ServiceNow"| SP[Solution Plays]
-        SP -->|"automation play"| SM[Strategic Motion]
-        
-        SUB[Subscriptions] -->|"expiring 30d"| SM
-        CASES[Support Cases] -->|"Sev1 on AAP"| SM
-        
-        CCSP[Cloud Spend] -->|"$160K AWS"| MKT[Marketplace]
-        MKT -->|"CPPO eligible"| SM
-        
-        PIPE[Pipeline] -->|"$500K opp"| SM
-        
-        SM -->|"3 phases, 17 TDPs"| OUT["Strategic Motion Output:<br/>Anchor · Expand · Transform<br/>Est. TCV: $507K"]
-    end
-
-    style Cross fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
-    style SM fill:#2a3a4a,stroke:#ff9800,color:#e0e0e0
-    style OUT fill:#2a3a4a,stroke:#4caf50,color:#e0e0e0
-```
-
-The result: instead of showing you 134 disconnected data points, the dashboard surfaces **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
-
-### What Makes This Different
-
-| Traditional Dashboard | Daily Brief Intelligence |
-|---|---|
-| Shows raw data | Cross-references 23 sources into scored insights |
-| Static views | Dynamic scoring — same data, different score per customer |
-| Manual analysis | Auto-generated strategic motions with evidence |
-| Flat data display | Graph-based intelligence that stacks and compounds |
-| Generic recommendations | Customer-specific plays with TCV estimates |
-| Requires interpretation | Surfaces "what to do" not just "what happened" |
-
-<img src="docs/images/intelligence-graph.png" alt="Intelligence Graph Admin" width="600" />
-
----
-
-## Screenshots
-
-<details>
-<summary><strong>Click to expand full screenshot gallery</strong></summary>
-
-| View | Description |
-|------|-------------|
-| <img src="docs/images/dashboard-hero.png" width="400" /> | **Command Center** — Morning summary, KPIs, Red Hat Pulse, top actions, pipeline overview |
-| <img src="docs/images/customer-intelligence.png" width="400" /> | **Customer Detail** — Health score, sales strategy, signals, account brief, floating Q&A |
-| <img src="docs/images/strategic-motion.png" width="400" /> | **Sales Strategy** — Evidence-backed phases with tactics and recommendations |
-| <img src="docs/images/pipeline-view.png" width="400" /> | **Pipeline** — ACV by stage, owner breakdown, top opportunities |
-| <img src="docs/images/products-page.png" width="400" /> | **Products** — Release radar, tech previews, product spotlight |
-| <img src="docs/images/campaigns.png" width="400" /> | **Campaigns** — AI-generated outreach with AE voice matching |
-| <img src="docs/images/events-page.png" width="400" /> | **Events** — Filterable by format, product, and region |
-| <img src="docs/images/book-of-business.png" width="400" /> | **Book of Business** — Portfolio triage with combined filters |
-
-</details>
-
----
-
-## Setup Wizard
-
-After the installer finishes, the setup wizard opens in your browser at `http://localhost:7777/dashboard/setup`:
-
-### Step 1 — Google Auth
-
-Click **Connect Google** to authorize Gmail, Calendar, Drive, and Sheets. Uses a shared GCP project — any `@redhat.com` Google Workspace account works automatically. OAuth keys are bundled with the container.
-
-### Step 2 — AEs & Customers
-
-1. Paste your **AE parent folder URL** (a Google Drive folder you create)
-2. Click **Add AE** for each AE you manage
-3. Bootstrap runs automatically — creates Drive folder structure, imports customer data from the shared L3 data source
-
-### Step 3 — AI Settings (Optional)
-
-Configure AI brief generation preferences. Briefs work out of the box using your Google OAuth token with Vertex AI — no additional API keys needed.
-
-Then click **Open Dashboard** at `http://localhost:7777/dashboard`. First data sync takes 3–5 minutes.
-
-> **Google OAuth error?** The shared GCP project uses Internal consent mode — any `@redhat.com` account can authorize. Email **jhorn@redhat.com** if you hit issues.
-
----
-
-## What is the AE Parent Folder?
-
-A Google Drive folder you create that becomes the root of your data structure:
-
-```
-Your AE Parent Folder/
-  ├── {AE Name}/
-  │   ├── SF Bookings.gsheet       ← subscription data
-  │   ├── CCSP.gsheet              ← cloud spend
-  │   ├── Pipeline.gsheet          ← Salesforce pipeline
-  │   └── {Customer Name}/         ← per-customer docs & intelligence
-  ├── Config/                      ← backup sheets
-  └── Products/                    ← product intel (openshift, rhel, ansible...)
-```
-
-Bootstrap populates everything from the shared L3 data source (updated nightly). The folder lives in your personal Drive — nothing is shared unless you share it.
-
----
-
-## Data Sources
-
-| Source | What it provides | Update frequency |
-|--------|-----------------|------------------|
-| **Red Hat Customer Portal** | Support cases by severity | Scheduled + on-demand |
-| **Salesforce Bookings** | Subscriptions, renewals, ACV | Nightly via L3 |
-| **Salesforce Pipeline** | Opportunities by stage and owner | Nightly via L3 |
-| **CCSP (Cloud Spend)** | Cloud consumption by partner | Nightly via L3 |
-| **Google Gmail** | Email context for meeting prep | On-demand |
-| **Google Calendar** | Upcoming meetings and attendees | On-demand |
-| **Red Hat Product Lifecycle** | Release radar, GA/TP/EOL dates | Scheduled |
-| **Red Hat Events** | Upcoming events by region/product | Scheduled |
-| **Red Hat RSS** | News, blog posts, announcements | Scheduled |
-| **SalesHub** | Sales plays, TDPs, solution kits | Scheduled |
-| **Cloud Marketplace** | AWS/Azure/GCP offers, CPPO eligibility | Scheduled |
-| **Ecosystem Catalog** | Partner integrations, certifications | Scheduled |
-| **Tech Stack Detection** | Customer infrastructure signals | On intelligence generation |
-| **Competitive Intel** | M&A activity, competitive positioning | Scheduled |
-| **News Radar** | Customer-specific news monitoring | Scheduled |
-| **Vertex AI (Gemini)** | Account briefs, narrative synthesis | On-demand (4h cache) |
-
-All data is cached locally. The dashboard runs entirely on your machine.
-
----
-
-## Stopping and Restarting
-
-```bash
-podman stop pai-dashboard     # stop
-podman start pai-dashboard    # restart
-podman rm pai-dashboard       # remove (data preserved in ./data/)
-```
 
 ## Upgrading
 
@@ -464,6 +139,54 @@ Data and configuration are preserved across upgrades — only the application co
 
 ---
 
+## Setup Wizard
+
+After the installer finishes, the setup wizard opens in your browser at `http://localhost:7777/dashboard/setup`:
+
+### Step 1 — Google Auth
+
+Click **Connect Google** to authorize Gmail, Calendar, Drive, and Sheets. Uses a shared GCP project — any `@redhat.com` Google Workspace account works automatically. OAuth keys are bundled with the container.
+
+### Step 2 — AEs & Customers
+
+1. Paste your **AE parent folder URL** — a Google Drive folder you create that becomes the root of your data structure:
+
+   ```
+   Your AE Parent Folder/
+     ├── {AE Name}/
+     │   ├── SF Bookings.gsheet       ← subscription data
+     │   ├── CCSP.gsheet              ← cloud spend
+     │   ├── Pipeline.gsheet          ← Salesforce pipeline
+     │   └── {Customer Name}/         ← per-customer docs & intelligence
+     ├── Config/                      ← backup sheets
+     └── Products/                    ← product intel (openshift, rhel, ansible...)
+   ```
+
+   Bootstrap populates everything from the shared L3 data source (updated nightly). The folder lives in your personal Drive — nothing is shared unless you share it.
+
+2. Click **Add AE** for each AE you manage
+3. Bootstrap runs automatically — creates Drive folder structure, imports customer data from the shared L3 data source
+
+### Step 3 — AI Settings (Optional)
+
+Configure AI brief generation preferences. Briefs work out of the box using your Google OAuth token with Vertex AI — no additional API keys needed.
+
+Then click **Open Dashboard** at `http://localhost:7777/dashboard`. First data sync takes 3–5 minutes.
+
+> **Google OAuth error?** The shared GCP project uses Internal consent mode — any `@redhat.com` account can authorize. Email **jhorn@redhat.com** if you hit issues.
+
+---
+
+## Stopping and Restarting
+
+```bash
+podman stop pai-dashboard     # stop
+podman start pai-dashboard    # restart
+podman rm pai-dashboard       # remove (data preserved in ./data/)
+```
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -473,7 +196,7 @@ Data and configuration are preserved across upgrades — only the application co
 | RAM too low (large install, macOS) | `podman machine stop && podman machine set --memory 16384 && podman machine start` |
 | Container exits immediately | `podman logs pai-dashboard` — check for missing deps or config |
 | Dashboard not loading | `podman ps` to verify container is running, then check logs |
-| Pages slow during intel generation | Use `docker-compose-optimized.yaml` — see [Large Installs](#large-installs) |
+| Pages slow during intel generation | Add `MEM_LIMIT=16g` to `.env` — see [Large Installs](#large-installs) |
 | "Thin content (1 lines)" on intel docs | Gemini calls timing out — reduce concurrency or increase container memory |
 | Google auth errors | Re-run setup wizard at `/dashboard/setup` |
 | AI briefs empty | Check `podman logs pai-dashboard` — uses your Google OAuth token |
@@ -487,28 +210,309 @@ Still stuck? Email **jhorn@redhat.com**.
 
 ---
 
+## Features
+
+### Command Center — Your Daily Brief
+
+The main dashboard gives you a morning summary with today's priorities, KPI cards across your portfolio, Red Hat Pulse (news, product releases, upcoming events), and top actions ranked by urgency.
+
+<img src="docs/images/dashboard-hero.png" alt="Command Center Dashboard" width="800" />
+
+### Customer Intelligence — Account Detail (v2.0)
+
+Click any customer to see their full intelligence page — redesigned around intent, not data type. Every section answers "what's the story?" then "what should I do about it?"
+
+- **Account Brief** — AI-generated narrative: who they are, what's happening, what to talk about
+- **Sales Strategy** — TDP-aligned expansion phases and tactics with evidence chains, estimated TCV, and one-click campaign generation
+- **AI-Discovered Opportunities** — Gemini-surfaced novel sales angles from cross-signal analysis
+- **Health Score** — 6-dimension weighted composite (cases, contacts, renewal, meetings, resolution, cloud spend) with hover breakdown
+- **Floating Q&A Widget** — Ask grounded questions about any customer's product data, subscriptions, and tech stack — accessible from any tab
+- **3 Sidebar Groups:**
+  - **Opportunities** — Product Signals, Expansion Fit, and Recommended Actions (cross-referenced case/solution matches)
+  - **People** — Key Contacts with engagement frequency and days-silent alerts
+  - **Account Data** — Research Docs, Account Plan, Subscriptions, Cases, Cloud Marketplace, Drive Documents, Signal Sources
+
+<img src="docs/images/customer-intelligence.png" alt="Customer Intelligence View" width="800" />
+
+### Sales Strategy — AI-Powered Sales Plays
+
+The intelligence engine cross-references your customer's tech stack, support cases, subscriptions, cloud spend, and pipeline to generate strategic sales plays. Each motion has phases with evidence-backed tactics, compressed views that expand on click, and estimated TCV.
+
+<img src="docs/images/strategic-motion.png" alt="Strategic Motion with Evidence" width="800" />
+
+### Pipeline & Cloud Spend
+
+Full pipeline visualization with ACV breakdowns by forecast stage, owner, and top opportunities. Cloud spend (CCSP) tracking by partner, with account-level trends.
+
+<img src="docs/images/pipeline-view.png" alt="Pipeline and Cloud Spend" width="800" />
+
+### Product Intelligence
+
+Track new product releases, tech previews, and GA announcements across the Red Hat portfolio. Filter by product family, lifecycle stage, or feature set. Spotlight cards highlight what's new and relevant to your customers.
+
+<img src="docs/images/products-page.png" alt="Product Intelligence" width="800" />
+
+### AI-Generated Campaigns
+
+Generate personalized outreach campaigns per customer, with style guides matching your AE's voice, value propositions mapped to the customer's business objectives, and role-specific email templates.
+
+<img src="docs/images/campaigns.png" alt="AI Campaigns" width="800" />
+
+### Meeting Prep
+
+Pre-meeting intelligence briefs with full customer context, talking points, and recent activity — exported directly to Google Docs with Red Hat brand formatting.
+
+### Red Hat Events
+
+Browse upcoming Red Hat events filtered by format (in-person, virtual, hybrid), product focus (AAP, OCP, RHEL, RHOAI), and region. Share event links directly with customers.
+
+<img src="docs/images/events-page.png" alt="Events Page" width="800" />
+
+### Book of Business
+
+Portfolio triage view with filterable account lists, summary totals, and combined filter states across AEs and products.
+
+<img src="docs/images/book-of-business.png" alt="Book of Business" width="800" />
+
+---
+
+## Intelligence Engine
+
+This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 7 external sources flows through 35 processing modules in a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
+
+### How It Works
+
+```mermaid
+flowchart TD
+    subgraph Sources["DATA SOURCES (7 External)"]
+        S1[Support Cases]
+        S2[Subscriptions]
+        S3[Cloud Spend]
+        S4[Pipeline]
+        S5[Gmail / Calendar]
+        S6[Google Drive]
+        S7[Red Hat APIs]
+    end
+
+    subgraph Layer1["LAYER 1: Signal Production (35 Modules)"]
+        direction LR
+        L1[Each module produces signals<br/>with structured metadata:<br/>rawRelevance, products, severity,<br/>confidence, customer context]
+    end
+
+    subgraph Layer2["LAYER 2: Scoring Engine"]
+        direction LR
+        L2A[Specificity Detection<br/>Customer · Industry · General]
+        L2B[8 Score Boosters<br/>+revenue +severity +renewal<br/>+products +confidence +cloud]
+        L2C[Time Decay &<br/>Budget Caps]
+    end
+
+    subgraph Layer3["LAYER 3: Template Engine"]
+        direction LR
+        L3A[Signal Routing<br/>metadata → section]
+        L3B[Deterministic<br/>Template Sections]
+        L3C[Gemini Synthesis<br/>narrative only]
+    end
+
+    subgraph Consumers["11 CONSUMERS"]
+        C1[Account Briefs]
+        C2[Strategic Motions]
+        C3[Campaign Generator]
+        C4[Meeting Prep]
+        C5[Playbooks]
+    end
+
+    Sources --> Layer1
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Consumers
+
+    style Sources fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style Layer1 fill:#1a2332,stroke:#ff9800,color:#e0e0e0
+    style Layer2 fill:#1a2332,stroke:#4caf50,color:#e0e0e0
+    style Layer3 fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
+    style Consumers fill:#1a2332,stroke:#f44336,color:#e0e0e0
+```
+
+> **Interactive version:** See the [full engine visualization](docs/visual/full-engine.html) for an expandable, 6-layer view of all 35 modules, 11 consumers, and the complete data flow.
+
+### The Three Layers
+
+**Layer 1 — Signal Production** &nbsp; Each of 35 modules produces signals with structured metadata. A module reports facts — it never decides importance. Signals carry `rawRelevance`, `redHatProducts`, `severity`, `confidence`, `customerSlug`, and more.
+
+**Layer 2 — Centralized Scoring** &nbsp; A single scoring engine evaluates every signal. It detects specificity (is this customer-specific, industry-level, or general?), applies 8 boosters (revenue, severity, renewal urgency, product match, confidence, context, cloud spend), and enforces budget caps per source so no one data stream dominates.
+
+**Layer 3 — Template Engine** &nbsp; Scored signals are routed to deterministic template sections based on metadata — not editorial judgment. Deterministic template routing handles the majority of output sections (no AI). Gemini only writes narrative synthesis; it never decides what signals matter or where they appear.
+
+### Signal Scoring
+
+Every signal is scored 0–100 using specificity detection and contextual boosters:
+
+| Tier | Score | Meaning | Example |
+|------|-------|---------|---------|
+| **Critical** | 90–100 | Revenue impact, urgent action | Sev1 case on evaluating tech |
+| **High** | 70–89 | Directly actionable | Customer tech + RH product mapping |
+| **Medium** | 50–69 | Useful context | Subscription renewal data |
+| **Low** | 35–49 | Background awareness | Industry trend, low confidence |
+| **Noise** | 0–34 | Filtered from output | Generic blog post |
+
+A generic "OpenShift 4.22 released" signal scores 15 (noise). The **same signal** scores 85 (high) when the customer has OpenShift subscriptions expiring in 30 days with active support cases — because the scoring engine cross-references metadata across all 35 modules.
+
+### The Intelligence Graph
+
+The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules:
+
+```mermaid
+flowchart LR
+    subgraph Cross["CROSS-REFERENCE MATRIX"]
+        TS[Tech Stack] -->|"detected ServiceNow"| SP[Solution Plays]
+        SP -->|"automation play"| SM[Strategic Motion]
+        
+        SUB[Subscriptions] -->|"expiring 30d"| SM
+        CASES[Support Cases] -->|"Sev1 on AAP"| SM
+        
+        CCSP[Cloud Spend] -->|"$160K AWS"| MKT[Marketplace]
+        MKT -->|"CPPO eligible"| SM
+        
+        PIPE[Pipeline] -->|"$500K opp"| SM
+        
+        SM -->|"3 phases, 17 TDPs"| OUT["Strategic Motion Output:<br/>Anchor · Expand · Transform<br/>Est. TCV: $507K"]
+    end
+
+    style Cross fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style SM fill:#2a3a4a,stroke:#ff9800,color:#e0e0e0
+    style OUT fill:#2a3a4a,stroke:#4caf50,color:#e0e0e0
+```
+
+The result: instead of showing you 134 disconnected data points, the dashboard surfaces **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
+
+### What Makes This Different
+
+| Traditional Dashboard | Daily Brief Intelligence |
+|---|---|
+| Shows raw data | Cross-references 35 modules into scored insights |
+| Static views | Dynamic scoring — same data, different score per customer |
+| Manual analysis | Auto-generated strategic motions with evidence |
+| Flat data display | Graph-based intelligence that stacks and compounds |
+| Generic recommendations | Customer-specific plays with TCV estimates |
+| Requires interpretation | Surfaces "what to do" not just "what happened" |
+
+<img src="docs/images/intelligence-graph.png" alt="Intelligence Graph Admin" width="600" />
+
+---
+
+## Screenshots
+
+<details>
+<summary><strong>Click to expand full screenshot gallery</strong></summary>
+
+| View | Description |
+|------|-------------|
+| <img src="docs/images/dashboard-hero.png" width="400" /> | **Command Center** — Morning summary, KPIs, Red Hat Pulse, top actions, pipeline overview |
+| <img src="docs/images/customer-intelligence.png" width="400" /> | **Customer Detail** — Health score, sales strategy, signals, account brief, floating Q&A |
+| <img src="docs/images/strategic-motion.png" width="400" /> | **Sales Strategy** — Evidence-backed phases with tactics and recommendations |
+| <img src="docs/images/pipeline-view.png" width="400" /> | **Pipeline** — ACV by stage, owner breakdown, top opportunities |
+| <img src="docs/images/products-page.png" width="400" /> | **Products** — Release radar, tech previews, product spotlight |
+| <img src="docs/images/campaigns.png" width="400" /> | **Campaigns** — AI-generated outreach with AE voice matching |
+| <img src="docs/images/events-page.png" width="400" /> | **Events** — Filterable by format, product, and region |
+| <img src="docs/images/book-of-business.png" width="400" /> | **Book of Business** — Portfolio triage with combined filters |
+
+</details>
+
+---
+
+## Available Pods & Regions
+
+During setup, you select the pods and regions you manage. The shared L3 data source provides nightly-synced subscription, pipeline, and cloud spend data for each pod.
+
+### West Commercial
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Northwest** | WEST_COMM_CORP_NORTHWEST | Active |
+| **Southwest** | WEST_COMM_CORP_SOUTHWEST | Active |
+| **North Central** | WEST_COMM_CORP_NORTH_CENTRAL | Active |
+| **South Central** | WEST_COMM_CORP_SOUTH_CENTRAL | Active |
+
+### East Commercial
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
+| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
+| **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
+| **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
+
+### Central Enterprise
+
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **TOLA** | CENTRAL_ENT_TOLA | Active |
+| **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Active |
+
+**7 pods active** across 3 regions. Each pod includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
+
+> Want your region or pod added? Email **jhorn@redhat.com** with your Salesforce report ID and territory codes.
+
+---
+
+## Data Sources
+
+| Source | What it provides | Update frequency |
+|--------|-----------------|------------------|
+| **Red Hat Customer Portal** | Support cases by severity | Scheduled + on-demand |
+| **Salesforce Bookings** | Subscriptions, renewals, ACV | Nightly via L3 |
+| **Salesforce Pipeline** | Opportunities by stage and owner | Nightly via L3 |
+| **CCSP (Cloud Spend)** | Cloud consumption by partner | Nightly via L3 |
+| **Google Gmail** | Email context for meeting prep | On-demand |
+| **Google Calendar** | Upcoming meetings and attendees | On-demand |
+| **Red Hat Product Lifecycle** | Release radar, GA/TP/EOL dates | Scheduled |
+| **Red Hat Events** | Upcoming events by region/product | Scheduled |
+| **Red Hat RSS** | News, blog posts, announcements | Scheduled |
+| **SalesHub** | Sales plays, TDPs, solution kits | Scheduled |
+| **Cloud Marketplace** | AWS/Azure/GCP offers, CPPO eligibility | Scheduled |
+| **Ecosystem Catalog** | Partner integrations, certifications | Scheduled |
+| **Tech Stack Detection** | Customer infrastructure signals | On intelligence generation |
+| **Competitive Intel** | M&A activity, competitive positioning | Scheduled |
+| **News Radar** | Customer-specific news monitoring | Scheduled |
+| **Vertex AI (Gemini)** | Account briefs, narrative synthesis | On-demand (14d/30d cache) |
+
+All data is cached locally. The dashboard runs entirely on your machine.
+
+---
+
 ## Large Installs
 
-For deployments with **100+ accounts or 2+ pods**, use the optimized compose file for better performance during intelligence generation and page loads.
+For deployments with **100+ accounts or 2+ pods**, configure higher resource limits for better performance during intelligence generation and page loads.
 
 ### Quick Start (Large Install)
 
+Add these environment variables to your `.env` file:
+
 ```bash
-mkdir ~/daily-brief && cd ~/daily-brief
-curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose-optimized.yaml -o docker-compose.yaml
-curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example -o .env
-mkdir -p ./data/config ./data/cache ./data/rh-profile
-podman compose up -d --pull always
+MEM_LIMIT=16g
+MAX_RSS_MB=12288
+CPU_LIMIT=4
 ```
+
+Then restart your container. The setup script asks about this during install — if you chose "standard" and need to upgrade later, just add these variables and restart.
+
+If using compose:
+
+```bash
+podman compose down
+podman compose up -d
+```
+
+If using podman run directly, the upgrade script reads `MEM_LIMIT` from `.env` automatically.
 
 ### Resource Sizing
 
-| Accounts | RAM | CPUs | Compose File |
-|----------|-----|------|--------------|
-| 1–50 | 4GB | 2 | `docker-compose.yml` |
-| 50–100 | 8GB | 2 | `docker-compose.yml` |
-| 100–250 | 16GB | 4 | `docker-compose-optimized.yaml` |
-| 250+ | 16GB+ | 4+ | `docker-compose-optimized.yaml` |
+| Accounts | RAM | CPUs | `.env` Settings |
+|----------|-----|------|-----------------|
+| 1–50 | 4GB | 2 | (defaults) |
+| 50–100 | 8GB | 2 | (defaults) |
+| 100–250 | 16GB | 4 | `MEM_LIMIT=16g` `CPU_LIMIT=4` `MAX_RSS_MB=12288` |
+| 250+ | 16GB+ | 4+ | `MEM_LIMIT=16g` `CPU_LIMIT=4` `MAX_RSS_MB=12288` |
 
 ### macOS (Podman Machine)
 
@@ -522,13 +526,13 @@ podman machine start
 
 Verify: `podman machine inspect --format '{{.Resources.CPUs}}c / {{.Resources.Memory}}MB'`
 
-### What the Optimized Compose Adds
+### What the Environment Variables Control
 
-- **16GB memory limit** — prevents OOM during batch intelligence generation
-- **4 CPUs** — parallel Gemini calls and scraper scheduling
-- **2GB shared memory** — headless Chrome for web scraping
-- **`MAX_RSS_MB=12288`** — raises the browser recycle threshold (default is tuned for 4GB containers)
-- **Event loop healthcheck** — detects starvation, not just HTTP availability
+- **`MEM_LIMIT=16g`** — Container memory limit. Prevents OOM during batch intelligence generation.
+- **`CPU_LIMIT=4`** — CPU allocation. Enables parallel Gemini calls and scraper scheduling.
+- **`MAX_RSS_MB=12288`** — Browser recycle threshold. Raises the limit for headless Chrome recycling (default is tuned for 8GB containers).
+- **Shared memory (`--shm-size 2g`)** — Set automatically by setup/upgrade scripts. Required for headless Chrome web scraping.
+- **Healthcheck** — Built into `docker-compose.yml`. Detects event loop starvation, not just HTTP availability.
 
 ---
 
@@ -545,16 +549,14 @@ mkdir ~/daily-brief && cd ~/daily-brief
 curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
 ```
 
-**For large installs on Fedora:**
+**For large installs on Fedora**, add the large install variables to your `.env` after setup:
 
 ```bash
-mkdir ~/daily-brief && cd ~/daily-brief
-curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose-optimized.yaml -o docker-compose.yaml
-mkdir -p ./data/config ./data/cache ./data/rh-profile
-podman-compose up -d --pull always
+echo -e '\nMEM_LIMIT=16g\nMAX_RSS_MB=12288\nCPU_LIMIT=4' >> ~/daily-brief/.env
+cd ~/daily-brief && podman compose down && podman compose up -d
 ```
 
-The `:Z` volume flag (for SELinux) is already set in both compose files.
+The `:Z` volume flag (for SELinux) is already set in the compose file.
 
 Check available resources: `free -h` for memory, `nproc` for CPUs.
 
@@ -584,7 +586,7 @@ mkdir -p ./data/config ./data/cache ./data/rh-profile
 cat > .env << 'EOF'
 PORT=7777
 # GOOGLE_CLOUD_PROJECT=jhorn-pai
-# GEMINI_MODEL=gemini-2.5-flash
+# GEMINI_MODEL=gemini-2.5-pro
 EOF
 ```
 
@@ -599,7 +601,7 @@ podman run -d \
   -e CONFIG_DIR=/data/config \
   -e CACHE_DIR=/data/cache \
   -e RH_PROFILE_DIR=/data/rh-profile \
-  --shm-size=256m \
+  --shm-size=2g \
   --name pai-dashboard \
   ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
@@ -614,7 +616,7 @@ Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 |---|---|---|
 | `GOOGLE_CLOUD_PROJECT` | `jhorn-pai` | GCP project for Vertex AI |
 | `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Model for brief generation |
+| `GEMINI_MODEL` | `gemini-2.5-pro` | Model for brief generation |
 | `PORT` | `7777` | Server port |
 | `MAX_RSS_MB` | `12288` | Browser recycle threshold (MB) — raise for large containers |
 | `UNIFIED_INTELLIGENCE` | `true` | Enable unified intelligence engine |
