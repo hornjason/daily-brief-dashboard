@@ -282,58 +282,9 @@ This dashboard is built on a **graph-based intelligence engine** — not a simpl
 
 ### How It Works
 
-```mermaid
-flowchart TD
-    subgraph Sources["DATA SOURCES (7 External)"]
-        S1[Support Cases]
-        S2[Subscriptions]
-        S3[Cloud Spend]
-        S4[Pipeline]
-        S5[Gmail / Calendar]
-        S6[Google Drive]
-        S7[Red Hat APIs]
-    end
+<img src="docs/images/full-engine-dark.png" alt="Intelligence Engine — 6 layers from data sources to consumers" width="800" />
 
-    subgraph Layer1["LAYER 1: Signal Production (35 Modules)"]
-        direction LR
-        L1[Each module produces signals<br/>with structured metadata:<br/>rawRelevance, products, severity,<br/>confidence, customer context]
-    end
-
-    subgraph Layer2["LAYER 2: Scoring Engine"]
-        direction LR
-        L2A[Specificity Detection<br/>Customer · Industry · General]
-        L2B[8 Score Boosters<br/>+revenue +severity +renewal<br/>+products +confidence +cloud]
-        L2C[Time Decay &<br/>Budget Caps]
-    end
-
-    subgraph Layer3["LAYER 3: Template Engine"]
-        direction LR
-        L3A[Signal Routing<br/>metadata → section]
-        L3B[Deterministic<br/>Template Sections]
-        L3C[Gemini Synthesis<br/>narrative only]
-    end
-
-    subgraph Consumers["11 CONSUMERS"]
-        C1[Account Briefs]
-        C2[Strategic Motions]
-        C3[Campaign Generator]
-        C4[Meeting Prep]
-        C5[Playbooks]
-    end
-
-    Sources --> Layer1
-    Layer1 --> Layer2
-    Layer2 --> Layer3
-    Layer3 --> Consumers
-
-    style Sources fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
-    style Layer1 fill:#1a2332,stroke:#ff9800,color:#e0e0e0
-    style Layer2 fill:#1a2332,stroke:#4caf50,color:#e0e0e0
-    style Layer3 fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
-    style Consumers fill:#1a2332,stroke:#f44336,color:#e0e0e0
-```
-
-> **Interactive version:** See the [full engine visualization](docs/visual/full-engine.html) for an expandable, 6-layer view of all 35 modules, 11 consumers, and the complete data flow.
+> **[View interactive version](docs/visual/full-engine.html)** — expandable 6-layer view with all 35 modules, 11 consumers, knowledge graph stats, and the complete data flow. Toggle light/dark mode.
 
 ### The Three Layers
 
@@ -359,31 +310,7 @@ A generic "OpenShift 4.22 released" signal scores 15 (noise). The **same signal*
 
 ### The Intelligence Graph
 
-The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules:
-
-```mermaid
-flowchart LR
-    subgraph Cross["CROSS-REFERENCE MATRIX"]
-        TS[Tech Stack] -->|"detected ServiceNow"| SP[Solution Plays]
-        SP -->|"automation play"| SM[Strategic Motion]
-        
-        SUB[Subscriptions] -->|"expiring 30d"| SM
-        CASES[Support Cases] -->|"Sev1 on AAP"| SM
-        
-        CCSP[Cloud Spend] -->|"$160K AWS"| MKT[Marketplace]
-        MKT -->|"CPPO eligible"| SM
-        
-        PIPE[Pipeline] -->|"$500K opp"| SM
-        
-        SM -->|"3 phases, 17 TDPs"| OUT["Strategic Motion Output:<br/>Anchor · Expand · Transform<br/>Est. TCV: $507K"]
-    end
-
-    style Cross fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
-    style SM fill:#2a3a4a,stroke:#ff9800,color:#e0e0e0
-    style OUT fill:#2a3a4a,stroke:#4caf50,color:#e0e0e0
-```
-
-The result: instead of showing you 134 disconnected data points, the dashboard surfaces **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
+The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules. Instead of showing you disconnected data points, the engine cross-references tech stack detection, subscriptions, support cases, cloud spend, and pipeline data to surface **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
 
 ### What Makes This Different
 
@@ -395,8 +322,6 @@ The result: instead of showing you 134 disconnected data points, the dashboard s
 | Flat data display | Graph-based intelligence that stacks and compounds |
 | Generic recommendations | Customer-specific plays with TCV estimates |
 | Requires interpretation | Surfaces "what to do" not just "what happened" |
-
-<img src="docs/images/intelligence-graph.png" alt="Intelligence Graph Admin" width="600" />
 
 ---
 
