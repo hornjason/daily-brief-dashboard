@@ -7,6 +7,7 @@ set -euo pipefail
 CONTAINER="${CONTAINER_NAME:-pai-dashboard}"
 IMAGE="ghcr.io/hornjason/daily-brief-dashboard"
 PORT="${PORT:-7777}"
+VNC_PORT="${VNC_PORT:-6080}"
 REPO_API="https://api.github.com/repos/hornjason/daily-brief-dashboard/releases/latest"
 HEALTH_URL="http://localhost:${PORT}/api/admin/health"
 
@@ -57,15 +58,38 @@ if [[ "$OS_TYPE" == "linux" ]]; then
 fi
 
 # ── Find install directory ────────────────────────────────────────────────────
-if [[ -n "${INSTALL_DIR:-}" && -f "${INSTALL_DIR}/.env" ]]; then
-  : # explicit override via env var
-elif [[ -f "$HOME/daily-brief/.env" ]]; then
-  INSTALL_DIR="$HOME/daily-brief"
-elif [[ -f ".env" ]]; then
-  INSTALL_DIR="$(pwd)"
+# Priority: explicit env var > running container inspect > ~/daily-brief > cwd
+DETECT_METHOD=""
+if [[ -n "${INSTALL_DIR:-}" ]]; then
+  DETECT_METHOD="explicit \$INSTALL_DIR"
 else
-  die "Could not find install directory. Expected ~/daily-brief/.env or ./.env"
+  # Try to read the data volume mount from the running container
+  if podman container exists "$CONTAINER" 2>/dev/null; then
+    _mount_src=$(podman inspect "$CONTAINER" \
+      --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)
+    if [[ -n "$_mount_src" ]]; then
+      INSTALL_DIR="${_mount_src%/data}"
+      DETECT_METHOD="container inspect"
+    fi
+  fi
+
+  # Fall back to ~/daily-brief if the directory exists
+  if [[ -z "${INSTALL_DIR:-}" && -d "$HOME/daily-brief" ]]; then
+    INSTALL_DIR="$HOME/daily-brief"
+    DETECT_METHOD="\~/daily-brief"
+  fi
+
+  # Fall back to cwd only if BOTH .env and ./data exist (avoids wrong-dir trap)
+  if [[ -z "${INSTALL_DIR:-}" && -f ".env" && -d "./data" ]]; then
+    INSTALL_DIR="$(pwd)"
+    DETECT_METHOD="current directory"
+  fi
 fi
+
+if [[ -z "${INSTALL_DIR:-}" ]]; then
+  die "Could not find install directory. Set \$INSTALL_DIR, ensure container '$CONTAINER' is running, or run from ~/daily-brief."
+fi
+ok "install directory: $INSTALL_DIR (from $DETECT_METHOD)"
 
 # ── Pre-flight checks ────────────────────────────────────────────────────────
 hdr "Pre-flight checks"
@@ -149,7 +173,7 @@ podman run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
   -p "${PORT}:7777" \
-  -p "127.0.0.1:${VNC_PORT:-6080}:6080" \
+  -p "127.0.0.1:${VNC_PORT}:6080" \
   -v "${INSTALL_DIR}/data:/data${VOL_FLAG}" \
   -e PORT=7777 \
   -e CONFIG_DIR=/data/config \
