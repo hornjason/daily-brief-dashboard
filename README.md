@@ -2,7 +2,15 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-09-02
+updated: 2026-09-13
+---
+
+<!-- AUTO-GENERATED from README.template.md — do not edit directly -->
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-07-28
 ---
 
 <p align="center">
@@ -18,10 +26,10 @@ updated: 2026-09-02
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> &bull;
-  <a href="#upgrading">Upgrading</a> &bull;
-  <a href="#setup-wizard">Setup</a> &bull;
   <a href="#features">Features</a> &bull;
-  <a href="#troubleshooting">Troubleshooting</a> &bull;
+  <a href="#intelligence-engine">Intelligence Engine</a> &bull;
+  <a href="#screenshots">Screenshots</a> &bull;
+  <a href="#setup-wizard">Setup</a> &bull;
   <a href="#architecture">Architecture</a>
 </p>
 
@@ -33,7 +41,7 @@ A containerized intelligence dashboard for Red Hat Account Solution Architects a
 
 It aggregates support cases, subscriptions, cloud spend, pipeline, product intelligence, competitive signals, and Google Workspace data — then layers AI-powered intelligence on top to surface **what matters** and **what to do about it**.
 
-**This is not a data dashboard.** It's an intelligence engine with 35 modules across 7 data sources that scores every signal for customer relevance and generates strategic sales plays with evidence-backed recommendations.
+**This is not a data dashboard.** It's an intelligence engine that cross-references 35 modules across 7 data sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
 
 ```
 Your data stays on your machine. Nothing leaves except API calls
@@ -51,162 +59,46 @@ curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/do
 
 That's it. The installer handles prerequisites, pulls the container, and opens the setup wizard. Setup takes ~5 minutes.
 
-**Requirements:** [Podman](https://podman.io/) (or Docker), 4GB RAM (16GB for [large installs](#large-installs)), 5GB disk. Linux and macOS on Intel and Apple Silicon.
+**Requirements:** [Podman](https://podman.io/) (or Docker), 4GB RAM, 5GB disk. Linux and macOS on Intel and Apple Silicon.
 
 > Want to inspect the script first? `curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh` then review it.
 
 ---
 
-## Upgrading
+## Available Pods & Regions
 
-### One-command upgrade (recommended)
+During setup, you select the pods and regions you manage. The shared L3 data source provides nightly-synced subscription, pipeline, and cloud spend data for each pod.
 
-```bash
-curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash
-```
+### West Commercial
 
-This pulls the latest release, swaps the container, preserves all data in `~/daily-brief/data/`, and verifies the dashboard is healthy. Takes ~30 seconds.
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Northwest** | WEST_COMM_CORP_NORTHWEST | Active |
+| **Southwest** | WEST_COMM_CORP_SOUTHWEST | Active |
+| **North Central** | WEST_COMM_CORP_NORTH_CENTRAL | Active |
+| **South Central** | WEST_COMM_CORP_SOUTH_CENTRAL | Active |
 
-Preview what it'll do first:
+### East Commercial
 
-```bash
-curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --dry-run
-```
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
+| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
+| **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
+| **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
 
-Upgrade to the latest image (bleeding edge — most recent push, may be ahead of the last release):
+### Central Enterprise
 
-```bash
-curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --latest
-```
+| Pod | Territory | Status |
+|-----|-----------|--------|
+| **TOLA** | CENTRAL_ENT_TOLA | Active |
+| **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Prefix-routed — not selectable in setup |
 
-Upgrade to a specific version:
+**6 selectable pods** across 3 regions. Each includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
 
-```bash
-curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --version=v1.7.3
-```
+High Plains is reached through territory prefixes (`High_Plains_Terr03`) rather than as a configured pod: it has no entry in `settings.json` and so does not appear in the wizard. Its data still flows, because pod CSVs are matched structurally rather than against the configured pod list — see `src/lib/l3-csv-reader.ts`.
 
-### Manual upgrade
-
-If you prefer to run the commands yourself:
-
-```bash
-cd ~/daily-brief
-
-# 1. Check your current version
-podman exec pai-dashboard cat /app/package.json | grep version
-
-# 2. Pull the latest image
-podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
-
-# 3. Stop and remove the old container (data is safe — it's on the host)
-podman stop pai-dashboard
-podman rm pai-dashboard
-
-# 4. Start the new container
-podman run -d \
-  --name pai-dashboard \
-  --restart unless-stopped \
-  -p 7777:7777 \
-  -p 127.0.0.1:6080:6080 \
-  -v ./data:/data \
-  -e PORT=7777 \
-  -e CONFIG_DIR=/data/config \
-  -e CACHE_DIR=/data/cache \
-  -e RH_PROFILE_DIR=/data/rh-profile \
-  -e UNIFIED_INTELLIGENCE=true \
-  --env-file .env \
-  --shm-size 2g \
-  --memory 8g \
-  ghcr.io/hornjason/daily-brief-dashboard:latest
-
-# 5. Verify it's running
-curl -sf http://localhost:7777/api/admin/health && echo "✔ healthy"
-```
-
-> **Linux note:** Add `:z` to the volume mount: `-v ./data:/data:z`
-
-### Using compose
-
-If you installed with compose and prefer that workflow:
-
-```bash
-cd ~/daily-brief
-podman compose pull
-podman compose up -d
-```
-
-Data and configuration are preserved across upgrades — only the application code changes.
-
----
-
-## Setup Wizard
-
-After the installer finishes, the setup wizard opens in your browser at `http://localhost:7777/dashboard/setup`:
-
-### Step 1 — Google Auth
-
-Click **Connect Google** to authorize Gmail, Calendar, Drive, and Sheets. Uses a shared GCP project — any `@redhat.com` Google Workspace account works automatically. OAuth keys are bundled with the container.
-
-### Step 2 — AEs & Customers
-
-1. Paste your **AE parent folder URL** — a Google Drive folder you create that becomes the root of your data structure:
-
-   ```
-   Your AE Parent Folder/
-     ├── {AE Name}/
-     │   ├── SF Bookings.gsheet       ← subscription data
-     │   ├── CCSP.gsheet              ← cloud spend
-     │   ├── Pipeline.gsheet          ← Salesforce pipeline
-     │   └── {Customer Name}/         ← per-customer docs & intelligence
-     ├── Config/                      ← backup sheets
-     └── Products/                    ← product intel (openshift, rhel, ansible...)
-   ```
-
-   Bootstrap populates everything from the shared L3 data source (updated nightly). The folder lives in your personal Drive — nothing is shared unless you share it.
-
-2. Click **Add AE** for each AE you manage
-3. Bootstrap runs automatically — creates Drive folder structure, imports customer data from the shared L3 data source
-
-### Step 3 — AI Settings (Optional)
-
-Configure AI brief generation preferences. Briefs work out of the box using your Google OAuth token with Vertex AI — no additional API keys needed.
-
-Then click **Open Dashboard** at `http://localhost:7777/dashboard`. First data sync takes 3–5 minutes.
-
-> **Google OAuth error?** The shared GCP project uses Internal consent mode — any `@redhat.com` account can authorize. Email **jhorn@redhat.com** if you hit issues.
-
----
-
-## Stopping and Restarting
-
-```bash
-podman stop pai-dashboard     # stop
-podman start pai-dashboard    # restart
-podman rm pai-dashboard       # remove (data preserved in ./data/)
-```
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Podman machine not running (macOS) | `podman machine start` |
-| RAM too low (macOS) | `podman machine stop && podman machine set --memory 8192 && podman machine start` |
-| RAM too low (large install, macOS) | `podman machine stop && podman machine set --memory 16384 && podman machine start` |
-| Container exits immediately | `podman logs pai-dashboard` — check for missing deps or config |
-| Dashboard not loading | `podman ps` to verify container is running, then check logs |
-| Pages slow during intel generation | Add `MEM_LIMIT=16g` to `.env` — see [Large Installs](#large-installs) |
-| "Thin content (1 lines)" on intel docs | Gemini calls timing out — reduce concurrency or increase container memory |
-| Google auth errors | Re-run setup wizard at `/dashboard/setup` |
-| AI briefs empty | Check `podman logs pai-dashboard` — uses your Google OAuth token |
-| SELinux permission denied (Fedora/RHEL) | Use `:Z` volume suffix — already set in compose files |
-| Port 7777 in use | Set `PORT=7778` in `.env` and update `docker-compose.yml` |
-| Stale image after upgrade | `podman pull ghcr.io/hornjason/daily-brief-dashboard:latest` or use `--pull always` |
-| Check container resources (macOS) | `podman machine inspect --format '{{.Resources.CPUs}}c / {{.Resources.Memory}}MB'` |
-| Check container resources (Fedora) | `podman info --format '{{.Host.MemTotal}}'` (uses host resources directly) |
-
-Still stuck? Email **jhorn@redhat.com**.
+> Want your region or pod added? Email **jhorn@redhat.com** with your Salesforce report ID and territory codes.
 
 ---
 
@@ -225,7 +117,7 @@ Click any customer to see their full intelligence page — redesigned around int
 - **Account Brief** — AI-generated narrative: who they are, what's happening, what to talk about
 - **Sales Strategy** — TDP-aligned expansion phases and tactics with evidence chains, estimated TCV, and one-click campaign generation
 - **AI-Discovered Opportunities** — Gemini-surfaced novel sales angles from cross-signal analysis
-- **Health Score** — 6-dimension weighted composite (cases, contacts, renewal, meetings, resolution, cloud spend) with hover breakdown
+- **Health Score** — 81-point composite (cases, contacts, renewal, meetings, resolution) with hover breakdown
 - **Floating Q&A Widget** — Ask grounded questions about any customer's product data, subscriptions, and tech stack — accessible from any tab
 - **3 Sidebar Groups:**
   - **Opportunities** — Product Signals, Expansion Fit, and Recommended Actions (cross-referenced case/solution matches)
@@ -278,21 +170,72 @@ Portfolio triage view with filterable account lists, summary totals, and combine
 
 ## Intelligence Engine
 
-This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 7 external sources flows through 35 processing modules in a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
+This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 35 modules flows through a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
 
 ### How It Works
 
-<img src="docs/images/full-engine-dark.png" alt="Intelligence Engine — 6 layers from data sources to consumers" width="800" />
+```mermaid
+flowchart TD
+    subgraph Sources["DATA SOURCES (35 Modules)"]
+        S1[Support Cases]
+        S2[Subscriptions]
+        S3[Cloud Spend]
+        S4[Pipeline]
+        S5[Tech Stack Detection]
+        S6[News Radar]
+        S7[Competitive Intel]
+        S8[Product Lifecycle]
+        S9[Ecosystem Catalog]
+        S10[Solution Plays]
+        S11["+ 25 more..."]
+    end
 
-> **[View interactive version](docs/visual/full-engine.html)** — expandable 6-layer view with all 35 modules, 11 consumers, knowledge graph stats, and the complete data flow. Toggle light/dark mode.
+    subgraph Layer1["LAYER 1: Signal Production"]
+        direction LR
+        L1[Each module produces signals<br/>with structured metadata:<br/>rawRelevance, products, severity,<br/>confidence, customer context]
+    end
+
+    subgraph Layer2["LAYER 2: Scoring Engine"]
+        direction LR
+        L2A[Specificity Detection<br/>Customer · Industry · General]
+        L2B[Score Boosters<br/>+revenue +severity +renewal<br/>+products +confidence]
+        L2C[Time Decay &<br/>Budget Caps]
+    end
+
+    subgraph Layer3["LAYER 3: Template Engine"]
+        direction LR
+        L3A[Signal Routing<br/>metadata → section]
+        L3B[10 Deterministic<br/>Template Sections]
+        L3C[Gemini Synthesis<br/>narrative only]
+    end
+
+    subgraph Consumers["CONSUMERS"]
+        C1[Account Briefs]
+        C2[Strategic Motions]
+        C3[Campaign Generator]
+        C4[Meeting Prep]
+        C5[Playbooks]
+    end
+
+    Sources --> Layer1
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Consumers
+
+    style Sources fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style Layer1 fill:#1a2332,stroke:#ff9800,color:#e0e0e0
+    style Layer2 fill:#1a2332,stroke:#4caf50,color:#e0e0e0
+    style Layer3 fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
+    style Consumers fill:#1a2332,stroke:#f44336,color:#e0e0e0
+```
 
 ### The Three Layers
 
 **Layer 1 — Signal Production** &nbsp; Each of 35 modules produces signals with structured metadata. A module reports facts — it never decides importance. Signals carry `rawRelevance`, `redHatProducts`, `severity`, `confidence`, `customerSlug`, and more.
 
-**Layer 2 — Centralized Scoring** &nbsp; A single scoring engine evaluates every signal. It detects specificity (is this customer-specific, industry-level, or general?), applies 8 boosters (revenue, severity, renewal urgency, product match, confidence, context, cloud spend), and enforces budget caps per source so no one data stream dominates.
+**Layer 2 — Centralized Scoring** &nbsp; A single scoring engine evaluates every signal. It detects specificity (is this customer-specific, industry-level, or general?), applies boosters (revenue, severity, renewal urgency, product match), and enforces budget caps per source so no one data stream dominates.
 
-**Layer 3 — Template Engine** &nbsp; Scored signals are routed to deterministic template sections based on metadata — not editorial judgment. Deterministic template routing handles the majority of output sections (no AI). Gemini only writes narrative synthesis; it never decides what signals matter or where they appear.
+**Layer 3 — Template Engine** &nbsp; Scored signals are routed to deterministic template sections based on metadata — not editorial judgment. 10 of 18 output sections are fully deterministic (no AI). Gemini only writes narrative synthesis; it never decides what signals matter or where they appear.
 
 ### Signal Scoring
 
@@ -306,11 +249,35 @@ Every signal is scored 0–100 using specificity detection and contextual booste
 | **Low** | 35–49 | Background awareness | Industry trend, low confidence |
 | **Noise** | 0–34 | Filtered from output | Generic blog post |
 
-A generic "OpenShift 4.22 released" signal scores 15 (noise). The **same signal** scores 85 (high) when the customer has OpenShift subscriptions expiring in 30 days with active support cases — because the scoring engine cross-references metadata across all 35 modules.
+A generic "OpenShift 4.22 released" signal scores 15 (noise). The **same signal** scores 85 (high) when the customer has OpenShift subscriptions expiring in 30 days with active support cases — because the scoring engine cross-references metadata across all signal sources.
 
 ### The Intelligence Graph
 
-The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules. Instead of showing you disconnected data points, the engine cross-references tech stack detection, subscriptions, support cases, cloud spend, and pipeline data to surface **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
+The intelligence graph is a **strategic cross-reference matrix** that connects signals across modules:
+
+```mermaid
+flowchart LR
+    subgraph Cross["CROSS-REFERENCE MATRIX"]
+        TS[Tech Stack] -->|"detected ServiceNow"| SP[Solution Plays]
+        SP -->|"automation play"| SM[Strategic Motion]
+        
+        SUB[Subscriptions] -->|"expiring 30d"| SM
+        CASES[Support Cases] -->|"Sev1 on AAP"| SM
+        
+        CCSP[Cloud Spend] -->|"$160K AWS"| MKT[Marketplace]
+        MKT -->|"CPPO eligible"| SM
+        
+        PIPE[Pipeline] -->|"$500K opp"| SM
+        
+        SM -->|"3 phases, 17 TDPs"| OUT["Strategic Motion Output:<br/>Anchor · Expand · Transform<br/>Est. TCV: $507K"]
+    end
+
+    style Cross fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style SM fill:#2a3a4a,stroke:#ff9800,color:#e0e0e0
+    style OUT fill:#2a3a4a,stroke:#4caf50,color:#e0e0e0
+```
+
+The result: instead of showing you 134 disconnected data points, the dashboard surfaces **"Build and Run Applications for Crowdstrike — 3 phases, 17 TDPs, Est. TCV $507K, high confidence"** with evidence trails linking back to specific cases, subscriptions, and marketplace opportunities.
 
 ### What Makes This Different
 
@@ -322,6 +289,8 @@ The intelligence graph is a **strategic cross-reference matrix** that connects s
 | Flat data display | Graph-based intelligence that stacks and compounds |
 | Generic recommendations | Customer-specific plays with TCV estimates |
 | Requires interpretation | Surfaces "what to do" not just "what happened" |
+
+<img src="docs/images/intelligence-graph.png" alt="Intelligence Graph Admin" width="600" />
 
 ---
 
@@ -345,38 +314,46 @@ The intelligence graph is a **strategic cross-reference matrix** that connects s
 
 ---
 
-## Available Pods & Regions
+## Setup Wizard
 
-During setup, you select the pods and regions you manage. The shared L3 data source provides nightly-synced subscription, pipeline, and cloud spend data for each pod.
+After the installer finishes, the setup wizard opens in your browser at `http://localhost:7777/dashboard/setup`:
 
-### West Commercial
+### Step 1 — Google Auth
 
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **Northwest** | WEST_COMM_CORP_NORTHWEST | Active |
-| **Southwest** | WEST_COMM_CORP_SOUTHWEST | Active |
-| **North Central** | WEST_COMM_CORP_NORTH_CENTRAL | Active |
-| **South Central** | WEST_COMM_CORP_SOUTH_CENTRAL | Active |
+Click **Connect Google** to authorize Gmail, Calendar, Drive, and Sheets. Uses a shared GCP project — any `@redhat.com` Google Workspace account works automatically. OAuth keys are bundled with the container.
 
-### East Commercial
+### Step 2 — AEs & Customers
 
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
-| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
-| **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
-| **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
+1. Paste your **AE parent folder URL** (a Google Drive folder you create)
+2. Click **Add AE** for each AE you manage
+3. Bootstrap runs automatically — creates Drive folder structure, imports customer data from the shared L3 data source
 
-### Central Enterprise
+### Step 3 — AI Settings (Optional)
 
-| Pod | Territory | Status |
-|-----|-----------|--------|
-| **TOLA** | CENTRAL_ENT_TOLA | Active |
-| **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Active |
+Configure AI brief generation preferences. Briefs work out of the box using your Google OAuth token with Vertex AI — no additional API keys needed.
 
-**7 pods active** across 3 regions. Each pod includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
+Then click **Open Dashboard** at `http://localhost:7777/dashboard`. First data sync takes 3–5 minutes.
 
-> Want your region or pod added? Email **jhorn@redhat.com** with your Salesforce report ID and territory codes.
+> **Google OAuth error?** The shared GCP project uses Internal consent mode — any `@redhat.com` account can authorize. Email **jhorn@redhat.com** if you hit issues.
+
+---
+
+## What is the AE Parent Folder?
+
+A Google Drive folder you create that becomes the root of your data structure:
+
+```
+Your AE Parent Folder/
+  ├── {AE Name}/
+  │   ├── SF Bookings.gsheet       ← subscription data
+  │   ├── CCSP.gsheet              ← cloud spend
+  │   ├── Pipeline.gsheet          ← Salesforce pipeline
+  │   └── {Customer Name}/         ← per-customer docs & intelligence
+  ├── Config/                      ← backup sheets
+  └── Products/                    ← product intel (openshift, rhel, ansible...)
+```
+
+Bootstrap populates everything from the shared L3 data source (updated nightly). The folder lives in your personal Drive — nothing is shared unless you share it.
 
 ---
 
@@ -399,91 +376,100 @@ During setup, you select the pods and regions you manage. The shared L3 data sou
 | **Tech Stack Detection** | Customer infrastructure signals | On intelligence generation |
 | **Competitive Intel** | M&A activity, competitive positioning | Scheduled |
 | **News Radar** | Customer-specific news monitoring | Scheduled |
-| **Vertex AI (Gemini)** | Account briefs, narrative synthesis | On-demand (14d/30d cache) |
+| **Vertex AI (Gemini)** | Account briefs, narrative synthesis | On-demand (4h cache) |
 
 All data is cached locally. The dashboard runs entirely on your machine.
 
 ---
 
-## Large Installs
-
-For deployments with **100+ accounts or 2+ pods**, configure higher resource limits for better performance during intelligence generation and page loads.
-
-### Quick Start (Large Install)
-
-Add these environment variables to your `.env` file:
+## Stopping and Restarting
 
 ```bash
-MEM_LIMIT=16g
-MAX_RSS_MB=12288
-CPU_LIMIT=4
+podman stop pai-dashboard     # stop
+podman start pai-dashboard    # restart
+podman rm pai-dashboard       # remove (data preserved in ./data/)
 ```
 
-Then restart your container. The setup script asks about this during install — if you chose "standard" and need to upgrade later, just add these variables and restart.
+## Upgrading
 
-If using compose:
+### One-command upgrade (recommended)
 
 ```bash
-podman compose down
-podman compose up -d
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash
 ```
 
-If using podman run directly, the upgrade script reads `MEM_LIMIT` from `.env` automatically.
+This automatically stops and removes the old container, pulls the latest release, starts the new container, and verifies the dashboard is healthy. All data in `~/daily-brief/data/` is preserved. No manual `podman stop` or `podman rm` needed. Takes ~30 seconds.
 
-### Resource Sizing
-
-| Accounts | RAM | CPUs | `.env` Settings |
-|----------|-----|------|-----------------|
-| 1–50 | 4GB | 2 | (defaults) |
-| 50–100 | 8GB | 2 | (defaults) |
-| 100–250 | 16GB | 4 | `MEM_LIMIT=16g` `CPU_LIMIT=4` `MAX_RSS_MB=12288` |
-| 250+ | 16GB+ | 4+ | `MEM_LIMIT=16g` `CPU_LIMIT=4` `MAX_RSS_MB=12288` |
-
-### macOS (Podman Machine)
-
-Podman on macOS runs in a VM — you must allocate resources to the VM:
+Preview what it'll do first:
 
 ```bash
-podman machine stop
-podman machine set --memory 16384 --cpus 4
-podman machine start
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --dry-run
 ```
 
-Verify: `podman machine inspect --format '{{.Resources.CPUs}}c / {{.Resources.Memory}}MB'`
+Upgrade to a specific version:
 
-### What the Environment Variables Control
+```bash
+curl -sfL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/upgrade.sh | bash -s -- --version=v1.7.3
+```
 
-- **`MEM_LIMIT=16g`** — Container memory limit. Prevents OOM during batch intelligence generation.
-- **`CPU_LIMIT=4`** — CPU allocation. Enables parallel Gemini calls and scraper scheduling.
-- **`MAX_RSS_MB=12288`** — Browser recycle threshold. Raises the limit for headless Chrome recycling (default is tuned for 8GB containers).
-- **Shared memory (`--shm-size 2g`)** — Set automatically by setup/upgrade scripts. Required for headless Chrome web scraping.
-- **Healthcheck** — Built into `docker-compose.yml`. Detects event loop starvation, not just HTTP availability.
+### Manual upgrade
+
+If you prefer to run the commands yourself:
+
+```bash
+cd ~/daily-brief
+
+# 1. Check your current version
+podman exec pai-dashboard cat /app/package.json | grep version
+
+# 2. Pull the latest image
+podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
+
+# 3. Stop and remove the old container (data is safe — it's on the host)
+podman stop pai-dashboard
+podman rm pai-dashboard
+
+# 4. Start the new container
+podman run -d \
+  --name pai-dashboard \
+  --restart unless-stopped \
+  -p 7777:7777 \
+  -p 127.0.0.1:6080:6080 \
+  -v ./data:/data \
+  -e PORT=7777 \
+  -e CONFIG_DIR=/data/config \
+  -e CACHE_DIR=/data/cache \
+  -e RH_PROFILE_DIR=/data/rh-profile \
+  -e UNIFIED_INTELLIGENCE=true \
+  --env-file .env \
+  --shm-size 2g \
+  --memory 8g \
+  ghcr.io/hornjason/daily-brief-dashboard:latest
+
+# 5. Verify it's running
+curl -sf http://localhost:7777/api/admin/health && echo "✔ healthy"
+```
+
+> **Linux note:** Add `:z` to the volume mount: `-v ./data:/data:z`
+
+Data and configuration are preserved across upgrades — only the application code changes.
 
 ---
 
-## Fedora / RHEL Install
+## Troubleshooting
 
-Fedora and RHEL run Podman natively — no VM or `podman machine` needed. Containers use host resources directly.
+| Problem | Solution |
+|---------|----------|
+| Podman machine not running (macOS) | `podman machine start` |
+| RAM too low | `podman machine stop && podman machine set --memory 4096 && podman machine start` |
+| Container exits immediately | `podman logs pai-dashboard` |
+| Dashboard not loading | `podman ps` to verify container is running |
+| Google auth errors | Re-run setup wizard at `/dashboard/setup` |
+| AI briefs empty | Check `podman logs pai-dashboard` — uses your Google OAuth token |
+| SELinux errors | Use `:Z` volume suffix (Podman on RHEL/Fedora) |
+| Port 7777 in use | Set `PORT=7778` in `.env` and re-run `setup.sh` |
 
-```bash
-# Install podman-compose if not present
-sudo dnf install -y podman podman-compose
-
-# Standard install
-mkdir ~/daily-brief && cd ~/daily-brief
-curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
-```
-
-**For large installs on Fedora**, add the large install variables to your `.env` after setup:
-
-```bash
-echo -e '\nMEM_LIMIT=16g\nMAX_RSS_MB=12288\nCPU_LIMIT=4' >> ~/daily-brief/.env
-cd ~/daily-brief && podman compose down && podman compose up -d
-```
-
-The `:Z` volume flag (for SELinux) is already set in the compose file.
-
-Check available resources: `free -h` for memory, `nproc` for CPUs.
+Still stuck? Email **jhorn@redhat.com**.
 
 ---
 
@@ -511,7 +497,7 @@ mkdir -p ./data/config ./data/cache ./data/rh-profile
 cat > .env << 'EOF'
 PORT=7777
 # GOOGLE_CLOUD_PROJECT=jhorn-pai
-# GEMINI_MODEL=gemini-2.5-pro
+# GEMINI_MODEL=gemini-2.5-flash
 EOF
 ```
 
@@ -519,6 +505,8 @@ EOF
 
 ```bash
 podman run -d \
+  --name pai-dashboard \
+  --restart unless-stopped \
   -p 7777:7777 \
   -v ./data:/data:Z \
   --env-file .env \
@@ -526,12 +514,27 @@ podman run -d \
   -e CONFIG_DIR=/data/config \
   -e CACHE_DIR=/data/cache \
   -e RH_PROFILE_DIR=/data/rh-profile \
-  --shm-size=2g \
-  --name pai-dashboard \
+  --shm-size 2g \
   ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
 
 > **Docker users:** Replace `podman` with `docker` and remove the `:Z` volume suffix.
+
+### Memory
+
+The container needs at least **4 GB of memory** available to the podman machine. If you see OOM kills or slow Gemini calls:
+
+```bash
+# Check current podman machine memory
+podman machine inspect --format '{{.Resources.Memory}}'
+
+# Increase (requires restart — stops all containers)
+podman machine stop
+podman machine set --memory 8192
+podman machine start
+```
+
+To set a container-level memory limit, add `--memory 4g` to the `podman run` command. You cannot change memory on a running container — stop, remove, and re-run with the new flag.
 
 Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 
@@ -541,10 +544,8 @@ Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 |---|---|---|
 | `GOOGLE_CLOUD_PROJECT` | `jhorn-pai` | GCP project for Vertex AI |
 | `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
-| `GEMINI_MODEL` | `gemini-2.5-pro` | Model for brief generation |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Model for brief generation |
 | `PORT` | `7777` | Server port |
-| `MAX_RSS_MB` | `12288` | Browser recycle threshold (MB) — raise for large containers |
-| `UNIFIED_INTELLIGENCE` | `true` | Enable unified intelligence engine |
 
 </details>
 
@@ -556,7 +557,134 @@ The dashboard is built with React + TypeScript on the frontend and Bun + TypeScr
 
 **Supported platforms:** Linux and macOS on Intel (x86_64) and Apple Silicon (arm64). Multi-arch container image.
 
-**System requirements:** 4GB RAM minimum (8GB recommended, 16GB for 100+ accounts), 5GB disk, 2+ cores (4 for large installs).
+**System requirements:** 4GB RAM minimum (8GB recommended), 5GB disk, 2+ cores.
+
+### Signal Pipeline
+
+How raw data becomes actionable intelligence — end to end:
+
+```mermaid
+flowchart TD
+    subgraph Bootstrap["BOOTSTRAP"]
+        B1[Drive Folder Structure]
+        B2[Salesforce Bookings Import]
+        B3[Customer Discovery]
+    end
+
+    subgraph Intel["INTELLIGENCE GENERATION"]
+        IG1["Gemini + Google Search Grounding"]
+        IG2[Company Intelligence Doc]
+        IG3[Industry Analysis Doc]
+        IG1 --> IG2
+        IG1 --> IG3
+    end
+
+    subgraph Signals["SIGNAL PIPELINE (7 Sources)"]
+        direction LR
+        SIG1["Support Cases"]
+        SIG2["Subscriptions"]
+        SIG3["Cloud Spend"]
+        SIG4["Pipeline"]
+        SIG5["Emails"]
+        SIG6["Meetings"]
+        SIG7["Drive Docs"]
+    end
+
+    subgraph Scoring["CROSS-REFERENCE ENGINE"]
+        CR1["Specificity Detection\n(customer · industry · general)"]
+        CR2["Confidence Scoring\n(revenue · severity · renewal · products)"]
+        CR3["Budget Caps & Time Decay"]
+        CR1 --> CR2 --> CR3
+    end
+
+    subgraph Gate["QUALITY GATE"]
+        QG["11-Check Validator\nsignal completeness · freshness\ncross-source consistency"]
+    end
+
+    subgraph Output["THE BRIEF"]
+        OUT1["Morning Summary"]
+        OUT2["Account Briefs"]
+        OUT3["Strategic Motions"]
+        OUT4["Campaign Generator"]
+        OUT5["Account Plans"]
+    end
+
+    Bootstrap --> Intel
+    Intel --> Signals
+    Signals --> Scoring
+    Scoring --> Gate
+    Gate --> Output
+
+    style Bootstrap fill:#1a2332,stroke:#00bcd4,color:#e0e0e0
+    style Intel fill:#1a2332,stroke:#ff9800,color:#e0e0e0
+    style Signals fill:#1a2332,stroke:#2196f3,color:#e0e0e0
+    style Scoring fill:#1a2332,stroke:#4caf50,color:#e0e0e0
+    style Gate fill:#1a2332,stroke:#ff5722,color:#e0e0e0
+    style Output fill:#1a2332,stroke:#9c27b0,color:#e0e0e0
+```
+
+**Day 1:** Bootstrap imports your customers and generates intelligence docs. **Day 30:** Seven signal sources are accumulating context. **Day 90:** The cross-reference engine knows your customer — briefs surface patterns you haven't noticed yet.
+
+---
+
+## AI Challenge Themes
+
+Three themes guide where the team focuses improvements. Each maps to a specific stage in the pipeline above.
+
+### Theme A: "Show Your Work"
+
+Make the intelligence pipeline transparent. Users should see *why* the platform recommends what it recommends.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| Signal provenance trails | Cross-Reference Engine | "This recommendation comes from 3 cases + 1 renewal + marketplace data" |
+| Quality score visibility | Quality Gate | Show the 11-check validator score on each brief section |
+| Data maturity indicators | Signal Pipeline | "Cloud spend: 90 days of history" vs "Cloud spend: first sync today" |
+| Account plan showcase | The Brief | Structured output with evidence chains visible |
+
+**Judging criteria:** Innovation, Technical Excellence, User Experience
+
+### Theme B: "Make It Smarter"
+
+Improve the recommendations themselves — better signals, better reasoning, better timing.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| "Why now" reasoning | Cross-Reference Engine | "Renewal in 45 days + open Sev1 = risk. Act before renewal conversation" |
+| Signal chain visualization | Scoring Engine | Show which signals combined to produce a strategic motion |
+| Trend indicators | Signal Pipeline | "Support cases trending up 3x over 60 days" |
+| Delta tracking | The Brief | "Since your last brief: 2 new cases, pipeline moved from Stage 3 to 4" |
+
+**Judging criteria:** Innovation, Technical Excellence
+
+### Theme C: "Make It Shine"
+
+Polish the experience — make it intuitive for someone who's never seen it before.
+
+| Improvement Area | Pipeline Stage | Example |
+|---|---|---|
+| Morning Summary hierarchy | The Brief | Visual priority ranking — critical actions above context |
+| Loading states | All stages | Skeleton screens instead of spinners during signal ingestion |
+| First-time user experience | Bootstrap | Guided walkthrough from install to first brief |
+| Navigation cleanup | The Brief | Active sidebar states, remove dead tabs |
+
+**Judging criteria:** User Experience, Feasibility
+
+---
+
+## Who Uses This
+
+The platform serves different roles differently. Here's what each person sees:
+
+**Account Solution Architect** — Your daily operating system. Morning summary tells you which customer needs attention *today*. Account briefs give you the full story before every call. Strategic motions show you the play, the evidence, and the estimated TCV — so you walk in with a plan, not a question.
+
+**Ansible Evangelist** — Filter by AAP across the entire portfolio. See which customers have Ansible subscriptions expiring, which ones opened automation-related cases, and where the product intelligence radar spotted a new AAP feature that maps to a customer's tech stack. Turn product knowledge into customer-specific talking points.
+
+**Fleet Console Manager** — Portfolio-level triage across hundreds of accounts. The Book of Business view shows health scores, case trends, and renewal urgency at a glance. Morning synthesis highlights cross-customer patterns — "3 accounts in manufacturing sector all opened storage-related cases this week" — that individual ASAs might miss.
+
+**Performance & Scale Engineers** — The signal pipeline processes thousands of data points per sync cycle. Latency budgets enforce sub-200ms API responses. The scoring engine evaluates every signal in real time. For engineers interested in AI pipeline architecture: the three-layer design (signal production, centralized scoring, template routing) is documented in ARCHITECTURE.md with full data flow diagrams.
+
+**Ecosystem Marketing** — Track which Red Hat partner integrations and certifications matter to real customers. The ecosystem catalog and marketplace modules surface AWS/Azure/GCP offers, CPPO eligibility, and partner certification status — mapped to actual customer cloud spend data. Campaign generation produces role-specific outreach with value propositions tied to the customer's business context.
 
 ---
 
