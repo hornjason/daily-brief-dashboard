@@ -22,11 +22,13 @@ hdr()  { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 VERSION=""
 DRY_RUN=0
 USE_LATEST=0
+LOCAL_IMAGE=""
 
 for arg in "$@"; do
   case "$arg" in
     --version=*) VERSION="${arg#--version=}" ;;
     --latest)    USE_LATEST=1 ;;
+    --image=*)   LOCAL_IMAGE="${arg#--image=}" ;;
     --dry-run)   DRY_RUN=1 ;;
     --help|-h)
       echo "Usage: bash upgrade.sh [OPTIONS]"
@@ -34,8 +36,12 @@ for arg in "$@"; do
       echo "Options:"
       echo "  --version=vX.Y.Z   Upgrade to a specific version"
       echo "  --latest            Pull the latest image (most recent push, may be ahead of release)"
+      echo "  --image=REF         Use an image already present locally (release testing, rollback); no pull"
       echo "  --dry-run           Print planned actions without executing"
       echo "  --help              Show this help"
+      echo ""
+      echo "Environment:"
+      echo "  HEALTH_TIMEOUT_S    Seconds to wait for the dashboard to answer (default 120)"
       echo ""
       echo "Default (no flags): upgrades to the latest GitHub release."
       echo ""
@@ -49,6 +55,17 @@ for arg in "$@"; do
     *) die "Unknown argument: $arg (try --help)" ;;
   esac
 done
+
+if [[ -n "$LOCAL_IMAGE" && ( -n "$VERSION" || "$USE_LATEST" -eq 1 ) ]]; then
+  die "--image cannot be combined with --version or --latest — pick one target"
+fi
+
+# A typo'd timeout must not silently become the default (#1919): refuse it
+# before anything is stopped.
+HEALTH_TIMEOUT_S="${HEALTH_TIMEOUT_S:-120}"
+if ! [[ "$HEALTH_TIMEOUT_S" =~ ^[0-9]+$ ]] || [[ "$HEALTH_TIMEOUT_S" -eq 0 ]]; then
+  die "HEALTH_TIMEOUT_S must be a positive whole number of seconds (got '$HEALTH_TIMEOUT_S')"
+fi
 
 # ── Platform detection ────────────────────────────────────────────────────────
 OS_TYPE="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -111,7 +128,14 @@ OLD_VERSION=$(podman exec "$CONTAINER" cat /app/package.json 2>/dev/null \
 say "Current version: $OLD_VERSION"
 
 # ── Resolve target version ───────────────────────────────────────────────────
-if [[ -n "$VERSION" ]]; then
+if [[ -n "$LOCAL_IMAGE" ]]; then
+  VERSION="$LOCAL_IMAGE"
+  # Refuse a missing local ref BEFORE the running container is touched.
+  if ! podman image exists "$LOCAL_IMAGE" 2>/dev/null; then
+    die "$LOCAL_IMAGE not found locally (check: podman images). Nothing was stopped."
+  fi
+  ok "using local image $LOCAL_IMAGE (no pull)"
+elif [[ -n "$VERSION" ]]; then
   : # explicit version provided via --version=
 elif [[ "$USE_LATEST" -eq 1 ]]; then
   VERSION="latest"
@@ -126,20 +150,38 @@ else
   ok "latest release: $VERSION"
 fi
 
-IMAGE_REF="${IMAGE}:${VERSION}"
+if [[ -n "$LOCAL_IMAGE" ]]; then
+  IMAGE_REF="$LOCAL_IMAGE"
+else
+  IMAGE_REF="${IMAGE}:${VERSION}"
+fi
 say "Target image: $IMAGE_REF"
+
+# The image the running container uses — the rollback target if anything fails.
+OLD_IMAGE=$(podman inspect "$CONTAINER" --format '{{.ImageName}}' 2>/dev/null || true)
+OLD_IMAGE="${OLD_IMAGE:-unknown}"
+rollback_hint() {
+  say "To roll back to the previous image once the name is free:"
+  say "  bash upgrade.sh --image=$OLD_IMAGE"
+}
 
 # ── Dry-run exit ─────────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" -eq 1 ]]; then
   hdr "Dry-run — planned actions (no changes made)"
   say "1. podman stop $CONTAINER"
   say "2. podman rm $CONTAINER"
-  say "3. podman pull $IMAGE_REF"
-  say "4. podman run -d --name $CONTAINER ... $IMAGE_REF"
+  if [[ -n "$LOCAL_IMAGE" ]]; then
+    say "3. (no pull — local image $IMAGE_REF)"
+  else
+    say "3. podman pull $IMAGE_REF"
+  fi
+  say "4. verify the name $CONTAINER is free (podman ps -a --external)"
+  say "5. podman run -d --name $CONTAINER ... $IMAGE_REF"
   say "   Install dir: $INSTALL_DIR"
   say "   Volume: ${INSTALL_DIR}/data:/data${VOL_FLAG}"
   say "   Env file: ${INSTALL_DIR}/.env"
-  say "5. Health check: $HEALTH_URL"
+  say "6. Health check: $HEALTH_URL (up to ${HEALTH_TIMEOUT_S}s)"
+  say "   Rollback image: $OLD_IMAGE"
   say ""
   say "Upgrade from $OLD_VERSION → $VERSION"
   say "Data in ${INSTALL_DIR}/data/ will be preserved."
@@ -147,13 +189,34 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 # ── Execute upgrade ──────────────────────────────────────────────────────────
-hdr "Pulling image"
-podman pull "$IMAGE_REF"
-ok "image pulled"
+if [[ -z "$LOCAL_IMAGE" ]]; then
+  hdr "Pulling image"
+  podman pull "$IMAGE_REF"
+  ok "image pulled"
+fi
 
 hdr "Stopping container"
 podman stop "$CONTAINER" 2>/dev/null || true
-podman rm "$CONTAINER" 2>/dev/null || true
+# #1919: a failed rm must stop the upgrade. Swallowing it and running anyway
+# left prod with no container and a name held by a storage-only leftover.
+if ! rm_err=$(podman rm "$CONTAINER" 2>&1); then
+  printf '%s\n' "$rm_err" >&2
+  say "podman rm failed — the name $CONTAINER may still be held. To recover:"
+  say "  podman ps -a --external --filter name=^${CONTAINER}\$"
+  say "  podman rm -f <ID>    # a 'replacing mount point' error usually clears on retry or after 'podman system migrate'"
+  rollback_hint
+  die "Upgrade aborted before starting the new container."
+fi
+
+# rm can succeed while a storage-only container still holds the name.
+leftover=$(podman ps -a --external --filter "name=^${CONTAINER}\$" --format '{{.ID}} {{.Names}}' 2>/dev/null || true)
+if [[ -n "$leftover" ]]; then
+  leftover_id="${leftover%% *}"
+  say "The name $CONTAINER is still held by: $leftover"
+  say "  podman rm -f $leftover_id"
+  rollback_hint
+  die "Upgrade aborted before starting the new container."
+fi
 ok "old container removed"
 
 hdr "Starting upgraded container"
@@ -188,20 +251,27 @@ ok "container started"
 
 # ── Health check ─────────────────────────────────────────────────────────────
 hdr "Waiting for dashboard"
-for i in $(seq 1 5); do
+healthy=0
+waited=0
+while [[ "$waited" -lt "$HEALTH_TIMEOUT_S" ]]; do
   if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
-    ok "dashboard healthy"
+    healthy=1
     break
-  fi
-  if [[ "$i" -eq 5 ]]; then
-    warn "Dashboard not responding after 15s — check: podman logs $CONTAINER"
   fi
   printf '.'
   sleep 3
+  waited=$((waited + 3))
 done
+printf '\n'
+if [[ "$healthy" -ne 1 ]]; then
+  say "Dashboard did not answer $HEALTH_URL within ${HEALTH_TIMEOUT_S}s."
+  say "  check: podman logs $CONTAINER"
+  rollback_hint
+  die "Upgrade FAILED — the new container is not healthy."
+fi
+ok "dashboard healthy"
 
 # ── Done ─────────────────────────────────────────────────────────────────────
-printf '\n'
 hdr "Upgrade complete"
 ok "Upgraded from $OLD_VERSION → $VERSION"
 say "Your data in ${INSTALL_DIR}/data/ was preserved."
