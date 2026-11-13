@@ -1,10 +1,3 @@
----
-doc-type: reference
-status: active
-owner: jason
-updated: 2026-09-13
----
-
 <!-- AUTO-GENERATED from README.template.md — do not edit directly -->
 ---
 doc-type: reference
@@ -41,7 +34,7 @@ A containerized intelligence dashboard for Red Hat Account Solution Architects a
 
 It aggregates support cases, subscriptions, cloud spend, pipeline, product intelligence, competitive signals, and Google Workspace data — then layers AI-powered intelligence on top to surface **what matters** and **what to do about it**.
 
-**This is not a data dashboard.** It's an intelligence engine that cross-references 35 modules across 7 data sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
+**This is not a data dashboard.** It's an intelligence engine that cross-references 36 modules across 7 data sources, scores every signal for customer relevance, and generates strategic sales plays with evidence-backed recommendations.
 
 ```
 Your data stays on your machine. Nothing leaves except API calls
@@ -83,7 +76,7 @@ During setup, you select the pods and regions you manage. The shared L3 data sou
 | Pod | Territory | Status |
 |-----|-----------|--------|
 | **Rough Riders** | EAST_COMM_CORP_POD01 | Active |
-| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Coming Soon |
+| **Big Apple Ballers** | EAST_COMM_CORP_POD02 | Active |
 | **Pythons** | EAST_COMM_CORP_POD03 | Coming Soon |
 | **Mad Hatters** | EAST_COMM_CORP_POD05 | Coming Soon |
 
@@ -94,7 +87,7 @@ During setup, you select the pods and regions you manage. The shared L3 data sou
 | **TOLA** | CENTRAL_ENT_TOLA | Active |
 | **High Plains** | CENTRAL_ENT_HIGH_PLAINS | Prefix-routed — not selectable in setup |
 
-**6 selectable pods** across 3 regions. Each includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
+**7 selectable pods** across 3 regions. Each includes SF pipeline reports, territory spreadsheets, and bookings data. During the setup wizard, you select your region and pods — the dashboard automatically imports AEs and customers from the shared data source.
 
 High Plains is reached through territory prefixes (`High_Plains_Terr03`) rather than as a configured pod: it has no entry in `settings.json` and so does not appear in the wizard. Its data still flows, because pod CSVs are matched structurally rather than against the configured pod list — see `src/lib/l3-csv-reader.ts`.
 
@@ -170,13 +163,13 @@ Portfolio triage view with filterable account lists, summary totals, and combine
 
 ## Intelligence Engine
 
-This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 35 modules flows through a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
+This dashboard is built on a **graph-based intelligence engine** — not a simple data aggregator. Raw data from 36 modules flows through a three-layer architecture that scores, routes, and synthesizes signals into actionable intelligence.
 
 ### How It Works
 
 ```mermaid
 flowchart TD
-    subgraph Sources["DATA SOURCES (35 Modules)"]
+    subgraph Sources["DATA SOURCES (36 Modules)"]
         S1[Support Cases]
         S2[Subscriptions]
         S3[Cloud Spend]
@@ -187,7 +180,7 @@ flowchart TD
         S8[Product Lifecycle]
         S9[Ecosystem Catalog]
         S10[Solution Plays]
-        S11["+ 25 more..."]
+        S11["+ 26 more..."]
     end
 
     subgraph Layer1["LAYER 1: Signal Production"]
@@ -231,7 +224,7 @@ flowchart TD
 
 ### The Three Layers
 
-**Layer 1 — Signal Production** &nbsp; Each of 35 modules produces signals with structured metadata. A module reports facts — it never decides importance. Signals carry `rawRelevance`, `redHatProducts`, `severity`, `confidence`, `customerSlug`, and more.
+**Layer 1 — Signal Production** &nbsp; Each of 36 modules produces signals with structured metadata. A module reports facts — it never decides importance. Signals carry `rawRelevance`, `redHatProducts`, `severity`, `confidence`, `customerSlug`, and more.
 
 **Layer 2 — Centralized Scoring** &nbsp; A single scoring engine evaluates every signal. It detects specificity (is this customer-specific, industry-level, or general?), applies boosters (revenue, severity, renewal urgency, product match), and enforces budget caps per source so no one data stream dominates.
 
@@ -283,7 +276,7 @@ The result: instead of showing you 134 disconnected data points, the dashboard s
 
 | Traditional Dashboard | Daily Brief Intelligence |
 |---|---|
-| Shows raw data | Cross-references 35 modules into scored insights |
+| Shows raw data | Cross-references 36 modules into scored insights |
 | Static views | Dynamic scoring — same data, different score per customer |
 | Manual analysis | Auto-generated strategic motions with evidence |
 | Flat data display | Graph-based intelligence that stacks and compounds |
@@ -553,7 +546,7 @@ Open the setup wizard at `http://localhost:7777/dashboard/setup`.
 
 ## Architecture
 
-The dashboard is built with React + TypeScript on the frontend and Bun + TypeScript on the backend. 35 feature modules register with a central registry. The intelligence engine scores and routes signals deterministically. Gemini handles narrative synthesis only — all signal ranking, filtering, and routing is code, not prompts.
+The dashboard is built with React + TypeScript on the frontend and Bun + TypeScript on the backend. 36 feature modules register with a central registry. The intelligence engine scores and routes signals deterministically. Gemini handles narrative synthesis only — all signal ranking, filtering, and routing is code, not prompts.
 
 **Supported platforms:** Linux and macOS on Intel (x86_64) and Apple Silicon (arm64). Multi-arch container image.
 
