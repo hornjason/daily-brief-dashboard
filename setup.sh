@@ -16,6 +16,9 @@ SETUP_SCHEMA_VERSION="1.3.1"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:${IMAGE_TAG}"
 PORT="${PORT:-7777}"
+# Host port for the in-container VNC (always 6080 inside). Set it to run a
+# second install beside one already using 6080, as upgrade.sh does.
+VNC_PORT="${VNC_PORT:-6080}"
 CONTAINER_NAME="${CONTAINER_NAME:-pai-dashboard}"
 DASHBOARD_URL="http://localhost:${PORT}/dashboard/setup"
 HEALTH_URL="http://localhost:${PORT}/api/aes"
@@ -263,28 +266,43 @@ check_cpu() {
   fi
 }
 
-check_port() {
-  local in_use=0
+# 0 = in use, 1 = free, 2 = no tool to tell.
+port_in_use() {
+  local port="$1"
   if command -v lsof >/dev/null 2>&1; then
-    if lsof -i ":${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
-      in_use=1
-    fi
+    lsof -i ":${port}" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    return 1
   elif command -v ss >/dev/null 2>&1; then
-    if ss -tlnp 2>/dev/null | grep -q ":${PORT} "; then
-      in_use=1
-    fi
-  else
+    ss -tlnp 2>/dev/null | grep -q ":${port} " && return 0
+    return 1
+  fi
+  return 2
+}
+
+check_port() {
+  local rc=0
+  port_in_use "$PORT" || rc=$?
+  if [[ "$rc" -eq 2 ]]; then
     warn "Neither lsof nor ss found — skipping port check."
     return 0
   fi
-
-  if [[ "$in_use" -eq 1 ]]; then
+  if [[ "$rc" -eq 0 ]]; then
     die "$E_PORT_IN_USE" \
       "✗ Port ${PORT} is already in use." \
       "  Check what's running: lsof -i :${PORT}" \
       "  If it's a previous dashboard container: podman stop pai-dashboard"
   fi
   ok "port ${PORT} is free"
+
+  rc=0
+  port_in_use "$VNC_PORT" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    die "$E_PORT_IN_USE" \
+      "✗ VNC port ${VNC_PORT} is already in use." \
+      "  Check what's running: lsof -i :${VNC_PORT}" \
+      "  To run beside another install, pick a free one: VNC_PORT=6090 ./setup.sh"
+  fi
+  ok "VNC port ${VNC_PORT} is free"
 }
 
 check_ghcr() {
@@ -491,7 +509,7 @@ start_container() {
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     -p "${PORT}:7777" \
-    -p "127.0.0.1:6080:6080" \
+    -p "127.0.0.1:${VNC_PORT}:6080" \
     -v "$vol_flag" \
     -e PORT=7777 \
     -e CONFIG_DIR=/data/config \

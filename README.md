@@ -461,6 +461,7 @@ Data and configuration are preserved across upgrades — only the application co
 | AI briefs empty | Check `podman logs pai-dashboard` — uses your Google OAuth token |
 | SELinux errors | Use `:Z` volume suffix (Podman on RHEL/Fedora) |
 | Port 7777 in use | Set `PORT=7778` in `.env` and re-run `setup.sh` |
+| VNC port 6080 in use (e.g. a second install on the same machine) | Re-run with a free port: `VNC_PORT=6090 ./setup.sh` |
 
 Still stuck? Email **jhorn@redhat.com**.
 
