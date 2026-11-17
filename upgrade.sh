@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # upgrade.sh — Upgrade DailyBriefDashboard to the latest (or specified) release.
-# Usage: bash upgrade.sh [--version=vX.Y.Z] [--latest] [--dry-run] [--help]
+# Usage: bash upgrade.sh [--version=vX.Y.Z] [--latest] [--force] [--dry-run] [--help]
 
 CONTAINER="${CONTAINER_NAME:-pai-dashboard}"
 IMAGE="ghcr.io/hornjason/daily-brief-dashboard"
@@ -22,6 +22,7 @@ hdr()  { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 VERSION=""
 DRY_RUN=0
 USE_LATEST=0
+FORCE=0
 LOCAL_IMAGE=""
 
 for arg in "$@"; do
@@ -30,6 +31,7 @@ for arg in "$@"; do
     --latest)    USE_LATEST=1 ;;
     --image=*)   LOCAL_IMAGE="${arg#--image=}" ;;
     --dry-run)   DRY_RUN=1 ;;
+    --force)     FORCE=1 ;;
     --help|-h)
       echo "Usage: bash upgrade.sh [OPTIONS]"
       echo ""
@@ -38,6 +40,7 @@ for arg in "$@"; do
       echo "  --latest            Pull the latest image (most recent push, may be ahead of release)"
       echo "  --image=REF         Use an image already present locally (release testing, rollback); no pull"
       echo "  --dry-run           Print planned actions without executing"
+      echo "  --force             Recreate the container even if it already runs the target image"
       echo "  --help              Show this help"
       echo ""
       echo "Environment:"
@@ -193,6 +196,19 @@ if [[ -z "$LOCAL_IMAGE" ]]; then
   hdr "Pulling image"
   podman pull "$IMAGE_REF"
   ok "image pulled"
+fi
+
+# Already running the target image? Then a re-run changes nothing. Checked
+# after the pull, so a moved tag such as :latest is still picked up. A stopped
+# container is recreated; --force recreates regardless.
+if [[ "$FORCE" -eq 0 ]]; then
+  RUNNING_ID=$(podman inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)
+  TARGET_ID=$(podman image inspect "$IMAGE_REF" --format '{{.Id}}' 2>/dev/null || true)
+  IS_RUNNING=$(podman inspect "$CONTAINER" --format '{{.State.Running}}' 2>/dev/null || true)
+  if [[ -n "$TARGET_ID" && "$RUNNING_ID" == "$TARGET_ID" && "$IS_RUNNING" == "true" ]]; then
+    ok "$CONTAINER already runs $IMAGE_REF — nothing to do (use --force to recreate it)"
+    exit 0
+  fi
 fi
 
 hdr "Stopping container"
