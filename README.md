@@ -1,4 +1,5 @@
 <!-- AUTO-GENERATED from README.template.md — do not edit directly -->
+<!-- generated-by: bun scripts/render-readme.ts · generated-sha256: 5f4f5b8d25b2b8ed1b5c157131e5db94d5e4f6fed01202a2500e3dd905f1eaa9 · two changes that each regenerate this file conflict on this line by design: re-run the command on the merged tree, never pick a side -->
 ---
 doc-type: reference
 status: active
