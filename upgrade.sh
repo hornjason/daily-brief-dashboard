@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # upgrade.sh — Upgrade DailyBriefDashboard to the latest (or specified) release.
-# Usage: bash upgrade.sh [--version=vX.Y.Z] [--latest] [--dry-run] [--help]
+# Usage: bash upgrade.sh [--version=vX.Y.Z] [--latest] [--force] [--dry-run] [--help]
 
 CONTAINER="${CONTAINER_NAME:-pai-dashboard}"
 IMAGE="ghcr.io/hornjason/daily-brief-dashboard"
@@ -22,6 +22,7 @@ hdr()  { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 VERSION=""
 DRY_RUN=0
 USE_LATEST=0
+FORCE=0
 LOCAL_IMAGE=""
 
 for arg in "$@"; do
@@ -30,6 +31,7 @@ for arg in "$@"; do
     --latest)    USE_LATEST=1 ;;
     --image=*)   LOCAL_IMAGE="${arg#--image=}" ;;
     --dry-run)   DRY_RUN=1 ;;
+    --force)     FORCE=1 ;;
     --help|-h)
       echo "Usage: bash upgrade.sh [OPTIONS]"
       echo ""
@@ -38,6 +40,7 @@ for arg in "$@"; do
       echo "  --latest            Pull the latest image (most recent push, may be ahead of release)"
       echo "  --image=REF         Use an image already present locally (release testing, rollback); no pull"
       echo "  --dry-run           Print planned actions without executing"
+      echo "  --force             Recreate the container even if it already runs the target image"
       echo "  --help              Show this help"
       echo ""
       echo "Environment:"
@@ -165,9 +168,26 @@ rollback_hint() {
   say "  bash upgrade.sh --image=$OLD_IMAGE"
 }
 
+# True when the container is running the target image, so a re-run changes
+# nothing. The real run and the dry-run both ask this (ai-review on #1974).
+already_runs_target() {
+  local running_id target_id is_running
+  running_id=$(podman inspect "$CONTAINER" --format '{{.Image}}' 2>/dev/null || true)
+  target_id=$(podman image inspect "$IMAGE_REF" --format '{{.Id}}' 2>/dev/null || true)
+  is_running=$(podman inspect "$CONTAINER" --format '{{.State.Running}}' 2>/dev/null || true)
+  [[ -n "$target_id" && "$running_id" == "$target_id" && "$is_running" == "true" ]]
+}
+
 # ── Dry-run exit ─────────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" -eq 1 ]]; then
   hdr "Dry-run — planned actions (no changes made)"
+  if [[ "$FORCE" -eq 0 ]] && already_runs_target; then
+    say "$CONTAINER already runs $IMAGE_REF — nothing to do (use --force to recreate it)"
+    if [[ -z "$LOCAL_IMAGE" ]]; then
+      say "A real run pulls first, so if this tag has moved since it was pulled, the real run upgrades."
+    fi
+    exit 0
+  fi
   say "1. podman stop $CONTAINER"
   say "2. podman rm $CONTAINER"
   if [[ -n "$LOCAL_IMAGE" ]]; then
@@ -193,6 +213,14 @@ if [[ -z "$LOCAL_IMAGE" ]]; then
   hdr "Pulling image"
   podman pull "$IMAGE_REF"
   ok "image pulled"
+fi
+
+# Already running the target image? Then a re-run changes nothing. Checked
+# after the pull, so a moved tag such as :latest is still picked up. A stopped
+# container is recreated; --force recreates regardless.
+if [[ "$FORCE" -eq 0 ]] && already_runs_target; then
+  ok "$CONTAINER already runs $IMAGE_REF — nothing to do (use --force to recreate it)"
+  exit 0
 fi
 
 hdr "Stopping container"
